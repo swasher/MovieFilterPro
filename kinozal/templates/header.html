@@ -1,0 +1,75 @@
+{# Bootstrap CSS template#}
+{% load i18n %}
+{% load static %}
+{% load active %}
+{% load admin_urls %}
+
+{% block navbar %}
+
+    <nav class="navbar navbar-expand ">
+        <div class="container-fluid m-2 p-2 border border-1 rounded">
+
+            <a class="navbar-brand" href="/">
+                <img src="{% static 'icons8-movie-64.png' %}" alt="Logo" width="30" height="24"
+                     class="d-inline-block align-text-top">
+                MES
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                    <li class="nav-item">
+                        <a class="nav-link {% active 'kinozal:movies' %}"
+                           href="{% url 'kinozal:movies' %}"><i class="bi-database me-1"></i>Movies</a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% active 'kinozal:movies' %}"
+                           href="{% url 'kinozal:upload_csv' %}"><i class="bi-database me-1"></i>Upload Kinorium CSV</a>
+                    </li>
+
+
+                </ul>
+
+
+                {% if user.is_authenticated %}
+                    <div class="Header-item">
+                        {% comment %} <a href="{% url 'core:user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
+                            <i class="bi-person-check-fill" style="color: #66f566;"></i>
+                            {{ user.username }}</a>{% endcomment %}
+                        {{ user.username }}
+                    </div>
+                    <div class="Header-item">
+                        <a href="{% url 'logout' %}?next=/" class="btn btn-sm btn-outline-secondary mx-1" type="button">
+                            <i class="bi bi-box-arrow-left"></i>
+                            Logout</a>
+                    </div>
+
+                {% else %}
+
+                    <form class="d-flex mx-2" name='AuthenticationForm' method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+                        <input type="text" class="form-control form-control-sm me-2" id="input1" placeholder="Username"
+                               name="username">
+                        <input type="password" class="form-control form-control-sm me-2" id="input2"
+                               placeholder="Password" name="password">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">Login</button>
+                    </form>
+
+                {% endif %}
+
+                <button class="btn btn-outline" data-bs-theme-value="" id="theme-toggler">
+                    <i class="bi bi-lightbulb"></i>
+                </button>
+
+            </div>
+        </div>
+    </nav>
+
+{% endblock %}

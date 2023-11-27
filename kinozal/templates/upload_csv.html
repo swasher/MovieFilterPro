@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% load static %}
+
+{% block body %}
+
+    <div>
+
+{% comment %}  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file"  name="uploaded_csv">
+    <button type="submit">Upload</button>
+  </form>{% endcomment %}
+
+{# remove from post enctype="multipart/form-data"   #}
+<form id='form'  method="post"  hx-encoding='multipart/form-data' hx-post='' hx-target="#answer">
+        {% csrf_token %}
+        <div class="col-4 mb-3">
+            <label for="input1" class="form-label">File <b>movie list</b></label>
+            <input type="file" name='file_movie_list' class="form-control" id="input1">
+        </div>
+        <div class="col-4 mb-3">
+            <label for="input2" class="form-label">File <b>votes</b></label>
+            <input type="file" name='file_votes' class="form-control m-1" id="input2">
+        </div>
+        <button class="btn btn-primary">
+            Upload
+        </button>
+        <progress id='progress' value='0' max='100'></progress>
+</form>
+    <div id="answer">111</div>
+
+    <script>
+        htmx.on('#form', 'htmx:xhr:progress', function(evt) {
+          htmx.find('#progress').setAttribute('value', evt.detail.loaded/evt.detail.total * 100)
+        });
+    </script>
+
+  {% if uploaded_file_url %}
+    <p>File uploaded at: <a href="{{ uploaded_file_url }}">{{ uploaded_file_url }}</a></p>
+  {% endif %}
+
+  <p><a href="{% url 'kinozal:movies' %}">Return to home</a></p>
+
+    </div>
+
+{% endblock %}
