@@ -1,12 +1,13 @@
 from django.shortcuts import render
 from io import StringIO
-from django.core.files.storage import FileSystemStorage
-from django.core.files.storage import InMemoryStorage
 import csv
 from django.http import HttpResponse
 from django.template.defaultfilters import safe
+from datetime import date
 
 from .models import KinoriumMovie
+from .classes import LinkConstructor
+from kinozal.parse import parse
 
 def movies(request):
     return render(request, template_name='movies.html')
@@ -91,8 +92,6 @@ def upload_csv(request):
             except Exception as e:
                 return HttpResponse(safe(f"<b style='color:red'>Error processing Vote file! Error: {e}</b>"))
 
-
-
             return HttpResponse(safe("<b style='color:green'>Update success!</b>"))
 
         else:
@@ -102,5 +101,9 @@ def upload_csv(request):
     return render(request, 'upload_csv.html')
 
 
-def parse_test(request):
-    return render(request, 'test.html')
+def scan(request):
+    scan_to_date = date(2023, 11, 23)
+    site = LinkConstructor()
+
+    movies = parse(site, scan_to_date)
+    return render(request, 'scan.html', context={'movies': movies})

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block body %}
+
+    Parse result
+
+    <table class="table">
+        <thead>
+        <tr>
+            <th scope="col">title</th>
+            <th scope="col">original_title</th>
+            <th scope="col">year</th>
+            <th scope="col">d</th>
+        </tr>
+        </thead>
+        <tbody>
+
+        {% for f in movies %}
+            <tr>
+                <th scope="row">{{ f.title }}</th>
+                <td>{{ f.original_title }}</td>
+                <td>{{ f.year }}</td>
+                <td>{{ f.date }}</td>
+            </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
+
+{% endblock %}

@@ -1,11 +1,10 @@
 {% extends "base.html" %}
-{% load active %}
 
 {% block body %}
 
 <h2>Фильмы просканенные в кинозале</h2>
 
-{% for f in films %}
+{% for f in movies %}
     {{ f }}
 {% endfor %}
 

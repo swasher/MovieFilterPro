@@ -6,7 +6,7 @@ app_name = "kinozal"
 urlpatterns = [
     path('', views.movies, name='movies'),
     path('upload_csv/', views.upload_csv, name='upload_csv'),
-    path('parse_test/', views.parse_test, name='parse_test'),
+    path('scan/', views.scan, name='scan'),
     # path('order_print/<orderid>', views.order_print, name='order_print'),
 ]
 
