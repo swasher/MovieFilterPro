@@ -1,3 +1,5 @@
 db.sqlite3
 .idea/
 __pycache__/
+1-movie_list.csv
+2-votes.csv

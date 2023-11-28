@@ -21,13 +21,13 @@ class Movie(models.Model):
 
     UNKNOWN = 0
     WATCHED = 1
-    TO_WATCH = 2
+    WILL_WATCH = 2
     DECLINED = 3
 
     STATUS = (
         (UNKNOWN, 'Новый'),
         (WATCHED, 'Просмотрен'),
-        (TO_WATCH, 'Буду смотреть'),  # значит, уже скачан
+        (WILL_WATCH, 'Буду смотреть'),  # значит, уже скачан
         (DECLINED, 'Не буду смотреть'),
     )
 
@@ -58,8 +58,14 @@ class Movie(models.Model):
 
 class KinoriumMovie(models.Model):
     """
-    Эта таблица не имеет внешнего ключа к Moveies. Это просто копия CSV для более быстрого поиска.
-    Каждый раз, когда CSV обновляется, данные в этой таблице полностью удаляются и заменяются новыми.
+    Эта таблица не имеет внешнего ключа к Moveies. Это просто копия CSV из Кинориума для более быстрого поиска(можно
+    было бы просто по CSV искать)
+
+    Поля kinozal_title и kinozal_original_title и kinozal_year нужны для того, чтобы в случае, если данные Кинозала
+    не совпадают с данными Кинориума, пользователь мог нажать 'Fix it', и в базе будет записаны актуальные данные
+    Кинозала. По ним в след раз и будет происходить поиск.
+
+    Каждый раз, когда пользователь обновляет базу, она не перезаписывается, а только обновляются статусы.
 
     Если в таблице отсутствует original_title, то оригинальное название было на русском (возможно есть и другие причины)
 
@@ -73,19 +79,24 @@ class KinoriumMovie(models.Model):
 
     UNKNOWN = 0
     WATCHED = 1
-    TO_WATCH = 2
+    WILL_WATCH = 2
     DECLINED = 3
 
     STATUS = (
         (UNKNOWN, 'Новый'),
         (WATCHED, 'Просмотрен'),
-        (TO_WATCH, 'Буду смотреть'),  # значит, уже скачан
+        (WILL_WATCH, 'Буду смотреть'),  # значит, уже скачан
         (DECLINED, 'Не буду смотреть'),
     )
 
     title = models.CharField(max_length=50)
-    original_title = models.CharField(max_length=50)
+    original_title = models.CharField(max_length=50, blank=True)
     year = models.PositiveSmallIntegerField()
+
+    kinozal_title = models.CharField(max_length=50, blank=True, default='')
+    kinozal_original_title = models.CharField(max_length=50, blank=True, default='')
+    kinozal_year = models.PositiveSmallIntegerField(blank=True, null=True)
+
     status = models.PositiveSmallIntegerField(choices=STATUS, verbose_name='Статус', default=UNKNOWN)
 
 
@@ -95,3 +106,11 @@ class UserPreferences(models.Model):
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE)
     last_scan = models.DateField(default=datetime.now() - timedelta(days=180))
+
+    # SCAN PREFERENCIES. Skip movie if:
+    # is already watched or already downloaded [bool]
+    # is ru [bool]
+    # is indian [bool]
+    # is genre [list]
+    # is older than desired year [int]
+    # is imdb AND kinopoisk ratings lower than <float>

@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 django = "*"
 python-decouple = "*"
+requests = "*"
+beautifulsoup4 = "*"
 
 [dev-packages]
 doppler-env = "*"
