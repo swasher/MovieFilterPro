@@ -1,3 +1,5 @@
+from urllib.parse import urlencode, quote_plus
+
 from django.db import models
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
@@ -16,44 +18,46 @@ class Genre(models.Model):
     name = models.CharField(max_length=30)
 
 
-class Movie(models.Model):
-
-    UNKNOWN = 0
-    WATCHED = 1
-    WILL_WATCH = 2
-    DECLINED = 3
-
-    STATUS = (
-        (UNKNOWN, 'Новый'),
-        (WATCHED, 'Просмотрен'),
-        (WILL_WATCH, 'Буду смотреть'),  # значит, уже скачан
-        (DECLINED, 'Не буду смотреть'),
-    )
-
-    ru_name = models.CharField(max_length=70)
-    en_name = models.CharField(max_length=70)
+class MovieRSS(models.Model):
+    """
+    Это фильмы с кинозала, которые ждут реакции юзера
+    """
+    kinozal_id = models.PositiveSmallIntegerField()
+    title = models.CharField(max_length=70)
+    original_title = models.CharField(max_length=70)
     year = models.PositiveSmallIntegerField()
-    status = models.PositiveSmallIntegerField(choices=STATUS, verbose_name='Статус', default=UNKNOWN)
+    date_added = models.DateField()
 
-    imdb_id = models.PositiveSmallIntegerField()
-    kinopoisk_id = models.PositiveSmallIntegerField()
-    kinorium_id = models.PositiveSmallIntegerField()
+    imdb_id = models.CharField(max_length=9, blank=True, null=True)
+    imdb_rating = models.FloatField(blank=True, null=True)
 
-    genres = models.ManyToManyField(Genre, related_name='movies')
+    kinopoisk_id = models.PositiveSmallIntegerField(blank=True, null=True)
+    kinopoisk_rating = models.FloatField(blank=True, null=True)
 
-    # DEPRECATED
-    # def search_link(self):
-    #     # for "Мизантроп / Misanthrope" and 2023
-    #     #link = "https://kinozal.tv/browse.php?s=%CC%E8%E7%E0%ED%F2%F0%EE%EF+%2F+Misanthrope&g=0&c=1002&v=3&d=2023&w=0&t=0&f=0"
-    #
-    #     # c = 1002 for movies, 1001 for serials
-    #     payload = {'s': f'{self.ru_name} / {self.en_name}', 'd': f'{self.year}', 'c': '1002'}
-    #     params = urlencode(payload, quote_via=quote_plus)
-    #     # quote_plus - заменяет пробелы знаками +
-    #     # 'password=xyz&username=administrator'
-    #
-    #     link = f"https://kinozal.tv/browse.php?{params}"
-    #     return link
+    genres = models.CharField(max_length=300)
+    countries = models.CharField(max_length=300)
+
+    director = models.CharField(max_length=300)
+    actors = models.CharField(max_length=300)
+    plot = models.CharField(max_length=300)
+    translate = models.CharField(max_length=300, blank=True, null=True)
+    poster = models.CharField(max_length=300)
+
+    kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True)
+
+    @property
+    def search_link(self):
+        # for "Мизантроп / Misanthrope" and 2023
+        # link = "https://kinozal.tv/browse.php?s=%CC%E8%E7%E0%ED%F2%F0%EE%EF+%2F+Misanthrope&g=0&c=1002&v=3&d=2023&w=0&t=0&f=0"
+
+        # c = 1002 for movies, 1001 for serials
+        payload = {'s': f'{self.title} / {self.original_title}', 'd': f'{self.year}', 'c': '1002'}
+        params = urlencode(payload, quote_via=quote_plus)
+        # quote_plus - заменяет пробелы знаками +
+        # 'password=xyz&username=administrator'
+
+        link = f"https://kinozal.tv/browse.php?{params}"
+        return link
 
 
 class KinoriumMovie(models.Model):

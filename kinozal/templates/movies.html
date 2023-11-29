@@ -2,10 +2,54 @@
 
 {% block body %}
 
-<h2>Фильмы из кинозал в базе</h2>
+    <h2>Лента RSS</h2>
 
-{% for f in movies %}
-    {{ f }}
-{% endfor %}
+    <table class="table">
+        <thead>
+        <tr>
+            <th scope="col">poster</th>
+            <th scope="col">title</th>
+            <th scope="col">original_title</th>
+            <th scope="col">year</th>
+            <th scope="col">date_added</th>
+            <th scope="col">imdb_rating</th>
+            <th scope="col">kinopoisk_rating</th>
+            <th scope="col">genres</th>
+            <th scope="col">countries</th>
+            <th scope="col">director</th>
+            <th scope="col">actors</th>
+            <th scope="col">plot</th>
+            <th scope="col">translate</th>
+            <th scope="col"></th>
+            <th scope="col" style="width:150px">BTN</th>
+        </tr>
+        </thead>
+        <tbody>
+
+        {% for f in movies %}
+            <tr>
+                <td><img src="{{ f.poster }}" class="img-thumbnail"></td>
+                <td>{{ f.title }}</td>
+                <td>{{ f.original_title }}</td>
+                <td>{{ f.year }}</td>
+                <td>{{ f.date_added }}</td>
+                <td>{{ f.imdb_rating }}</td>
+                <td>{{ f.kinopoisk_rating }}</td>
+                <td>{{ f.genres }}</td>
+                <td>{{ f.countries }}</td>
+                <td>{{ f.director }}</td>
+                <td>{{ f.actors|truncatechars:30 }}</td>
+                <td>{{ f.plot|truncatechars:30 }}</td>
+                <td>{{ f.translate }}</td>
+                <td><a href="{{ f.search_link }}">Search</a></td>
+                <td style="width:150px">
+                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-primary btn-sm">Done</button>
+                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-danger btn-sm">Don't show</button>
+                </td>
+            </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
 
 {% endblock %}

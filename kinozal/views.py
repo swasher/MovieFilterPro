@@ -1,4 +1,5 @@
 import csv
+import dataclasses
 from io import StringIO
 from datetime import date
 
@@ -10,12 +11,17 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 
-from .models import KinoriumMovie, UserPreferences
+from .models import MovieRSS, KinoriumMovie, UserPreferences
 from .classes import LinkConstructor
 from kinozal.parse import parse_browse
+from .checks import check_kinozal, check_kinorium, check_filters
+from .parse import parse_detail
+from .models import MovieRSS
+
 
 def movies(request):
-    return render(request, template_name='movies.html')
+    movies = MovieRSS.objects.all()
+    return render(request, template_name='movies.html', context={'movies': movies})
 
 
 def handle_uploaded_file(f):
@@ -132,7 +138,11 @@ def scan(request):
         is_pass_filters = check_filters(m)
         if not_in_kinozal and not_in_kinorium and is_pass_filters:
             # add m to db
-            ...
+            print(f'GET DETAILS: {m.original_title} - {m.year}')
+            m = parse_detail(m)
+            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year, defaults=dataclasses.asdict(m))
+
+
 
     return render(request, 'scan.html', context={'movies': movies})
 

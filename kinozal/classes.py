@@ -4,16 +4,6 @@ from dataclasses import dataclass
 import datetime
 from typing import Any, List
 
-# fields = ('kinozal_id title original_title year date '
-#           'imdb_id imdb_rating kinopoisk_id kinopoisk_rating '
-#           'genres countries director actors plot translate poster')
-#
-# KinozalMovie = namedtuple(
-#     'Movie',
-#     fields,
-#     defaults=(None,) * len(fields)
-#     )
-
 
 @dataclass
 class KinozalMovie:

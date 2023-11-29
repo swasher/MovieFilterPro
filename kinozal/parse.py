@@ -6,6 +6,8 @@ from typing import List, Type
 from .classes import KinozalMovie
 from .classes import LinkConstructor
 
+from .util import is_float
+
 
 def parse_browse(site: LinkConstructor, scan_to_date):
     """
@@ -40,13 +42,13 @@ def parse_browse(site: LinkConstructor, scan_to_date):
 
                 match date_added:
                     case 'сегодня' | 'сейчас':
-                        movie_date = datetime.now().date()
+                        date_added = datetime.now().date()
                     case 'вчера':
-                        movie_date = (datetime.now() - timedelta(days=1)).date()
+                        date_added = (datetime.now() - timedelta(days=1)).date()
                     case _:
-                        movie_date = datetime.strptime(date_added, '%d.%m.%Y').date()
+                        date_added = datetime.strptime(date_added, '%d.%m.%Y').date()
 
-                if movie_date < scan_to_date:
+                if date_added < scan_to_date:
                     return movies
 
                 txt = s.text.split(' / ')
@@ -61,10 +63,9 @@ def parse_browse(site: LinkConstructor, scan_to_date):
                     year = txt[1]
 
                 kinozal_id: int = int(s['href'].split('id=')[1])
-                print(title, original_title.encode('utf-8'), year, kinozal_id)
+                print(f'FOUND: {original_title} - {year}')
 
                 m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
-                m = parse_detail(kinozal_id, m)
 
                 movies.append(m)
 
@@ -78,8 +79,8 @@ def parse_browse(site: LinkConstructor, scan_to_date):
             raise Exception(response)
 
 
-def parse_detail(id: int, m: KinozalMovie) -> KinozalMovie:
-    site = LinkConstructor(id=id)
+def parse_detail(m: KinozalMovie) -> KinozalMovie:
+    site = LinkConstructor(id=m.kinozal_id)
 
     response = requests.get(site.detail_url())
 
@@ -90,56 +91,39 @@ def parse_detail(id: int, m: KinozalMovie) -> KinozalMovie:
         if imdb_part:
             # todo weak assumption for [4]; may be need add some checks
             m.imdb_id = imdb_part['href'].split('/')[4]
-            m.imdb_rating = imdb_part.find('span').text
+            rating = imdb_part.find('span').text
+            m.imdb_rating = rating if is_float(rating) else None
         else:
             m.imdb_id = None
             m.imdb_rating = None
-        print('IMDb id:', m.imdb_id)
-        print('IMDb rating:', m.imdb_rating)
 
         kinopoisk_part = soup.select_one('a:-soup-contains("Кинопоиск")')
         if kinopoisk_part:
             # todo weak assumption for [4]; may be need add some checks
             m.kinopoisk_id = kinopoisk_part['href'].split('/')[4]
-            m.kinopoisk_rating = kinopoisk_part.find('span').text
+            rating = kinopoisk_part.find('span').text
+            m.kinopoisk_rating = rating if is_float(rating) else None
         else:
             m.kinopoisk_id = None
             m.kinopoisk_rating = None
-        print('kinopoisk id:', m.kinopoisk_id)
-        print('kinopoisk rating:', m.kinopoisk_rating)
 
-        print('\nGenres:')  # WORKED
         m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
-        print(m.genres)
 
-        print('\nCountries:')  # WORKED
         m.countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
-        print(m.countries)
 
-        print('\nDirector:')  # WORKED
         m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
-        print(m.director)
 
-        print('\nActors:')  # WORKED
         m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
-        print(m.actors)
 
-        print('\nPlot:')  # WORKED
         m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
-        print(m.plot)
 
-        print('\nTranslate:')  #
         translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
         if translate_search:
             m.translate = translate_search.next_sibling.strip()
-            print(m.translate)
 
-        print('\nPoster:')  # WORKED
         poster = soup.find('img', 'p200').attrs['src']
         if poster[:4] != 'http':
             poster = 'https://kinozal.tv' + poster
         m.poster = poster
-        print(m.poster)
-        print('=====================\n\n')
 
         return m
