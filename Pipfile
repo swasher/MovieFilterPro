@@ -8,6 +8,8 @@ django = "*"
 python-decouple = "*"
 requests = "*"
 beautifulsoup4 = "*"
+django-crispy-forms = "*"
+crispy-bootstrap5 = "*"
 
 [dev-packages]
 doppler-env = "*"

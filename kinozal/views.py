@@ -1,13 +1,18 @@
-from django.shortcuts import render
-from io import StringIO
 import csv
-from django.http import HttpResponse
-from django.template.defaultfilters import safe
+from io import StringIO
 from datetime import date
 
-from .models import KinoriumMovie
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
+from django.template.defaultfilters import safe
+from django import forms
+from django.contrib.auth.models import User
+from django.urls import reverse
+from django.contrib.auth.decorators import login_required
+
+from .models import KinoriumMovie, UserPreferences
 from .classes import LinkConstructor
-from kinozal.parse import parse
+from kinozal.parse import parse_browse
 
 def movies(request):
     return render(request, template_name='movies.html')
@@ -101,9 +106,65 @@ def upload_csv(request):
     return render(request, 'upload_csv.html')
 
 
+@login_required()
+def scan_page(request):
+    return render(request, 'scan.html')
+
+
+@login_required()
 def scan(request):
-    scan_to_date = date(2023, 11, 23)
+    scan_to_date = date(2023, 11, 28)
     site = LinkConstructor()
 
-    movies = parse(site, scan_to_date)
+    movies = parse_browse(site, scan_to_date)
+
+    for m in movies:
+        """
+        LOGIC:
+        - если есть в базе kinozal - пропускаем (предложение о скачивании показывается пользователю один раз)
+        - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
+            - проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
+        - проверяем через пользовательские фильтры
+        - и вот теперь только заносим в базу 
+        """
+        not_in_kinozal = check_kinozal(m)
+        not_in_kinorium = check_kinorium(m)
+        is_pass_filters = check_filters(m)
+        if not_in_kinozal and not_in_kinorium and is_pass_filters:
+            # add m to db
+            ...
+
     return render(request, 'scan.html', context={'movies': movies})
+
+
+class PreferencesForm(forms.ModelForm):
+    class Meta:
+        model = UserPreferences
+        fields = '__all__'
+
+    # def clean_zoom(self):
+    #     zoom = int(self.cleaned_data["zoom"])
+    #     if zoom < 70 or zoom > 130:
+    #         raise ValidationError("Zoom not in range [70-130]!")
+    #
+    #     # Always return a value to use as the new cleaned data, even if
+    #     # this method didn't change it.
+    #     return zoom
+
+
+def user_preferences_update(request):
+    user = User.objects.get(pk=request.user.pk)
+    pref, _ = UserPreferences.objects.get_or_create(user=user)
+    form = PreferencesForm(request.POST or None, instance=pref)
+
+    if request.method == 'POST':
+        if form.is_valid():
+            # pref = UserPreferences.objects.get_or_create(user=request.user)
+            pref.last_scan = form.cleaned_data['last_scan']
+            pref.countries = form.cleaned_data['countries']
+            pref.genres = form.cleaned_data['genres']
+            pref.max_year = int(form.cleaned_data['max_year'])
+            pref.min_rating = float(form.cleaned_data['min_rating'])
+            pref.save()
+            return redirect(reverse('kinozal:user_preferences'))
+    return render(request, 'preferences_update_form.html', {'form': form})

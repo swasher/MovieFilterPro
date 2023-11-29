@@ -1,8 +1,38 @@
 from urllib.parse import urlencode, quote_plus
 from collections import namedtuple
+from dataclasses import dataclass
+import datetime
+from typing import Any, List
+
+# fields = ('kinozal_id title original_title year date '
+#           'imdb_id imdb_rating kinopoisk_id kinopoisk_rating '
+#           'genres countries director actors plot translate poster')
+#
+# KinozalMovie = namedtuple(
+#     'Movie',
+#     fields,
+#     defaults=(None,) * len(fields)
+#     )
 
 
-KinozalMovie = namedtuple('Movie', 'title original_title year date')
+@dataclass
+class KinozalMovie:
+    kinozal_id: int = None
+    title: str = None
+    original_title: str = None
+    year: int = None
+    date_added: datetime.date = None
+    imdb_id: str = None
+    imdb_rating: float = None
+    kinopoisk_id: int = None
+    kinopoisk_rating: float = None
+    genres: List[str] = None
+    countries: List[str] = None
+    director: str = None
+    actors: List[str] = None
+    plot: str = None
+    translate: str = None
+    poster: str = None
 
 
 class LinkConstructor:
@@ -24,20 +54,31 @@ class LinkConstructor:
 
     head = 'https://kinozal.tv/browse.php?'
 
-    def __init__(self, c=1002, v=3, page=0):
+    def __init__(self, c=1002, v=3, page=0, id: int = None):
         self.c = c
         self.v = v
         self.page = page
+        self.id = id
 
     def url(self):
+        # линк на список фильмов
         payload = {'c': self.c, 'v': self.v, 'page': self.page}
         params = urlencode(payload, quote_via=quote_plus)
         # quote_plus - заменяет пробелы знаками +
         link = f"https://kinozal.tv/browse.php?{params}"
         return link
 
+    def detail_url(self):
+        # линк на страницу фильма
+        payload = {'id': self.id}
+        params = urlencode(payload, quote_via=quote_plus)
+        # quote_plus - заменяет пробелы знаками +
+        link = f"https://kinozal.tv/details.php?{params}"
+        return link
+
     def prev_page(self):
-        if self.page > 1:
+        # первая страница на kinozal'е имеет номер 0
+        if self.page > 0:
             self.page -= 1
             return self.url()
         else:

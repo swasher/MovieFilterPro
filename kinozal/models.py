@@ -102,15 +102,12 @@ class KinoriumMovie(models.Model):
 
 class UserPreferences(models.Model):
     """
-    Settings per user. Do not show in admin.
+    Settings per user.
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE)
     last_scan = models.DateField(default=datetime.now() - timedelta(days=180))
+    countries = models.CharField(max_length=300, default=None, blank=True, null=True)
+    genres = models.CharField(max_length=300, default=None, blank=True, null=True)
+    max_year = models.PositiveSmallIntegerField(default=1900)
+    min_rating = models.FloatField(default=1.0)
 
-    # SCAN PREFERENCIES. Skip movie if:
-    # is already watched or already downloaded [bool]
-    # is ru [bool]
-    # is indian [bool]
-    # is genre [list]
-    # is older than desired year [int]
-    # is imdb AND kinopoisk ratings lower than <float>

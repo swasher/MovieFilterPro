@@ -2,25 +2,54 @@
 
 {% block body %}
 
-    Parse result
+    <h2>Фильмы из кинозала - результат скана (без внесения в базу)</h2>
+
+{#    <button type="button" class="btn btn-primary btn-lg" >SCAN</button>#}
+    <a href="{% url 'kinozal:scan' %}" class="btn btn-primary btn-lg" role="button">SCAN</a>
+
+
 
     <table class="table">
         <thead>
         <tr>
+            <th scope="col">kinozal_id</th>
             <th scope="col">title</th>
             <th scope="col">original_title</th>
             <th scope="col">year</th>
-            <th scope="col">d</th>
+            <th scope="col">date_added</th>
+            <th scope="col">imdb_id</th>
+            <th scope="col">imdb_rating</th>
+            <th scope="col">kinopoisk_id</th>
+            <th scope="col">kinopoisk_rating</th>
+            <th scope="col">genres</th>
+            <th scope="col">countries</th>
+            <th scope="col">director</th>
+            <th scope="col">actors</th>
+            <th scope="col">plot</th>
+            <th scope="col">translate</th>
+            <th scope="col">poster</th>
         </tr>
         </thead>
         <tbody>
 
         {% for f in movies %}
             <tr>
-                <th scope="row">{{ f.title }}</th>
+                <th scope="row">{{ f.kinozal_id }}</th>
+                <td>{{ f.title }}</td>
                 <td>{{ f.original_title }}</td>
                 <td>{{ f.year }}</td>
-                <td>{{ f.date }}</td>
+                <td>{{ f.date_added }}</td>
+                <td>{{ f.imdb_id }}</td>
+                <td>{{ f.imdb_rating }}</td>
+                <td>{{ f.kinopoisk_id }}</td>
+                <td>{{ f.kinopoisk_rating }}</td>
+                <td>{{ f.genres }}</td>
+                <td>{{ f.countries }}</td>
+                <td>{{ f.director }}</td>
+                <td>{{ f.actors|truncatechars:30 }}</td>
+                <td>{{ f.plot|truncatechars:30 }}</td>
+                <td>{{ f.translate }}</td>
+                <td><img src="{{ f.poster }}" class="img-thumbnail" ></td>
             </tr>
         {% endfor %}
 

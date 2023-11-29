@@ -35,9 +35,10 @@
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'kinozal:scan' %}"
-                           href="{% url 'kinozal:scan' %}"><i class="bi-database me-1"></i>Scan</a>
+                        <a class="nav-link {% active 'kinozal:scan_page' %}"
+                           href="{% url 'kinozal:scan_page' %}"><i class="bi-database me-1"></i>Scan</a>
                     </li>
+
 
 
                 </ul>
@@ -45,11 +46,15 @@
 
                 {% if user.is_authenticated %}
                     <div class="Header-item">
-                        {% comment %} <a href="{% url 'core:user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
-                            <i class="bi-person-check-fill" style="color: #66f566;"></i>
-                            {{ user.username }}</a>{% endcomment %}
-                        {{ user.username }}
+                        <span class="badge text-bg-success"><i class="bi-person-check-fill"></i> {{ user.username }}</span>
                     </div>
+
+                    <div class="Header-item">
+                        <a href="{% url 'kinozal:user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
+                            {% comment %}<i class="bi-person-check-fill" style="color: #66f566;"></i>{% endcomment %}
+                            Preferences</a>
+                    </div>
+
                     <div class="Header-item">
                         <a href="{% url 'logout' %}?next=/" class="btn btn-sm btn-outline-secondary mx-1" type="button">
                             <i class="bi bi-box-arrow-left"></i>
