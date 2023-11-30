@@ -9,6 +9,15 @@ def tst():
         if x == 15:
             return x
 
+
+def tst1():
+    return False, False
+
+
+
+
 if __name__ == '__main__':
-    g = tst()
-    print(f'The end! with {g}')
+    if tst1():
+        print(True)
+    else:
+        print(False)

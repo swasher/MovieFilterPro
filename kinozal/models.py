@@ -25,7 +25,7 @@ class MovieRSS(models.Model):
     kinozal_id = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=70)
     original_title = models.CharField(max_length=70)
-    year = models.PositiveSmallIntegerField()
+    year = models.CharField(max_length=9, help_text='Год может быть представлен как диапазон: 1982-1994')
     date_added = models.DateField()
 
     imdb_id = models.CharField(max_length=9, blank=True, null=True)
@@ -59,6 +59,9 @@ class MovieRSS(models.Model):
         link = f"https://kinozal.tv/browse.php?{params}"
         return link
 
+    def __str__(self):
+        name = self.original_title if self.original_title else self.title
+        return f"{name} - {self.year}"
 
 class KinoriumMovie(models.Model):
     """
@@ -97,9 +100,9 @@ class KinoriumMovie(models.Model):
     original_title = models.CharField(max_length=50, blank=True)
     year = models.PositiveSmallIntegerField()
 
-    kinozal_title = models.CharField(max_length=50, blank=True, default='')
-    kinozal_original_title = models.CharField(max_length=50, blank=True, default='')
-    kinozal_year = models.PositiveSmallIntegerField(blank=True, null=True)
+    kinozal_title = models.CharField(max_length=50, blank=True, null=True)
+    kinozal_original_title = models.CharField(max_length=50, blank=True, null=True)
+    kinozal_year = models.CharField(max_length=10, blank=True, null=True)
 
     status = models.PositiveSmallIntegerField(choices=STATUS, verbose_name='Статус', default=UNKNOWN)
 
@@ -108,8 +111,8 @@ class UserPreferences(models.Model):
     """
     Settings per user.
     """
-    user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE)
-    last_scan = models.DateField(default=datetime.now() - timedelta(days=180))
+    user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
+    last_scan = models.DateField(blank=True, null=True)
     countries = models.CharField(max_length=300, default=None, blank=True, null=True)
     genres = models.CharField(max_length=300, default=None, blank=True, null=True)
     max_year = models.PositiveSmallIntegerField(default=1900)

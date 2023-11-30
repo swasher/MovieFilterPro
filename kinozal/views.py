@@ -1,7 +1,7 @@
 import csv
 import dataclasses
 from io import StringIO
-from datetime import date
+from datetime import date, datetime
 
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
@@ -14,8 +14,8 @@ from django.contrib.auth.decorators import login_required
 from .models import MovieRSS, KinoriumMovie, UserPreferences
 from .classes import LinkConstructor
 from kinozal.parse import parse_browse
-from .checks import check_kinozal, check_kinorium, check_filters
-from .parse import parse_detail
+from .checks import exist_in_kinorium, exist_in_kinozal, pass_all_filters
+from .parse import get_details
 from .models import MovieRSS
 
 
@@ -114,12 +114,13 @@ def upload_csv(request):
 
 @login_required()
 def scan_page(request):
-    return render(request, 'scan.html')
+    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    return render(request, 'scan.html', {'last_scan': last_scan})
 
 
 @login_required()
 def scan(request):
-    scan_to_date = date(2023, 11, 28)
+    scan_to_date = UserPreferences.objects.get(user=request.user).last_scan
     site = LinkConstructor()
 
     movies = parse_browse(site, scan_to_date)
@@ -130,19 +131,27 @@ def scan(request):
         - если есть в базе kinozal - пропускаем (предложение о скачивании показывается пользователю один раз)
         - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
             - проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
+        - если фильм прошел проверки по базам, тогда вытягиваем для него данные со страницы
         - проверяем через пользовательские фильтры
         - и вот теперь только заносим в базу 
         """
-        not_in_kinozal = check_kinozal(m)
-        not_in_kinorium = check_kinorium(m)
-        is_pass_filters = check_filters(m)
-        if not_in_kinozal and not_in_kinorium and is_pass_filters:
-            # add m to db
-            print(f'GET DETAILS: {m.original_title} - {m.year}')
-            m = parse_detail(m)
-            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year, defaults=dataclasses.asdict(m))
+        if exist_in_kinozal(m):
+            print(f'SKIP [kinozal]: {m.title} - {m.year}')
+            continue
 
+        if exist_in_kinorium(m):
+            print(f'SKIP [kinorium]: {m.title} - {m.year}')
+            continue
 
+        print(f'GET DETAILS: {m.title} - {m.year}')
+        m = get_details(m)
+
+        if pass_all_filters(request.user, m):
+            print(f'ADD TO DB: {m.title} - {m.year}')
+            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
+                                           defaults=dataclasses.asdict(m))
+
+    UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
 
     return render(request, 'scan.html', context={'movies': movies})
 

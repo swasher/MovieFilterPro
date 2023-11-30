@@ -10,7 +10,7 @@ class KinozalMovie:
     kinozal_id: int = None
     title: str = None
     original_title: str = None
-    year: int = None
+    year: str = None
     date_added: datetime.date = None
     imdb_id: str = None
     imdb_rating: float = None

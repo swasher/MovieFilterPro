@@ -23,6 +23,8 @@ def parse_browse(site: LinkConstructor, scan_to_date):
         # with an HTTP GET request
         response = requests.get(site.url())
 
+        print(f'GRAB URL: {site.url()}')
+
         if response.ok:
             soup = BeautifulSoup(response.content, "html.parser")
 
@@ -38,8 +40,10 @@ def parse_browse(site: LinkConstructor, scan_to_date):
                 
                 """
                 s = m.find('a')
-                date_added = m.find_all('td', 's')[-1].text.split(' в ')[0]  # '27.11.2023' or 'сегодня' or 'вчера' or 'сейчас'
 
+                kinozal_id: int = int(s['href'].split('id=')[1])
+
+                date_added = m.find_all('td', 's')[-1].text.split(' в ')[0]  # '27.11.2023' or 'сегодня' or 'вчера' or 'сейчас'
                 match date_added:
                     case 'сегодня' | 'сейчас':
                         date_added = datetime.now().date()
@@ -51,19 +55,25 @@ def parse_browse(site: LinkConstructor, scan_to_date):
                 if date_added < scan_to_date:
                     return movies
 
-                txt = s.text.split(' / ')
-                if txt[2].isdigit() and len(txt[2]) == 4:  # normal format
-                    title = txt[0]
-                    original_title = txt[1]
-                    year = txt[2]
+                header = s.text.split(' / ')
+                if header[2].isdigit() and len(header[2]) == 4:  # normal format
+                    title = header[0]
+                    original_title = header[1]
+                    year = header[2]
 
-                elif 'РУ' in txt[2].split(', '):  # русский формат без original title
-                    title = txt[0]
+                elif 'РУ' in header[2].split(', '):  # русский формат без original title
+                    title = header[0]
                     original_title = ''
-                    year = txt[1]
+                    year = header[1]
 
-                kinozal_id: int = int(s['href'].split('id=')[1])
-                print(f'FOUND: {original_title} - {year}')
+                elif len(header[2]) == 9 and '-' in header[2]:  # год в заголовке как диапазон: "Голый пистолет (Коллекция) / Naked Gun: Collection / 1982-1994 / ПМ, ПД..."
+                    title = header[0]
+                    original_title = header[1]
+                    year = header[2]
+                else:
+                    raise Exception(f'Can\'t parse header in id={kinozal_id}')
+
+                print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
                 m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
 
@@ -79,7 +89,7 @@ def parse_browse(site: LinkConstructor, scan_to_date):
             raise Exception(response)
 
 
-def parse_detail(m: KinozalMovie) -> KinozalMovie:
+def get_details(m: KinozalMovie) -> KinozalMovie:
     site = LinkConstructor(id=m.kinozal_id)
 
     response = requests.get(site.detail_url())
