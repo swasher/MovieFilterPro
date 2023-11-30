@@ -21,11 +21,10 @@ admin:
 	python manage.py createsuperuser --username=swasher --email=mr.swasher@gmail.com --skip-checks;
 
 migrations:
-	# возможно тут надо указать имена apps после makemigrations
 	doppler run -- python manage.py makemigrations
 
 migrate:
-	# нужно указывать --run-syncdb для первой миграции, иначе не создаются базы
+	doppler run -- python manage.py makemigrations
 	doppler run -- python manage.py migrate
 
 collect:
