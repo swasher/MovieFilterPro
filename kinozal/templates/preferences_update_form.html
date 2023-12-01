@@ -2,16 +2,28 @@
 {% block title %}Edit Preferensies{% endblock %}
 {% load crispy_forms_tags %}
 
+
 {% block body %}
-<div class="row my-4">
-    <div class="col-md-6 offset-md-3 p-3">
-    <h3>Пользовательские настройки</h3>
-        <hr>
-        <form method="post">
-            {% csrf_token %}
-            {{ form|crispy }}
-            <input class="btn btn-primary" type="submit" value="Confirm">
-        </form>
+    <div class="row my-4">
+
+        <div class="row offset-md-3 p-0">
+            <h3>Normal prority</h3>
+            <hr>
+            <form method="post">
+                {% csrf_token %}
+                {% crispy form form.helper %}
+            </form>
+        </div>
+
+        <div class="row offset-md-3 p-0">
+            <h3>Low prority</h3>
+            <hr>
+            <form method="post">
+                {% csrf_token %}
+
+                {% crispy form_low %}
+            </form>
+        </div>
+
     </div>
-</div>
 {% endblock %}

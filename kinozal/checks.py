@@ -68,28 +68,47 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool]:
     return False #, True
 
 
-def pass_all_filters(user: User, m: KinozalMovie) -> bool:
+def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> bool:
     """
     Возвращает True, если m удовлетворяет всем фильтрам.
     """
+    prefs = UserPreferences.objects.get(user=user)
+    if low_priority:
+        stop_countries, stop_genres, max_year, min_rating = prefs.get_low_priority_preferences()
+    else:
+        stop_countries, stop_genres, max_year, min_rating = prefs.get_normal_preferences()
+
 
     ### 1 Countries
-    stop_countries = UserPreferences.objects.get(user=user).countries.split(', ')
     country_passes = not bool(set(m.countries) & set(stop_countries))
     if not country_passes:
         print(f'STOP country detected in {m.title} - {m.year}')
         return False
 
     ### 2 Genres
-    stop_genres = UserPreferences.objects.get(user=user).countries.split(', ')
     genre_passes = not bool(set(m.genres) & set(stop_genres))
     if not country_passes:
-        print(f'STOP country detected in {m.title} - {m.year}')
+        print(f'STOP [country] -> {m.title} - {m.year}')
         return False
 
     ### 3 Max year
+    # year can be dipason at website (as 2008-2012). If so, check last year (i.e 2012)
+    # Если что-то пошло не так с преобразованием строки, считаем, что фильм прошел эту проверку
+    try:
+        if len(m.year) == 9:
+            year = int(m.year[5:])
+        else:
+            year = int(m.year)
+        if year < max_year:
+            print(f'STOP [year] -> {m.title} - {m.year}')
+            return False
+    except:
+        print('ERROR in checks.py -> checking_all_filters -> year converting')
 
 
     ### 4 Min rating
+    if m.kinopoisk_rating < min_rating and m.imdb_rating < min_rating:
+        print(f'STOP [rating] -> {m.title} - {m.year}')
+        return False
 
     return True

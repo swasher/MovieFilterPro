@@ -1,4 +1,5 @@
 from urllib.parse import urlencode, quote_plus
+from typing import List, Tuple
 
 from django.db import models
 from datetime import datetime, timedelta
@@ -22,6 +23,7 @@ class MovieRSS(models.Model):
     """
     Это фильмы с кинозала, которые ждут реакции юзера
     """
+    low_priority = models.BooleanField(default=False)
     kinozal_id = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=70)
     original_title = models.CharField(max_length=70)
@@ -113,8 +115,19 @@ class UserPreferences(models.Model):
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
     last_scan = models.DateField(blank=True, null=True)
+
     countries = models.CharField(max_length=300, default=None, blank=True, null=True)
     genres = models.CharField(max_length=300, default=None, blank=True, null=True)
     max_year = models.PositiveSmallIntegerField(default=1900)
     min_rating = models.FloatField(default=1.0)
 
+    low_countries = models.CharField(max_length=300, default=None, blank=True, null=True)
+    low_genres = models.CharField(max_length=300, default=None, blank=True, null=True)
+    low_max_year = models.PositiveSmallIntegerField(default=1900)
+    low_min_rating = models.FloatField(default=1.0)
+
+    def get_normal_preferences(self):
+        return self.countries.split(', '), self.genres.split(', '), self.max_year, self.min_rating
+
+    def get_low_priority_preferences(self) -> Tuple[List[str], List[str], int, float]:
+        return self.low_countries.split(', '), self.low_genres.split(', '), self.low_max_year, self.low_min_rating

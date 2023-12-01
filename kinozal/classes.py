@@ -23,6 +23,7 @@ class KinozalMovie:
     plot: str = None
     translate: str = None
     poster: str = None
+    low_priority: bool = None
 
 
 class LinkConstructor:

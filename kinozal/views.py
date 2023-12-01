@@ -14,13 +14,18 @@ from django.contrib.auth.decorators import login_required
 from .models import MovieRSS, KinoriumMovie, UserPreferences
 from .classes import LinkConstructor
 from kinozal.parse import parse_browse
-from .checks import exist_in_kinorium, exist_in_kinozal, pass_all_filters
+from .checks import exist_in_kinorium, exist_in_kinozal, checking_all_filters
 from .parse import get_details
 from .models import MovieRSS
+from .forms import PreferencesForm, PreferencesFormLow
 
 
 def movies(request):
-    movies = MovieRSS.objects.all()
+    movies = MovieRSS.objects.filter(low_priority=False)
+    return render(request, template_name='movies.html', context={'movies': movies})
+
+def movies_low(request):
+    movies = MovieRSS.objects.filter(low_priority=True)
     return render(request, template_name='movies.html', context={'movies': movies})
 
 
@@ -118,6 +123,17 @@ def scan_page(request):
     return render(request, 'scan.html', {'last_scan': last_scan})
 
 
+
+@login_required()
+def reset_rss(requst):
+    if requst.method == 'POST':
+        rss = MovieRSS.objects.all()
+        rss.delete()
+        context = {'answer': 'MovieRSS table is cleaned.'}
+        return render(requst, 'reset_rss.html', context)
+    return render(requst, 'reset_rss.html')
+
+
 @login_required()
 def scan(request):
     scan_to_date = UserPreferences.objects.get(user=request.user).last_scan
@@ -146,44 +162,51 @@ def scan(request):
         print(f'GET DETAILS: {m.title} - {m.year}')
         m = get_details(m)
 
-        if pass_all_filters(request.user, m):
-            print(f'ADD TO DB: {m.title} - {m.year}')
+        if checking_all_filters(request.user, m, low_priority=False):
+            print(f'ADD TO DB [high]: {m.title} - {m.year}')
+            m.low_priority = False
             MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
                                            defaults=dataclasses.asdict(m))
+        elif checking_all_filters(request.user, m, low_priority=True):
+            print(f'ADD TO DB [low]: {m.title} - {m.year}')
+            m.low_priority = False
+            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
+                                           defaults=dataclasses.asdict(m))
+        else:
+            pass  # Movie do not match criteria, just do nothing
 
     UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
 
     return render(request, 'scan.html', context={'movies': movies})
 
 
-class PreferencesForm(forms.ModelForm):
-    class Meta:
-        model = UserPreferences
-        fields = '__all__'
-
-    # def clean_zoom(self):
-    #     zoom = int(self.cleaned_data["zoom"])
-    #     if zoom < 70 or zoom > 130:
-    #         raise ValidationError("Zoom not in range [70-130]!")
-    #
-    #     # Always return a value to use as the new cleaned data, even if
-    #     # this method didn't change it.
-    #     return zoom
 
 
 def user_preferences_update(request):
     user = User.objects.get(pk=request.user.pk)
     pref, _ = UserPreferences.objects.get_or_create(user=user)
     form = PreferencesForm(request.POST or None, instance=pref)
+    form_low = PreferencesFormLow(request.POST or None, instance=pref)
 
     if request.method == 'POST':
-        if form.is_valid():
-            # pref = UserPreferences.objects.get_or_create(user=request.user)
-            pref.last_scan = form.cleaned_data['last_scan']
-            pref.countries = form.cleaned_data['countries']
-            pref.genres = form.cleaned_data['genres']
-            pref.max_year = int(form.cleaned_data['max_year'])
-            pref.min_rating = float(form.cleaned_data['min_rating'])
-            pref.save()
-            return redirect(reverse('kinozal:user_preferences'))
-    return render(request, 'preferences_update_form.html', {'form': form})
+        if 'normal_priority' in request.POST:
+            if form.is_valid():
+                # pref = UserPreferences.objects.get_or_create(user=request.user)
+                pref.last_scan = form.cleaned_data['last_scan']
+                pref.countries = form.cleaned_data['countries']
+                pref.genres = form.cleaned_data['genres']
+                pref.max_year = int(form.cleaned_data['max_year'])
+                pref.min_rating = float(form.cleaned_data['min_rating'])
+                pref.save()
+                return redirect(reverse('kinozal:user_preferences'))
+        if 'low_priority' in request.POST:
+            if form_low.is_valid():
+                # pref = UserPreferences.objects.get_or_create(user=request.user)
+                pref.low_countries = form_low.cleaned_data['low_countries']
+                pref.low_genres = form_low.cleaned_data['low_genres']
+                pref.low_max_year = int(form_low.cleaned_data['low_max_year'])
+                pref.low_min_rating = float(form_low.cleaned_data['low_min_rating'])
+                pref.save()
+                return redirect(reverse('kinozal:user_preferences'))
+    return render(request, 'preferences_update_form.html',
+                  {'form': form, 'form_low': form_low})

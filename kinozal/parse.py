@@ -102,7 +102,7 @@ def get_details(m: KinozalMovie) -> KinozalMovie:
             # todo weak assumption for [4]; may be need add some checks
             m.imdb_id = imdb_part['href'].split('/')[4]
             rating = imdb_part.find('span').text
-            m.imdb_rating = rating if is_float(rating) else None
+            m.imdb_rating = float(rating) if is_float(rating) else 10
         else:
             m.imdb_id = None
             m.imdb_rating = None
@@ -112,7 +112,7 @@ def get_details(m: KinozalMovie) -> KinozalMovie:
             # todo weak assumption for [4]; may be need add some checks
             m.kinopoisk_id = kinopoisk_part['href'].split('/')[4]
             rating = kinopoisk_part.find('span').text
-            m.kinopoisk_rating = rating if is_float(rating) else None
+            m.kinopoisk_rating = float(rating) if is_float(rating) else 10
         else:
             m.kinopoisk_id = None
             m.kinopoisk_rating = None
