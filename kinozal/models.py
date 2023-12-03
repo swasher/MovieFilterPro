@@ -46,6 +46,7 @@ class MovieRSS(models.Model):
     poster = models.CharField(max_length=300)
 
     kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True)
+    kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
 
     @property
     def search_link(self):
@@ -126,8 +127,12 @@ class UserPreferences(models.Model):
     low_max_year = models.PositiveSmallIntegerField(default=1900)
     low_min_rating = models.FloatField(default=1.0)
 
-    def get_normal_preferences(self):
-        return self.countries.split(', '), self.genres.split(', '), self.max_year, self.min_rating
+    def get_normal_preferences(self) -> Tuple[List[str], List[str], int, float]:
+        countries = self.countries.split(', ') if self.countries else []
+        genres = self.genres.split(', ') if self.genres else []
+        return countries, genres, self.max_year, self.min_rating
 
     def get_low_priority_preferences(self) -> Tuple[List[str], List[str], int, float]:
-        return self.low_countries.split(', '), self.low_genres.split(', '), self.low_max_year, self.low_min_rating
+        countries = self.low_countries.split(', ') if self.countries else []
+        genres = self.low_genres.split(', ') if self.genres else []
+        return countries, genres, self.low_max_year, self.low_min_rating

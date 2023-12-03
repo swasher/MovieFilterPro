@@ -16,7 +16,7 @@ def exist_in_kinozal(m: KinozalMovie) -> bool:
     return answer
 
 
-def exist_in_kinorium(m: KinozalMovie) -> [bool, bool]:
+def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str|None]:
     """
     Возвращает True, если такой фильм уже присутствует  в базе MovieRSS.
     Выполняет частичные проверки.
@@ -29,31 +29,33 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool]:
     В кинозале год может быть периодом - 2008-2013.
     Поэтому если год - это период, то берем первые 4 цифры как для сравения.
     """
+    MATCH = True
+    FULL = True
+    PARTIAL = False
 
     year = m.year if m.year.isdigit() else m.year[:4]
 
-
     exist = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title, year=year)
-    answer = True if exist else False
-    if answer:
-        return True #, True
+    if exist:
+        return MATCH, FULL, exist.get_status_display()
 
     exist = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title)
-    answer = True if exist else False
-    if answer:
-        return True #, False
+    if exist:
+        return MATCH, PARTIAL, exist.get_status_display()
 
-    exist = get_object_or_none(KinoriumMovie, title=m.title, year=year)
-    answer = True if exist else False
-    if answer:
-        return True #, False
+    if m.title:
+        exist = get_object_or_none(KinoriumMovie, title=m.title, year=year)
+        if exist:
+            return MATCH, PARTIAL, exist.get_status_display()
 
-    exist = get_object_or_none(KinoriumMovie, original_title=m.original_title, year=year)
-    answer = True if exist else False
-    if answer:
-        return True #, False
+    if m.original_title:
+        exist = get_object_or_none(KinoriumMovie, original_title=m.original_title, year=year)
+        if exist:
+            return MATCH, PARTIAL, exist.get_status_display()
 
     """
+    answer = True if exist else False  --> Возможно, заменить на bool(exist)
+    
     После тестирование переделать так:
     
     partial1 = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title)
@@ -65,13 +67,17 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool]:
     Но будут проблемы, наверное, если вместо quryset будет None 
     """
 
-    return False #, True
+    return False, False, None
 
 
 def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> bool:
     """
     Возвращает True, если m удовлетворяет всем фильтрам.
     """
+
+    def prio(s: bool) -> str:
+        return 'Low priority' if s else 'High priority'
+
     prefs = UserPreferences.objects.get(user=user)
     if low_priority:
         stop_countries, stop_genres, max_year, min_rating = prefs.get_low_priority_preferences()
@@ -82,13 +88,13 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
     ### 1 Countries
     country_passes = not bool(set(m.countries) & set(stop_countries))
     if not country_passes:
-        print(f'STOP country detected in {m.title} - {m.year}')
+        print(f'└─ SKIP [country] [{prio(low_priority)}]')
         return False
 
     ### 2 Genres
     genre_passes = not bool(set(m.genres) & set(stop_genres))
     if not country_passes:
-        print(f'STOP [country] -> {m.title} - {m.year}')
+        print(f'└─ SKIP [genres] [{prio(low_priority)}]')
         return False
 
     ### 3 Max year
@@ -100,7 +106,7 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
         else:
             year = int(m.year)
         if year < max_year:
-            print(f'STOP [year] -> {m.title} - {m.year}')
+            print(f'└─ SKIP [year] [{prio(low_priority)}]')
             return False
     except:
         print('ERROR in checks.py -> checking_all_filters -> year converting')
@@ -108,7 +114,7 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
 
     ### 4 Min rating
     if m.kinopoisk_rating < min_rating and m.imdb_rating < min_rating:
-        print(f'STOP [rating] -> {m.title} - {m.year}')
+        print(f'└─ SKIP [rating] [{prio(low_priority)}]')
         return False
 
     return True

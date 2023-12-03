@@ -6,24 +6,52 @@
 {% block body %}
     <div class="row my-4">
 
-        <div class="row offset-md-3 p-0">
-            <h3>Normal prority</h3>
-            <hr>
-            <form method="post">
-                {% csrf_token %}
-                {% crispy form form.helper %}
-            </form>
+        <div class="col-6 offset-3">
+
+            <div class="row p-0">
+                <h3>Normal prority</h3>
+                <hr>
+                <form method="post">
+                    {% csrf_token %}
+                    {% crispy form form.helper %}
+                </form>
+            </div>
+
+            <div class="row p-0">
+                <h3>Low prority</h3>
+                <hr>
+                <form method="post">
+                    {% csrf_token %}
+                    {% crispy form_low %}
+                </form>
+            </div>
+
+            <div class="row p-0">
+                <h3>Clear RSS database</h3>
+                <hr>
+                <div class="col-1">
+                    <button type="submit" class="btn btn-danger btn-lg" name="reset"
+                            hx-post="{% url 'kinozal:reset_rss' %}"
+                            hx-confirm="This destroy all scanned movies!"
+                    ><i class="fa fa-check"></i>RESET
+                    </button>
+                </div>
+            </div>
         </div>
-
-        <div class="row offset-md-3 p-0">
-            <h3>Low prority</h3>
-            <hr>
-            <form method="post">
-                {% csrf_token %}
-
-                {% crispy form_low %}
-            </form>
-        </div>
-
     </div>
+
+    <script>
+        document.addEventListener("htmx:confirm", function (e) {
+            e.preventDefault()
+            Swal.fire({
+                title: "Proceed?",
+                text: `${e.detail.question}`,
+                showCancelButton: true,
+            }).then(function (result) {
+                if (result.isConfirmed) e.detail.issueRequest(true) // use true to skip window.confirm
+            })
+        })
+    </script>
+
 {% endblock %}
+

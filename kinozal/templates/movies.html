@@ -20,7 +20,7 @@
             <th scope="col">actors</th>
             <th scope="col">plot</th>
             <th scope="col">translate</th>
-            <th scope="col"></th>
+            {% comment %}<th scope="col"></th>{% endcomment %}
             <th scope="col" style="width:150px">BTN</th>
         </tr>
         </thead>
@@ -41,10 +41,11 @@
                 <td>{{ f.actors|truncatechars:30 }}</td>
                 <td>{{ f.plot|truncatechars:30 }}</td>
                 <td>{{ f.translate }}</td>
-                <td><a href="{{ f.search_link }}">Search</a></td>
+                {% comment %}<td><a href="{{ f.search_link }}">Search</a></td>{% endcomment %}
                 <td style="width:150px">
-                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-primary btn-sm">Done</button>
-                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-danger btn-sm">Don't show</button>
+                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-primary btn-sm">Скачаю</button>
+                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-primary btn-sm">Посмотреть</button>
+                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-danger btn-sm">Убрать</button>
                 </td>
             </tr>
         {% endfor %}

@@ -10,6 +10,9 @@ requests = "*"
 beautifulsoup4 = "*"
 django-crispy-forms = "*"
 crispy-bootstrap5 = "*"
+plexapi = "*"
+django-compressor = "*"
+django-libsass = "*"
 
 [dev-packages]
 doppler-env = "*"

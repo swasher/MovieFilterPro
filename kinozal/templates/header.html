@@ -12,7 +12,7 @@
             <a class="navbar-brand" href="/">
                 <img src="{% static 'icons8-movie-64.png' %}" alt="Logo" width="30" height="24"
                      class="d-inline-block align-text-top">
-                MES
+                KinoRSS
             </a>
 
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
@@ -30,12 +30,12 @@
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'kinozal:movies' %}"
+                        <a class="nav-link {% active 'kinozal:movies_low' %}"
                            href="{% url 'kinozal:movies_low' %}"><i class="bi-database me-1"></i>Low Priority RSS</a>
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'kinozal:movies' %}"
+                        <a class="nav-link {% active 'kinozal:upload_csv' %}"
                            href="{% url 'kinozal:upload_csv' %}"><i class="bi-database me-1"></i>Upload Kinorium CSV</a>
                     </li>
 
@@ -45,8 +45,8 @@
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'kinozal:reset_css' %}"
-                           href="{% url 'kinozal:reset_rss' %}"><i class="bi-database me-1"></i>Reset RSS</a>
+                        <a class="nav-link {% active 'kinozal:plex' %}"
+                           href="{% url 'kinozal:plex' %}"><i class="bi-database me-1"></i>Plex</a>
                     </li>
 
 

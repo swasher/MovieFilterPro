@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+
+
+{% comment %}    <div class="d-flex flex-row mb-3">
+{#        <div class="p-2"><h2>PLEX</h2></div>#}
+        <h1 class="p-3"> <span class="badge bg-secondary">Plex</span></h1>
+        <div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div>
+    </div>{% endcomment %}
+
+<div class="d-inline-block p-2 "><h1 class="p-3"> <span class="badge bg-secondary">Plex</span></h1></div>
+<div class="d-inline-block p-2 "><div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div></div>
+
+
+    <table class="table">
+        <thead>
+        <tr>
+            <th scope="col">title</th>
+            <th scope="col">originalTitle</th>
+            <th scope="col">year</th>
+        </tr>
+        </thead>
+        <tbody>
+
+        {% for f in movies %}
+            <tr>
+                <td>{{ f.title }}</td>
+                <td>{{ f.originalTitle }}</td>
+                <td>{{ f.year }}</td>
+            </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
+
+{% endblock %}

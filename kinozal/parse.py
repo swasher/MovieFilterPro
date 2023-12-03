@@ -89,7 +89,7 @@ def parse_browse(site: LinkConstructor, scan_to_date):
             raise Exception(response)
 
 
-def get_details(m: KinozalMovie) -> KinozalMovie:
+def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     site = LinkConstructor(id=m.kinozal_id)
 
     response = requests.get(site.detail_url())
@@ -136,4 +136,4 @@ def get_details(m: KinozalMovie) -> KinozalMovie:
             poster = 'https://kinozal.tv' + poster
         m.poster = poster
 
-        return m
+        return m, response.elapsed.total_seconds()

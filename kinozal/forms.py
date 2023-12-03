@@ -16,8 +16,8 @@ class PreferencesForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.form_class = 'form-horizontal'
-        self.helper.label_class = 'col-sm-1'
-        self.helper.field_class = 'col-md-4'
+        self.helper.label_class = 'col-sm-3'
+        self.helper.field_class = 'col-md-9'
         self.helper.add_input(Submit('submit', 'Save'))
 
     # def clean_zoom(self):
@@ -41,6 +41,6 @@ class PreferencesFormLow(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.form_class = 'form-horizontal'
-        self.helper.label_class = 'col-sm-1'
-        self.helper.field_class = 'col-md-4'
+        self.helper.label_class = 'col-sm-3'
+        self.helper.field_class = 'col-md-9'
         self.helper.add_input(Submit('submit', 'Save'))

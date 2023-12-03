@@ -10,6 +10,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
+from plexapi.server import PlexServer
 
 from .models import MovieRSS, KinoriumMovie, UserPreferences
 from .classes import LinkConstructor
@@ -58,55 +59,54 @@ def upload_csv(request):
 
         if 'file_votes' in request.FILES and 'file_movie_list' in request.FILES:
 
-            try:
-                movie_lists_data = upload_to_dictreader(request.FILES['file_movie_list'])
-                print('\nLists')
-                for row in movie_lists_data:
+            objs = KinoriumMovie.objects.all()
+            objs.delete()
+
+            movie_lists_data = upload_to_dictreader(request.FILES['file_movie_list'])
+            print('\nLists')
+            for row in movie_lists_data:
+                t = row['Type']
+                list_title = row['ListTitle']
+
+                match list_title:
+                    case 'Буду смотреть':
+                        status = KinoriumMovie.WILL_WATCH
+                    case 'Не буду смотреть':
+                        status = KinoriumMovie.DECLINED
+                    case _:
+                        status = None
+
+                if t == 'Фильм' and status:
                     title = row['Title']
                     original_title = row['Original Title']
-                    t = row['Type']
                     year = year_to_int(row['Year'])
-                    list_title = row['ListTitle']
 
                     print(list_title, title, original_title, t, year)
 
-                    match list_title:
-                        case 'Буду смотреть':
-                            status = KinoriumMovie.WILL_WATCH
-                        case 'Не буду смотреть':
-                            status = KinoriumMovie.DECLINED
-                        case _:
-                            status = None
+                    m, created = KinoriumMovie.objects.get_or_create(
+                        title=title, original_title=original_title, year=year
+                    )
+                    m.status = status
+                    m.save()
 
-                    if t == 'Фильм' and status:
-                        m, created = KinoriumMovie.objects.get_or_create(
-                            title=title, original_title=original_title, year=year
-                        )
-                        m.status = status
-                        m.save()
-            except:
-                return HttpResponse(safe("<b style='color:red'>Error processing Movie List file!</b>"))
-
-
-            try:
-                votes_data = upload_to_dictreader(request.FILES['file_votes'])
-                print('\nVOTES')
-                for row in votes_data:
+            votes_data = upload_to_dictreader(request.FILES['file_votes'])
+            print('\nVOTES')
+            for row in votes_data:
+                t = row['Type']
+                if t == 'Фильм':
                     title = row['Title']
                     original_title = row['Original Title']
-                    t = row['Type']
                     year = year_to_int(row['Year'])
                     print(title, original_title, t, year)
 
-                    if t == 'Фильм':
-                        m, created = KinoriumMovie.objects.get_or_create(
-                            title=title, original_title=original_title, year=year
-                        )
-                        m.status = KinoriumMovie.WATCHED
-                        m.save()
+                    m, created = KinoriumMovie.objects.get_or_create(
+                        title=title, original_title=original_title, year=year
+                    )
+                    m.status = KinoriumMovie.WATCHED
+                    m.save()
 
-            except Exception as e:
-                return HttpResponse(safe(f"<b style='color:red'>Error processing Vote file! Error: {e}</b>"))
+            # except Exception as e:
+            #     return HttpResponse(safe(f"<b style='color:red'>Error processing Vote file! Error: {e}</b>"))
 
             return HttpResponse(safe("<b style='color:green'>Update success!</b>"))
 
@@ -117,69 +117,79 @@ def upload_csv(request):
     return render(request, 'upload_csv.html')
 
 
-@login_required()
-def scan_page(request):
-    last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    return render(request, 'scan.html', {'last_scan': last_scan})
+
 
 
 
 @login_required()
+# htmx function
 def reset_rss(requst):
     if requst.method == 'POST':
         rss = MovieRSS.objects.all()
         rss.delete()
         context = {'answer': 'MovieRSS table is cleaned.'}
-        return render(requst, 'reset_rss.html', context)
-    return render(requst, 'reset_rss.html')
+
 
 
 @login_required()
+def scan_page(request):
+    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    return render(request, 'scan.html', {'last_scan': last_scan})
+
+@login_required()
 def scan(request):
-    scan_to_date = UserPreferences.objects.get(user=request.user).last_scan
-    site = LinkConstructor()
+    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    context = {'last_scan': last_scan}
 
-    movies = parse_browse(site, scan_to_date)
+    if request.method == 'GET':
 
-    for m in movies:
-        """
-        LOGIC:
-        - если есть в базе kinozal - пропускаем (предложение о скачивании показывается пользователю один раз)
-        - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
-            - проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
-        - если фильм прошел проверки по базам, тогда вытягиваем для него данные со страницы
-        - проверяем через пользовательские фильтры
-        - и вот теперь только заносим в базу 
-        """
-        if exist_in_kinozal(m):
-            print(f'SKIP [kinozal]: {m.title} - {m.year}')
-            continue
+        site = LinkConstructor()
+        movies = parse_browse(site, last_scan)
 
-        if exist_in_kinorium(m):
-            print(f'SKIP [kinorium]: {m.title} - {m.year}')
-            continue
+        for m in movies:
+            """
+            LOGIC:
+            - если есть в базе kinozal - пропускаем (предложение о скачивании показывается пользователю один раз)
+            - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
+                - проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
+            - если фильм прошел проверки по базам, тогда вытягиваем для него данные со страницы
+            - проверяем через пользовательские фильтры
+            - и вот теперь только заносим в базу 
+            """
+            print(f'START: {m.title} - {m.original_title} - {m.year}')
 
-        print(f'GET DETAILS: {m.title} - {m.year}')
-        m = get_details(m)
+            if exist_in_kinozal(m):
+                print(f'└─ SKIP [kinozal]')
+                continue
 
-        if checking_all_filters(request.user, m, low_priority=False):
-            print(f'ADD TO DB [high]: {m.title} - {m.year}')
-            m.low_priority = False
-            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
-                                           defaults=dataclasses.asdict(m))
-        elif checking_all_filters(request.user, m, low_priority=True):
-            print(f'ADD TO DB [low]: {m.title} - {m.year}')
-            m.low_priority = False
-            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
-                                           defaults=dataclasses.asdict(m))
-        else:
-            pass  # Movie do not match criteria, just do nothing
+            exist, match_full, status = exist_in_kinorium(m)
+            if exist and match_full:
+                print(f'└─ SKIP [{status}]')
+                continue
+            if not match_full:
+                m.kinorium_partial_match = True
 
-    UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
+            m, sec = get_details(m)
+            print(f'└─ GET DETAILS: {sec:.1f}s')
 
-    return render(request, 'scan.html', context={'movies': movies})
+            if checking_all_filters(request.user, m, low_priority=False):
+                print(f'└─ ADD TO DB [high] [partial={not match_full}]')
+                m.low_priority = False
+            elif checking_all_filters(request.user, m, low_priority=True):
+                print(f'└─ ADD TO DB [low] [partial={not match_full}]')
+                m.low_priority = True
+            else:
+                pass  # Movie do not match criteria, just do nothing
 
+            if m.low_priority is not None:
+                MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
+                                               defaults=dataclasses.asdict(m))
 
+        UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
+
+        context['movies'] = movies
+
+        return render(request, 'partials/scan-table.html', context)
 
 
 def user_preferences_update(request):
@@ -210,3 +220,15 @@ def user_preferences_update(request):
                 return redirect(reverse('kinozal:user_preferences'))
     return render(request, 'preferences_update_form.html',
                   {'form': form, 'form_low': form_low})
+
+
+def plex(request):
+    baseurl = 'http://127.0.0.1:32400'
+    token = '4xNQeFuz8ty2A4omgxXB'
+    plex = PlexServer(baseurl, token)
+
+    m = plex.library.section('Фильмы')
+    movies = m.search()
+    for mov in movies:
+        print(mov)
+    return render(request, 'plex.html', {'movies': movies})
