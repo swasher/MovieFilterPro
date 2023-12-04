@@ -1,0 +1,969 @@
+#
+# Список стран кодов по ISO 3166-1.
+#
+# Data taken from: http://openconcept.ca/blog/mgifford/text_list_all_countries
+#
+countries:
+  AF:
+    iso_2:  "AF"
+    name:   "Афганистан"
+
+  AL:
+    iso_2:  "AL"
+    name:   "Албания"
+
+  DZ:
+    iso_2:  "DZ"
+    name:   "Алжир"
+
+  AS:
+    iso_2:  "AS"
+    name:   "Американское Самоа"
+
+  AD:
+    iso_2:  "AD"
+    name:   "Андорра"
+
+  AO:
+    iso_2:  "AO"
+    name:   "Ангола"
+
+  AI:
+    iso_2:  "AI"
+    name:   "Ангилья"
+
+  AQ:
+    iso_2:  "AQ"
+    name:   "Антарктида"
+
+  AG:
+    iso_2:  "AG"
+    name:   "Анти́гуа и Барбу́да"
+
+  AR:
+    iso_2:  "AR"
+    name:   "Аргентина"
+
+  AM:
+    iso_2:  "AM"
+    name:   "Армения"
+
+  AW:
+    iso_2:  "AW"
+    name:   "Аруба"
+
+  AU:
+    iso_2:  "AU"
+    name:   "Австралия"
+
+  AT:
+    iso_2:  "AT"
+    name:   "Австрия"
+
+  AZ:
+    iso_2:  "AZ"
+    name:   "Азербайджан"
+
+  BS:
+    iso_2:  "BS"
+    name:   "Багамские острова"
+
+  BH:
+    iso_2:  "BH"
+    name:   "Бахрейн"
+
+  BD:
+    iso_2:  "BD"
+    name:   "Бангладеш"
+
+  BB:
+    iso_2:  "BB"
+    name:   "Барбадос"
+
+  BY:
+    iso_2:  "BY"
+    name:   "Беларусь"
+
+  BE:
+    iso_2:  "BE"
+    name:   "Бельгия"
+
+  BZ:
+    iso_2:  "BZ"
+    name:   "Белиз"
+
+  BJ:
+    iso_2:  "BJ"
+    name:   "Бенин"
+
+  BM:
+    iso_2:  "BM"
+    name:   "Бермудские острова"
+
+  BT:
+    iso_2:  "BT"
+    name:   "Бутан"
+
+  BO:
+    iso_2:  "BO"
+    name:   "Боливия"
+
+  BA:
+    iso_2:  "BA"
+    name:   "Босния и Герцеговина"
+
+  BW:
+    iso_2:  "BW"
+    name:   "Ботсвана"
+
+  BV:
+    iso_2:  "BV"
+    name:   "Остров Буве"
+
+  BR:
+    iso_2:  "BR"
+    name:   "Бразилия"
+
+  IO:
+    iso_2:  "IO"
+    name:   "Британская территория в Индийском океане"
+
+  BN:
+    iso_2:  "BN"
+    name:   "Бруней"
+
+  BG:
+    iso_2:  "BG"
+    name:   "Болгария"
+
+  BF:
+    iso_2:  "BF"
+    name:   "Буркина Фасо"
+
+  BI:
+    iso_2:  "BI"
+    name:   "Бурунди"
+
+  KH:
+    iso_2:  "KH"
+    name:   "Камбоджа"
+
+  CM:
+    iso_2:  "CM"
+    name:   "Камерун"
+
+  CA:
+    iso_2:  "CA"
+    name:   "Канада"
+
+  CV:
+    iso_2:  "CV"
+    name:   "Кабо-Верде"
+
+  KY:
+    iso_2:  "KY"
+    name:   "Каймановы острова"
+
+  CF:
+    iso_2:  "CF"
+    name:   "Центрально-Африканская Республика"
+
+  TD:
+    iso_2:  "TD"
+    name:   "Чад"
+
+  CL:
+    iso_2:  "CL"
+    name:   "Чили"
+
+  CN:
+    iso_2:  "CN"
+    name:   "Китай"
+
+  CX:
+    iso_2:  "CX"
+    name:   "Остров Рождества"
+
+  CC:
+    iso_2:  "CC"
+    name:   "Кокосовые острова (Килинг)"
+
+  CO:
+    iso_2:  "CO"
+    name:   "Колумбия"
+
+  KM:
+    iso_2:  "KM"
+    name:   "Коморы"
+
+  CG:
+    iso_2:  "CG"
+    name:   "Конго"
+
+  CD:
+    iso_2:  "CD"
+    name:   "Демократическая Республика Конго"
+
+  CK:
+    iso_2:  "CK"
+    name:   "Острова Кука"
+
+  CR:
+    iso_2:  "CR"
+    name:   "Коста-Рика"
+
+  CI:
+    iso_2:  "CI"
+    name:   "Кот-д’Ивуар"
+
+  HR:
+    iso_2:  "HR"
+    name:   "Хорватия"
+
+  CU:
+    iso_2:  "CU"
+    name:   "Куба"
+
+  CY:
+    iso_2:  "CY"
+    name:   "Кипр"
+
+  CZ:
+    iso_2:  "CZ"
+    name:   "Чехия"
+
+  DK:
+    iso_2:  "DK"
+    name:   "Дания"
+
+  DJ:
+    iso_2:  "DJ"
+    name:   "Джибути"
+
+  DM:
+    iso_2:  "DM"
+    name:   "Доминика"
+
+  DO:
+    iso_2:  "DO"
+    name:   "Доминиканская Республика"
+
+  TP:
+    iso_2:  "TP"
+    name:   "Восточный Тимор"
+
+  EC:
+    iso_2:  "EC"
+    name:   "Эквадор"
+
+  EG:
+    iso_2:  "EG"
+    name:   "Египет"
+
+  SV:
+    iso_2:  "SV"
+    name:   "Сальвадор"
+
+  GQ:
+    iso_2:  "GQ"
+    name:   "Экваториальная Гвинея"
+
+  ER:
+    iso_2:  "ER"
+    name:   "Эритрея"
+
+  EE:
+    iso_2:  "EE"
+    name:   "Эстония"
+
+  ET:
+    iso_2:  "ET"
+    name:   "Эфиопия"
+
+  FK:
+    iso_2:  "FK"
+    name:   "Фолклендские острова"
+
+  FO:
+    iso_2:  "FO"
+    name:   "Фарерские острова"
+
+  FJ:
+    iso_2:  "FJ"
+    name:   "Фиджи"
+
+  FI:
+    iso_2:  "FI"
+    name:   "Финляндия"
+
+  FR:
+    iso_2:  "FR"
+    name:   "Франция"
+
+  GF:
+    iso_2:  "GF"
+    name:   "Французская Гвиана"
+
+  PF:
+    iso_2:  "PF"
+    name:   "Французская Полинезия"
+
+  TF:
+    iso_2:  "TF"
+    name:   "Французские Южные Территории"
+
+  GA:
+    iso_2:  "GA"
+    name:   "Габон"
+
+  GM:
+    iso_2:  "GM"
+    name:   "Гамбия"
+
+  GE:
+    iso_2:  "GE"
+    name:   "Грузия"
+
+  DE:
+    iso_2:  "DE"
+    name:   "Германия"
+
+  GH:
+    iso_2:  "GH"
+    name:   "Гана"
+
+  GI:
+    iso_2:  "GI"
+    name:   "Гибралтар"
+
+  GR:
+    iso_2:  "GR"
+    name:   "Греция"
+
+  GL:
+    iso_2:  "GL"
+    name:   "Гренландия"
+
+  GD:
+    iso_2:  "GD"
+    name:   "Гренада"
+
+  GP:
+    iso_2:  "GP"
+    name:   "Гваделупа"
+
+  GU:
+    iso_2:  "GU"
+    name:   "Гуам"
+
+  GT:
+    iso_2:  "GT"
+    name:   "Гватемала"
+
+  GN:
+    iso_2:  "GN"
+    name:   "Гвинея"
+
+  GW:
+    iso_2:  "GW"
+    name:   "Гвинея-Бисау"
+
+  GY:
+    iso_2:  "GY"
+    name:   "Гайана"
+
+  HT:
+    iso_2:  "HT"
+    name:   "Гаити"
+
+  HM:
+    iso_2:  "HM"
+    name:   "Остров Херд и острова Макдональд"
+
+  VA:
+    iso_2:  "VA"
+    name:   "Святейший Престол (Ватикан)"
+
+  HN:
+    iso_2:  "HN"
+    name:   "Гондурас"
+
+  HK:
+    iso_2:  "HK"
+    name:   "Гонг-Конг"
+
+  HU:
+    iso_2:  "HU"
+    name:   "Венгрия"
+
+  IS:
+    iso_2:  "IS"
+    name:   "Исландия"
+
+  IN:
+    iso_2:  "IN"
+    name:   "Индия"
+
+  ID:
+    iso_2:  "ID"
+    name:   "Индонезия"
+
+  IR:
+    iso_2:  "IR"
+    name:   "Иран"
+
+  IQ:
+    iso_2:  "IQ"
+    name:   "Ирак"
+
+  IE:
+    iso_2:  "IE"
+    name:   "Ирландия"
+
+  IL:
+    iso_2:  "IL"
+    name:   "Израиль"
+
+  IT:
+    iso_2:  "IT"
+    name:   "Италия"
+
+  JM:
+    iso_2:  "JM"
+    name:   "Ямайка"
+
+  JP:
+    iso_2:  "JP"
+    name:   "Япония"
+
+  JO:
+    iso_2:  "JO"
+    name:   "Иордания"
+
+  KZ:
+    iso_2:  "KZ"
+    name:   "Казахстан"
+
+  KE:
+    iso_2:  "KE"
+    name:   "Кения"
+
+  KI:
+    iso_2:  "KI"
+    name:   "Кирибати"
+
+  KP:
+    iso_2:  "KP"
+    name:   "Корейская Народно- Демократическая Республика"
+
+  KR:
+    iso_2:  "KR"
+    name:   "Республика Корея"
+
+  KV:
+    iso_2:  "KV"
+    name:   "Косово"
+
+  KW:
+    iso_2:  "KW"
+    name:   "Кувейт"
+
+  KG:
+    iso_2:  "KG"
+    name:   "Кыргызстан"
+
+  LA:
+    iso_2:  "LA"
+    name:   "Лаос"
+
+  LV:
+    iso_2:  "LV"
+    name:   "Датвия"
+
+  LB:
+    iso_2:  "LB"
+    name:   "Ливан"
+
+  LS:
+    iso_2:  "LS"
+    name:   "Лесото"
+
+  LR:
+    iso_2:  "LR"
+    name:   "Либерия"
+
+  LY:
+    iso_2:  "LY"
+    name:   "Ливия"
+
+  LI:
+    iso_2:  "LI"
+    name:   "Лихтенштейн"
+
+  LT:
+    iso_2:  "LT"
+    name:   "Литва"
+
+  LU:
+    iso_2:  "LU"
+    name:   "Люксембург"
+
+  MO:
+    iso_2:  "MO"
+    name:   "Макао"
+
+  MK:
+    iso_2:  "MK"
+    name:   "бывшая югославская Республика Македония"
+
+  MG:
+    iso_2:  "MG"
+    name:   "Мадагаскар"
+
+  MW:
+    iso_2:  "MW"
+    name:   "Малави"
+
+  MY:
+    iso_2:  "MY"
+    name:   "Малайзия"
+
+  MV:
+    iso_2:  "MV"
+    name:   "Мальдивы"
+
+  ML:
+    iso_2:  "ML"
+    name:   "Мали"
+
+  MT:
+    iso_2:  "MT"
+    name:   "Мальта"
+
+  MH:
+    iso_2:  "MH"
+    name:   "Маршалловы острова"
+
+  MQ:
+    iso_2:  "MQ"
+    name:   "Мартиника"
+
+  MR:
+    iso_2:  "MR"
+    name:   "Мавритания"
+
+  MU:
+    iso_2:  "MU"
+    name:   "Маврикий"
+
+  YT:
+    iso_2:  "YT"
+    name:   "Майотта"
+
+  MX:
+    iso_2:  "MX"
+    name:   "Мексика"
+
+  FM:
+    iso_2:  "FM"
+    name:   "Микронезия, Федеративные Штаты"
+
+  MD:
+    iso_2:  "MD"
+    name:   "Молдова"
+
+  MC:
+    iso_2:  "MC"
+    name:   "Монако"
+
+  MN:
+    iso_2:  "MN"
+    name:   "Монголия"
+
+  MS:
+    iso_2:  "MS"
+    name:   "Монтсеррат"
+
+  ME:
+    iso_2:  "ME"
+    name:   "Черногория"
+
+  MA:
+    iso_2:  "MA"
+    name:   "Марокко"
+
+  MZ:
+    iso_2:  "MZ"
+    name:   "Мозамбик"
+
+  MM:
+    iso_2:  "MM"
+    name:   "Мьянма"
+
+  NA:
+    iso_2:  "NA"
+    name:   "Намибия"
+
+  NR:
+    iso_2:  "NR"
+    name:   "Науру"
+
+  NP:
+    iso_2:  "NP"
+    name:   "Непал"
+
+  NL:
+    iso_2:  "NL"
+    name:   "Нидерланды"
+
+  AN:
+    iso_2:  "AN"
+    name:   "Нидерландские Антильские острова"
+
+  NC:
+    iso_2:  "NC"
+    name:   "Новая Каледония"
+
+  NZ:
+    iso_2:  "NZ"
+    name:   "Новая Зеландия"
+
+  NI:
+    iso_2:  "NI"
+    name:   "Никарагуа"
+
+  NE:
+    iso_2:  "NE"
+    name:   "Нигер"
+
+  NG:
+    iso_2:  "NG"
+    name:   "Нигерия"
+
+  NU:
+    iso_2:  "NU"
+    name:   "Ниуэ"
+
+  NF:
+    iso_2:  "NF"
+    name:   "Норфолк"
+
+  MP:
+    iso_2:  "MP"
+    name:   "Северные Марианские острова"
+
+  NO:
+    iso_2:  "NO"
+    name:   "Норвегия"
+
+  OM:
+    iso_2:  "OM"
+    name:   "Оман"
+
+  PK:
+    iso_2:  "PK"
+    name:   "Пакистан"
+
+  PW:
+    iso_2:  "PW"
+    name:   "Палау"
+
+  PS:
+    iso_2:  "PS"
+    name:   "Палестина"
+
+  PA:
+    iso_2:  "PA"
+    name:   "Панама"
+
+  PG:
+    iso_2:  "PG"
+    name:   "Папуа — Новая Гвинея"
+
+  PY:
+    iso_2:  "PY"
+    name:   "Парагвай"
+
+  PE:
+    iso_2:  "PE"
+    name:   "Перу"
+
+  PH:
+    iso_2:  "PH"
+    name:   "Филиппины"
+
+  PN:
+    iso_2:  "PN"
+    name:   "Питкэрн"
+
+  PL:
+    iso_2:  "PL"
+    name:   "Польша"
+
+  PT:
+    iso_2:  "PT"
+    name:   "Португалия"
+
+  PR:
+    iso_2:  "PR"
+    name:   "Пуэрто-Рико"
+
+  QA:
+    iso_2:  "QA"
+    name:   "Катар"
+
+  RE:
+    iso_2:  "RE"
+    name:   "Реюньон"
+
+  RO:
+    iso_2:  "RO"
+    name:   "Румыния"
+
+  RU:
+    iso_2:  "RU"
+    name:   "Российская Федерация"
+
+  RW:
+    iso_2:  "RW"
+    name:   "Руанда"
+
+  SH:
+    iso_2:  "SH"
+    name:   "Остров Святой Елены"
+
+  KN:
+    iso_2:  "KN"
+    name:   "Сент-Китс и Невис"
+
+  LC:
+    iso_2:  "LC"
+    name:   "Сент-Люсия"
+
+  PM:
+    iso_2:  "PM"
+    name:   "Сен-Пьер и Микелон"
+
+  VC:
+    iso_2:  "VC"
+    name:   "Сент-Винсент и Гренадины"
+
+  WS:
+    iso_2:  "WS"
+    name:   "Самоа"
+
+  SM:
+    iso_2:  "SM"
+    name:   "Сан Марино"
+
+  ST:
+    iso_2:  "ST"
+    name:   "Сан-Томе и Принсипи"
+
+  SA:
+    iso_2:  "SA"
+    name:   "Саудовская Аравия"
+
+  SN:
+    iso_2:  "SN"
+    name:   "Сенегал"
+
+  RS:
+    iso_2:  "RS"
+    name:   "Сербия"
+
+  SC:
+    iso_2:  "SC"
+    name:   "Сейшельские Острова"
+
+  SL:
+    iso_2:  "SL"
+    name:   "Сьерра-Леоне"
+
+  SG:
+    iso_2:  "SG"
+    name:   "Сингапур"
+
+  SK:
+    iso_2:  "SK"
+    name:   "Словакия"
+
+  SI:
+    iso_2:  "SI"
+    name:   "Словения"
+
+  SB:
+    iso_2:  "SB"
+    name:   "Соломоновы острова"
+
+  SO:
+    iso_2:  "SO"
+    name:   "Сомали"
+
+  ZA:
+    iso_2:  "ZA"
+    name:   "Южно-Африканская Республика"
+
+  GS:
+    iso_2:  "GS"
+    name:   "Южная Георгия и Южные Сандвичевы острова"
+
+  ES:
+    iso_2:  "ES"
+    name:   "Испания"
+
+  LK:
+    iso_2:  "LK"
+    name:   "Шри Ланка"
+
+  SD:
+    iso_2:  "SD"
+    name:   "Судан"
+
+  SR:
+    iso_2:  "SR"
+    name:   "Суринам"
+
+  SJ:
+    iso_2:  "SJ"
+    name:   "Сволборд и Ян Майен"
+
+  SZ:
+    iso_2:  "SZ"
+    name:   "Свазиленд"
+
+  SE:
+    iso_2:  "SE"
+    name:   "Швеция"
+
+  CH:
+    iso_2:  "CH"
+    name:   "Швейцария"
+
+  SY:
+    iso_2:  "SY"
+    name:   "Сирия"
+
+  TW:
+    iso_2:  "TW"
+    name:   "Тайвань"
+
+  TJ:
+    iso_2:  "TJ"
+    name:   "Таджикистан"
+
+  TZ:
+    iso_2:  "TZ"
+    name:   "Танзания"
+
+  TH:
+    iso_2:  "TH"
+    name:   "Таиланд"
+
+  TG:
+    iso_2:  "TG"
+    name:   "Того"
+
+  TK:
+    iso_2:  "TK"
+    name:   "Токелау"
+
+  TO:
+    iso_2:  "TO"
+    name:   "Тонга"
+
+  TT:
+    iso_2:  "TT"
+    name:   "Тринидад и Тобаго"
+
+  TN:
+    iso_2:  "TN"
+    name:   "Тунис"
+
+  TR:
+    iso_2:  "TR"
+    name:   "Турция"
+
+  TM:
+    iso_2:  "TM"
+    name:   "Туркменистан"
+
+  TC:
+    iso_2:  "TC"
+    name:   "Тёркс и Кайкос"
+
+  TV:
+    iso_2:  "TV"
+    name:   "Тувалу"
+
+  UG:
+    iso_2:  "UG"
+    name:   "Уганда"
+
+  UA:
+    iso_2:  "UA"
+    name:   "Украина"
+
+  AE:
+    iso_2:  "AE"
+    name:   "Объединённые Арабские Эмираты"
+
+  GB:
+    iso_2:  "GB"
+    name:   "Великобритания"
+
+  US:
+    iso_2:  "US"
+    name:   "Соединенные штаты Америки"
+
+  UM:
+    iso_2:  "UM"
+    name:   "Мелкие отдаленные острова США"
+
+  UY:
+    iso_2:  "UY"
+    name:   "Уругвай"
+
+  UZ:
+    iso_2:  "UZ"
+    name:   "Узбекистан"
+
+  VU:
+    iso_2:  "VU"
+    name:   "Вануату"
+
+  VE:
+    iso_2:  "VE"
+    name:   "Венесуэла"
+
+  VN:
+    iso_2:  "VN"
+    name:   "Вьетнам"
+
+  VG:
+    iso_2:  "VG"
+    name:   "Британские Виргинские острова"
+
+  VI:
+    iso_2:  "VI"
+    name:   "Американские Виргинские Острова"
+
+  WF:
+    iso_2:  "WF"
+    name:   "Уоллис и Футуна"
+
+  EH:
+    iso_2:  "EH"
+    name:   "Западная Сахара"
+
+  YE:
+    iso_2:  "YE"
+    name:   "Йемен"
+
+  ZM:
+    iso_2:  "ZM"
+    name:   "Замбия"
+
+  ZW:
+    iso_2:  "ZW"
+    name:   "Зимбабве"

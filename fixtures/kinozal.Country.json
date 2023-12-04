@@ -1,0 +1,1696 @@
+[
+{
+    "model": "kinozal.country",
+    "pk": 1,
+    "fields": {
+        "name": "Афганистан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 2,
+    "fields": {
+        "name": "Албания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 3,
+    "fields": {
+        "name": "Алжир"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 4,
+    "fields": {
+        "name": "Американское Самоа"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 5,
+    "fields": {
+        "name": "Андорра"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 6,
+    "fields": {
+        "name": "Ангола"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 7,
+    "fields": {
+        "name": "Ангилья"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 8,
+    "fields": {
+        "name": "Антарктида"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 9,
+    "fields": {
+        "name": "Анти́гуа и Барбу́да"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 10,
+    "fields": {
+        "name": "Аргентина"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 11,
+    "fields": {
+        "name": "Армения"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 12,
+    "fields": {
+        "name": "Аруба"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 13,
+    "fields": {
+        "name": "Австралия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 14,
+    "fields": {
+        "name": "Австрия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 15,
+    "fields": {
+        "name": "Азербайджан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 16,
+    "fields": {
+        "name": "Багамские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 17,
+    "fields": {
+        "name": "Бахрейн"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 18,
+    "fields": {
+        "name": "Бангладеш"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 19,
+    "fields": {
+        "name": "Барбадос"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 20,
+    "fields": {
+        "name": "Беларусь"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 21,
+    "fields": {
+        "name": "Бельгия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 22,
+    "fields": {
+        "name": "Белиз"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 23,
+    "fields": {
+        "name": "Бенин"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 24,
+    "fields": {
+        "name": "Бермудские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 25,
+    "fields": {
+        "name": "Бутан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 26,
+    "fields": {
+        "name": "Боливия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 27,
+    "fields": {
+        "name": "Босния и Герцеговина"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 28,
+    "fields": {
+        "name": "Ботсвана"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 29,
+    "fields": {
+        "name": "Остров Буве"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 30,
+    "fields": {
+        "name": "Бразилия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 31,
+    "fields": {
+        "name": "Британская территория в Индийском океане"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 32,
+    "fields": {
+        "name": "Бруней"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 33,
+    "fields": {
+        "name": "Болгария"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 34,
+    "fields": {
+        "name": "Буркина Фасо"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 35,
+    "fields": {
+        "name": "Бурунди"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 36,
+    "fields": {
+        "name": "Камбоджа"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 37,
+    "fields": {
+        "name": "Камерун"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 38,
+    "fields": {
+        "name": "Канада"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 39,
+    "fields": {
+        "name": "Кабо-Верде"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 40,
+    "fields": {
+        "name": "Каймановы острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 41,
+    "fields": {
+        "name": "Центрально-Африканская Республика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 42,
+    "fields": {
+        "name": "Чад"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 43,
+    "fields": {
+        "name": "Чили"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 44,
+    "fields": {
+        "name": "Китай"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 45,
+    "fields": {
+        "name": "Остров Рождества"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 46,
+    "fields": {
+        "name": "Кокосовые острова (Килинг)"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 47,
+    "fields": {
+        "name": "Колумбия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 48,
+    "fields": {
+        "name": "Коморы"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 49,
+    "fields": {
+        "name": "Конго"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 50,
+    "fields": {
+        "name": "Демократическая Республика Конго"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 51,
+    "fields": {
+        "name": "Острова Кука"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 52,
+    "fields": {
+        "name": "Коста-Рика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 53,
+    "fields": {
+        "name": "Кот-д’Ивуар"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 54,
+    "fields": {
+        "name": "Хорватия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 55,
+    "fields": {
+        "name": "Куба"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 56,
+    "fields": {
+        "name": "Кипр"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 57,
+    "fields": {
+        "name": "Чехия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 58,
+    "fields": {
+        "name": "Дания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 59,
+    "fields": {
+        "name": "Джибути"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 60,
+    "fields": {
+        "name": "Доминика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 61,
+    "fields": {
+        "name": "Доминиканская Республика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 62,
+    "fields": {
+        "name": "Восточный Тимор"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 63,
+    "fields": {
+        "name": "Эквадор"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 64,
+    "fields": {
+        "name": "Египет"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 65,
+    "fields": {
+        "name": "Сальвадор"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 66,
+    "fields": {
+        "name": "Экваториальная Гвинея"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 67,
+    "fields": {
+        "name": "Эритрея"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 68,
+    "fields": {
+        "name": "Эстония"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 69,
+    "fields": {
+        "name": "Эфиопия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 70,
+    "fields": {
+        "name": "Фолклендские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 71,
+    "fields": {
+        "name": "Фарерские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 72,
+    "fields": {
+        "name": "Фиджи"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 73,
+    "fields": {
+        "name": "Финляндия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 74,
+    "fields": {
+        "name": "Франция"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 75,
+    "fields": {
+        "name": "Французская Гвиана"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 76,
+    "fields": {
+        "name": "Французская Полинезия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 77,
+    "fields": {
+        "name": "Французские Южные Территории"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 78,
+    "fields": {
+        "name": "Габон"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 79,
+    "fields": {
+        "name": "Гамбия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 80,
+    "fields": {
+        "name": "Грузия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 81,
+    "fields": {
+        "name": "Германия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 82,
+    "fields": {
+        "name": "Гана"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 83,
+    "fields": {
+        "name": "Гибралтар"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 84,
+    "fields": {
+        "name": "Греция"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 85,
+    "fields": {
+        "name": "Гренландия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 86,
+    "fields": {
+        "name": "Гренада"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 87,
+    "fields": {
+        "name": "Гваделупа"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 88,
+    "fields": {
+        "name": "Гуам"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 89,
+    "fields": {
+        "name": "Гватемала"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 90,
+    "fields": {
+        "name": "Гвинея"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 91,
+    "fields": {
+        "name": "Гвинея-Бисау"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 92,
+    "fields": {
+        "name": "Гайана"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 93,
+    "fields": {
+        "name": "Гаити"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 94,
+    "fields": {
+        "name": "Остров Херд и острова Макдональд"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 95,
+    "fields": {
+        "name": "Святейший Престол (Ватикан)"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 96,
+    "fields": {
+        "name": "Гондурас"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 97,
+    "fields": {
+        "name": "Гонг-Конг"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 98,
+    "fields": {
+        "name": "Венгрия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 99,
+    "fields": {
+        "name": "Исландия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 100,
+    "fields": {
+        "name": "Индия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 101,
+    "fields": {
+        "name": "Индонезия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 102,
+    "fields": {
+        "name": "Иран"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 103,
+    "fields": {
+        "name": "Ирак"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 104,
+    "fields": {
+        "name": "Ирландия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 105,
+    "fields": {
+        "name": "Израиль"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 106,
+    "fields": {
+        "name": "Италия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 107,
+    "fields": {
+        "name": "Ямайка"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 108,
+    "fields": {
+        "name": "Япония"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 109,
+    "fields": {
+        "name": "Иордания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 110,
+    "fields": {
+        "name": "Казахстан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 111,
+    "fields": {
+        "name": "Кения"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 112,
+    "fields": {
+        "name": "Кирибати"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 113,
+    "fields": {
+        "name": "Корейская Народно- Демократическая Республика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 114,
+    "fields": {
+        "name": "Республика Корея"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 115,
+    "fields": {
+        "name": "Косово"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 116,
+    "fields": {
+        "name": "Кувейт"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 117,
+    "fields": {
+        "name": "Кыргызстан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 118,
+    "fields": {
+        "name": "Лаос"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 119,
+    "fields": {
+        "name": "Датвия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 120,
+    "fields": {
+        "name": "Ливан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 121,
+    "fields": {
+        "name": "Лесото"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 122,
+    "fields": {
+        "name": "Либерия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 123,
+    "fields": {
+        "name": "Ливия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 124,
+    "fields": {
+        "name": "Лихтенштейн"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 125,
+    "fields": {
+        "name": "Литва"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 126,
+    "fields": {
+        "name": "Люксембург"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 127,
+    "fields": {
+        "name": "Макао"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 128,
+    "fields": {
+        "name": "бывшая югославская Республика Македония"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 129,
+    "fields": {
+        "name": "Мадагаскар"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 130,
+    "fields": {
+        "name": "Малави"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 131,
+    "fields": {
+        "name": "Малайзия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 132,
+    "fields": {
+        "name": "Мальдивы"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 133,
+    "fields": {
+        "name": "Мали"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 134,
+    "fields": {
+        "name": "Мальта"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 135,
+    "fields": {
+        "name": "Маршалловы острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 136,
+    "fields": {
+        "name": "Мартиника"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 137,
+    "fields": {
+        "name": "Мавритания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 138,
+    "fields": {
+        "name": "Маврикий"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 139,
+    "fields": {
+        "name": "Майотта"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 140,
+    "fields": {
+        "name": "Мексика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 141,
+    "fields": {
+        "name": "Микронезия, Федеративные Штаты"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 142,
+    "fields": {
+        "name": "Молдова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 143,
+    "fields": {
+        "name": "Монако"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 144,
+    "fields": {
+        "name": "Монголия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 145,
+    "fields": {
+        "name": "Монтсеррат"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 146,
+    "fields": {
+        "name": "Черногория"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 147,
+    "fields": {
+        "name": "Марокко"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 148,
+    "fields": {
+        "name": "Мозамбик"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 149,
+    "fields": {
+        "name": "Мьянма"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 150,
+    "fields": {
+        "name": "Намибия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 151,
+    "fields": {
+        "name": "Науру"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 152,
+    "fields": {
+        "name": "Непал"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 153,
+    "fields": {
+        "name": "Нидерланды"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 154,
+    "fields": {
+        "name": "Нидерландские Антильские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 155,
+    "fields": {
+        "name": "Новая Каледония"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 156,
+    "fields": {
+        "name": "Новая Зеландия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 157,
+    "fields": {
+        "name": "Никарагуа"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 158,
+    "fields": {
+        "name": "Нигер"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 159,
+    "fields": {
+        "name": "Нигерия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 160,
+    "fields": {
+        "name": "Ниуэ"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 161,
+    "fields": {
+        "name": "Норфолк"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 162,
+    "fields": {
+        "name": "Северные Марианские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 163,
+    "fields": {
+        "name": "Норвегия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 164,
+    "fields": {
+        "name": "Оман"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 165,
+    "fields": {
+        "name": "Пакистан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 166,
+    "fields": {
+        "name": "Палау"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 167,
+    "fields": {
+        "name": "Палестина"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 168,
+    "fields": {
+        "name": "Панама"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 169,
+    "fields": {
+        "name": "Папуа — Новая Гвинея"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 170,
+    "fields": {
+        "name": "Парагвай"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 171,
+    "fields": {
+        "name": "Перу"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 172,
+    "fields": {
+        "name": "Филиппины"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 173,
+    "fields": {
+        "name": "Питкэрн"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 174,
+    "fields": {
+        "name": "Польша"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 175,
+    "fields": {
+        "name": "Португалия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 176,
+    "fields": {
+        "name": "Пуэрто-Рико"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 177,
+    "fields": {
+        "name": "Катар"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 178,
+    "fields": {
+        "name": "Реюньон"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 179,
+    "fields": {
+        "name": "Румыния"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 180,
+    "fields": {
+        "name": "Россия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 181,
+    "fields": {
+        "name": "Руанда"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 182,
+    "fields": {
+        "name": "Остров Святой Елены"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 183,
+    "fields": {
+        "name": "Сент-Китс и Невис"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 184,
+    "fields": {
+        "name": "Сент-Люсия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 185,
+    "fields": {
+        "name": "Сен-Пьер и Микелон"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 186,
+    "fields": {
+        "name": "Сент-Винсент и Гренадины"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 187,
+    "fields": {
+        "name": "Самоа"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 188,
+    "fields": {
+        "name": "Сан Марино"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 189,
+    "fields": {
+        "name": "Сан-Томе и Принсипи"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 190,
+    "fields": {
+        "name": "Саудовская Аравия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 191,
+    "fields": {
+        "name": "Сенегал"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 192,
+    "fields": {
+        "name": "Сербия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 193,
+    "fields": {
+        "name": "Сейшельские Острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 194,
+    "fields": {
+        "name": "Сьерра-Леоне"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 195,
+    "fields": {
+        "name": "Сингапур"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 196,
+    "fields": {
+        "name": "Словакия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 197,
+    "fields": {
+        "name": "Словения"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 198,
+    "fields": {
+        "name": "Соломоновы острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 199,
+    "fields": {
+        "name": "Сомали"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 200,
+    "fields": {
+        "name": "Южно-Африканская Республика"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 201,
+    "fields": {
+        "name": "Южная Георгия и Южные Сандвичевы острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 202,
+    "fields": {
+        "name": "Испания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 203,
+    "fields": {
+        "name": "Шри Ланка"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 204,
+    "fields": {
+        "name": "Судан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 205,
+    "fields": {
+        "name": "Суринам"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 206,
+    "fields": {
+        "name": "Сволборд и Ян Майен"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 207,
+    "fields": {
+        "name": "Свазиленд"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 208,
+    "fields": {
+        "name": "Швеция"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 209,
+    "fields": {
+        "name": "Швейцария"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 210,
+    "fields": {
+        "name": "Сирия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 211,
+    "fields": {
+        "name": "Тайвань"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 212,
+    "fields": {
+        "name": "Таджикистан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 213,
+    "fields": {
+        "name": "Танзания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 214,
+    "fields": {
+        "name": "Таиланд"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 215,
+    "fields": {
+        "name": "Того"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 216,
+    "fields": {
+        "name": "Токелау"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 217,
+    "fields": {
+        "name": "Тонга"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 218,
+    "fields": {
+        "name": "Тринидад и Тобаго"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 219,
+    "fields": {
+        "name": "Тунис"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 220,
+    "fields": {
+        "name": "Турция"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 221,
+    "fields": {
+        "name": "Туркменистан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 222,
+    "fields": {
+        "name": "Тёркс и Кайкос"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 223,
+    "fields": {
+        "name": "Тувалу"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 224,
+    "fields": {
+        "name": "Уганда"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 225,
+    "fields": {
+        "name": "Украина"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 226,
+    "fields": {
+        "name": "Объединённые Арабские Эмираты"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 227,
+    "fields": {
+        "name": "Великобритания"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 228,
+    "fields": {
+        "name": "Соединенные штаты Америки"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 229,
+    "fields": {
+        "name": "Мелкие отдаленные острова США"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 230,
+    "fields": {
+        "name": "Уругвай"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 231,
+    "fields": {
+        "name": "Узбекистан"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 232,
+    "fields": {
+        "name": "Вануату"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 233,
+    "fields": {
+        "name": "Венесуэла"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 234,
+    "fields": {
+        "name": "Вьетнам"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 235,
+    "fields": {
+        "name": "Британские Виргинские острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 236,
+    "fields": {
+        "name": "Американские Виргинские Острова"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 237,
+    "fields": {
+        "name": "Уоллис и Футуна"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 238,
+    "fields": {
+        "name": "Западная Сахара"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 239,
+    "fields": {
+        "name": "Йемен"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 240,
+    "fields": {
+        "name": "Замбия"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 241,
+    "fields": {
+        "name": "Зимбабве"
+    }
+},
+{
+    "model": "kinozal.country",
+    "pk": 242,
+    "fields": {
+        "name": "СССР"
+    }
+}
+]

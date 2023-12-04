@@ -136,3 +136,11 @@ class UserPreferences(models.Model):
         countries = self.low_countries.split(', ') if self.countries else []
         genres = self.low_genres.split(', ') if self.genres else []
         return countries, genres, self.low_max_year, self.low_min_rating
+
+
+class Country(models.Model):
+    """
+    Нужно потому, что в Kinozale в одном поле и страны и студии. С помощью списка известных стран будем отделять одни о
+    от других.
+    """
+    name = models.CharField(max_length=60, unique=True)

@@ -34,11 +34,7 @@ flush:
 	python manage.py flush --no-input
 
 TABLES = \
- core.Colours core.Customer core.Contractor core.Employee core.OperationsGroup core.OperationTemplate \
- core.OperationsCost core.Material core.Papersize core.Paper core.PrintingPress core.Equipment \
- core.UserPreferences core.Shift \
- orders.Order orders.PrintSheet orders.Detail orders.Operation \
- stanzforms.Doska stanzforms.Knife
+ kinozal.Country
 
 save_fixtures:
 	read  -p "Are you sure? THIS WILL DELETE ALL EXISTING FIXTURES!!! [y/N] " ans && ans=$${ans:-N} ; \
