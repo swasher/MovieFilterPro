@@ -7,6 +7,7 @@ from .classes import KinozalMovie
 from .classes import LinkConstructor
 
 from .util import is_float
+from .models import Country
 
 
 def parse_browse(site: LinkConstructor, scan_to_date):
@@ -119,7 +120,13 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
 
         m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
 
-        m.countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
+        countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
+        countries_list = Country.objects.values_list('name', flat=True)
+        if countries:
+            result = [c for c in countries.split(', ') if c in countries_list]
+            m.countries = ', '.join(result)
+        else:
+            m.countries = None
 
         m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
 

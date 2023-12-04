@@ -9,22 +9,23 @@
         <div class="col-6 offset-3">
 
             <div class="row p-0">
-                <h3>Normal prority</h3>
-                <hr>
                 <form method="post">
                     {% csrf_token %}
-                    {% crispy form form.helper %}
+                    {% crispy form %}
                 </form>
             </div>
 
-            <div class="row p-0">
-                <h3>Low prority</h3>
-                <hr>
-                <form method="post">
-                    {% csrf_token %}
-                    {% crispy form_low %}
-                </form>
-            </div>
+            {% comment %}
+                        deprecated
+                         <div class="row p-0">
+                            <h3>Low prority</h3>
+                            <h6>В оставшемся списке помечается как "низкий приоритет" содержащее указанные страны/жанры, или менее года/рейтинга </h6>
+                            <hr>
+                            <form method="post">
+                                {% csrf_token %}
+                            </form>
+                        </div>
+            {% endcomment %}
 
             <div class="row p-0">
                 <h3>Clear RSS database</h3>

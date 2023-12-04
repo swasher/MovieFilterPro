@@ -18,7 +18,7 @@ from kinozal.parse import parse_browse
 from .checks import exist_in_kinorium, exist_in_kinozal, checking_all_filters
 from .parse import get_details
 from .models import MovieRSS
-from .forms import PreferencesForm, PreferencesFormLow
+from .forms import PreferencesForm
 
 
 def movies(request):
@@ -136,6 +136,7 @@ def scan_page(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
     return render(request, 'scan.html', {'last_scan': last_scan})
 
+
 @login_required()
 def scan(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
@@ -196,30 +197,23 @@ def user_preferences_update(request):
     user = User.objects.get(pk=request.user.pk)
     pref, _ = UserPreferences.objects.get_or_create(user=user)
     form = PreferencesForm(request.POST or None, instance=pref)
-    form_low = PreferencesFormLow(request.POST or None, instance=pref)
 
     if request.method == 'POST':
-        if 'normal_priority' in request.POST:
-            if form.is_valid():
-                # pref = UserPreferences.objects.get_or_create(user=request.user)
-                pref.last_scan = form.cleaned_data['last_scan']
-                pref.countries = form.cleaned_data['countries']
-                pref.genres = form.cleaned_data['genres']
-                pref.max_year = int(form.cleaned_data['max_year'])
-                pref.min_rating = float(form.cleaned_data['min_rating'])
-                pref.save()
-                return redirect(reverse('kinozal:user_preferences'))
-        if 'low_priority' in request.POST:
-            if form_low.is_valid():
-                # pref = UserPreferences.objects.get_or_create(user=request.user)
-                pref.low_countries = form_low.cleaned_data['low_countries']
-                pref.low_genres = form_low.cleaned_data['low_genres']
-                pref.low_max_year = int(form_low.cleaned_data['low_max_year'])
-                pref.low_min_rating = float(form_low.cleaned_data['low_min_rating'])
-                pref.save()
-                return redirect(reverse('kinozal:user_preferences'))
-    return render(request, 'preferences_update_form.html',
-                  {'form': form, 'form_low': form_low})
+        if form.is_valid():
+            # pref = UserPreferences.objects.get_or_create(user=request.user)
+            pref.last_scan = form.cleaned_data['last_scan']
+            pref.countries = form.cleaned_data['countries']
+            pref.genres = form.cleaned_data['genres']
+            pref.max_year = int(form.cleaned_data['max_year'])
+            pref.min_rating = float(form.cleaned_data['min_rating'])
+
+            pref.low_countries = form.cleaned_data['low_countries']
+            pref.low_genres = form.cleaned_data['low_genres']
+            pref.low_max_year = int(form.cleaned_data['low_max_year'])
+            pref.low_min_rating = float(form.cleaned_data['low_min_rating'])
+            pref.save()
+            return redirect(reverse('kinozal:user_preferences'))
+    return render(request, 'preferences_update_form.html', {'form': form})
 
 
 def plex(request):
