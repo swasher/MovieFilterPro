@@ -1,3 +1,9 @@
 from django.contrib import admin
+from .models import KinoriumMovie
 
-# Register your models here.
+
+class KinoriumMovieAdmin(admin.ModelAdmin):
+    pass
+
+
+admin.site.register(KinoriumMovie, KinoriumMovieAdmin)

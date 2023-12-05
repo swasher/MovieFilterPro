@@ -5,6 +5,14 @@ def is_float(string):
         return False
 
 
+def year_to_int(year: str) -> int:
+    try:
+        year = int(year)
+    except ValueError:
+        raise Exception('Year not int')
+    return year
+
+
 def get_object_or_none(klass, *args, **kwargs):
     """
     Use get() to return an object, or returns None if the object

@@ -19,42 +19,31 @@ from .checks import exist_in_kinorium, exist_in_kinozal, checking_all_filters
 from .parse import get_details
 from .models import MovieRSS
 from .forms import PreferencesForm
+from .util import year_to_int
 
 
 def movies(request):
-    movies = MovieRSS.objects.filter(low_priority=False)
+    movies = MovieRSS.objects.filter(low_priority=False, ignored=False)
     return render(request, template_name='movies.html', context={'movies': movies})
+
 
 def movies_low(request):
-    movies = MovieRSS.objects.filter(low_priority=True)
+    movies = MovieRSS.objects.filter(low_priority=True, ignored=False)
     return render(request, template_name='movies.html', context={'movies': movies})
 
 
-def handle_uploaded_file(f):
-    # with open("some/file/name.txt", "wb+") as destination:
-    content = f.read()
-    for line in content.lines():
-        print(line)
-
-def from_line(line: str) -> list[str]:
-    return next(csv.reader([line]))
-
-def upload_to_dictreader(requst_file):
-    content = requst_file.read()
-    data = content.decode('utf-16', 'strict')
-    dict_reader_obj = csv.DictReader(StringIO(data, newline=''), delimiter='\t')
-    return dict_reader_obj
+# def from_line(line: str) -> list[str]:
+#     return next(csv.reader([line]))
 
 
-def year_to_int(year: str) -> int:
-    try:
-        year = int(year)
-    except:
-        return HttpResponse(safe(f"<b style='color:red'>Year not string in {title}</b>"))
-    return year
+def parse_kinorium_csv(request):
 
+    def upload_to_dictreader(requst_file):
+        content = requst_file.read()
+        data = content.decode('utf-16', 'strict')
+        dict_reader_obj = csv.DictReader(StringIO(data, newline=''), delimiter='\t')
+        return dict_reader_obj
 
-def upload_csv(request):
     if request.method == 'POST':
 
         if 'file_votes' in request.FILES and 'file_movie_list' in request.FILES:
@@ -63,7 +52,7 @@ def upload_csv(request):
             objs.delete()
 
             movie_lists_data = upload_to_dictreader(request.FILES['file_movie_list'])
-            print('\nLists')
+            print('\nСканируем "Списки фильмов')
             for row in movie_lists_data:
                 t = row['Type']
                 list_title = row['ListTitle']
@@ -81,7 +70,7 @@ def upload_csv(request):
                     original_title = row['Original Title']
                     year = year_to_int(row['Year'])
 
-                    print(list_title, title, original_title, t, year)
+                    print(f'{list_title}: {title} - {original_title} - {year}')
 
                     m, created = KinoriumMovie.objects.get_or_create(
                         title=title, original_title=original_title, year=year
@@ -97,7 +86,7 @@ def upload_csv(request):
                     title = row['Title']
                     original_title = row['Original Title']
                     year = year_to_int(row['Year'])
-                    print(title, original_title, t, year)
+                    print(f'Просмотрено: {title} - {original_title} - {year}')
 
                     m, created = KinoriumMovie.objects.get_or_create(
                         title=title, original_title=original_title, year=year
@@ -117,10 +106,6 @@ def upload_csv(request):
     return render(request, 'upload_csv.html')
 
 
-
-
-
-
 @login_required()
 # htmx function
 def reset_rss(requst):
@@ -128,7 +113,6 @@ def reset_rss(requst):
         rss = MovieRSS.objects.all()
         rss.delete()
         context = {'answer': 'MovieRSS table is cleaned.'}
-
 
 
 @login_required()
@@ -151,8 +135,9 @@ def scan(request):
             """
             LOGIC:
             - если есть в базе kinozal - пропускаем (предложение о скачивании показывается пользователю один раз)
+                ◦ так же этот фильм может быть уже в базе как Игнорируемый - в коде никаких дополнительных действий не требуется, просто не добавляем.
             - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
-                - проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
+                ◦ проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
             - если фильм прошел проверки по базам, тогда вытягиваем для него данные со страницы
             - проверяем через пользовательские фильтры
             - и вот теперь только заносим в базу 
@@ -167,28 +152,30 @@ def scan(request):
             if exist and match_full:
                 print(f'└─ SKIP [{status}]')
                 continue
-            if not match_full:
+            elif exist and not match_full:
+                print(f'└─ ADD AS PARTIAL [{status}]')
                 m.kinorium_partial_match = True
 
             m, sec = get_details(m)
             print(f'└─ GET DETAILS: {sec:.1f}s')
 
+            # Этот фильтр выкидвает все, что через него не прошло
             if checking_all_filters(request.user, m, low_priority=False):
-                print(f'└─ ADD TO DB [high] [partial={not match_full}]')
                 m.low_priority = False
-            elif checking_all_filters(request.user, m, low_priority=True):
-                print(f'└─ ADD TO DB [low] [partial={not match_full}]')
-                m.low_priority = True
-            else:
-                pass  # Movie do not match criteria, just do nothing
+
+                # Из оставшихся, некоторым назначаем низкий приоритет
+                # тут логика такая - если фильм НЕ прошел проверку - то он подпадет как Low priority
+                if not checking_all_filters(request.user, m, low_priority=True):
+                    m.low_priority = True
 
             if m.low_priority is not None:
+                print(f'└─ ADD TO DB [prio={"low" if m.low_priority else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
                 MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
                                                defaults=dataclasses.asdict(m))
 
         UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
 
-        context['movies'] = movies
+        context['result'] = movies
 
         return render(request, 'partials/scan-table.html', context)
 
@@ -226,3 +213,13 @@ def plex(request):
     for mov in movies:
         print(mov)
     return render(request, 'plex.html', {'movies': movies})
+
+
+def ignore_movie(request, pk):
+    # htmx
+    if request.method == 'DELETE':
+        try:
+            MovieRSS.objects.filter(pk=pk).update(ignored=True)
+            return HttpResponse('success')
+        except:
+            return HttpResponse('error')

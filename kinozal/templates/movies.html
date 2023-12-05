@@ -1,56 +1,96 @@
 {% extends "base.html" %}
-
 {% block body %}
 
     <h2>Лента RSS</h2>
 
-    <table class="table w-auto small">
+    <table class="table w-auto table-sm">
         <thead>
         <tr>
             <th scope="col">poster</th>
-            <th scope="col">title</th>
-            <th scope="col">original_title</th>
+            <th scope="col" class="col-1">title</th>
+            <th scope="col" class="col-1">original_title</th>
             <th scope="col">year</th>
             <th scope="col">date_added</th>
             <th scope="col">I_R</th>
             <th scope="col">K_R</th>
-            <th scope="col">genres</th>
+            <th scope="col" class="col-1">genres</th>
             <th scope="col">countries</th>
             <th scope="col">director</th>
             <th scope="col">actors</th>
             <th scope="col">plot</th>
             <th scope="col">translate</th>
-            {% comment %}<th scope="col"></th>{% endcomment %}
             <th scope="col" style="width:150px">BTN</th>
         </tr>
         </thead>
         <tbody>
 
         {% for f in movies %}
-            <tr>
-                <td><img src="{{ f.poster }}" class="img-thumbnail"></td>
-                <td>{{ f.title }}</td>
-                <td>{{ f.original_title }}</td>
+            <tr {% if f.kinorium_partial_match %} class="table-warning" {% endif %}>
+                <td>
+                    <img
+                            src="{{ f.poster }}"
+                            class="img-thumbnail"
+                            style="width: 50px"
+                            data-bs-toggle="tooltip"
+                            data-bs-html="true"
+                            title="<img src='{{ f.poster }}' />"
+                    >
+                </td>
+                <td><h6>{{ f.title }}</h6></td>
+                <td><h6>{{ f.original_title }}</h6></td>
                 <td>{{ f.year }}</td>
                 <td>{{ f.date_added }}</td>
                 <td>{{ f.imdb_rating }}</td>
                 <td>{{ f.kinopoisk_rating }}</td>
-                <td>{{ f.genres }}</td>
-                <td>{{ f.countries }}</td>
-                <td>{{ f.director }}</td>
-                <td>{{ f.actors|truncatechars:30 }}</td>
-                <td>{{ f.plot|truncatechars:30 }}</td>
-                <td>{{ f.translate }}</td>
-                {% comment %}<td><a href="{{ f.search_link }}">Search</a></td>{% endcomment %}
-                <td style="width:150px">
-                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-primary btn-sm">Скачаю</button>
-                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-primary btn-sm">Посмотреть</button>
-                    <button style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" type="button" class="btn btn-danger btn-sm">Убрать</button>
+                <td>
+                    {% for g in f.genres_as_list %}
+                        <span class="badge text-bg-light">{{ g }}</span>
+                    {% endfor %}
                 </td>
+                <td>
+                    {% for c in f.countries_as_list %}
+                        <span class="badge text-bg-light">{{ c }}</span>
+                    {% endfor %}
+                </td>
+                <td><span class="badge text-bg-light">{{ f.director }}</span></td>
+                <td>
+                    {% for a in f.actors_as_list %}
+                        {% if forloop.counter < 7 %}
+                            <span class="badge text-bg-light">{{ a }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </td>
+
+                <td>{{ f.plot|truncatechars:500 }}</td>
+                <td style="width:10%">{{ f.translate }}</td>
+                <td style="width:150px">
+                    <div class="btn-group" role="group" aria-label="Basic mixed styles example">
+                        <a href="{{ f.search_link }}" target="_blank" class="btn btn-warning btn-sm"
+                           data-bs-toggle="tooltip" title="Just open search">Open</a>
+
+                        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="tooltip"
+                                title="Open search and add to ignore">Accept
+                        </button>
+
+                        <button type="button" class="btn btn-warning btn-sm"
+                                _="on click transition closest <tr/> opacity to 0
+                                    then add @hidden to the closest <tr/>"
+                                >Hide
+                        </button>
+
+                        <button type="button" class="btn btn-danger btn-sm"
+                                data-bs-toggle="tooltip" title="Add to ignore table"
+                                hx-delete="{% url 'kinozal:ignore' f.pk %}"
+                        >Decline</button>
+                    </div>
+                </td>
+
             </tr>
         {% endfor %}
 
         </tbody>
     </table>
+
+
 
 {% endblock %}

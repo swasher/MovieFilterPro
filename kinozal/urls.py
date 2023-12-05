@@ -6,7 +6,7 @@ app_name = "kinozal"
 urlpatterns = [
     path('', views.movies, name='movies'),
     path('movies_low/', views.movies_low, name='movies_low'),
-    path('upload_csv/', views.upload_csv, name='upload_csv'),
+    path('parse_kinorium_csv/', views.parse_kinorium_csv, name='parse_kinorium_csv'),
     path('scan_page/', views.scan_page, name='scan_page'),
     path('plex/', views.plex, name='plex'),
     path('preferences/', views.user_preferences_update, name='user_preferences'),
@@ -16,6 +16,7 @@ urlpatterns = [
 htmx = [
     path('scan/', views.scan, name='scan'),
     path('reset_rss/', views.reset_rss, name='reset_rss'),
+    path('ignore/<pk>', views.ignore_movie, name='ignore')
 ]
 
 urlpatterns += htmx

@@ -16,11 +16,13 @@ def exist_in_kinozal(m: KinozalMovie) -> bool:
     return answer
 
 
-def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str|None]:
+def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
     """
-    Возвращает True, если такой фильм уже присутствует  в базе MovieRSS.
+
     Выполняет частичные проверки.
+    Первый возвращаемый аргумент - True, если такой фильм уже присутствует  в базе Kinorium.
     Второй возвращаемый аргумент показывает, было ли совпадение полное (True) или частичное (False)
+    Третий возвращаемый аргумент показывает, какой статус у фильма в базе Кинориум - Просмотрен, Буду смотреть etc.
     """
 
     """
@@ -29,9 +31,11 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str|None]:
     В кинозале год может быть периодом - 2008-2013.
     Поэтому если год - это период, то берем первые 4 цифры как для сравения.
     """
+    NOT_FOUND = False
     MATCH = True
     FULL = True
     PARTIAL = False
+
 
     year = m.year if m.year.isdigit() else m.year[:4]
 
@@ -41,16 +45,19 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str|None]:
 
     exist = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title)
     if exist:
+        print(f'  └─ DEBUG: partial match title+original: {m.title}+{m.original_title}')
         return MATCH, PARTIAL, exist.get_status_display()
 
     if m.title:
         exist = get_object_or_none(KinoriumMovie, title=m.title, year=year)
         if exist:
+            print(f'   DEBUG: partial match title+year: {m.title}+{year}')
             return MATCH, PARTIAL, exist.get_status_display()
 
     if m.original_title:
         exist = get_object_or_none(KinoriumMovie, original_title=m.original_title, year=year)
         if exist:
+            print(f'   DEBUG: partial match original+year: {m.original_title}+{year}')
             return MATCH, PARTIAL, exist.get_status_display()
 
     """
@@ -66,8 +73,7 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str|None]:
     Обычно quryset объеденяются так: q1.union(q2)
     Но будут проблемы, наверное, если вместо quryset будет None 
     """
-
-    return False, False, None
+    return NOT_FOUND, False, None
 
 
 def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> bool:
@@ -88,13 +94,13 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
     ### 1 Countries
     country_passes = not bool(set(m.countries) & set(stop_countries))
     if not country_passes:
-        print(f'└─ SKIP [country] [{prio(low_priority)}]')
+        print(f'└─ NOT MATCH in [{prio(low_priority)}]: [country]')
         return False
 
     ### 2 Genres
     genre_passes = not bool(set(m.genres) & set(stop_genres))
     if not country_passes:
-        print(f'└─ SKIP [genres] [{prio(low_priority)}]')
+        print(f'└─ NOT MATCH in [{prio(low_priority)}]: [genres]')
         return False
 
     ### 3 Max year
@@ -106,7 +112,7 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
         else:
             year = int(m.year)
         if year < max_year:
-            print(f'└─ SKIP [year] [{prio(low_priority)}]')
+            print(f'└─ NOT MATCH in [{prio(low_priority)}]: [year]')
             return False
     except:
         print('ERROR in checks.py -> checking_all_filters -> year converting')
@@ -114,7 +120,7 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
 
     ### 4 Min rating
     if m.kinopoisk_rating < min_rating and m.imdb_rating < min_rating:
-        print(f'└─ SKIP [rating] [{prio(low_priority)}]')
+        print(f'└─ NOT MATCH in [{prio(low_priority)}]: [rating]')
         return False
 
     return True

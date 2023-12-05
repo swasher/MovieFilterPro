@@ -13,16 +13,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="shortcut icon" type="image/png" href="{% static 'favicon.ico' %}"/>
 
+    <!-- Popper [before bootstrap]-->
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+
     <!-- BOOTSTRAP -->
-    <script defer src="{% static 'bootstrap/bootstrap.bundle.min.js' %}"></script>
-    <script defer src="{% static 'bootstrap/bootstrap-theme-toggler.js' %}"></script>
+    <script src="{% static 'bootstrap/bootstrap.bundle.min.js' %}"></script>
     <link rel="stylesheet" href="{% static 'bootstrap/bootstrap.min.css' %} ">
+    <script defer src="{% static 'bootstrap/bootstrap-theme-toggler.js' %}"></script>
 
     <!-- ALPINE JS -->
     <script defer src="{% static 'alpine/alpine.min.js' %}"></script>
 
     <!-- HTMX -->
     <script src="{% static 'htmx/htmx.min.js' %}"></script>
+
+    <!-- Hyperscript -->
+    <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
 
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="{% static 'bootstrap-icons/font/bootstrap-icons.css' %} ">
@@ -43,23 +49,25 @@
     <script src="{% static 'select2/select2.min.js' %}"></script>
     <link rel="stylesheet" href="{% static 'select2/select2-bootstrap-5-theme.min.css' %}" />{% endcomment %}
 
-
-
-    <title>{% block title %}PRINT MES{% endblock %}</title>
+    <title>{% block title %}KinoRSS{% endblock %}</title>
     {% block css %}{% endblock %}
     {% block js %}{% endblock %}
 
 </head>
+
 <body class="" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-
-
 
 {% include "header.html" %}
 {% block body %}  {% endblock %}
 
 {% block scripts %}
-{% comment %}   <!-- My toast injecting -->
+    {% comment %}   <!-- My toast injecting -->
     <script src="{% static 'js/toasts.js' %}" defer></script>{% endcomment %}
+    <script>
+        // Initialize bootstrap tooltips (need load popper.js)
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    </script>
 {% endblock %}
 
 {% comment %}

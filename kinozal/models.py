@@ -2,7 +2,6 @@ from urllib.parse import urlencode, quote_plus
 from typing import List, Tuple
 
 from django.db import models
-from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 
 
@@ -21,8 +20,11 @@ class Genre(models.Model):
 
 class MovieRSS(models.Model):
     """
-    Это фильмы с кинозала, которые ждут реакции юзера
+    Это фильмы с кинозала, которые ждут реакции юзера.
+    Если пользователь нажал Ignore на фильме, он остается в базе с меткой Ignore. В дальнейшем, при сканированнии,
+    сканер знает, что такие фильмы показывать пользователю не нужно.
     """
+    ignored = models.BooleanField(default=False, help_text='Пользователь не хочет видеть этот фильм.')
     low_priority = models.BooleanField(default=False)
     kinozal_id = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=70)
@@ -47,6 +49,18 @@ class MovieRSS(models.Model):
 
     kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True)
     kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
+
+    @property
+    def genres_as_list(self):
+        return self.genres.split(', ')
+
+    @property
+    def countries_as_list(self):
+        return self.countries.split(', ')
+
+    @property
+    def actors_as_list(self):
+        return self.actors.split(', ')
 
     @property
     def search_link(self):
@@ -103,11 +117,10 @@ class KinoriumMovie(models.Model):
     original_title = models.CharField(max_length=50, blank=True)
     year = models.PositiveSmallIntegerField()
 
-    kinozal_title = models.CharField(max_length=50, blank=True, null=True)
-    kinozal_original_title = models.CharField(max_length=50, blank=True, null=True)
-    kinozal_year = models.CharField(max_length=10, blank=True, null=True)
-
     status = models.PositiveSmallIntegerField(choices=STATUS, verbose_name='Статус', default=UNKNOWN)
+
+    def __str__(self):
+        return f'{self.title} - {self.year}'
 
 
 class UserPreferences(models.Model):
