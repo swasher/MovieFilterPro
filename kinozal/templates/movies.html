@@ -3,7 +3,16 @@
 
     <h2>Лента RSS</h2>
 
-    <table class="table w-auto table-sm">
+    <button class='btn btn-primary'
+            hx-get="{% url 'kinozal:scan' %}"
+            hx-target="#films"
+            hx-swap="innerHTML">
+        <span id="save-icon" class="bi-database"></span> SCAN
+        <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+    </button>
+    Last scan: <span class="badge text-bg-success">{{ last_scan }}</span>
+
+    <table id="films" class="table w-auto table-sm">
         <thead>
         <tr>
             <th scope="col">poster</th>
@@ -13,10 +22,7 @@
             <th scope="col">date_added</th>
             <th scope="col">I_R</th>
             <th scope="col">K_R</th>
-            <th scope="col" class="col-1">genres</th>
-            <th scope="col">countries</th>
-            <th scope="col">director</th>
-            <th scope="col">actors</th>
+            <th scope="col" class="col-3">common</th>
             <th scope="col">plot</th>
             <th scope="col">translate</th>
             <th scope="col" style="width:150px">BTN</th>
@@ -25,7 +31,7 @@
         <tbody>
 
         {% for f in movies %}
-            <tr {% if f.kinorium_partial_match %} class="table-warning" {% endif %}>
+            <tr class="fade-me-out" {% if f.kinorium_partial_match %} class="table-warning" {% endif %}>
                 <td>
                     <img
                             src="{{ f.poster }}"
@@ -43,45 +49,57 @@
                 <td>{{ f.imdb_rating }}</td>
                 <td>{{ f.kinopoisk_rating }}</td>
                 <td>
+                    <strong>Genres</strong>
                     {% for g in f.genres_as_list %}
                         <span class="badge text-bg-light">{{ g }}</span>
                     {% endfor %}
-                </td>
-                <td>
+                    <hr>
+                    <strong>Countries</strong>
                     {% for c in f.countries_as_list %}
                         <span class="badge text-bg-light">{{ c }}</span>
                     {% endfor %}
-                </td>
-                <td><span class="badge text-bg-light">{{ f.director }}</span></td>
-                <td>
+                    <hr>
+                    <strong>Director</strong>
+                    {% for d in f.director_as_list %}
+                        <span class="badge text-bg-light">{{ d }}</span>
+                    {% endfor %}
+                    <hr>
+                    <strong>Actors</strong>
                     {% for a in f.actors_as_list %}
                         {% if forloop.counter < 7 %}
                             <span class="badge text-bg-light">{{ a }}</span>
                         {% endif %}
                     {% endfor %}
                 </td>
-
-                <td>{{ f.plot|truncatechars:500 }}</td>
-                <td style="width:10%">{{ f.translate }}</td>
+                <td style="font-size: small">{{ f.plot|truncatechars:500 }}</td>
+                <td style="width:10%; font-size: small">{{ f.translate }}</td>
                 <td style="width:150px">
                     <div class="btn-group" role="group" aria-label="Basic mixed styles example">
-                        <a href="{{ f.search_link }}" target="_blank" class="btn btn-warning btn-sm"
+                        <a href="{{ f.search_link }}" target="_blank"
+                           class="btn btn-warning btn-sm"
                            data-bs-toggle="tooltip" title="Just open search">Open</a>
 
-                        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="tooltip"
-                                title="Open search and add to ignore">Accept
-                        </button>
+{% comment %}                        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="tooltip"
+                                title="Open search and add to ignore">D
+                        </button>{% endcomment %}
 
-                        <button type="button" class="btn btn-warning btn-sm"
-                                _="on click transition closest <tr/> opacity to 0
-                                    then add @hidden to the closest <tr/>"
-                                >Hide
-                        </button>
+                        <a href="{{ f.search_link }}" target="_blank"
+                           class="btn btn-success btn-sm"
+                            data-bs-toggle="tooltip" title="Open search and add to ignore"
+                            hx-delete="{% url 'kinozal:ignore' f.pk %}"
+                            hx-target="closest tr"
+                            hx-swap="delete swap:0.6s"
+                        >Download
+                        </a>
+
 
                         <button type="button" class="btn btn-danger btn-sm"
                                 data-bs-toggle="tooltip" title="Add to ignore table"
                                 hx-delete="{% url 'kinozal:ignore' f.pk %}"
-                        >Decline</button>
+                                hx-target="closest tr"
+                                hx-swap="delete swap:0.6s"
+                        >Decline
+                        </button>
                     </div>
                 </td>
 
@@ -91,6 +109,44 @@
         </tbody>
     </table>
 
+    <!-- Toast template -->
+    <div data-toast-container class="toast-container position-fixed top-0 end-0 p-3">
+        <div data-toast-template class="toast align-items-center border-0" role="alert" aria-live="assertive"
+             aria-atomic="true">
+            <div class="d-flex">
+                <div data-toast-body class="toast-body"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                        aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+    <!-- end Toast template -->
 
+{% endblock %}
 
+{% block css %}
+    <style>
+        .htmx-indicator {
+            display: none
+        }
+
+        .htmx-request .htmx-indicator {
+            display: inline-block;
+        }
+
+        .htmx-request.htmx-indicator {
+            display: inline-block;
+        }
+
+        hr {
+            margin: 0.6rem;
+
+        }
+
+        .fade-me-out.htmx-swapping {
+            opacity: 0;
+            transition: opacity 0.6s ease-out;
+        }
+
+    </style>
 {% endblock %}

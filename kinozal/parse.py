@@ -123,8 +123,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
         countries_list = Country.objects.values_list('name', flat=True)
         if countries:
-            result = [c for c in countries.split(', ') if c in countries_list]
-            m.countries = ', '.join(result)
+            m.countries = [c for c in countries.split(', ') if c in countries_list]
         else:
             m.countries = None
 

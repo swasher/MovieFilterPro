@@ -10,6 +10,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from plexapi.server import PlexServer
 
 from .models import MovieRSS, KinoriumMovie, UserPreferences
@@ -24,7 +25,8 @@ from .util import year_to_int
 
 def movies(request):
     movies = MovieRSS.objects.filter(low_priority=False, ignored=False)
-    return render(request, template_name='movies.html', context={'movies': movies})
+    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    return render(request, template_name='movies.html', context={'movies': movies, 'last_scan': last_scan})
 
 
 def movies_low(request):
@@ -115,10 +117,11 @@ def reset_rss(requst):
         context = {'answer': 'MovieRSS table is cleaned.'}
 
 
-@login_required()
-def scan_page(request):
-    last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    return render(request, 'scan.html', {'last_scan': last_scan})
+# DEPRECATED
+# @login_required()
+# def scan_page(request):
+#     last_scan = UserPreferences.objects.get(user=request.user).last_scan
+#     return render(request, 'deprecated_scan.html', {'last_scan': last_scan})
 
 
 @login_required()
@@ -145,19 +148,19 @@ def scan(request):
             print(f'START: {m.title} - {m.original_title} - {m.year}')
 
             if exist_in_kinozal(m):
-                print(f'└─ SKIP [kinozal]')
+                print(f' ┣━ SKIP [kinozal]')
                 continue
 
             exist, match_full, status = exist_in_kinorium(m)
             if exist and match_full:
-                print(f'└─ SKIP [{status}]')
+                print(f' ┣━ SKIP [{status}]')
                 continue
             elif exist and not match_full:
-                print(f'└─ ADD AS PARTIAL [{status}]')
+                print(f' ┣━ ADD AS PARTIAL [{status}]')
                 m.kinorium_partial_match = True
 
             m, sec = get_details(m)
-            print(f'└─ GET DETAILS: {sec:.1f}s')
+            print(f' ┣━ GET DETAILS: {sec:.1f}s')
 
             # Этот фильтр выкидвает все, что через него не прошло
             if checking_all_filters(request.user, m, low_priority=False):
@@ -169,7 +172,7 @@ def scan(request):
                     m.low_priority = True
 
             if m.low_priority is not None:
-                print(f'└─ ADD TO DB [prio={"low" if m.low_priority else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
+                print(f' ┣━ ADD TO DB [prio={"low" if m.low_priority else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
                 MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
                                                defaults=dataclasses.asdict(m))
 
@@ -220,6 +223,8 @@ def ignore_movie(request, pk):
     if request.method == 'DELETE':
         try:
             MovieRSS.objects.filter(pk=pk).update(ignored=True)
-            return HttpResponse('success')
+            messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")
+            return HttpResponse(status=200)
         except:
-            return HttpResponse('error')
+            messages.error(request, f"Error with removing Movie pk={pk}")
+            return HttpResponse(status=500)

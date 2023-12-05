@@ -35,3 +35,14 @@ def get_object_or_none(klass, *args, **kwargs):
         return queryset.get(*args, **kwargs)
     except queryset.model.DoesNotExist:
         return None
+
+
+def not_match_rating(movie_rating: float | None, filter_rating: float | None) -> bool:
+    """
+    Возвращает True, если рейтинг фильмы ниже заданного.
+    Если у фильма нет рейтинга, то фильм проходит проверку (возв. False)
+    """
+    if movie_rating:
+        if movie_rating < filter_rating:
+            return True
+    return False

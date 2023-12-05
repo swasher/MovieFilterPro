@@ -5,6 +5,7 @@ from .models import KinoriumMovie
 from .models import UserPreferences
 from .classes import KinozalMovie
 from .util import get_object_or_none
+from .util import not_match_rating
 
 
 def exist_in_kinozal(m: KinozalMovie) -> bool:
@@ -94,13 +95,13 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
     ### 1 Countries
     country_passes = not bool(set(m.countries) & set(stop_countries))
     if not country_passes:
-        print(f'└─ NOT MATCH in [{prio(low_priority)}]: [country]')
+        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [country: {list(set(m.countries) & set(stop_countries))}]')
         return False
 
     ### 2 Genres
     genre_passes = not bool(set(m.genres) & set(stop_genres))
     if not country_passes:
-        print(f'└─ NOT MATCH in [{prio(low_priority)}]: [genres]')
+        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [genres]')
         return False
 
     ### 3 Max year
@@ -112,15 +113,14 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
         else:
             year = int(m.year)
         if year < max_year:
-            print(f'└─ NOT MATCH in [{prio(low_priority)}]: [year]')
+            print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [year: {year}]')
             return False
     except:
         print('ERROR in checks.py -> checking_all_filters -> year converting')
 
-
     ### 4 Min rating
-    if m.kinopoisk_rating < min_rating and m.imdb_rating < min_rating:
-        print(f'└─ NOT MATCH in [{prio(low_priority)}]: [rating]')
+    if not_match_rating(m.kinopoisk_rating, min_rating) and not_match_rating(m.imdb_rating, min_rating):
+        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [rating]')
         return False
 
     return True

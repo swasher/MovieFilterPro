@@ -63,6 +63,10 @@ class MovieRSS(models.Model):
         return self.actors.split(', ')
 
     @property
+    def director_as_list(self):
+        return self.director.split(', ')
+
+    @property
     def search_link(self):
         # for "Мизантроп / Misanthrope" and 2023
         # link = "https://kinozal.tv/browse.php?s=%CC%E8%E7%E0%ED%F2%F0%EE%EF+%2F+Misanthrope&g=0&c=1002&v=3&d=2023&w=0&t=0&f=0"
