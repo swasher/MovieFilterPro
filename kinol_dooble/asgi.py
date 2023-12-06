@@ -1,5 +1,5 @@
 """
-ASGI config for kinozal_parse project.
+ASGI config for kinol_dooble project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'kinozal_parse.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'kinol_dooble.settings')
 
 application = get_asgi_application()

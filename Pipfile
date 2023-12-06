@@ -16,6 +16,8 @@ django-libsass = "*"
 pyyaml = "*"
 whitenoise = "*"
 dj-database-url = "*"
+psycopg = "*"
+gunicorn = "*"
 
 [dev-packages]
 doppler-env = "*"

@@ -1,4 +1,4 @@
-import kinozal_parse.asgi
+import kinol_dooble.asgi
 import yaml
 from kinozal.models import Country
 
