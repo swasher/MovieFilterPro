@@ -24,6 +24,9 @@ class MovieRSS(models.Model):
     Если пользователь нажал Ignore на фильме, он остается в базе с меткой Ignore. В дальнейшем, при сканированнии,
     сканер знает, что такие фильмы показывать пользователю не нужно.
     """
+    class Meta:
+        ordering = ['-id']
+
     ignored = models.BooleanField(default=False, help_text='Пользователь не хочет видеть этот фильм.')
     low_priority = models.BooleanField(default=False)
     kinozal_id = models.PositiveSmallIntegerField()
@@ -161,3 +164,6 @@ class Country(models.Model):
     от других.
     """
     name = models.CharField(max_length=60, unique=True)
+
+    def __str__(self):
+        return self.name

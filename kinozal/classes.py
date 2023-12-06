@@ -16,8 +16,8 @@ class KinozalMovie:
     imdb_rating: float = None
     kinopoisk_id: int = None
     kinopoisk_rating: float = None
-    genres: List[str] = None
-    countries: List[str] = None
+    genres: str = None
+    countries: str = None
     director: str = None
     actors: List[str] = None
     plot: str = None

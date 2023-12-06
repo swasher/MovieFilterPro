@@ -1,20 +1,16 @@
-/*body {
-  background-color: green;
-}*/
-
-//$primary: red;
-$table-cell-padding-y:        .5rem; // внутреннее поля ячейки
-$table-cell-padding-x:        .5rem;
-//$table-cell-padding-y-sm:     .25rem;
-//$table-cell-padding-x-sm:     .25rem;
-
-$table-cell-vertical-align:   top;
-
-
 $tooltip-padding-y:               0rem;
 $tooltip-padding-x:               0rem;
 //$tooltip-margin: 20;
 //$tooltip-border-radius: 10px;
+
+
+// Эти настройки меняют вид линии между строками основной таблицы.
+// Если у меня в проекте будут другие таблицы, нужно снизить уровень видимости этих настроек.
+$table-border-width: 3px;
+$table-border-color: #adb5bd;
+// более узкие внутреннее поля ячейки в основной таблице
+$table-cell-padding-y:        .5rem;
+$table-cell-padding-x:        .5rem;
 
 
 @import "static/bootstrap-5.3.2-source/scss/bootstrap";

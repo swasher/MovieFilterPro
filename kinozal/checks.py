@@ -12,9 +12,8 @@ def exist_in_kinozal(m: KinozalMovie) -> bool:
     """
     Возвращает True, если такой фильм уже присутствует в базе MovieRSS
     """
-    exist = get_object_or_none(MovieRSS, title=m.title, original_title=m.original_title, year=m.year)
-    answer = True if exist else False
-    return answer
+    exist = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year)
+    return bool(exist)
 
 
 def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
@@ -46,19 +45,19 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
 
     exist = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title)
     if exist:
-        print(f'  └─ DEBUG: partial match title+original: {m.title}+{m.original_title}')
+        print(f' ┣━ KINORIUM PARTIAL MATCH [title+original]: {m.title} + {m.original_title}')
         return MATCH, PARTIAL, exist.get_status_display()
 
     if m.title:
         exist = get_object_or_none(KinoriumMovie, title=m.title, year=year)
         if exist:
-            print(f'   DEBUG: partial match title+year: {m.title}+{year}')
+            print(f' ┣━ KINORIUM PARTIAL MATCH [title+year]: {m.title} + {year}')
             return MATCH, PARTIAL, exist.get_status_display()
 
     if m.original_title:
         exist = get_object_or_none(KinoriumMovie, original_title=m.original_title, year=year)
         if exist:
-            print(f'   DEBUG: partial match original+year: {m.original_title}+{year}')
+            print(f' ┣━ KINORIUM PARTIAL MATCH [original+year]: {m.original_title} + {year}')
             return MATCH, PARTIAL, exist.get_status_display()
 
     """
@@ -93,15 +92,16 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
 
 
     ### 1 Countries
-    country_passes = not bool(set(m.countries) & set(stop_countries))
-    if not country_passes:
-        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [country: {list(set(m.countries) & set(stop_countries))}]')
+    country_intersection = set(m.countries.split(', ')) & set(stop_countries)
+    # country_passes = not bool(country_intersection)
+    if bool(country_intersection):
+        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [country: {country_intersection}]')
         return False
 
     ### 2 Genres
-    genre_passes = not bool(set(m.genres) & set(stop_genres))
-    if not country_passes:
-        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [genres]')
+    genre_intersection = set(m.genres) & set(stop_genres)
+    if bool(genre_intersection):
+        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [genres: {genre_intersection}]')
         return False
 
     ### 3 Max year

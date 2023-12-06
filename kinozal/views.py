@@ -11,6 +11,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core.paginator import Paginator
 from plexapi.server import PlexServer
 
 from .models import MovieRSS, KinoriumMovie, UserPreferences
@@ -25,13 +26,18 @@ from .util import year_to_int
 
 def movies(request):
     movies = MovieRSS.objects.filter(low_priority=False, ignored=False)
+    paginator = Paginator(movies, 5)
+    page_number = request.GET.get("page")
+    movies_page = paginator.get_page(page_number)
+
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    return render(request, template_name='movies.html', context={'movies': movies, 'last_scan': last_scan})
+    return render(request, template_name='movies.html', context={'movies': movies_page, 'last_scan': last_scan})
 
 
 def movies_low(request):
     movies = MovieRSS.objects.filter(low_priority=True, ignored=False)
-    return render(request, template_name='movies.html', context={'movies': movies})
+    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    return render(request, template_name='movies.html', context={'movies': movies, 'last_scan': last_scan})
 
 
 # def from_line(line: str) -> list[str]:
@@ -111,10 +117,12 @@ def parse_kinorium_csv(request):
 @login_required()
 # htmx function
 def reset_rss(requst):
-    if requst.method == 'POST':
+    if requst.method == 'DELETE':
         rss = MovieRSS.objects.all()
         rss.delete()
         context = {'answer': 'MovieRSS table is cleaned.'}
+        messages.success(requst, 'Success!')
+        return HttpResponse(status=200)
 
 
 # DEPRECATED
@@ -178,10 +186,12 @@ def scan(request):
 
         UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
 
-        context['result'] = movies
-
+        movies = MovieRSS.objects.filter(low_priority=False, ignored=False)
+        paginator = Paginator(movies, 5)
+        page_number = request.GET.get("page")
+        movies_page = paginator.get_page(page_number)
+        context['movies'] = movies_page
         return render(request, 'partials/scan-table.html', context)
-
 
 def user_preferences_update(request):
     user = User.objects.get(pk=request.user.pk)
@@ -209,7 +219,10 @@ def user_preferences_update(request):
 def plex(request):
     baseurl = 'http://127.0.0.1:32400'
     token = '4xNQeFuz8ty2A4omgxXB'
-    plex = PlexServer(baseurl, token)
+    try:
+        plex = PlexServer(baseurl, token)
+    except:
+        return render(request, 'plex.html', {'error': 'No Plex connection'})
 
     m = plex.library.section('Фильмы')
     movies = m.search()
