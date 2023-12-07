@@ -1,6 +1,6 @@
 _GREEN := "\033[32m[%s]\033[0m %s\n" # Green text for "printf"
 _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
-.SILENT:
+#.SILENT:
 .PHONY: all
 
 # So in short:
@@ -17,15 +17,25 @@ factory:
 install:
 	pipenv install
 
-admin:
-	python manage.py createsuperuser --username=swasher --email=mr.swasher@gmail.com --skip-checks;
+superuser:
+	# this environment variables came from doppler:
+	#	DJANGO_SUPERUSER_USERNAME=testuser
+	#	DJANGO_SUPERUSER_PASSWORD=testpass
+	#	DJANGO_SUPERUSER_EMAIL="admin@admin.com"
+	doppler run -- python manage.py createsuperuser --noinput
 
 migrations:
 	doppler run -- python manage.py makemigrations
 
 migrate:
-	doppler run -- python manage.py makemigrations
 	doppler run -- python manage.py migrate
+
+migrate_initital:
+	# for first run, - this command create datatables
+	doppler run -- python manage.py makemigrations moviefilter
+	doppler run -- python manage.py migrate
+	@$(MAKE) load_fixtures
+	@$(MAKE) superuser
 
 collect:
 	doppler run -- python manage.py collectstatic --noinput
@@ -34,7 +44,7 @@ flush:
 	python manage.py flush --no-input
 
 TABLES = \
- kinozal.Country
+ moviefilter.Country
 
 save_fixtures:
 	read  -p "Are you sure? THIS WILL DELETE ALL EXISTING FIXTURES!!! [y/N] " ans && ans=$${ans:-N} ; \
@@ -51,7 +61,6 @@ save_fixtures:
 
 
 load_fixtures:
-	doppler run -- python manage.py loaddata fixtures/auth.Group.json
 	for table in $(TABLES); do \
 		doppler run -- python manage.py loaddata fixtures/$$table.json; \
 	done

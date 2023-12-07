@@ -1,0 +1,115 @@
+<table class="table w-auto table-sm">
+    <thead>
+    <tr>
+        <th scope="col" style="width: 150px">poster</th>
+        <th scope="col" class="col-2">title</th>
+        <th scope="col" class="col-1">Some sata</th>
+        <th scope="col" class="col-3">common</th>
+        <th scope="col">plot</th>
+        <th scope="col" class="col-1">translate</th>
+        <th scope="col" style="width:80px">BTN</th>
+    </tr>
+    </thead>
+    <tbody>
+
+    {% for f in movies %}
+        <tr class="fade-me-out" {% if f.kinorium_partial_match %} class="table-warning" {% endif %}>
+            <td>
+                <img
+                        src="{{ f.poster }}"
+                        class="imgdiv img-thumbnail"
+                        data-bs-toggle="tooltip"
+                        data-bs-html="true"
+                        data-bs-title="<img src='{{ f.poster }}' />"
+                >
+            </td>
+            <td>
+                <h5><strong>{{ f.title }}</strong></h5>
+                <hr>
+                <h6>{{ f.original_title }}</h6>
+            </td>
+            <td>
+                <strong>Year:</strong> {{ f.year }}
+                <hr>
+                <strong>IMDB:</strong> {{ f.imdb_rating }}
+                <hr>
+                <strong>KP:</strong> {{ f.kinopoisk_rating }}
+                <hr>
+                <strong>Scan:</strong> {{ f.date_added|date:'d.m.y' }}
+            </td>
+            <td>
+                <strong>Genres</strong>
+                {% for g in f.genres_as_list %}
+                    <span class="badge text-bg-light">{{ g }}</span>
+                {% endfor %}
+                <hr>
+                <strong>Countries</strong>
+                {% for c in f.countries_as_list %}
+                    <span class="badge text-bg-light">{{ c }}</span>
+                {% endfor %}
+                <hr>
+                <strong>Director</strong>
+                {% for d in f.director_as_list %}
+                    <span class="badge text-bg-light">{{ d }}</span>
+                {% endfor %}
+                <hr>
+                <strong>Actors</strong>
+                {% for a in f.actors_as_list %}
+                    {% if forloop.counter < 7 %}
+                        <span class="badge text-bg-light">{{ a }}</span>
+                    {% endif %}
+                {% endfor %}
+            </td>
+            <td style="font-size: small">{{ f.plot|truncatechars:500 }}</td>
+            <td style="width:10%; font-size: small">{{ f.translate }}</td>
+            <td>
+                {% comment %}<div class="btn-group" role="group" aria-label="Basic mixed styles example">{% endcomment %}
+                <div class="d-grid gap-1 col-1 ">
+                    <button href="{{ f.search_link }}" target="_blank"
+                            class="btn btn-warning btn-sm"
+                            data-bs-toggle="tooltip" title="Just open search"
+                            _="on click go to url {{ f.search_link }} in new window"
+                    >Open
+                    </button>
+
+                    <button type="button" class="btn btn-success btn-sm"
+                            data-bs-toggle="tooltip" title="Open search and add to ignore"
+                            hx-delete="{% url 'moviefilter:ignore' f.pk %}"
+                            hx-target="closest tr"
+                            hx-swap="delete swap:0.6s"
+                            _="on click go to url {{ f.search_link }} in new window"
+                    >Download
+                    </button>
+
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-bs-toggle="tooltip" title="Add to ignore table"
+                            hx-delete="{% url 'moviefilter:ignore' f.pk %}"
+                            hx-target="closest tr"
+                            hx-swap="delete swap:0.6s"
+                    >Decline
+                    </button>
+                </div>
+            </td>
+
+        </tr>
+    {% endfor %}
+
+    </tbody>
+</table>
+<div class="pagination">
+    <span class="step-links">
+        {% if movies.has_previous %}
+            <a href="?page=1">&laquo; first</a>
+            <a href="?page={{ movies.previous_page_number }}">previous</a>
+        {% endif %}
+
+        <span class="current">
+            Page {{ movies.number }} of {{ movies.paginator.num_pages }}.
+        </span>
+
+        {% if movies.has_next %}
+            <a href="?page={{ movies.next_page_number }}">next</a>
+            <a href="?page={{ movies.paginator.num_pages }}">last &raquo;</a>
+        {% endif %}
+    </span>
+</div>

@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %} Login {% endblock %}
+
+{% block body %}
+
+    <div class="container text-center">
+        <div class="row justify-content-md-center">
+            <div class="col col-lg-4">
+                {% if answer %}
+                <div class="card mb-3">
+                    <div class="card-body ">
+                        <p class="text-danger fw-bold">{{ answer }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                <form action="{% url 'moviefilter:reset_rss' %}" method="post" id="myForm">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-lg" name="reset"><i class="fa fa-check"></i>RESET
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="container justify-content-center">
+
+
+        {% comment %}        <div class="card">
+            <div class="card-body">
+                This is some text within a card body.{{ answer }}
+            </div>
+        </div>
+        <p>{% endcomment %}
+
+        {#<a href="{% url 'moviefilter:reset_rss' %}" class="btn btn-danger btn-lg" role="button">RESET</a>#}
+
+
+    </div>
+{% endblock %}

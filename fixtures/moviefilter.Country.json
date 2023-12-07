@@ -1,0 +1,1696 @@
+[
+{
+    "model": "moviefilter.country",
+    "pk": 1,
+    "fields": {
+        "name": "Афганистан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 2,
+    "fields": {
+        "name": "Албания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 3,
+    "fields": {
+        "name": "Алжир"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 4,
+    "fields": {
+        "name": "Американское Самоа"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 5,
+    "fields": {
+        "name": "Андорра"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 6,
+    "fields": {
+        "name": "Ангола"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 7,
+    "fields": {
+        "name": "Ангилья"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 8,
+    "fields": {
+        "name": "Антарктида"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 9,
+    "fields": {
+        "name": "Анти́гуа и Барбу́да"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 10,
+    "fields": {
+        "name": "Аргентина"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 11,
+    "fields": {
+        "name": "Армения"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 12,
+    "fields": {
+        "name": "Аруба"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 13,
+    "fields": {
+        "name": "Австралия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 14,
+    "fields": {
+        "name": "Австрия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 15,
+    "fields": {
+        "name": "Азербайджан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 16,
+    "fields": {
+        "name": "Багамские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 17,
+    "fields": {
+        "name": "Бахрейн"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 18,
+    "fields": {
+        "name": "Бангладеш"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 19,
+    "fields": {
+        "name": "Барбадос"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 20,
+    "fields": {
+        "name": "Беларусь"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 21,
+    "fields": {
+        "name": "Бельгия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 22,
+    "fields": {
+        "name": "Белиз"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 23,
+    "fields": {
+        "name": "Бенин"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 24,
+    "fields": {
+        "name": "Бермудские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 25,
+    "fields": {
+        "name": "Бутан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 26,
+    "fields": {
+        "name": "Боливия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 27,
+    "fields": {
+        "name": "Босния и Герцеговина"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 28,
+    "fields": {
+        "name": "Ботсвана"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 29,
+    "fields": {
+        "name": "Остров Буве"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 30,
+    "fields": {
+        "name": "Бразилия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 31,
+    "fields": {
+        "name": "Британская территория в Индийском океане"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 32,
+    "fields": {
+        "name": "Бруней"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 33,
+    "fields": {
+        "name": "Болгария"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 34,
+    "fields": {
+        "name": "Буркина Фасо"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 35,
+    "fields": {
+        "name": "Бурунди"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 36,
+    "fields": {
+        "name": "Камбоджа"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 37,
+    "fields": {
+        "name": "Камерун"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 38,
+    "fields": {
+        "name": "Канада"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 39,
+    "fields": {
+        "name": "Кабо-Верде"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 40,
+    "fields": {
+        "name": "Каймановы острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 41,
+    "fields": {
+        "name": "Центрально-Африканская Республика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 42,
+    "fields": {
+        "name": "Чад"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 43,
+    "fields": {
+        "name": "Чили"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 44,
+    "fields": {
+        "name": "Китай"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 45,
+    "fields": {
+        "name": "Остров Рождества"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 46,
+    "fields": {
+        "name": "Кокосовые острова (Килинг)"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 47,
+    "fields": {
+        "name": "Колумбия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 48,
+    "fields": {
+        "name": "Коморы"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 49,
+    "fields": {
+        "name": "Конго"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 50,
+    "fields": {
+        "name": "Демократическая Республика Конго"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 51,
+    "fields": {
+        "name": "Острова Кука"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 52,
+    "fields": {
+        "name": "Коста-Рика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 53,
+    "fields": {
+        "name": "Кот-д’Ивуар"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 54,
+    "fields": {
+        "name": "Хорватия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 55,
+    "fields": {
+        "name": "Куба"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 56,
+    "fields": {
+        "name": "Кипр"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 57,
+    "fields": {
+        "name": "Чехия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 58,
+    "fields": {
+        "name": "Дания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 59,
+    "fields": {
+        "name": "Джибути"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 60,
+    "fields": {
+        "name": "Доминика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 61,
+    "fields": {
+        "name": "Доминиканская Республика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 62,
+    "fields": {
+        "name": "Восточный Тимор"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 63,
+    "fields": {
+        "name": "Эквадор"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 64,
+    "fields": {
+        "name": "Египет"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 65,
+    "fields": {
+        "name": "Сальвадор"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 66,
+    "fields": {
+        "name": "Экваториальная Гвинея"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 67,
+    "fields": {
+        "name": "Эритрея"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 68,
+    "fields": {
+        "name": "Эстония"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 69,
+    "fields": {
+        "name": "Эфиопия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 70,
+    "fields": {
+        "name": "Фолклендские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 71,
+    "fields": {
+        "name": "Фарерские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 72,
+    "fields": {
+        "name": "Фиджи"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 73,
+    "fields": {
+        "name": "Финляндия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 74,
+    "fields": {
+        "name": "Франция"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 75,
+    "fields": {
+        "name": "Французская Гвиана"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 76,
+    "fields": {
+        "name": "Французская Полинезия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 77,
+    "fields": {
+        "name": "Французские Южные Территории"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 78,
+    "fields": {
+        "name": "Габон"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 79,
+    "fields": {
+        "name": "Гамбия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 80,
+    "fields": {
+        "name": "Грузия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 81,
+    "fields": {
+        "name": "Германия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 82,
+    "fields": {
+        "name": "Гана"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 83,
+    "fields": {
+        "name": "Гибралтар"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 84,
+    "fields": {
+        "name": "Греция"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 85,
+    "fields": {
+        "name": "Гренландия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 86,
+    "fields": {
+        "name": "Гренада"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 87,
+    "fields": {
+        "name": "Гваделупа"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 88,
+    "fields": {
+        "name": "Гуам"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 89,
+    "fields": {
+        "name": "Гватемала"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 90,
+    "fields": {
+        "name": "Гвинея"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 91,
+    "fields": {
+        "name": "Гвинея-Бисау"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 92,
+    "fields": {
+        "name": "Гайана"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 93,
+    "fields": {
+        "name": "Гаити"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 94,
+    "fields": {
+        "name": "Остров Херд и острова Макдональд"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 95,
+    "fields": {
+        "name": "Святейший Престол (Ватикан)"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 96,
+    "fields": {
+        "name": "Гондурас"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 97,
+    "fields": {
+        "name": "Гонг-Конг"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 98,
+    "fields": {
+        "name": "Венгрия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 99,
+    "fields": {
+        "name": "Исландия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 100,
+    "fields": {
+        "name": "Индия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 101,
+    "fields": {
+        "name": "Индонезия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 102,
+    "fields": {
+        "name": "Иран"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 103,
+    "fields": {
+        "name": "Ирак"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 104,
+    "fields": {
+        "name": "Ирландия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 105,
+    "fields": {
+        "name": "Израиль"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 106,
+    "fields": {
+        "name": "Италия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 107,
+    "fields": {
+        "name": "Ямайка"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 108,
+    "fields": {
+        "name": "Япония"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 109,
+    "fields": {
+        "name": "Иордания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 110,
+    "fields": {
+        "name": "Казахстан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 111,
+    "fields": {
+        "name": "Кения"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 112,
+    "fields": {
+        "name": "Кирибати"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 113,
+    "fields": {
+        "name": "Корейская Народно- Демократическая Республика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 114,
+    "fields": {
+        "name": "Республика Корея"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 115,
+    "fields": {
+        "name": "Косово"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 116,
+    "fields": {
+        "name": "Кувейт"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 117,
+    "fields": {
+        "name": "Кыргызстан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 118,
+    "fields": {
+        "name": "Лаос"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 119,
+    "fields": {
+        "name": "Датвия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 120,
+    "fields": {
+        "name": "Ливан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 121,
+    "fields": {
+        "name": "Лесото"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 122,
+    "fields": {
+        "name": "Либерия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 123,
+    "fields": {
+        "name": "Ливия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 124,
+    "fields": {
+        "name": "Лихтенштейн"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 125,
+    "fields": {
+        "name": "Литва"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 126,
+    "fields": {
+        "name": "Люксембург"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 127,
+    "fields": {
+        "name": "Макао"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 128,
+    "fields": {
+        "name": "бывшая югославская Республика Македония"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 129,
+    "fields": {
+        "name": "Мадагаскар"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 130,
+    "fields": {
+        "name": "Малави"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 131,
+    "fields": {
+        "name": "Малайзия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 132,
+    "fields": {
+        "name": "Мальдивы"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 133,
+    "fields": {
+        "name": "Мали"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 134,
+    "fields": {
+        "name": "Мальта"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 135,
+    "fields": {
+        "name": "Маршалловы острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 136,
+    "fields": {
+        "name": "Мартиника"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 137,
+    "fields": {
+        "name": "Мавритания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 138,
+    "fields": {
+        "name": "Маврикий"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 139,
+    "fields": {
+        "name": "Майотта"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 140,
+    "fields": {
+        "name": "Мексика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 141,
+    "fields": {
+        "name": "Микронезия, Федеративные Штаты"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 142,
+    "fields": {
+        "name": "Молдова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 143,
+    "fields": {
+        "name": "Монако"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 144,
+    "fields": {
+        "name": "Монголия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 145,
+    "fields": {
+        "name": "Монтсеррат"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 146,
+    "fields": {
+        "name": "Черногория"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 147,
+    "fields": {
+        "name": "Марокко"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 148,
+    "fields": {
+        "name": "Мозамбик"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 149,
+    "fields": {
+        "name": "Мьянма"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 150,
+    "fields": {
+        "name": "Намибия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 151,
+    "fields": {
+        "name": "Науру"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 152,
+    "fields": {
+        "name": "Непал"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 153,
+    "fields": {
+        "name": "Нидерланды"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 154,
+    "fields": {
+        "name": "Нидерландские Антильские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 155,
+    "fields": {
+        "name": "Новая Каледония"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 156,
+    "fields": {
+        "name": "Новая Зеландия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 157,
+    "fields": {
+        "name": "Никарагуа"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 158,
+    "fields": {
+        "name": "Нигер"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 159,
+    "fields": {
+        "name": "Нигерия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 160,
+    "fields": {
+        "name": "Ниуэ"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 161,
+    "fields": {
+        "name": "Норфолк"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 162,
+    "fields": {
+        "name": "Северные Марианские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 163,
+    "fields": {
+        "name": "Норвегия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 164,
+    "fields": {
+        "name": "Оман"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 165,
+    "fields": {
+        "name": "Пакистан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 166,
+    "fields": {
+        "name": "Палау"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 167,
+    "fields": {
+        "name": "Палестина"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 168,
+    "fields": {
+        "name": "Панама"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 169,
+    "fields": {
+        "name": "Папуа — Новая Гвинея"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 170,
+    "fields": {
+        "name": "Парагвай"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 171,
+    "fields": {
+        "name": "Перу"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 172,
+    "fields": {
+        "name": "Филиппины"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 173,
+    "fields": {
+        "name": "Питкэрн"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 174,
+    "fields": {
+        "name": "Польша"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 175,
+    "fields": {
+        "name": "Португалия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 176,
+    "fields": {
+        "name": "Пуэрто-Рико"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 177,
+    "fields": {
+        "name": "Катар"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 178,
+    "fields": {
+        "name": "Реюньон"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 179,
+    "fields": {
+        "name": "Румыния"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 180,
+    "fields": {
+        "name": "Россия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 181,
+    "fields": {
+        "name": "Руанда"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 182,
+    "fields": {
+        "name": "Остров Святой Елены"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 183,
+    "fields": {
+        "name": "Сент-Китс и Невис"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 184,
+    "fields": {
+        "name": "Сент-Люсия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 185,
+    "fields": {
+        "name": "Сен-Пьер и Микелон"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 186,
+    "fields": {
+        "name": "Сент-Винсент и Гренадины"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 187,
+    "fields": {
+        "name": "Самоа"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 188,
+    "fields": {
+        "name": "Сан Марино"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 189,
+    "fields": {
+        "name": "Сан-Томе и Принсипи"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 190,
+    "fields": {
+        "name": "Саудовская Аравия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 191,
+    "fields": {
+        "name": "Сенегал"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 192,
+    "fields": {
+        "name": "Сербия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 193,
+    "fields": {
+        "name": "Сейшельские Острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 194,
+    "fields": {
+        "name": "Сьерра-Леоне"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 195,
+    "fields": {
+        "name": "Сингапур"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 196,
+    "fields": {
+        "name": "Словакия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 197,
+    "fields": {
+        "name": "Словения"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 198,
+    "fields": {
+        "name": "Соломоновы острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 199,
+    "fields": {
+        "name": "Сомали"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 200,
+    "fields": {
+        "name": "Южно-Африканская Республика"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 201,
+    "fields": {
+        "name": "Южная Георгия и Южные Сандвичевы острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 202,
+    "fields": {
+        "name": "Испания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 203,
+    "fields": {
+        "name": "Шри Ланка"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 204,
+    "fields": {
+        "name": "Судан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 205,
+    "fields": {
+        "name": "Суринам"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 206,
+    "fields": {
+        "name": "Сволборд и Ян Майен"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 207,
+    "fields": {
+        "name": "Свазиленд"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 208,
+    "fields": {
+        "name": "Швеция"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 209,
+    "fields": {
+        "name": "Швейцария"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 210,
+    "fields": {
+        "name": "Сирия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 211,
+    "fields": {
+        "name": "Тайвань"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 212,
+    "fields": {
+        "name": "Таджикистан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 213,
+    "fields": {
+        "name": "Танзания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 214,
+    "fields": {
+        "name": "Таиланд"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 215,
+    "fields": {
+        "name": "Того"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 216,
+    "fields": {
+        "name": "Токелау"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 217,
+    "fields": {
+        "name": "Тонга"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 218,
+    "fields": {
+        "name": "Тринидад и Тобаго"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 219,
+    "fields": {
+        "name": "Тунис"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 220,
+    "fields": {
+        "name": "Турция"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 221,
+    "fields": {
+        "name": "Туркменистан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 222,
+    "fields": {
+        "name": "Тёркс и Кайкос"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 223,
+    "fields": {
+        "name": "Тувалу"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 224,
+    "fields": {
+        "name": "Уганда"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 225,
+    "fields": {
+        "name": "Украина"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 226,
+    "fields": {
+        "name": "Объединённые Арабские Эмираты"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 227,
+    "fields": {
+        "name": "Великобритания"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 228,
+    "fields": {
+        "name": "США"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 229,
+    "fields": {
+        "name": "Мелкие отдаленные острова США"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 230,
+    "fields": {
+        "name": "Уругвай"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 231,
+    "fields": {
+        "name": "Узбекистан"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 232,
+    "fields": {
+        "name": "Вануату"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 233,
+    "fields": {
+        "name": "Венесуэла"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 234,
+    "fields": {
+        "name": "Вьетнам"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 235,
+    "fields": {
+        "name": "Британские Виргинские острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 236,
+    "fields": {
+        "name": "Американские Виргинские Острова"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 237,
+    "fields": {
+        "name": "Уоллис и Футуна"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 238,
+    "fields": {
+        "name": "Западная Сахара"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 239,
+    "fields": {
+        "name": "Йемен"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 240,
+    "fields": {
+        "name": "Замбия"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 241,
+    "fields": {
+        "name": "Зимбабве"
+    }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 242,
+    "fields": {
+        "name": "СССР"
+    }
+}
+]

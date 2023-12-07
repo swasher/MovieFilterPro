@@ -1,6 +1,6 @@
-import kinol_dooble.asgi
+import movie_filter_pro.asgi
 import yaml
-from kinozal.models import Country
+from moviefilter.models import Country
 
 with open('countries.yaml', 'r') as f:
     yml = yaml.safe_load(f)

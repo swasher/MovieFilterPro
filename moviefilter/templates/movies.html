@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block body %}
+
+    <div class="container-fluid">
+
+        <h2>Лента RSS</h2>
+
+        <button class='btn btn-primary'
+                hx-get="{% url 'moviefilter:scan' %}"
+                hx-target="#films"
+                hx-swap="innerHTML">
+            <span id="save-icon" class="bi-database"></span> SCAN
+            <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+        </button>
+        Last scan: <span class="badge text-bg-success">{{ last_scan }}</span>
+
+        <div id="films">
+        {% include 'partials/scan-table.html' %}
+        </div>
+
+        <!-- Toast template -->
+        <div data-toast-container class="toast-container position-fixed top-0 end-0 p-3">
+            <div data-toast-template class="toast align-items-center border-0" role="alert" aria-live="assertive"
+                 aria-atomic="true">
+                <div class="d-flex">
+                    <div data-toast-body class="toast-body"></div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                            aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+        <!-- end Toast template -->
+
+    </div>
+
+{% endblock %}
+
+{% block css %}
+    <style>
+        .htmx-indicator {
+            display: none
+        }
+
+        .htmx-request .htmx-indicator {
+            display: inline-block;
+        }
+
+        .htmx-request.htmx-indicator {
+            display: inline-block;
+        }
+
+        hr {
+        {#margin: 0.6rem;#} margin: 0;
+            padding-top: 0.1rem;
+            padding-bottom: 0.5rem;
+        }
+
+        .fade-me-out.htmx-swapping {
+            opacity: 0;
+            transition: opacity 0.6s ease-out;
+        }
+
+        .imgdiv {
+            width: 40vw;
+            display: table-cell;
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        img.imgdiv {
+            max-width: 100%;
+            height: auto;
+            max-height: 100%;
+        }
+
+    </style>
+{% endblock %}
