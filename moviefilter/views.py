@@ -49,8 +49,6 @@ def movies_low(request):
 
 def parse_kinorium_csv(request):
 
-
-
     if request.method == 'POST':
 
         if 'file_votes' in request.FILES and 'file_movie_list' in request.FILES:
@@ -58,40 +56,17 @@ def parse_kinorium_csv(request):
             objs = KinoriumMovie.objects.all()
             objs.delete()
 
-            print('\nСканируем "Списки фильмов')
+            print('\nСканируем "Списки фильмов"')
             dict_obj_with_movies = parse_file_movie_list(request.FILES['file_movie_list'])
-
-            # дальше делаем как-то так:
             django_list = [KinoriumMovie(**dataclasses.asdict(vals)) for vals in dict_obj_with_movies]
-            KinoriumMovie.objects.bulk_create(django_list)
-            # и непонятно, нужно ли делать save()
+            f = KinoriumMovie.objects.bulk_create(django_list)
+            print(f'-- Movies added: {len(f)}')
 
-
-            # m, created = KinoriumMovie.objects.get_or_create(
-            #     title=title, original_title=original_title, year=year
-            # )
-            # m.status = status
-            # m.save()
-            """
-            -------------------------------
-            """
-
+            print('\nСканируем "Отметки"')
             dict_obj_with_movies = parse_file_votes(request.FILES['file_votes'])
-            print('\nVOTES')
-
-
-            # m, created = KinoriumMovie.objects.get_or_create(
-            #     title=title, original_title=original_title, year=year
-            # )
-            # m.status = KinoriumMovie.WATCHED
-            # m.save()
-
-
-
-
-
-            # except Exception as e:
-            #     return HttpResponse(safe(f"<b style='color:red'>Error processing Vote file! Error: {e}</b>"))
+            django_list = [KinoriumMovie(**dataclasses.asdict(vals)) for vals in dict_obj_with_movies]
+            f = KinoriumMovie.objects.bulk_create(django_list)
+            print(f'-- Movies added: {len(f)}')
 
             return HttpResponse(safe("<b style='color:green'>Update success!</b>"))
 

@@ -2,6 +2,7 @@ from urllib.parse import urlencode, quote_plus
 from typing import List, Tuple
 from datetime import datetime
 
+from django import utils
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -136,7 +137,7 @@ class UserPreferences(models.Model):
     Settings per user.
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
-    last_scan = models.DateField(blank=True, null=True, default=datetime.now().date())
+    last_scan = models.DateField(blank=True, null=True, default=utils.timezone.now().date())
 
     countries = models.CharField(max_length=300, default='СССР, Россия, Индия')
     genres = models.CharField(max_length=300, default='Мюзикл')
