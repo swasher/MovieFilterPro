@@ -116,8 +116,8 @@ def parse_kinorium_csv(request):
 
 
 @login_required()
-# htmx function
 def reset_rss(requst):
+    # htmx function
     if requst.method == 'DELETE':
         rss = MovieRSS.objects.all()
         rss.delete()
@@ -230,6 +230,11 @@ def plex(request):
     for mov in movies:
         print(mov)
     return render(request, 'plex.html', {'movies': movies})
+
+
+def kinorium(request):
+    movies = KinoriumMovie.objects.all()
+    return render(request, 'kinorium.html', {'movies': movies})
 
 
 def ignore_movie(request, pk):

@@ -85,13 +85,12 @@ WSGI_APPLICATION = 'movie_filter_pro.wsgi.application'
 #
 # Database
 #
-conf = config('DATABASE_URL')  # 'sqlite:////C:\\Users\\swasher\\GitHub\\moviefilter-parse\\db.sqlite3'
+# got DATABASE_URL from environment variable, i.e. Doppler. In case local dev, it's just `sqlite:///db.sqlite3`
 DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.sqlite3',
-    #     'NAME': BASE_DIR / 'db.sqlite3',
-    # }
-    'default': dj_database_url.parse(conf, conn_max_age=600)
+    'default': dj_database_url.config(
+        conn_max_age=600,
+        conn_health_checks=True,
+    ),
 }
 
 

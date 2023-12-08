@@ -1,5 +1,6 @@
 from urllib.parse import urlencode, quote_plus
 from typing import List, Tuple
+from datetime import datetime
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -135,17 +136,17 @@ class UserPreferences(models.Model):
     Settings per user.
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
-    last_scan = models.DateField(blank=True, null=True)
+    last_scan = models.DateField(blank=True, null=True, default=datetime.now().date())
 
-    countries = models.CharField(max_length=300, default=None, blank=True, null=True)
-    genres = models.CharField(max_length=300, default=None, blank=True, null=True)
-    max_year = models.PositiveSmallIntegerField(default=1900)
-    min_rating = models.FloatField(default=1.0)
+    countries = models.CharField(max_length=300, default='СССР, Россия, Индия')
+    genres = models.CharField(max_length=300, default='Мюзикл')
+    max_year = models.PositiveSmallIntegerField(default=1990)
+    min_rating = models.FloatField(default=3.0)
 
-    low_countries = models.CharField(max_length=300, default=None, blank=True, null=True)
-    low_genres = models.CharField(max_length=300, default=None, blank=True, null=True)
-    low_max_year = models.PositiveSmallIntegerField(default=1900)
-    low_min_rating = models.FloatField(default=1.0)
+    low_countries = models.CharField(max_length=300, default='Таиланд, Япония, Южная Корея, Китай')
+    low_genres = models.CharField(max_length=300, default='Ужасы')
+    low_max_year = models.PositiveSmallIntegerField(default=2000)
+    low_min_rating = models.FloatField(default=5.0)
 
     def get_normal_preferences(self) -> Tuple[List[str], List[str], int, float]:
         countries = self.countries.split(', ') if self.countries else []
