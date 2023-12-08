@@ -1,7 +1,0 @@
-fly.toml
-.git/
-.idea/
-__pycache__/
-old/
-*.sqlite3
-sample_detail_pages/

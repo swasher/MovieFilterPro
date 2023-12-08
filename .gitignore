@@ -4,3 +4,4 @@ __pycache__/
 1-movie_list.csv
 2-votes.csv
 collectstatic
+.con_line

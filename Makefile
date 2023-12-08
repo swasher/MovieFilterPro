@@ -1,6 +1,6 @@
 _GREEN := "\033[32m[%s]\033[0m %s\n" # Green text for "printf"
 _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
-#.SILENT:
+.SILENT:
 .PHONY: all
 
 # So in short:
@@ -200,3 +200,7 @@ copydb-prod-stage:
 tunnel:
 	# first run `ngrok config add-authtoken <ngrok token>`  - token on page 'your-autotoken', not 'tunnels->autotoken'!!!
 	ngrok http 8000
+
+#fly_deploy:
+#	doppler run -c prd -- -> for get doppler's vars
+#	fly deploy --build-secret MY_SUPER_SECRET=some_value
