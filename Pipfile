@@ -18,6 +18,7 @@ whitenoise = "*"
 dj-database-url = "*"
 psycopg = "*"
 gunicorn = "*"
+django-htmx = "*"
 
 [dev-packages]
 doppler-env = "*"

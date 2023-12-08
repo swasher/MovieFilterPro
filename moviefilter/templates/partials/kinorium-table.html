@@ -1,0 +1,37 @@
+            <table class="table">
+                <thead>
+                <tr>
+                    <th scope="col">title</th>
+                    <th scope="col">originalTitle</th>
+                    <th scope="col">year</th>
+                    <th scope="col">status</th>
+                    <th scope="col">status</th>
+                </tr>
+                </thead>
+                <tbody>
+
+                {% for f in movies %}
+                    <tr>
+                        <td>{{ f.title }}</td>
+                        <td>{{ f.original_title }}</td>
+                        <td>{{ f.year }}</td>
+                        <td>{{ f.get_status_display }}</td>
+                        <td class="p-0">
+                            {% if f.status == 0 %}
+                                0 {# unknown #}
+                            {% elif f.status == 1 %} {# watched #}
+                                <i style="font-size: 1.7rem;" class="bi bi-eye-fill text-success"></i>
+
+                            {% elif f.status == 2 %} {# will_watch #}
+                                <i style="font-size: 1.7rem;" class="bi bi-cloud-arrow-down-fill"></i>
+
+                            {% elif f.status == 3 %} {# declined #}
+                                <i style="font-size: 1.7rem;" class="bi bi-eye-slash text-danger"></i>
+{#                                <i class="bi bi-eye-slash-fill"></i>#}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+
+                </tbody>
+            </table>

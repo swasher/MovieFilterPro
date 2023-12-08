@@ -2,38 +2,36 @@
 
 {% block body %}
 
-    {% if error %}
-    <h1 style="color: red">
-        {{ error }}
-    </h1><br>
-    {% endif %}
-<div class="container">
-<div class="d-inline-block p-2 "><h1 class="p-3"> <span class="badge bg-secondary">Kinorium</span></h1></div>
-<div class="d-inline-block p-2 "><div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div></div>
 
+    <div class="container">
+        <div class="d-inline-block p-2 "><h1 class="p-3"><span class="badge bg-secondary">Kinorium</span></h1></div>
+        <div class="d-inline-block p-2 ">
+            <div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div>
+        </div>
 
-    <table class="table">
-        <thead>
-        <tr>
-            <th scope="col">title</th>
-            <th scope="col">originalTitle</th>
-            <th scope="col">year</th>
-            <th scope="col">status</th>
-        </tr>
-        </thead>
-        <tbody>
+        {% if error %}
+            <h1 style="color: red">
+                {{ error }}
+            </h1><br>
+        {% endif %}
 
-        {% for f in movies %}
-            <tr>
-                <td>{{ f.title }}</td>
-                <td>{{ f.original_title }}</td>
-                <td>{{ f.year }}</td>
-                <td>{{ f.get_status_display }}</td>
-            </tr>
-        {% endfor %}
+        <form>
+            <div class="form-group row">
+                <label for="inputEmail3" class="col-1 col-form-label pb-3"><strong>Filter</strong></label>
+                <div class="col-2">
+                    <input type="text" name="filter" class="form-control" placeholder="filter"
+                           hx-trigger="keyup changed delay:0.4s"
+                           hx-get="{% url 'moviefilter:kinorium' %}"
+                           hx-target="#kinorium-table"
+                           hx-swap="innerHTML"
+                    >
+                </div>
+            </div>
+        </form>
 
-        </tbody>
-    </table>
+        <div id="kinorium-table">
+            {% include 'partials/kinorium-table.html' %}
+        </div>
 
-</div>
+    </div>
 {% endblock %}

@@ -3,6 +3,7 @@ import dataclasses
 from io import StringIO
 from datetime import date, datetime
 
+from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.template.defaultfilters import safe
@@ -233,6 +234,15 @@ def plex(request):
 
 
 def kinorium(request):
+    if request.htmx and request.method == 'GET':
+        query_text = request.GET.get('filter')
+        movies = KinoriumMovie.objects.filter(
+            Q(title__contains=query_text) |
+            Q(original_title__contains=query_text) |
+            Q(year__contains=query_text)
+        )
+        return render(request, 'partials/kinorium-table.html', {'movies': movies})
+
     movies = KinoriumMovie.objects.all()
     return render(request, 'kinorium.html', {'movies': movies})
 
