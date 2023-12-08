@@ -27,6 +27,14 @@ class KinozalMovie:
     kinorium_partial_match: bool = None
 
 
+@dataclass
+class KinoriumMovieDataClass:
+    title: str = None
+    original_title: str = None
+    year: str = None
+    status: int = None
+
+
 class LinkConstructor:
     """
     https: // moviefilter.tv / browse.php?c = 1002 & v = 3 & page = 74

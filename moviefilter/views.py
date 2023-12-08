@@ -1,6 +1,6 @@
-import csv
+
 import dataclasses
-from io import StringIO
+
 from datetime import date, datetime
 
 from django.db.models import Q
@@ -22,7 +22,8 @@ from .checks import exist_in_kinorium, exist_in_kinozal, checking_all_filters
 from .parse import get_details
 from .models import MovieRSS
 from .forms import PreferencesForm
-from .util import year_to_int
+from .parse_csv import parse_file_movie_list, parse_file_votes
+
 
 
 @login_required()
@@ -48,11 +49,7 @@ def movies_low(request):
 
 def parse_kinorium_csv(request):
 
-    def upload_to_dictreader(requst_file):
-        content = requst_file.read()
-        data = content.decode('utf-16', 'strict')
-        dict_reader_obj = csv.DictReader(StringIO(data, newline=''), delimiter='\t')
-        return dict_reader_obj
+
 
     if request.method == 'POST':
 
@@ -61,48 +58,37 @@ def parse_kinorium_csv(request):
             objs = KinoriumMovie.objects.all()
             objs.delete()
 
-            movie_lists_data = upload_to_dictreader(request.FILES['file_movie_list'])
             print('\nСканируем "Списки фильмов')
-            for row in movie_lists_data:
-                t = row['Type']
-                list_title = row['ListTitle']
+            dict_obj_with_movies = parse_file_movie_list(request.FILES['file_movie_list'])
 
-                match list_title:
-                    case 'Буду смотреть':
-                        status = KinoriumMovie.WILL_WATCH
-                    case 'Не буду смотреть':
-                        status = KinoriumMovie.DECLINED
-                    case _:
-                        status = None
+            # дальше делаем как-то так:
+            django_list = [KinoriumMovie(**dataclasses.asdict(vals)) for vals in dict_obj_with_movies]
+            KinoriumMovie.objects.bulk_create(django_list)
+            # и непонятно, нужно ли делать save()
 
-                if t == 'Фильм' and status:
-                    title = row['Title']
-                    original_title = row['Original Title']
-                    year = year_to_int(row['Year'])
 
-                    print(f'{list_title}: {title} - {original_title} - {year}')
+            # m, created = KinoriumMovie.objects.get_or_create(
+            #     title=title, original_title=original_title, year=year
+            # )
+            # m.status = status
+            # m.save()
+            """
+            -------------------------------
+            """
 
-                    m, created = KinoriumMovie.objects.get_or_create(
-                        title=title, original_title=original_title, year=year
-                    )
-                    m.status = status
-                    m.save()
-
-            votes_data = upload_to_dictreader(request.FILES['file_votes'])
+            dict_obj_with_movies = parse_file_votes(request.FILES['file_votes'])
             print('\nVOTES')
-            for row in votes_data:
-                t = row['Type']
-                if t == 'Фильм':
-                    title = row['Title']
-                    original_title = row['Original Title']
-                    year = year_to_int(row['Year'])
-                    print(f'Просмотрено: {title} - {original_title} - {year}')
 
-                    m, created = KinoriumMovie.objects.get_or_create(
-                        title=title, original_title=original_title, year=year
-                    )
-                    m.status = KinoriumMovie.WATCHED
-                    m.save()
+
+            # m, created = KinoriumMovie.objects.get_or_create(
+            #     title=title, original_title=original_title, year=year
+            # )
+            # m.status = KinoriumMovie.WATCHED
+            # m.save()
+
+
+
+
 
             # except Exception as e:
             #     return HttpResponse(safe(f"<b style='color:red'>Error processing Vote file! Error: {e}</b>"))
