@@ -1,93 +1,124 @@
+import dataclasses
 import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
-from typing import List, Type
 
 from .classes import KinozalMovie
 from .classes import LinkConstructor
 
 from .util import is_float
-from .models import Country
+from .models import Country, MovieRSS
+
+from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters
 
 
-def parse_browse(site: LinkConstructor, scan_to_date):
+def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
+
+    reach_last_day = False
+    while not reach_last_day:
+
+        # Получаем список всех фильмов со страницы. Если достигли нужной даты, то reach_last_day возврашается как True
+        movies, reach_last_day = parse_page(site, scan_to_date)
+
+        # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу
+        movies = movie_audit(movies, user)
+
+        # записываем фильмы в базу
+        if movies:
+            print('SAVE TO DB: ', end='')
+        for m in movies:
+            # todo использовать bulk_create
+            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
+                                           defaults=dataclasses.asdict(m))
+            print('⦁', end='')
+        print('')
+
+        # переходим к сканированию следующей странице
+        site.next_page()
+
+
+def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool):
     """
     Принимает URL и дату, до которой будет сканировать.
     URL - это объект Link_constructor
     """
+    END_DATE_REACHED = True
+    END_DATE_NOT_REACHED = False
 
-    movies: List[KinozalMovie] = []
 
-    while True:
+    movies: list[KinozalMovie] = []
 
-        # download the HTML document
-        # with an HTTP GET request
-        response = requests.get(site.url())
+    # download the HTML document
+    # with an HTTP GET request
+    response = requests.get(site.url())
 
-        print(f'GRAB URL: {site.url()}')
+    print(f'GRAB URL: {site.url()}')
 
-        if response.ok:
-            soup = BeautifulSoup(response.content, "html.parser")
+    if response.ok:
+        soup = BeautifulSoup(response.content, "html.parser")
 
-            movies_elements = soup.find_all('tr', 'bg')
+        movies_elements = soup.find_all('tr', 'bg')
 
-            for m in movies_elements:
-                """
-                movie head format:
-                
-                'Красная жара / Red Heat / 1988 / ПМ / UHD / BDRip (1080p)' - обычно такой форма
-                'Наследие / 2023 / РУ, СТ / WEB-DL (1080p)'                 - если русский, то нет original_title
-                'Телекинез / 2022-2023 / РУ / WEB-DL (1080p)'               - встречается и такое (тогда берем первые 4 цифры)
-                
-                """
-                s = m.find('a')
+        for m in movies_elements:
+            """
+            movie head format:
+            
+            'Красная жара / Red Heat / 1988 / ПМ / UHD / BDRip (1080p)' - обычно такой форма
+            'Наследие / 2023 / РУ, СТ / WEB-DL (1080p)'                 - если русский, то нет original_title
+            'Телекинез / 2022-2023 / РУ / WEB-DL (1080p)'               - встречается и такое (тогда берем первые 4 цифры)
+            
+            """
+            s = m.find('a')
 
-                kinozal_id: int = int(s['href'].split('id=')[1])
+            kinozal_id: int = int(s['href'].split('id=')[1])
 
-                date_added = m.find_all('td', 's')[-1].text.split(' в ')[0]  # '27.11.2023' or 'сегодня' or 'вчера' or 'сейчас'
-                match date_added:
-                    case 'сегодня' | 'сейчас':
-                        date_added = datetime.now().date()
-                    case 'вчера':
-                        date_added = (datetime.now() - timedelta(days=1)).date()
-                    case _:
-                        date_added = datetime.strptime(date_added, '%d.%m.%Y').date()
+            date_added = m.find_all('td', 's')[-1].text.split(' в ')[0]  # '27.11.2023' or 'сегодня' or 'вчера' or 'сейчас'
+            match date_added:
+                case 'сегодня' | 'сейчас':
+                    date_added = datetime.now().date()
+                case 'вчера':
+                    date_added = (datetime.now() - timedelta(days=1)).date()
+                case _:
+                    date_added = datetime.strptime(date_added, '%d.%m.%Y').date()
 
-                if date_added < scan_to_date:
-                    return movies
+            if date_added < scan_to_date:
+                return movies, END_DATE_REACHED
 
-                header = s.text.split(' / ')
-                if header[2].isdigit() and len(header[2]) == 4:  # normal format
-                    title = header[0]
-                    original_title = header[1]
-                    year = header[2]
+            header = s.text.split(' / ')
+            if header[2].strip().isdigit() and len(header[2].strip()) == 4:  # normal format
+                title = header[0].strip()
+                original_title = header[1].strip()
+                year = header[2].strip()
 
-                elif 'РУ' in header[2].split(', '):  # русский формат без original title
-                    title = header[0]
-                    original_title = ''
-                    year = header[1]
+            elif 'РУ' in header[2].split(', '):  # русский формат без original title
+                title = header[0].strip()
+                original_title = ''
+                year = header[1].strip()
 
-                elif len(header[2]) == 9 and '-' in header[2]:  # год в заголовке как диапазон: "Голый пистолет (Коллекция) / Naked Gun: Collection / 1982-1994 / ПМ, ПД..."
-                    title = header[0]
-                    original_title = header[1]
-                    year = header[2]
-                else:
-                    raise Exception(f'Can\'t parse header in id={kinozal_id}')
+            elif len(header[2]) > 4:
+                # год в заголовке как диапазон: "Голый пистолет (Коллекция) / Naked Gun: Collection / 1982-1994 / ПМ, ПД..."
+                # или как перечень:
+                # Клетка для чудаков (Клетка для безумцев) (Трилогия) / La Cage aux folles I, II, III / 1978, 1980, 1985 / ПМ, ПД / BDRip (1080p), HDTVRip (1080p)
+                title = header[0].strip()
+                original_title = header[1].strip()
+                year = header[2].strip()[:4]
+            else:
+                raise Exception("Can't parse header in id=", kinozal_id)
 
-                print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
+            print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
-                m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
+            m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
 
-                movies.append(m)
+            movies.append(m)
 
-            site.next_page()
+        return movies, END_DATE_NOT_REACHED
 
-        else:
-            # log the error response
-            # in case of 4xx or 5xx
-            print(response)
-            # todo А так вообще можно?
-            raise Exception(response)
+    else:
+        # log the error response
+        # in case of 4xx or 5xx
+        print(response)
+        # todo А так вообще можно?
+        raise Exception(response)
 
 
 def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
@@ -121,20 +152,34 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         try:
             m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
         except AttributeError:
-            m.genres = None
+            print("WARNING! CAN'T GET [genres]")
+            m.genres = ''
 
         countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
         countries_list = Country.objects.values_list('name', flat=True)
         if countries:
             m.countries = ', '.join(list(c for c in countries.split(', ') if c in countries_list))
         else:
-            m.countries = None
+            m.countries = ''
 
-        m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
+        try:
+            m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
+        except AttributeError:
+            print("WARNING! CAN'T GET [director]")
+            m.director = ''
 
-        m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
+        try:
+            m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
+        except AttributeError:
+            print("WARNING! CAN'T GET [actors]")
+            m.actors = ''
 
-        m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
+        try:
+            m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
+        except:
+            print("WARNING! CAN'T GET [plot]")
+            m.plot = ''
+
 
         translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
         if translate_search:
@@ -146,3 +191,59 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         m.poster = poster
 
         return m, response.elapsed.total_seconds()
+
+
+def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
+    """
+    Принимает на входе список объектов KinozalMovie.
+    Объекты заполнены только самой просто инфой со страницы списка фильмов (но не со страницы фильма!)
+    Каждый Объект сначала проходит простые проверки.
+    Если прошел, тогда парсер сканирует страницу фильма, заполняет объект.
+
+    Возвращает список объектов KinozalMovie, которые осталось только записать в базу.
+    """
+    result = []
+    for m in movies:
+        """
+        LOGIC:
+        - если уже есть в базе RSS - пропускаем
+            ◦ так же этот фильм может быть уже в базе как Игнорируемый - в коде никаких дополнительных действий не требуется, просто не добавляем.
+        - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
+            ◦ проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
+        - если фильм прошел проверки по базам kinozal и kinorium, тогда вытягиваем для него данные со страницы
+        - проверяем через пользовательские фильтры
+        - и вот теперь только заносим в базу 
+        """
+        print(f'PROCESS: {m.title} - {m.original_title} - {m.year}')
+
+        if exist_in_kinozal(m):
+            print(' ┣━ SKIP [exist in kinozal]')
+            continue
+
+        exist, match_full, status = exist_in_kinorium(m)
+        if exist and match_full:
+            print(f' ┣━ SKIP [{status}]')
+            continue
+        elif exist and not match_full:
+            print(f' ┣━ MARK AS PARTIAL [{status}]')
+            m.kinorium_partial_match = True
+
+        m, sec = get_details(m)
+        print(f' ┣━ GET DETAILS: {sec:.1f}s')
+
+        # Эта проверка выкидывает все, что через него не прошло
+        if check_users_filters(user, m, low_priority=False):
+            m.low_priority = False
+
+            # Из оставшихся, некоторым назначаем низкий приоритет
+            # тут логика такая - если фильм НЕ прошел проверку - то он подпадет как Low priority
+            if not check_users_filters(user, m, low_priority=True):
+                m.low_priority = True
+
+        if m.low_priority is not None:  # Если нет никакого priority, значит фильм не прошел проверку по фильтрам.
+            print(
+                f' ┣━ ADD TO DB [prio={"low" if m.low_priority else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
+
+            result.append(m)
+
+    return result

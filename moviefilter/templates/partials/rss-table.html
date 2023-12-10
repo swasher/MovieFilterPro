@@ -13,7 +13,7 @@
     <tbody>
 
     {% for f in movies %}
-        <tr class="fade-me-out" {% if f.kinorium_partial_match %} class="table-warning" {% endif %}>
+        <tr {% if f.kinorium_partial_match %} class="table-danger" {% endif %}>
             <td>
                 <img
                         src="{{ f.poster }}"
@@ -61,7 +61,7 @@
                 {% endfor %}
             </td>
             <td style="font-size: small">{{ f.plot|truncatechars:500 }}</td>
-            <td style="width:10%; font-size: small">{{ f.translate }}</td>
+            <td style="width:5%; font-size: small">{{ f.translate }}</td>
             <td>
                 {% comment %}<div class="btn-group" role="group" aria-label="Basic mixed styles example">{% endcomment %}
                 <div class="d-grid gap-1 col-1 ">

@@ -76,7 +76,7 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
     return NOT_FOUND, False, None
 
 
-def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> bool:
+def check_users_filters(user: User, m: KinozalMovie, low_priority: bool) -> bool:
     """
     Возвращает True, если m удовлетворяет всем фильтрам.
     """
@@ -95,13 +95,19 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
     country_intersection = set(m.countries.split(', ')) & set(stop_countries)
     # country_passes = not bool(country_intersection)
     if bool(country_intersection):
-        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [country: {country_intersection}]')
+        if low_priority:
+            print(f' ┣━ MARK LOW: [country] {country_intersection}')
+        else:
+            print(f' ┣━ SKIP: [country] {country_intersection}]')
         return False
 
     ### 2 Genres
     genre_intersection = set(m.genres) & set(stop_genres)
     if bool(genre_intersection):
-        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [genres: {genre_intersection}]')
+        if low_priority:
+            print(f' ┣━ MARK LOW: [genres] {genre_intersection}')
+        else:
+            print(f' ┣━ SKIP: [genres] {genre_intersection}')
         return False
 
     ### 3 Max year
@@ -113,14 +119,20 @@ def checking_all_filters(user: User, m: KinozalMovie, low_priority: bool) -> boo
         else:
             year = int(m.year)
         if year < max_year:
-            print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [year: {year}]')
+            if low_priority:
+                print(f' ┣━ MARK LOW: [year] {year}')
+            else:
+                print(f' ┣━ SKIP: [year] {year}')
             return False
     except:
         print('ERROR in checks.py -> checking_all_filters -> year converting')
 
     ### 4 Min rating
     if not_match_rating(m.kinopoisk_rating, min_rating) and not_match_rating(m.imdb_rating, min_rating):
-        print(f' ┣━ NOT MATCH in [{prio(low_priority)}]: [rating]')
+        if low_priority:
+            print(f' ┣━ MARK LOW: [rating] {m.kinopoisk_rating}/{m.imdb_rating}')
+        else:
+            print(f' ┣━ SKIP: [rating] {m.kinopoisk_rating}/{m.imdb_rating}')
         return False
 
     return True

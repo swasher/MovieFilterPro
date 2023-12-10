@@ -1,15 +1,35 @@
-# page
-# https://kinozal.tv/browse.php?c=1002&v=3&page=1
-# id
-# https://kinozal.tv/details.php?id=564005
-from movie_filter_pro import wsgi
-from moviefilter.parse import get_details
-from moviefilter.classes import KinozalMovie
+"""
+Сканирует определенную страницу (переменная page).
+Модифицированная функция из основного приложения для дебага.
+"""
+from moviefilter.classes import LinkConstructor
+from datetime import date
+import dataclasses
+from django.contrib.auth.models import User
+from moviefilter.models import MovieRSS
+from moviefilter.parse import parse_page, movie_audit
 
-m = KinozalMovie()
-m.id = 564005
-m.id = 2009368
 
-get_details(m)
+def modified_kinozal_scan(site: LinkConstructor, user):
+    scan_to_date = date(year=2000, month=1, day=1)
 
-print(m)
+    # Получаем список всех фильмов со страницы. Если достигли нужной даты, то reach_last_day возврашается как True
+    movies, reach_last_day = parse_page(site, scan_to_date)
+
+    # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу
+    movies = movie_audit(movies, user)
+
+    for m in movies:
+        print(m.title)
+
+    # записываем фильмы в базу
+    pass
+
+
+if __name__ == '__main__':
+    page = 15
+
+    page = LinkConstructor(page=page)
+    user = User.objects.get(pk=1)
+
+    modified_kinozal_scan(page, user)

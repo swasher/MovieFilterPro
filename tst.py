@@ -8,13 +8,23 @@ def tst():
             return x
 
 def tst1():
-    return False, False
 
+    def ret_bool():
+        return False, False
 
-if __name__ == '__main__':
-    if tst1():
+    if ret_bool():
         print(True)
     else:
         print(False)
 
-    tst()
+
+def tst3():
+    l = ['Apple', 'Banana', 'Berry', 'Cherry']
+    for i in l:
+        if i in ['Banana', 'Berry']:
+            l.remove(i)
+    print(l)
+
+
+if __name__ == '__main__':
+    tst3()

@@ -15,12 +15,10 @@ from silk.profiling.profiler import silk_profile
 
 from .models import MovieRSS, Kinorium, UserPreferences
 from .classes import LinkConstructor
-from .parse import parse_browse
-from .checks import exist_in_kinorium, exist_in_kinozal, checking_all_filters
-from .parse import get_details
 from .forms import PreferencesForm
 from .parse_csv import parse_file_movie_list, parse_file_votes
 from .forms import UploadCsvForm
+from .parse import kinozal_scan
 
 
 @silk_profile(name='AAA')
@@ -34,53 +32,15 @@ def movies(request):
 def scan(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
     context = {'last_scan': last_scan}
+    user = request.user
 
     if request.method == 'GET':
 
         site = LinkConstructor()
-        movies = parse_browse(site, last_scan)
+        movies = kinozal_scan(site, last_scan, user)
 
-        for m in movies:
-            """
-            LOGIC:
-            - если есть в базе moviefilter - пропускаем (предложение о скачивании показывается пользователю один раз)
-                ◦ так же этот фильм может быть уже в базе как Игнорируемый - в коде никаких дополнительных действий не требуется, просто не добавляем.
-            - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
-                ◦ проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
-            - если фильм прошел проверки по базам, тогда вытягиваем для него данные со страницы
-            - проверяем через пользовательские фильтры
-            - и вот теперь только заносим в базу 
-            """
-            print(f'START: {m.title} - {m.original_title} - {m.year}')
 
-            if exist_in_kinozal(m):
-                print(' ┣━ SKIP [moviefilter]')
-                continue
 
-            exist, match_full, status = exist_in_kinorium(m)
-            if exist and match_full:
-                print(f' ┣━ SKIP [{status}]')
-                continue
-            elif exist and not match_full:
-                print(f' ┣━ ADD AS PARTIAL [{status}]')
-                m.kinorium_partial_match = True
-
-            m, sec = get_details(m)
-            print(f' ┣━ GET DETAILS: {sec:.1f}s')
-
-            # Этот фильтр выкидвает все, что через него не прошло
-            if checking_all_filters(request.user, m, low_priority=False):
-                m.low_priority = False
-
-                # Из оставшихся, некоторым назначаем низкий приоритет
-                # тут логика такая - если фильм НЕ прошел проверку - то он подпадет как Low priority
-                if not checking_all_filters(request.user, m, low_priority=True):
-                    m.low_priority = True
-
-            if m.low_priority is not None:
-                print(f' ┣━ ADD TO DB [prio={"low" if m.low_priority else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
-                MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
-                                               defaults=dataclasses.asdict(m))
 
         UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
 

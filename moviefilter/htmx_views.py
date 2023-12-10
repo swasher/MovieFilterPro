@@ -30,11 +30,11 @@ def rss_table_data(request, prio='normal_priority'):
     else:
         movies_qs = MovieRSS.objects.filter(low_priority=True, ignored=False)
 
-    prefs = UserPreferences.objects.get(user=request.user)
-    paginate_by = prefs.paginate_by
-
-    paginator = Paginator(movies_qs, paginate_by)
-    page_number = request.GET.get("page")
-    movies_page = paginator.get_page(page_number)
-
-    return render(request, 'partials/rss-table.html', {'movies': movies_page})
+    # prefs = UserPreferences.objects.get(user=request.user)
+    # paginate_by = prefs.paginate_by
+    #
+    # paginator = Paginator(movies_qs, paginate_by)
+    # page_number = request.GET.get("page")
+    # movies_page = paginator.get_page(page_number)
+    # return render(request, 'partials/rss-table.html', {'movies': movies_page})
+    return render(request, 'partials/rss-table.html', {'movies': movies_qs})

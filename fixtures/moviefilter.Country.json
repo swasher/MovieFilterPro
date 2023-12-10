@@ -1692,5 +1692,12 @@
     "fields": {
         "name": "СССР"
     }
+},
+{
+    "model": "moviefilter.country",
+    "pk": 243,
+    "fields": {
+        "name": "Южная Корея"
+    }
 }
 ]
