@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import KinoriumMovie
+from .models import Kinorium
 from .models import Country
 
 
@@ -11,5 +11,5 @@ class CountryAdmin(admin.ModelAdmin):
     pass
 
 
-admin.site.register(KinoriumMovie, KinoriumMovieAdmin)
+admin.site.register(Kinorium, KinoriumMovieAdmin)
 admin.site.register(Country, CountryAdmin)

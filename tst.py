@@ -1,5 +1,3 @@
-
-
 def tst():
     x = 0
 
@@ -9,11 +7,8 @@ def tst():
         if x == 15:
             return x
 
-
 def tst1():
     return False, False
-
-
 
 
 if __name__ == '__main__':
@@ -21,3 +16,5 @@ if __name__ == '__main__':
         print(True)
     else:
         print(False)
+
+    tst()

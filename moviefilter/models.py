@@ -2,7 +2,7 @@ from urllib.parse import urlencode, quote_plus
 from typing import List, Tuple
 from datetime import datetime
 
-from django import utils
+from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -89,7 +89,7 @@ class MovieRSS(models.Model):
         name = self.original_title if self.original_title else self.title
         return f"{name} - {self.year}"
 
-class KinoriumMovie(models.Model):
+class Kinorium(models.Model):
     """
     Эта таблица не имеет внешнего ключа к Moveies. Это просто копия CSV из Кинориума для более быстрого поиска(можно
     было бы просто по CSV искать)
@@ -137,7 +137,7 @@ class UserPreferences(models.Model):
     Settings per user.
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
-    last_scan = models.DateField(blank=True, null=True, default=utils.timezone.now().date())
+    last_scan = models.DateField(blank=True, null=True, default=timezone.now)
 
     countries = models.CharField(max_length=300, default='СССР, Россия, Индия')
     genres = models.CharField(max_length=300, default='Мюзикл')
@@ -159,6 +159,13 @@ class UserPreferences(models.Model):
         genres = self.low_genres.split(', ') if self.genres else []
         return countries, genres, self.low_max_year, self.low_min_rating
 
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserPreferences.objects.create(user=instance)
 
 class Country(models.Model):
     """

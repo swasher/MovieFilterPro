@@ -19,10 +19,15 @@ dj-database-url = "*"
 psycopg = "*"
 gunicorn = "*"
 django-htmx = "*"
+django-widget-tweaks = "*"
 
 [dev-packages]
 doppler-env = "*"
 django-browser-reload = "*"
+django-debug-toolbar = "*"
+django-silk = "*"
+ruff = "*"
+ruff-lsp = "*"
 
 [requires]
 python_version = "3.11"

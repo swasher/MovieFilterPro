@@ -74,7 +74,7 @@
 
                     <button type="button" class="btn btn-success btn-sm"
                             data-bs-toggle="tooltip" title="Open search and add to ignore"
-                            hx-delete="{% url 'moviefilter:ignore' f.pk %}"
+                            hx-delete="{% url 'ignore' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.6s"
                             _="on click go to url {{ f.search_link }} in new window"
@@ -83,7 +83,7 @@
 
                     <button type="button" class="btn btn-danger btn-sm"
                             data-bs-toggle="tooltip" title="Add to ignore table"
-                            hx-delete="{% url 'moviefilter:ignore' f.pk %}"
+                            hx-delete="{% url 'ignore' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.6s"
                     >Decline

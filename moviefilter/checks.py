@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 
 from .models import MovieRSS
-from .models import KinoriumMovie
+from .models import Kinorium
 from .models import UserPreferences
 from .classes import KinozalMovie
 from .util import get_object_or_none
@@ -39,23 +39,23 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
 
     year = m.year if m.year.isdigit() else m.year[:4]
 
-    exist = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title, year=year)
+    exist = get_object_or_none(Kinorium, title=m.title, original_title=m.original_title, year=year)
     if exist:
         return MATCH, FULL, exist.get_status_display()
 
-    exist = get_object_or_none(KinoriumMovie, title=m.title, original_title=m.original_title)
+    exist = get_object_or_none(Kinorium, title=m.title, original_title=m.original_title)
     if exist:
         print(f' ┣━ KINORIUM PARTIAL MATCH [title+original]: {m.title} + {m.original_title}')
         return MATCH, PARTIAL, exist.get_status_display()
 
     if m.title:
-        exist = get_object_or_none(KinoriumMovie, title=m.title, year=year)
+        exist = get_object_or_none(Kinorium, title=m.title, year=year)
         if exist:
             print(f' ┣━ KINORIUM PARTIAL MATCH [title+year]: {m.title} + {year}')
             return MATCH, PARTIAL, exist.get_status_display()
 
     if m.original_title:
-        exist = get_object_or_none(KinoriumMovie, original_title=m.original_title, year=year)
+        exist = get_object_or_none(Kinorium, original_title=m.original_title, year=year)
         if exist:
             print(f' ┣━ KINORIUM PARTIAL MATCH [original+year]: {m.original_title} + {year}')
             return MATCH, PARTIAL, exist.get_status_display()

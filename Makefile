@@ -30,8 +30,8 @@ migrations:
 migrate:
 	doppler run -- python manage.py migrate
 
-migrate_initital:
-	# for first run, - this command create datatables
+initital:
+	# this command create datatables
 	doppler run -- python manage.py makemigrations moviefilter
 	doppler run -- python manage.py migrate
 	@$(MAKE) load_fixtures

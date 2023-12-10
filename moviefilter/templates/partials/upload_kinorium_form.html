@@ -1,0 +1,50 @@
+{% load widget_tweaks %}
+{% with WIDGET_ERROR_CLASS='is-invalid' %}
+
+<div class="modal-content">
+    <div class="modal-header">
+        <h1 class="modal-title fs-5" id="exampleModalLabel">Upload Kinorium CSV</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <form id='form' method="post" hx-encoding='multipart/form-data' hx-post='{{ request.path }}'>
+            {% csrf_token %}
+
+            <div class="col mb-3">
+                <label for="{{ form.file_movie_list.id_for_label }}" class="form-label">File <b>movie list</b></label>
+                {% render_field form.file_movie_list  class="form-control" %}
+                <div class="invalid-feedback">{{ form.file_movie_list.errors|first }}</div>
+            </div>
+            <div class="col mb-3">
+                <label for="{{ form.file_votes.id_for_label }}" class="form-label">File <b>votes</b></label>
+                {% render_field form.file_votes  class="form-control" %}
+                <div class="invalid-feedback">{{ form.file_votes.errors|first }}</div>
+            </div>
+
+        </form>
+    </div>
+
+    <div class="modal-footer">
+        <button type="submit" form="form" class="btn btn-primary">
+            Upload
+        </button>
+        <progress id='progress' value='0' max='100'></progress>
+
+        {% if uploaded_file_url %}
+            <p>File uploaded at: <a href="{{ uploaded_file_url }}">{{ uploaded_file_url }}</a></p>
+        {% endif %}
+    </div>
+
+</div>
+
+
+
+<script>
+    {# Это для отображения прогресс бара при заливке CSV#}
+    htmx.on('#form', 'htmx:xhr:progress', function (evt) {
+        htmx.find('#progress').setAttribute('value', evt.detail.loaded / evt.detail.total * 100)
+    });
+</script>
+
+{% endwith %}

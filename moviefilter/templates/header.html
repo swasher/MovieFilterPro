@@ -26,27 +26,27 @@
 
                     <li class="nav-item">
                         <a class="nav-link {% active 'moviefilter:movies' %}"
-                           href="{% url 'moviefilter:movies' %}"><i class="bi-database me-1"></i>Movies RSS</a>
+                           href="{% url 'movies' %}"><i class="bi-database me-1"></i>Movies RSS</a>
                     </li>
 
                     <li class="nav-item">
                         <a class="nav-link {% active 'moviefilter:movies_low' %}"
-                           href="{% url 'moviefilter:movies_low' %}"><i class="bi-database me-1"></i>Low Priority RSS</a>
+                           href="{% url 'movies_low' %}"><i class="bi-database me-1"></i>Low Priority RSS</a>
                     </li>
 
-                    <li class="nav-item">
+{% comment %}                     DEPRECATED <li class="nav-item">
                         <a class="nav-link {% active 'moviefilter:parse_kinorium_csv' %}"
-                           href="{% url 'moviefilter:parse_kinorium_csv' %}"><i class="bi-database me-1"></i>Upload Kinorium CSV</a>
-                    </li>
+                           href="{% url 'parse_kinorium_csv' %}"><i class="bi-database me-1"></i>Upload Kinorium CSV</a>
+                    </li>{% endcomment %}
 
                     <li class="nav-item">
                         <a class="nav-link {% active 'moviefilter:kinorium' %}"
-                           href="{% url 'moviefilter:kinorium' %}"><i class="bi-database me-1"></i>Kinorium</a>
+                           href="{% url 'kinorium' %}"><i class="bi-database me-1"></i>Kinorium</a>
                     </li>
 
                     <li class="nav-item">
                         <a class="nav-link {% active 'moviefilter:plex' %}"
-                           href="{% url 'moviefilter:plex' %}"><i class="bi-database me-1"></i>Plex</a>
+                           href="{% url 'plex' %}"><i class="bi-database me-1"></i>Plex</a>
                     </li>
 
 
@@ -60,7 +60,7 @@
                     </div>
 
                     <div class="Header-item">
-                        <a href="{% url 'moviefilter:user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
+                        <a href="{% url 'user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
                             {% comment %}<i class="bi-person-check-fill" style="color: #66f566;"></i>{% endcomment %}
                             Preferences</a>
                     </div>

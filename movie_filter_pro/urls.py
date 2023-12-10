@@ -6,6 +6,7 @@ from django.contrib.auth.views import LoginView
 from moviefilter import auth
 
 urlpatterns = [
+    path('silk/', include('silk.urls', namespace='silk')),
     path('login/', LoginView.as_view(template_name='login.html'), name='login'),
     path('logout/', auth.user_logout, name="logout"),
     path('admin/', admin.site.urls),
@@ -21,9 +22,9 @@ if settings.DEBUG:
     urlpatterns += path("__reload__/", include("django_browser_reload.urls")),
 
     # add debug_toolbar APP
-    # urlpatterns += [
-    #     path('__debug__/', include('debug_toolbar.urls')),
-    # ]
+    urlpatterns += [
+        path('__debug__/', include('debug_toolbar.urls')),
+    ]
 
     # add serve for Media during development
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)[0],

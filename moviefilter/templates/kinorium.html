@@ -1,13 +1,52 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block body %}
 
-
     <div class="container">
-        <div class="d-inline-block p-2 "><h1 class="p-3"><span class="badge bg-secondary">Kinorium</span></h1></div>
-        <div class="d-inline-block p-2 ">
-            <div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div>
+
+        <div class="row align-items-center">
+          <div class="col-auto me-auto">
+              <div class="d-inline-block pt-1">
+                  <h2><span class="badge bg-secondary">Kinorium</span></h2>
+              </div>
+              <div class="d-inline-block">
+                  <div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div>
+              </div>
+          </div>
+          <div class="col-auto">
+              <!-- Button trigger modal form-->
+              <button hx-get="{% url 'kinorium' %}" type="button" class="btn btn-primary pt-1"
+                      hx-target="#dialog">
+                  Update list of movies
+              </button>
+{% comment %}
+              <button hx-get="{% url 'kinorium' %}" type="button" class="btn btn-primary pt-1"
+                      hx-target="#dialog" hx-swap="innerHTML" data-bs-toggle="modal" data-bs-target="#modalform">
+                  Update list of movies
+              </button>
+{% endcomment %}
+          </div>
         </div>
+
+
+        <!-- Modal form-->
+        <div id="modalform" class="modal modal-blur fade" style="display: none" aria-hidden="false" tabindex="-1" >
+            <div id="dialog" class="modal-dialog modal-dialog-centered" hx-target="this"></div>
+        </div>
+
+        <!-- Toast template -->
+        <div data-toast-container class="toast-container position-fixed top-0 end-0 p-3">
+            <div data-toast-template class="toast align-items-center border-0" role="alert" aria-live="assertive"
+                 aria-atomic="true">
+                <div class="d-flex">
+                    <div data-toast-body class="toast-body"></div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                            aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+        <!-- end Toast template -->
 
         {% if error %}
             <h1 style="color: red">
@@ -15,13 +54,13 @@
             </h1><br>
         {% endif %}
 
-        <form>
+        <form class="my-3 border rounded p-2 ">
             <div class="form-group row">
-                <label for="inputEmail3" class="col-1 col-form-label pb-3"><strong>Filter</strong></label>
+                <label for="inputEmail3" class="col-1 col-form-label"><strong>Filter</strong></label>
                 <div class="col-2">
                     <input type="text" name="filter" class="form-control" placeholder="filter"
                            hx-trigger="keyup changed delay:0.4s"
-                           hx-get="{% url 'moviefilter:kinorium' %}"
+                           hx-get="{% url 'kinorium' %}"
                            hx-target="#kinorium-table"
                            hx-swap="innerHTML"
                     >
@@ -29,9 +68,19 @@
             </div>
         </form>
 
-        <div id="kinorium-table">
+        <div id="kinorium-table" hx-get="{% url 'kinorium_table_data' %}" hx-trigger="refreshEvent">
             {% include 'partials/kinorium-table.html' %}
         </div>
 
     </div>
+
+    <script src="{% static 'dialog.js' %}"></script>
+
+    <style>
+        .modal-open .modal-blur {
+          backdrop-filter: blur(10px);
+          background-color: rgb(255, 255, 255, 0.01);
+          opacity: 1 !important;
+        }
+    </style>
 {% endblock %}

@@ -5,6 +5,7 @@
 {#{% load admin_urls %}#}
 {% load compress %}
 
+
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
@@ -38,10 +39,10 @@
     <script src="{% static 'sweetalert2/sweetalert2.js' %}"></script>
 
     {% compress css %}
-        <link type="text/x-scss" href="{% static 'main/style.scss' %}" rel="stylesheet" media="screen">
+        <link type="text/x-scss" href="{% static 'style.scss' %}" rel="stylesheet" media="screen">
     {% endcompress %}
 
-    <script src="{% static 'htmx-toasts.js' %}" defer></script>
+    <script src="{% static 'toasts.js' %}"></script>
 
 {% comment %}    <!-- jQuery, for depends: Select2 -->
     <script src="{% static 'jslib/jquery-3.7.1.js' %}"></script>{% endcomment %}

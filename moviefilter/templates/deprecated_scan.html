@@ -18,9 +18,9 @@
 
     <h2>Фильмы из кинозала - результат скана (без внесения в базу)</h2>
 
-    {#    <a href="{% url 'moviefilter:scan' %}" class="btn btn-primary btn-lg" role="button">SCAN</a>#}
+    {#    <a href="{% url 'scan' %}" class="btn btn-primary btn-lg" role="button">SCAN</a>#}
 
-    {% comment %}    <form action="{% url 'moviefilter:scan' %}" method="post" id="myForm">
+    {% comment %}    <form action="{% url 'scan' %}" method="post" id="myForm">
         {% csrf_token %}
         <button type="submit" class="btn btn-primary btn-lg" name="reset"><i class="fa fa-check"></i>SCAN
         </button>
@@ -28,7 +28,7 @@
     </form>{% endcomment %}
 
     <button class='btn btn-primary'
-            hx-get="{% url 'moviefilter:scan' %}"
+            hx-get="{% url 'scan' %}"
             hx-target="#film-list"
             hx-swap="innerHTML">
         <span id="save-icon" class="bi-database"></span> SCAN

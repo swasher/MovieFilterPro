@@ -14,7 +14,7 @@
                     </div>
                 </div>
                 {% endif %}
-                <form action="{% url 'moviefilter:reset_rss' %}" method="post" id="myForm">
+                <form action="{% url 'reset_rss' %}" method="post" id="myForm">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger btn-lg" name="reset"><i class="fa fa-check"></i>RESET
                     </button>
@@ -33,7 +33,7 @@
         </div>
         <p>{% endcomment %}
 
-        {#<a href="{% url 'moviefilter:reset_rss' %}" class="btn btn-danger btn-lg" role="button">RESET</a>#}
+        {#<a href="{% url 'reset_rss' %}" class="btn btn-danger btn-lg" role="button">RESET</a>#}
 
 
     </div>

@@ -23,11 +23,21 @@ SECRET_KEY = config('SECRET_KEY')
 
 DEBUG = config('DEBUG', cast=bool)
 
+ENABLE_DEBUG_TOOLBAR = config('ENABLE_DEBUG_TOOLBAR', cast=bool)
+ENABLE_BROWSER_RELOAD = config('ENABLE_BROWSER_RELOAD', cast=bool)
+ENABLE_SAAS_COMPILER = False
+
+SILKY_PYTHON_PROFILER = True
+
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.fly.dev']
 CSRF_TRUSTED_ORIGINS = ['https://*.fly.dev']
 
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = 'login'
+
+INTERNAL_IPS = [
+    "127.0.0.1",
+]
 
 # Application definition
 
@@ -44,11 +54,15 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'compressor',
     'django_htmx',
+    'widget_tweaks',
+    'debug_toolbar',
+    'silk',
 
     'moviefilter',
 ]
 
 MIDDLEWARE = [
+    'silk.middleware.SilkyMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -57,10 +71,14 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_browser_reload.middleware.BrowserReloadMiddleware',
     'moviefilter.middleware.toast_middleware.HtmxMessageMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+
 ]
+if DEBUG and ENABLE_DEBUG_TOOLBAR:
+    MIDDLEWARE = ['debug_toolbar.middleware.DebugToolbarMiddleware'] + MIDDLEWARE
+if DEBUG and ENABLE_BROWSER_RELOAD:
+    MIDDLEWARE += ["django_browser_reload.middleware.BrowserReloadMiddleware"]
 
 ROOT_URLCONF = 'movie_filter_pro.urls'
 
@@ -142,9 +160,10 @@ STATICFILES_FINDERS = [
     'compressor.finders.CompressorFinder',
 ]
 
-COMPRESS_PRECOMPILERS = (
-    ('text/x-scss', 'django_libsass.SassCompiler'),
-)
+if ENABLE_SAAS_COMPILER:
+    COMPRESS_PRECOMPILERS = (
+        ('text/x-scss', 'django_libsass.SassCompiler'),
+    )
 
 STORAGES = {
     "staticfiles": {
