@@ -28,7 +28,7 @@ class MovieRSS(models.Model):
     сканер знает, что такие фильмы показывать пользователю не нужно.
     """
     class Meta:
-        ordering = ['-id']
+        ordering = ['date_added']
 
     ignored = models.BooleanField(default=False, help_text='Пользователь не хочет видеть этот фильм.')
     low_priority = models.BooleanField(default=False)

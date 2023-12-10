@@ -165,6 +165,13 @@ if ENABLE_SAAS_COMPILER:
         ('text/x-scss', 'django_libsass.SassCompiler'),
     )
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
 STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",

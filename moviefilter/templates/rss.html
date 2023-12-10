@@ -11,8 +11,12 @@
         </button>
         <span class="border rounded p-1 m-1">Last scan: <span
                 class="badge text-bg-success">{{ last_scan }}</span></span>
+        <span class="border rounded p-1 m-1">Primary: <span
+                class="badge text-bg-success">{{ total_primary }}</span></span>
+        <span class="border rounded p-1 m-1">Low prio: <span
+                class="badge text-bg-success">{{ total_low_priority }}</span></span>
         <span class="border rounded p-1 m-1">Total: <span
-                class="badge text-bg-success">{{ movie|length }}</span></span>
+                class="badge text-bg-success">{{ total_primary|add:total_low_priority }}</span></span>
 
 
         <div class="border my-4 p-3 rounded" style="background: lightgray">

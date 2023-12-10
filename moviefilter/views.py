@@ -25,7 +25,10 @@ from .parse import kinozal_scan
 @login_required
 def movies(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    return render(request, template_name='rss.html', context={'last_scan': last_scan})
+    total_primary = MovieRSS.objects.filter(low_priority=False).count()
+    total_low_priority = MovieRSS.objects.filter(low_priority=True).count()
+    return render(request, template_name='rss.html',
+                  context={'last_scan': last_scan, 'total_primary': total_primary, 'total_low_priority': total_low_priority})
 
 
 @login_required()
