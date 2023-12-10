@@ -96,6 +96,14 @@
 
     </tbody>
 </table>
+
+
+
+{% comment %}
+
+DEPRECATED
+
+<!-- Pagination -->
 <div class="pagination">
     <span class="step-links">
         {% if movies.has_previous %}
@@ -113,3 +121,43 @@
         {% endif %}
     </span>
 </div>
+<!-- End Pagination -->
+{% endcomment %}
+
+
+{% comment %}
+{% if movies %}
+    {% for item in movies %}
+        <div class="card mb-1">
+            <div class="card-body">
+              <p class="card-title">{{ item.title }}</p>
+            </div>
+        </div>
+    {% endfor %}
+
+    {% if movies.has_other_pages %}
+    <div class="btn-group" role="group" aria-label="Item pagination">
+        {% if movies.has_previous %}
+            <a href="?page={{ movies.previous_page_number }}" class="btn btn-outline-primary">&laquo;</a>
+        {% endif %}
+
+        {% for page_number in movies.paginator.page_range %}
+            {% if movies.number == page_number %}
+                <button class="btn btn-outline-primary active">
+                    <span>{{ page_number }} <span class="sr-only">(current)</span></span>
+                </button>
+            {% else %}
+                <a href="?page={{ page_number }}" class="btn btn-outline-primary">
+                    {{ page_number }}
+                </a>
+            {% endif %}
+        {% endfor %}
+
+        {% if movies.has_next %}
+            <a href="?page={{ movies.next_page_number }}" class="btn btn-outline-primary">&raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+{% else %}
+    <p>No items found.</p>
+{% endif %}{% endcomment %}

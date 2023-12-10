@@ -118,7 +118,10 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
             m.kinopoisk_id = None
             m.kinopoisk_rating = None
 
-        m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
+        try:
+            m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
+        except AttributeError:
+            m.genres = None
 
         countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
         countries_list = Country.objects.values_list('name', flat=True)

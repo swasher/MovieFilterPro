@@ -26,73 +26,8 @@ from .forms import UploadCsvForm
 @silk_profile(name='AAA')
 @login_required
 def movies(request):
-    movies = MovieRSS.objects.filter(low_priority=False, ignored=False)
-    paginator = Paginator(movies, 5)
-    page_number = request.GET.get("page")
-    movies_page = paginator.get_page(page_number)
-
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    return render(request, template_name='movies.html', context={'movies': movies_page, 'last_scan': last_scan})
-
-
-@silk_profile(name='BBB')
-@login_required()
-def movies_low(request):
-    movies = MovieRSS.objects.filter(low_priority=True, ignored=False)
-    last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    return render(request, template_name='movies.html', context={'movies': movies, 'last_scan': last_scan})
-
-
-# def from_line(line: str) -> list[str]:
-#     return next(csv.reader([line]))
-
-# DEPRECATED
-# def parse_kinorium_csv(request):
-#
-#     if request.method == 'POST':
-#
-#         if 'file_votes' in request.FILES and 'file_movie_list' in request.FILES:
-#
-#             objs = KinoriumMovie.objects.all()
-#             objs.delete()
-#
-#             print('\nСканируем "Списки фильмов"')
-#             dict_obj_with_movies = parse_file_movie_list(request.FILES['file_movie_list'])
-#             django_list = [KinoriumMovie(**dataclasses.asdict(vals)) for vals in dict_obj_with_movies]
-#             f = KinoriumMovie.objects.bulk_create(django_list)
-#             print(f'-- Movies added: {len(f)}')
-#
-#             print('\nСканируем "Отметки"')
-#             dict_obj_with_movies = parse_file_votes(request.FILES['file_votes'])
-#             django_list = [KinoriumMovie(**dataclasses.asdict(vals)) for vals in dict_obj_with_movies]
-#             f = KinoriumMovie.objects.bulk_create(django_list)
-#             print(f'-- Movies added: {len(f)}')
-#
-#             return HttpResponse(safe("<b style='color:green'>Update success!</b>"))
-#
-#         else:
-#             html = "<b style='color:red'>Need both files!</b>"
-#             return HttpResponse(safe(html))
-#
-#     return render(request, 'upload_csv.html')
-
-
-@login_required()
-def reset_rss(requst):
-    # htmx function
-    if requst.method == 'DELETE':
-        rss = MovieRSS.objects.all()
-        rss.delete()
-        context = {'answer': 'MovieRSS table is cleaned.'}
-        messages.success(requst, 'Success!')
-        return HttpResponse(status=200)
-
-
-# DEPRECATED
-# @login_required()
-# def scan_page(request):
-#     last_scan = UserPreferences.objects.get(user=request.user).last_scan
-#     return render(request, 'deprecated_scan.html', {'last_scan': last_scan})
+    return render(request, template_name='rss.html', context={'last_scan': last_scan})
 
 
 @login_required()
@@ -154,7 +89,7 @@ def scan(request):
         page_number = request.GET.get("page")
         movies_page = paginator.get_page(page_number)
         context['movies'] = movies_page
-        return render(request, 'partials/scan-table.html', context)
+        return render(request, 'partials/rss-table.html', context)
 
 def user_preferences_update(request):
     user = User.objects.get(pk=request.user.pk)
@@ -165,6 +100,7 @@ def user_preferences_update(request):
         if form.is_valid():
             # pref = UserPreferences.objects.get_or_create(user=request.user)
             pref.last_scan = form.cleaned_data['last_scan']
+            pref.paginate_by = form.cleaned_data['paginate_by']
             pref.countries = form.cleaned_data['countries']
             pref.genres = form.cleaned_data['genres']
             pref.max_year = int(form.cleaned_data['max_year'])
@@ -175,7 +111,7 @@ def user_preferences_update(request):
             pref.low_max_year = int(form.cleaned_data['low_max_year'])
             pref.low_min_rating = float(form.cleaned_data['low_min_rating'])
             pref.save()
-            return redirect(reverse('moviefilter:user_preferences'))
+            return redirect(reverse('user_preferences'))
     return render(request, 'preferences_update_form.html', {'form': form})
 
 

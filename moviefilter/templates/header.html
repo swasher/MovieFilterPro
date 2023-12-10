@@ -25,27 +25,27 @@
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'moviefilter:movies' %}"
+                        <a class="nav-link {% active 'movies' %}"
                            href="{% url 'movies' %}"><i class="bi-database me-1"></i>Movies RSS</a>
                     </li>
 
-                    <li class="nav-item">
-                        <a class="nav-link {% active 'moviefilter:movies_low' %}"
+{% comment %}                  DEPRECATED  <li class="nav-item">
+                        <a class="nav-link {% active 'movies_low' %}"
                            href="{% url 'movies_low' %}"><i class="bi-database me-1"></i>Low Priority RSS</a>
-                    </li>
+                    </li>{% endcomment %}
 
 {% comment %}                     DEPRECATED <li class="nav-item">
-                        <a class="nav-link {% active 'moviefilter:parse_kinorium_csv' %}"
+                        <a class="nav-link {% active 'parse_kinorium_csv' %}"
                            href="{% url 'parse_kinorium_csv' %}"><i class="bi-database me-1"></i>Upload Kinorium CSV</a>
                     </li>{% endcomment %}
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'moviefilter:kinorium' %}"
+                        <a class="nav-link {% active 'kinorium' %}"
                            href="{% url 'kinorium' %}"><i class="bi-database me-1"></i>Kinorium</a>
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'moviefilter:plex' %}"
+                        <a class="nav-link {% active 'plex' %}"
                            href="{% url 'plex' %}"><i class="bi-database me-1"></i>Plex</a>
                     </li>
 

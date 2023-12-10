@@ -5,4 +5,4 @@ from django.urls import reverse
 
 def user_logout(request):
     logout(request)
-    return redirect(reverse('moviefilter:movies'))
+    return redirect(reverse('movies'))

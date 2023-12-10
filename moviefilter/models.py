@@ -5,7 +5,8 @@ from datetime import datetime
 from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import User
-
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 """
 Логика такая:
@@ -138,6 +139,7 @@ class UserPreferences(models.Model):
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
     last_scan = models.DateField(blank=True, null=True, default=timezone.now)
+    paginate_by = models.PositiveSmallIntegerField(default=6)
 
     countries = models.CharField(max_length=300, default='СССР, Россия, Индия')
     genres = models.CharField(max_length=300, default='Мюзикл')
@@ -159,9 +161,11 @@ class UserPreferences(models.Model):
         genres = self.low_genres.split(', ') if self.genres else []
         return countries, genres, self.low_max_year, self.low_min_rating
 
-
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+"""
+Когда создается юзер, для него сразу создается записть UserPreferences.
+Мне удобнее здесь держать, а не в signals.py
+Потому что это нужно 
+"""
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:

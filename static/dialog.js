@@ -19,7 +19,7 @@
       e.detail.shouldSwap = false
 
       document.getElementById('kinorium-table').dispatchEvent(new Event('refreshEvent'));
-      
+
     }
   })
 
