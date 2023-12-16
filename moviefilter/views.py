@@ -156,3 +156,13 @@ def kinorium(request):
     return render(request, 'kinorium.html', {'movies': movies})
 
 
+def tst(request):
+    if request.method == 'POST':
+        print(request.POST)
+    if request.method == 'GET':
+        print(request.GET)
+
+    if request.htmx:
+        return HttpResponse('SOME HTMX DATA')
+    else:
+        return render(request, 'testing.html')

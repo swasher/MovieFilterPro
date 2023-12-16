@@ -1,9 +1,11 @@
 import os
+from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.contrib import messages
 from django.http import HttpResponse
 from django.conf import settings
+from django.views.decorators.http import require_http_methods, require_GET
 
 from .models import Kinorium
 from .models import MovieRSS
@@ -28,15 +30,34 @@ def reset_rss(requst):
         return HttpResponse(status=200)
 
 
-def rss_table_data(request, priority):
+@require_GET
+def rss_table_data(request):
     prefs = UserPreferences.objects.get(user=request.user)
     paginate_by = settings.INFINITE_PAGINATION_BY
+    print(request.GET)
 
-    try:
-        if priority in [HIGH, LOW, DEFER]:
-            movies_qs = MovieRSS.objects.filter(priority=priority)
-    except KeyError:
-        raise Exception('Improper call rss_table_data!!!')
+    if 'priority' in request.GET:
+        match request.GET['priority']:
+            case 'HIGH':
+                priority = HIGH
+            case 'LOW':
+                priority = LOW
+            case 'DEFER':
+                priority = DEFER
+    else:
+        priority = HIGH
+
+    movies_qs = MovieRSS.objects.filter(priority=priority)
+
+    if 'reverse' in request.GET:
+        movies_qs = movies_qs.reverse()
+
+    if 'textfilter' in request.GET:
+        movies_qs = movies_qs.filter(
+            Q(title__icontains=request.GET['textfilter']) |
+            Q(original_title__icontains=request.GET['textfilter']) |
+            Q(year__icontains=request.GET['textfilter'])
+        )
 
     page_number = request.GET.get('page', 1)
     paginator = Paginator(movies_qs, paginate_by)

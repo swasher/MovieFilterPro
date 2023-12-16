@@ -103,7 +103,7 @@
                 </div>
 
                 {% if movies.has_next and forloop.last %}
-                    <span hx-get="{% url 'get_rss_table_data' 1 %}?page={{ movies.next_page_number }}"
+                    <span hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
                           hx-swap="beforeend" hx-target="#loop" hx-select=".htmx-scroll"
                           hx-trigger="revealed">
                         </span>

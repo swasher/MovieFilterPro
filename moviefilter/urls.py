@@ -13,6 +13,7 @@ urlpatterns = [
     path('kinorium/', views.kinorium, name='kinorium'),
     path('preferences/', views.user_preferences_update, name='user_preferences'),
     path('log/', views.log, name='log'),
+    path('tst/', views.tst, name='tst'),
     # path('order_print/<orderid>', views.order_print, name='order_print'),
 ]
 
@@ -22,7 +23,7 @@ htmx = [
     path('ignore/<pk>', htmx_views.ignore_movie, name='ignore'),
     path('defer/<pk>', htmx_views.defer, name='defer'),
     path('kinorium_table_data/', htmx_views.kinorium_table_data, name='kinorium_table_data'),
-    path('get_rss_table_data/<int:priority>', htmx_views.rss_table_data, name='get_rss_table_data'),
+    path('get_rss_table_data/', htmx_views.rss_table_data, name='get_rss_table_data'),
     path('get_log/<str:logtype>', htmx_views.get_log, name='get_log'),
 ]
 

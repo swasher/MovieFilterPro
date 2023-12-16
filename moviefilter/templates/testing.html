@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    <!-- Form with HTMX integration -->
+    <form id="myForm" hx-post="/tst">
+
+        <!-- Radio buttons -->
+        <label>
+            <input type="radio" name="radioOption" value="option1" hx-trigger="click" /> Option 1
+        </label>
+        <label>
+            <input type="radio" name="radioOption" value="option2" hx-trigger="click" /> Option 2
+        </label>
+
+        <br>
+
+        <!-- Checkbox -->
+        <label>
+            <input type="checkbox" name="checkBox" hx-trigger="click" /> Check me
+        </label>
+
+        <br>
+
+        <!-- Text field -->
+        <label>
+            Enter text:
+            <input type="text" name="textField" hx-trigger="change" />
+        </label>
+
+    </form>
+
+    <!-- Display result here -->
+    <div id="result" hx-trigger="load"></div>
+{% endblock %}
