@@ -20,52 +20,6 @@
         <span class="border rounded p-1 m-1">Total: <span
                 class="badge text-bg-success">{{ total_high|add:total_low_priority }}</span></span>
 
-{% comment %}
-
-        WORKING CODE
-
-        <div class="border my-4 p-3 rounded" style="background: lightgray">
-
-            <div class="form-check form-check-inline" id="form1">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-high" value="HIGH" checked
-                       hx-get="{% url 'get_rss_table_data' 0 %}"
-                       hx-trigger="change"
-                       hx-target="#rss-table"
-                       hx-include="this"
-                >
-                <label class="form-check-label" for="r-prim"><strong>High priority</strong></label>
-            </div>
-
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-low" value="LOW"
-                       hx-get="{% url 'get_rss_table_data' 1 %}"
-                       hx-trigger="change"
-                       hx-target="#rss-table"
-                       hx-include="[name='inlineCheckBox']"
-                >
-                <label class="form-check-label" for="r-low"><strong>Low priority</strong></label>
-            </div>
-
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineCheckBox" id="r-defer" value="DEFER"
-                       hx-get="{% url 'get_rss_table_data' 2 %}"
-                       hx-trigger="change"
-                       hx-target="#rss-table"
-                       hx-include="this"
-                >
-                <label class="form-check-label" for="r-low"><strong>Defer</strong></label>
-            </div>
-
-            <div class="form-check-inline">
-                <input class="form-check-input" type="checkbox" value="" id="flexCheckChecked" checked>
-                <label class="form-check-label" for="flexCheckChecked">
-                    Checked checkbox
-                </label>
-            </div>
-
-        </div>
-
-{% endcomment %}
 
     <div class="border my-4 p-3 rounded" style="background: lightgray">
 
@@ -104,15 +58,19 @@
                    hx-trigger="keyup changed delay:0.4s" hx-get="{% url 'get_rss_table_data' %}">
         </div>
 
+        <button type="button" class="btn btn-light">
+          Filtered elements <span id="filtered_count" class="badge text-bg-secondary"></span>
+        </button>
+
         </span>
 
     </div>
 
 
-
-
-
-        <div id="rss-table" hx-get="{% url 'get_rss_table_data' %}" hx-trigger="load">
+        <div id="rss-table"
+             hx-get="{% url 'get_rss_table_data' %}"
+             hx-trigger="load"
+             hx-include="[name='priority'], [name='reverse'], [name='textfilter']">
         </div>
 
         <!-- Toast template -->

@@ -63,7 +63,10 @@ def rss_table_data(request):
     paginator = Paginator(movies_qs, paginate_by)
     page_obj = paginator.get_page(page_number)
 
-    return render(request, 'partials/rss-table.html', {'movies': page_obj, 'priority': priority})
+    found_total = movies_qs.count()
+
+    return render(request, 'partials/rss-table.html',
+                  {'movies': page_obj, 'priority': priority, 'found_total': found_total})
 
 
 def ignore_movie(request, pk):

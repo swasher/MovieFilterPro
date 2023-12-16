@@ -259,6 +259,11 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         if exist_in_kinozal(m):
             print(' ┣━ SKIP [exist in kinozal]')
             continue
+        """
+        Возможна такая ситуация, что фильм попал в RSS, а потом я его посмотрел.
+        Тогда уже существующий в RSS фильм нужно обновить (установить priority=SKIP)
+        """
+
 
         exist, match_full, status = exist_in_kinorium(m)
         if exist and match_full:

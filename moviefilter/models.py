@@ -40,8 +40,8 @@ class MovieRSS(models.Model):
     class Meta:
         ordering = ['date_added']
 
-    ignored = models.BooleanField(default=False, help_text='Пользователь не хочет, чтобы этот фильм снова появился в ленте')
-    low_priority = models.BooleanField(default=False)
+    ignored_deprecated = models.BooleanField(default=False, help_text='Пользователь не хочет, чтобы этот фильм снова появился в ленте')
+    low_priority_deprecated = models.BooleanField(default=False)
     priority = models.PositiveSmallIntegerField(choices=PRIORITY, verbose_name='Priority')
     kinozal_id = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=70)
@@ -64,8 +64,8 @@ class MovieRSS(models.Model):
     translate = models.CharField(max_length=300, blank=True, null=True)
     poster = models.CharField(max_length=100)
 
-    # kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True)
-    # kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
+    kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True, help_text='На данный момент не используется, потому что мы не можем получить ID из Кинориума')
+    kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
 
     @property
     def genres_as_list(self):
@@ -133,7 +133,7 @@ class Kinorium(models.Model):
         (WILL_WATCH, 'Буду смотреть'),  # значит, уже скачан
         (DECLINED, 'Не буду смотреть'),
     )
-
+    # ID фильма из Кинориума мы не можем получить
     title = models.CharField(max_length=50)
     original_title = models.CharField(max_length=50, blank=True)
     year = models.PositiveSmallIntegerField()

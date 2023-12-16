@@ -23,7 +23,7 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
     Выполняет частичные проверки.
     Первый возвращаемый аргумент - True, если такой фильм уже присутствует  в базе Kinorium.
     Второй возвращаемый аргумент показывает, было ли совпадение полное (True) или частичное (False)
-    Третий возвращаемый аргумент показывает, какой статус у фильма в базе Кинориум - Просмотрен, Буду смотреть etc.
+    Если было совпадение, - третий аргумент это статус фильма в Кинориум - Просмотрен, Буду смотреть etc.
     """
 
     """
@@ -36,7 +36,6 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
     MATCH = True
     FULL = True
     PARTIAL = False
-
 
     year = m.year if m.year.isdigit() else m.year[:4]
 
