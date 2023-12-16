@@ -8,6 +8,8 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+
 """
 Логика такая:
 - парсер парсит moviefilter, находит фильм
@@ -27,11 +29,20 @@ class MovieRSS(models.Model):
     Если пользователь нажал Ignore на фильме, он остается в базе с меткой Ignore. В дальнейшем, при сканированнии,
     сканер знает, что такие фильмы показывать пользователю не нужно.
     """
+
+    PRIORITY = (
+        (LOW, 'Низкий'),
+        (HIGH, 'Обычный'),
+        (DEFER, 'Отложено'),
+        (SKIP, 'Отложено'),
+    )
+
     class Meta:
         ordering = ['date_added']
 
-    ignored = models.BooleanField(default=False, help_text='Пользователь не хочет видеть этот фильм.')
+    ignored = models.BooleanField(default=False, help_text='Пользователь не хочет, чтобы этот фильм снова появился в ленте')
     low_priority = models.BooleanField(default=False)
+    priority = models.PositiveSmallIntegerField(choices=PRIORITY, verbose_name='Priority')
     kinozal_id = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=70)
     original_title = models.CharField(max_length=70)
@@ -51,10 +62,10 @@ class MovieRSS(models.Model):
     actors = models.CharField(max_length=300)
     plot = models.CharField(max_length=300)
     translate = models.CharField(max_length=300, blank=True, null=True)
-    poster = models.CharField(max_length=300)
+    poster = models.CharField(max_length=100)
 
-    kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True)
-    kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
+    # kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True)
+    # kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
 
     @property
     def genres_as_list(self):
@@ -139,7 +150,7 @@ class UserPreferences(models.Model):
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
     last_scan = models.DateField(blank=True, null=True, default=timezone.now)
-    paginate_by = models.PositiveSmallIntegerField(default=6)
+    scan_from_page = models.PositiveSmallIntegerField(blank=True, null=True, default=0, help_text='Если длительный скан оборвался, можно его продолжить с этой страницы до последней.')
 
     countries = models.CharField(max_length=300, default='СССР, Россия, Индия')
     genres = models.CharField(max_length=300, default='Мюзикл')

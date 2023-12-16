@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% load static %}
 {% block body %}
+
 
     <div class="container-fluid">
         <button class='btn btn-primary'
@@ -12,37 +14,55 @@
         <span class="border rounded p-1 m-1">Last scan: <span
                 class="badge text-bg-success">{{ last_scan }}</span></span>
         <span class="border rounded p-1 m-1">Primary: <span
-                class="badge text-bg-success">{{ total_primary }}</span></span>
+                class="badge text-bg-success">{{ total_high }}</span></span>
         <span class="border rounded p-1 m-1">Low prio: <span
                 class="badge text-bg-success">{{ total_low_priority }}</span></span>
         <span class="border rounded p-1 m-1">Total: <span
-                class="badge text-bg-success">{{ total_primary|add:total_low_priority }}</span></span>
+                class="badge text-bg-success">{{ total_high|add:total_low_priority }}</span></span>
+
 
 
         <div class="border my-4 p-3 rounded" style="background: lightgray">
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-prim"
-                       value="normal_priority" checked
-                       hx-get="{% url 'get_rss_table_data' 'normal_priority' %}"
+            <div class="form-check form-check-inline" id="form1">
+                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-high" value="HIGH" checked
+                       hx-get="{% url 'get_rss_table_data' 0 %}"
                        hx-trigger="change"
                        hx-target="#rss-table"
                        hx-include="this"
                 >
-                <label class="form-check-label" for="r-prim"><strong>Primary Movies</strong></label>
+                <label class="form-check-label" for="r-prim"><strong>High priority</strong></label>
             </div>
             <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-low" value="low_priority"
-                       hx-get="{% url 'get_rss_table_data' 'low_priority' %}"
+                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-low" value="LOW"
+                       hx-get="{% url 'get_rss_table_data' 1 %}"
                        hx-trigger="change"
                        hx-target="#rss-table"
-                       hx-include="this"
+                       hx-include="[name='inlineCheckBox']"
                 >
                 <label class="form-check-label" for="r-low"><strong>Low priority</strong></label>
             </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="inlineCheckBox" id="r-defer" value="DEFER"
+                       hx-get="{% url 'get_rss_table_data' 2 %}"
+                       hx-trigger="change"
+                       hx-target="#rss-table"
+                       hx-include="this"
+                >
+                <label class="form-check-label" for="r-low"><strong>Defer</strong></label>
+            </div>
+
+            <div class="form-check-inline">
+                <input class="form-check-input" type="checkbox" value="" id="flexCheckChecked" checked>
+                <label class="form-check-label" for="flexCheckChecked">
+                    Checked checkbox
+                </label>
+            </div>
+
         </div>
 
 
-        <div id="rss-table" hx-get="{% url 'get_rss_table_data' 'normal_priority' %}" hx-trigger="load">
+
+        <div id="rss-table" hx-get="{% url 'get_rss_table_data' 0 %}" hx-trigger="load">
         </div>
 
         <!-- Toast template -->

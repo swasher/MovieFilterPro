@@ -29,6 +29,8 @@ ENABLE_SAAS_COMPILER = False
 
 SILKY_PYTHON_PROFILER = True
 
+INFINITE_PAGINATION_BY = 4
+
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.fly.dev']
 CSRF_TRUSTED_ORIGINS = ['https://*.fly.dev']
 
@@ -38,6 +40,14 @@ LOGIN_URL = 'login'
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
+
+#
+# Priority constants
+#
+HIGH = 0
+LOW = 1
+DEFER = 2
+SKIP = 3
 
 # Application definition
 
@@ -191,7 +201,6 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 
-
 #
 # HTMX Toasts
 #
@@ -202,4 +211,48 @@ MESSAGE_TAGS = {
     messages.SUCCESS: "text-white bg-success",
     messages.WARNING: "text-dark bg-warning",
     messages.ERROR: "text-white bg-danger",
+}
+
+#
+# LOGGING
+#
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'full_log': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'full.log'),
+        },
+        'short_log': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'short.log'),
+        },
+        'error_log': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'error.log'),
+        },
+    },
+
+    'formatters': {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+
+    'loggers': {
+        'my_logger': {
+            'handlers': ['full_log', 'short_log', 'error_log'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
 }

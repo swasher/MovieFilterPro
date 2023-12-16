@@ -5,6 +5,15 @@
 
     <div class="container">
 
+        <button hx-trigger="click" onclick="scrollToBottom()">Scroll to Bottom</button>
+           
+           <script>
+               // JavaScript to scroll down to the bottom of the page
+               function scrollToBottom() {
+                   window.scrollTo(0, document.body.scrollHeight);
+               }
+           </script>
+
         <div class="row align-items-center">
           <div class="col-auto me-auto">
               <div class="d-inline-block pt-1">
@@ -20,12 +29,6 @@
                       hx-target="#dialog">
                   Update list of movies
               </button>
-{% comment %}
-              <button hx-get="{% url 'kinorium' %}" type="button" class="btn btn-primary pt-1"
-                      hx-target="#dialog" hx-swap="innerHTML" data-bs-toggle="modal" data-bs-target="#modalform">
-                  Update list of movies
-              </button>
-{% endcomment %}
           </div>
         </div>
 

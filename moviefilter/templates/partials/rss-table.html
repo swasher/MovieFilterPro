@@ -1,4 +1,5 @@
 <table class="table w-auto table-sm">
+
     <thead>
     <tr>
         <th scope="col" style="width: 150px">poster</th>
@@ -10,10 +11,11 @@
         <th scope="col" style="width:80px">BTN</th>
     </tr>
     </thead>
-    <tbody>
+
+    <tbody id="loop">
 
     {% for f in movies %}
-        <tr {% if f.kinorium_partial_match %} class="table-danger" {% endif %}>
+        <tr class="htmx-scroll" {% if f.kinorium_partial_match %} class="htmx-scroll table-danger" {% endif %}>
             <td>
                 <img
                         src="{{ f.poster }}"
@@ -27,6 +29,7 @@
                 <h5><strong>{{ f.title }}</strong></h5>
                 <hr>
                 <h6>{{ f.original_title }}</h6>
+                prio = <strong>{{ f.priority }}</strong>
             </td>
             <td>
                 <strong>Year:</strong> {{ f.year }}
@@ -88,76 +91,28 @@
                             hx-swap="delete swap:0.6s"
                     >Decline
                     </button>
-                </div>
-            </td>
 
+                    <button type="button" class="btn btn-primary btn-sm"
+                            data-bs-toggle="tooltip" title="Add to ignore table"
+                            hx-post="{% url 'defer' f.pk %}"
+                            hx-target="closest tr"
+                            hx-swap="delete swap:0.6s"
+                    >DEFER
+                    </button>
+                    
+                </div>
+
+                {% if movies.has_next and forloop.last %}
+                    <span hx-get="{% url 'get_rss_table_data' 1 %}?page={{ movies.next_page_number }}"
+                          hx-swap="beforeend" hx-target="#loop" hx-select=".htmx-scroll"
+                          hx-trigger="revealed">
+                        </span>
+                {% endif %}
+            </td>
         </tr>
     {% endfor %}
-
     </tbody>
+
 </table>
 
 
-
-{% comment %}
-
-DEPRECATED
-
-<!-- Pagination -->
-<div class="pagination">
-    <span class="step-links">
-        {% if movies.has_previous %}
-            <a href="?page=1">&laquo; first</a>
-            <a href="?page={{ movies.previous_page_number }}">previous</a>
-        {% endif %}
-
-        <span class="current">
-            Page {{ movies.number }} of {{ movies.paginator.num_pages }}.
-        </span>
-
-        {% if movies.has_next %}
-            <a href="?page={{ movies.next_page_number }}">next</a>
-            <a href="?page={{ movies.paginator.num_pages }}">last &raquo;</a>
-        {% endif %}
-    </span>
-</div>
-<!-- End Pagination -->
-{% endcomment %}
-
-
-{% comment %}
-{% if movies %}
-    {% for item in movies %}
-        <div class="card mb-1">
-            <div class="card-body">
-              <p class="card-title">{{ item.title }}</p>
-            </div>
-        </div>
-    {% endfor %}
-
-    {% if movies.has_other_pages %}
-    <div class="btn-group" role="group" aria-label="Item pagination">
-        {% if movies.has_previous %}
-            <a href="?page={{ movies.previous_page_number }}" class="btn btn-outline-primary">&laquo;</a>
-        {% endif %}
-
-        {% for page_number in movies.paginator.page_range %}
-            {% if movies.number == page_number %}
-                <button class="btn btn-outline-primary active">
-                    <span>{{ page_number }} <span class="sr-only">(current)</span></span>
-                </button>
-            {% else %}
-                <a href="?page={{ page_number }}" class="btn btn-outline-primary">
-                    {{ page_number }}
-                </a>
-            {% endif %}
-        {% endfor %}
-
-        {% if movies.has_next %}
-            <a href="?page={{ movies.next_page_number }}" class="btn btn-outline-primary">&raquo;</a>
-        {% endif %}
-    </div>
-    {% endif %}
-{% else %}
-    <p>No items found.</p>
-{% endif %}{% endcomment %}

@@ -10,7 +10,7 @@
         <div class="container-fluid m-2 p-2 border border-1 rounded">
 
             <a class="navbar-brand" href="/">
-                <img src="{% static 'icons8-movie-64.png' %}" alt="Logo" width="30" height="24"
+                <img src="{% static 'ico/icons8-movie-64.png' %}" alt="Logo" width="30" height="24"
                      class="d-inline-block align-text-top">
                 KinoRSS
             </a>
@@ -25,8 +25,8 @@
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'movies' %}"
-                           href="{% url 'movies' %}"><i class="bi-database me-1"></i>Kinozal</a>
+                        <a class="nav-link {% active 'rss' %}"
+                           href="{% url 'rss' %}"><i class="bi-database me-1"></i>Kinozal</a>
                     </li>
 
                     <li class="nav-item">
@@ -37,6 +37,11 @@
                     <li class="nav-item">
                         <a class="nav-link {% active 'plex' %}"
                            href="{% url 'plex' %}"><i class="bi-database me-1"></i>Plex</a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% active 'log' %}"
+                           href="{% url 'log' %}"><i class="bi-database me-1"></i>Logs</a>
                     </li>
 
 

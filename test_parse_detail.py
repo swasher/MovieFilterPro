@@ -2,6 +2,7 @@
 Сканирует определенную страницу (переменная page).
 Модифицированная функция из основного приложения для дебага.
 """
+from movie_filter_pro import wsgi
 from moviefilter.classes import LinkConstructor
 from datetime import date
 import dataclasses
@@ -19,15 +20,15 @@ def modified_kinozal_scan(site: LinkConstructor, user):
     # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу
     movies = movie_audit(movies, user)
 
+
+    # типа записываем фильмы в базу:
     for m in movies:
         print(m.title)
 
-    # записываем фильмы в базу
-    pass
 
 
 if __name__ == '__main__':
-    page = 15
+    page = 32
 
     page = LinkConstructor(page=page)
     user = User.objects.get(pk=1)

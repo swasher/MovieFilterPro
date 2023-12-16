@@ -1,5 +1,7 @@
-db.sqlite3
+*sqlite3*
+*.log
 .idea/
 __pycache__/
 collectstatic
 /fixtures/auth.Group.json
+/current_csv/

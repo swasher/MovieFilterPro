@@ -1,5 +1,7 @@
 import dataclasses
 import requests
+import logging
+import re
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 
@@ -10,21 +12,28 @@ from .util import is_float
 from .models import Country, MovieRSS
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+
+logger = logging.getLogger('my_logger')
 
 
 def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
 
-    reach_last_day = False
-    while not reach_last_day:
+    last_day_reached = False
+    last_page_reached = False
+    while not last_day_reached and site.page<=100:
 
         # Получаем список всех фильмов со страницы. Если достигли нужной даты, то reach_last_day возврашается как True
-        movies, reach_last_day = parse_page(site, scan_to_date)
+        movies, last_day_reached = parse_page(site, scan_to_date)
 
         # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу
         movies = movie_audit(movies, user)
 
         # записываем фильмы в базу
         if movies:
+            logger.debug(f"SAVE TO DB")
+            logger.info(f"SAVE TO DB infoinfoinfoinfoinfo")
+            logger.error(f"SAVE TO DB ERROR ERROR ERROR ERROR ERROR ")
             print('SAVE TO DB: ', end='')
         for m in movies:
             # todo использовать bulk_create
@@ -45,7 +54,6 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
     END_DATE_REACHED = True
     END_DATE_NOT_REACHED = False
 
-
     movies: list[KinozalMovie] = []
 
     # download the HTML document
@@ -53,6 +61,7 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
     response = requests.get(site.url())
 
     print(f'GRAB URL: {site.url()}')
+    logger.info(f'GRAB URL: {site.url()}')
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")
@@ -90,12 +99,17 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
                 original_title = header[1].strip()
                 year = header[2].strip()
 
-            elif 'РУ' in header[2].split(', '):  # русский формат без original title
+            elif 'РУ' in header[2].split(', '):  # 	До звезды / 2023 / РУ / WEB-DL (1080p)  - русский формат без original title
                 title = header[0].strip()
                 original_title = ''
                 year = header[1].strip()
 
-            elif len(header[2]) > 4:
+            elif header[1].strip().isdigit() and len(header[1].strip()) == 4:  # Карточный долг / 2023 / ДБ / WEB-DL (1080p) - фильм казахский, РУ нет, но и title нет.
+                title = header[0].strip()
+                original_title = ''
+                year = header[1].strip()
+
+            elif len(header[2]) > 4 and header[2][:4].isdigit():
                 # год в заголовке как диапазон: "Голый пистолет (Коллекция) / Naked Gun: Collection / 1982-1994 / ПМ, ПД..."
                 # или как перечень:
                 # Клетка для чудаков (Клетка для безумцев) (Трилогия) / La Cage aux folles I, II, III / 1978, 1980, 1985 / ПМ, ПД / BDRip (1080p), HDTVRip (1080p)
@@ -103,9 +117,35 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
                 original_title = header[1].strip()
                 year = header[2].strip()[:4]
             else:
-                raise Exception("Can't parse header in id=", kinozal_id)
+                # Если какой-то уебок написал каличный хедер, например, пропустил слеш, или еще что, не обрываем скан, и делаем по следующему алгоритму:
+                # - Если есть хоть один слеш - cчитаем все, что до него - это title
+                # - Если нет ни одного слеша, - берем первые 5 слов как title
+                # - original_title делаем пустым
+                # - год ставим как первые 4 цифры, найденные в строке, или текущий год, если цифры не найдены.
+
+                # remove double spaces
+                head = re.sub(r'\s+', ' ', s.text)
+                if '/' in s.text:
+                    title = head.split('/')[0]
+                else:
+                    b = [element.strip() for element in head.split(' ')]
+                    title = ' '.join(b[:5])
+                original_title = ''
+
+                match = re.search(r'\d{4}', head)
+                if match:
+                    year = str(match.group())
+                    year = year if year != '1080' else str(datetime.now().year)
+                else:
+                    year = str(datetime.now().year)
+
+
+
+
+
 
             print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
+            logger.debug(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
             m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
 
@@ -232,17 +272,18 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         print(f' ┣━ GET DETAILS: {sec:.1f}s')
 
         # Эта проверка выкидывает все, что через него не прошло
-        if check_users_filters(user, m, low_priority=False):
-            m.low_priority = False
+        if check_users_filters(user, m, priority=HIGH):
+            m.priority = HIGH
 
             # Из оставшихся, некоторым назначаем низкий приоритет
             # тут логика такая - если фильм НЕ прошел проверку - то он подпадет как Low priority
-            if not check_users_filters(user, m, low_priority=True):
-                m.low_priority = True
+            # А если прошел - остается в HIGH priority
+            if not check_users_filters(user, m, priority=LOW):
+                m.priority = LOW
 
-        if m.low_priority is not None:  # Если нет никакого priority, значит фильм не прошел проверку по фильтрам.
+        if m.priority in [LOW, HIGH]:  # Если фильм прошел проверки, то приорити будет или LOW или HIGH. Тогда записываем в базу, иначе - просто пропускаем.
             print(
-                f' ┣━ ADD TO DB [prio={"low" if m.low_priority else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
+                f' ┣━ ADD TO DB [prio={"low" if m.priority==LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
 
             result.append(m)
 

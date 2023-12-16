@@ -8,7 +8,7 @@ from crispy_bootstrap5.bootstrap5 import FloatingField
 class PreferencesForm(forms.ModelForm):
     class Meta:
         model = UserPreferences
-        fields = ['last_scan', 'paginate_by', 'countries', 'genres', 'max_year', 'min_rating',
+        fields = ['last_scan', 'scan_from_page', 'countries', 'genres', 'max_year', 'min_rating',
                   'low_countries', 'low_genres', 'low_max_year', 'low_min_rating']
 
     def __init__(self, *args, **kwargs):
@@ -24,7 +24,7 @@ class PreferencesForm(forms.ModelForm):
               <h3>Last scan</h3><hr>
               """),
             Field('last_scan'),
-            Field('paginate_by'),
+            Field('scan_from_page'),
             HTML("""<h3>Strict rules</h3><hr>
                 <strong class='p-0'>Сначала из всего списка удаляеся все, что содержит эти страны/жанры или менее года/рейтинга</strong>
                 """),

@@ -1,4 +1,6 @@
 import dataclasses
+import sys
+import logging
 from datetime import datetime
 
 from django.db.models import Q
@@ -19,16 +21,22 @@ from .forms import PreferencesForm
 from .parse_csv import parse_file_movie_list, parse_file_votes
 from .forms import UploadCsvForm
 from .parse import kinozal_scan
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
 
+logger = logging.getLogger('my_logger')
 
-@silk_profile(name='AAA')
 @login_required
-def movies(request):
+def rss(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    total_primary = MovieRSS.objects.filter(low_priority=False).count()
-    total_low_priority = MovieRSS.objects.filter(low_priority=True).count()
+    total_high = MovieRSS.objects.filter(priority=HIGH).count()
+    total_low_priority = MovieRSS.objects.filter(priority=LOW).count()
     return render(request, template_name='rss.html',
-                  context={'last_scan': last_scan, 'total_primary': total_primary, 'total_low_priority': total_low_priority})
+                  context={'last_scan': last_scan, 'total_high': total_high, 'total_low_priority': total_low_priority})
+
+
+@login_required()
+def log(request):
+    return render(request, template_name='log.html')
 
 
 @login_required()
@@ -37,21 +45,23 @@ def scan(request):
     context = {'last_scan': last_scan}
     user = request.user
 
+    pref, _ = UserPreferences.objects.get_or_create(user=user)
+    start_page = pref.scan_from_page
+
     if request.method == 'GET':
 
-        site = LinkConstructor()
+        site = LinkConstructor(page=start_page)
+
+        # TODO тут что-то задумывалось, функция возвращает список фильмов, но с ним ничего не происходит.
         movies = kinozal_scan(site, last_scan, user)
 
-
-
-
-        UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
-
-        movies = MovieRSS.objects.filter(low_priority=False, ignored=False)
+        movies = MovieRSS.objects.filter(priority=HIGH, ignored=False)
         paginator = Paginator(movies, 5)
         page_number = request.GET.get("page")
         movies_page = paginator.get_page(page_number)
         context['movies'] = movies_page
+
+        UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
         return render(request, 'partials/rss-table.html', context)
 
 def user_preferences_update(request):
@@ -63,7 +73,7 @@ def user_preferences_update(request):
         if form.is_valid():
             # pref = UserPreferences.objects.get_or_create(user=request.user)
             pref.last_scan = form.cleaned_data['last_scan']
-            pref.paginate_by = form.cleaned_data['paginate_by']
+            pref.scan_from_page = form.cleaned_data['scan_from_page']
             pref.countries = form.cleaned_data['countries']
             pref.genres = form.cleaned_data['genres']
             pref.max_year = int(form.cleaned_data['max_year'])
@@ -146,13 +156,3 @@ def kinorium(request):
     return render(request, 'kinorium.html', {'movies': movies})
 
 
-def ignore_movie(request, pk):
-    # htmx
-    if request.method == 'DELETE':
-        try:
-            MovieRSS.objects.filter(pk=pk).update(ignored=True)
-            messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")
-            return HttpResponse(status=200)
-        except:
-            messages.error(request, f"Error with removing Movie pk={pk}")
-            return HttpResponse(status=500)

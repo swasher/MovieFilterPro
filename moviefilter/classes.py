@@ -57,7 +57,7 @@ class LinkConstructor:
     def __init__(self, c=1002, v=3, page=0, id: int = None):
         self.c = c
         self.v = v
-        self.page = page
+        self.page = page if page else 0
         self.id = id
 
     def url(self):
@@ -86,4 +86,3 @@ class LinkConstructor:
 
     def next_page(self):
         self.page += 1
-        return self.url()
