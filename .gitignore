@@ -5,3 +5,4 @@ __pycache__/
 collectstatic
 /fixtures/auth.Group.json
 /current_csv/
+api.md
