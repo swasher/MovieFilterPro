@@ -1,7 +1,7 @@
 <table class="table w-auto table-sm">
 
-    <!-- Этот код помещает переменную found_total во внешний HTML - rss.html,--> 
-    <!-- в бейдж 'Filtered elements1' --> 
+    <!-- Этот код помещает переменную found_total во внешний HTML - rss.html,-->
+    <!-- в бейдж 'Filtered elements' -->
     <span _="on load put '{{ found_total }}' into #filtered_count" hidden>
     Click Me
     </span>
@@ -22,7 +22,7 @@
     <tbody id="loop">
 
     {% for f in movies %}
-        <tr class="htmx-scroll" {% if f.kinorium_partial_match %} class="htmx-scroll table-danger" {% endif %}>
+        <tr {% if f.kinorium_partial_match %} class="htmx-scroll table-warning" {% else %}  class="htmx-scroll" {% endif %}>
             <td>
                 <img
                         src="{{ f.poster }}"
@@ -36,17 +36,17 @@
                 <h5><strong>{{ f.title }}</strong></h5>
                 <hr>
                 <h6>{{ f.original_title }}</h6>
-                prio = <strong>{{ f.priority }}</strong>
             </td>
             <td>
-                <strong>Year:</strong> {{ f.year }}
+                Year: <strong>{{ f.year }}</strong>
                 <hr>
-                <strong>IMDB:</strong> {{ f.imdb_rating }}
+                IMDB: <strong>{{ f.imdb_rating|default_if_none:"-" }}</strong>
                 <hr>
-                <strong>KP:</strong> {{ f.kinopoisk_rating }}
+                KP: <strong>{{ f.kinopoisk_rating|default_if_none:"-" }}</strong>
                 <hr>
-                <strong>Scan:</strong> {{ f.date_added|date:'d.m.y' }}
+                Scan: <strong>{{ f.date_added|date:'d.m.y' }}</strong>
             </td>
+
             <td>
                 <strong>Genres</strong>
                 {% for g in f.genres_as_list %}
@@ -70,13 +70,12 @@
                     {% endif %}
                 {% endfor %}
             </td>
-            <td style="font-size: small">{{ f.plot|truncatechars:500 }}</td>
+            <td style="font-size: small">{{ f.plot|truncatechars:700 }}</td>
             <td style="width:5%; font-size: small">{{ f.translate }}</td>
             <td>
                 {% comment %}<div class="btn-group" role="group" aria-label="Basic mixed styles example">{% endcomment %}
                 <div class="d-grid gap-1 col-1 ">
-                    <button href="{{ f.search_link }}" target="_blank"
-                            class="btn btn-warning btn-sm"
+                    <button class="btn btn-warning btn-sm"
                             data-bs-toggle="tooltip" title="Just open search"
                             _="on click go to url {{ f.search_link }} in new window"
                     >Open
@@ -86,9 +85,18 @@
                             data-bs-toggle="tooltip" title="Open search and add to ignore"
                             hx-delete="{% url 'ignore' f.pk %}"
                             hx-target="closest tr"
-                            hx-swap="delete swap:0.6s"
+                            hx-swap="delete swap:0.7s"
                             _="on click go to url {{ f.search_link }} in new window"
                     >Download
+                    </button>
+
+                    <button type="button" class="btn btn-primary btn-sm"
+                            data-bs-toggle="tooltip" title="Add to ignore table"
+                            hx-post="{% url 'defer' f.pk %}"
+                            hx-target="closest tr"
+                            hx-swap="delete swap:0.7s"
+                            onclick="manualUpdate()"
+                    >Defer
                     </button>
 
                     <button type="button" class="btn btn-danger btn-sm"
@@ -96,21 +104,55 @@
                             hx-delete="{% url 'ignore' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.6s"
+                            onclick="manualUpdate()"
                     >Decline
                     </button>
 
-                    <button type="button" class="btn btn-primary btn-sm"
-                            data-bs-toggle="tooltip" title="Add to ignore table"
-                            hx-post="{% url 'defer' f.pk %}"
-                            hx-target="closest tr"
-                            hx-swap="delete swap:0.6s"
-                    >DEFER
-                    </button>
-                    
+                    <script>
+                        function manualUpdate() {
+                            // Use hx-sync to manually trigger an update
+                            htmx.trigger('#triggerElement', 'hx-sync');
+                            console.log('MANUAL UPDATE')
+                        }
+                    </script>
+                
+                    {% comment %}                    <script>
+                                        document.body.addEventListener('htmx:afterOnLoad', function (evt) {
+                                          // only allow requests to the current server as well as myserver.com
+                                          // if (!evt.detail.sameHost && evt.detail.url.hostname !== "myserver.com") {
+                                          // evt.preventDefault();
+                                          // }
+                                            console.log('EVENT!')
+                                        });
+                                        </script>{% endcomment %}
+                
+                
+                
+                    <div class="d-flex flex-row mt-2">
+                        {% with url='https://ru.kinorium.com/search/?q='|add:f.title|add:' '|add:f.original_title|add:' '|add:f.year %}
+                            <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">KR</span>
+                        {% endwith %}
+
+                        {% with url='https://www.imdb.com/title/'|add:f.imdb_id %}
+                            <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">IMDB</span>
+                        {% endwith %}
+
+                        {% if f.kinopoisk_id %}
+                        {% comment %}{% with url='https://www.kinopoisk.ru/film/'|add:f.kinopoisk_id %}{% endcomment %}
+                        {% with id=f.kinopoisk_id|stringformat:'s' %}
+                            {% with url='https://www.kinopoisk.ru/film/'|add:id %}
+                                <span class="badge text-bg-warning" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">KP</span>
+                            {% endwith %}
+                        {% endwith %}
+                        {% endif %}
+                    </div>
+
+                    </div>
+
                 </div>
 
                 {% if movies.has_next and forloop.last %}
-                    <span hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
+                    <span id='triggerElement' hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
                           hx-swap="beforeend" hx-target="#loop" hx-select=".htmx-scroll"
                           hx-trigger="revealed">
                         </span>

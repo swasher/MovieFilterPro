@@ -6,7 +6,6 @@ from django.contrib.auth.views import LoginView
 from moviefilter import auth
 
 urlpatterns = [
-    path('silk/', include('silk.urls', namespace='silk')),
     path('login/', LoginView.as_view(template_name='login.html'), name='login'),
     path('logout/', auth.user_logout, name="logout"),
     path('admin/', admin.site.urls),

@@ -89,7 +89,8 @@ class MovieRSS(models.Model):
         # link = "https://kinozal.tv/browse.php?s=%CC%E8%E7%E0%ED%F2%F0%EE%EF+%2F+Misanthrope&g=0&c=1002&v=3&d=2023&w=0&t=0&f=0"
 
         # c = 1002 for movies, 1001 for serials
-        payload = {'s': f'{self.title} / {self.original_title}', 'd': f'{self.year}', 'c': '1002'}
+        # v = 3 for Рипы HD(1080|720)
+        payload = {'s': f'{self.title} / {self.original_title}', 'd': f'{self.year}', 'c': '1002', 'v': 3}
         params = urlencode(payload, quote_via=quote_plus)
         # quote_plus - заменяет пробелы знаками +
         # 'password=xyz&username=administrator'
@@ -100,6 +101,7 @@ class MovieRSS(models.Model):
     def __str__(self):
         name = self.original_title if self.original_title else self.title
         return f"{name} - {self.year}"
+
 
 class Kinorium(models.Model):
     """

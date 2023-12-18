@@ -13,6 +13,8 @@ from moviefilter.models import MovieRSS
 from moviefilter.parse import parse_page, movie_audit
 from moviefilter.checks import exist_in_kinorium
 from django.core.exceptions import ObjectDoesNotExist
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+
 
 
 def modified_kinozal_scan(site: LinkConstructor, user):
@@ -27,24 +29,28 @@ def modified_kinozal_scan(site: LinkConstructor, user):
 
     # типа записываем фильмы в базу:
     for m in movies:
-        exist, full_match, status = exist_in_kinorium(m)
+        in_kinorium, full_match, status = exist_in_kinorium(m)
 
         try:
             rss_m = MovieRSS.objects.get(title=m.title, original_title=m.original_title, year=m.year)
-            found = 'FOUND'
+            in_kinozal = True
         except MovieRSS.DoesNotExist:
-            found = 'NOT_FOUND'
+            in_kinozal = False
 
-        print('{: <40}'.format(m.title[:40]), '\t', exist, full_match, status, found)
+        # print('{: <40}'.format(m.title[:40]), '\t', 'FOUND' if in_kinozal else 'NOT_FOUND  ->  ', in_kinorium, full_match, status)
 
-
-
+        if in_kinozal and in_kinorium:
+            if full_match:
+                rss_m.priority = SKIP
+                print('{: <40}'.format(m.title[:40]), '\t', 'set SKIP')
+            else:
+                rss_m.kinorium_partial_match = True
+                print('{: <40}'.format(m.title[:40]), '\t', 'set PARTIAL')
+            rss_m.save()
 
 
 if __name__ == '__main__':
-    page = 5
-
-    page = LinkConstructor(page=page)
     user = User.objects.get(pk=1)
-
-    modified_kinozal_scan(page, user)
+    for page in range(101):
+        page = LinkConstructor(page=page)
+        modified_kinozal_scan(page, user)

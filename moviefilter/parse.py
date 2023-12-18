@@ -21,6 +21,7 @@ def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
 
     last_day_reached = False
     last_page_reached = False
+    counter = 0
     while not last_day_reached and site.page<=100:
 
         # Получаем список всех фильмов со страницы. Если достигли нужной даты, то reach_last_day возврашается как True
@@ -34,17 +35,19 @@ def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
             logger.debug(f"SAVE TO DB")
             logger.info(f"SAVE TO DB infoinfoinfoinfoinfo")
             logger.error(f"SAVE TO DB ERROR ERROR ERROR ERROR ERROR ")
-            print('SAVE TO DB: ', end='')
-        for m in movies:
-            # todo использовать bulk_create
-            MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
-                                           defaults=dataclasses.asdict(m))
-            print('⦁', end='')
+            print(f'SAVE TO DB: [{len(movies)} movies]')
+
+            counter += len(movies)
+            for m in movies:
+                # todo использовать bulk_create
+                MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
+                                               defaults=dataclasses.asdict(m))
         print('')
 
         # переходим к сканированию следующей странице
         site.next_page()
 
+    return counter
 
 def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool):
     """
@@ -139,11 +142,6 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
                 else:
                     year = str(datetime.now().year)
 
-
-
-
-
-
             print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
             logger.debug(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
@@ -174,7 +172,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
             # todo weak assumption for [4]; may be need add some checks
             m.imdb_id = imdb_part['href'].split('/')[4]
             rating = imdb_part.find('span').text
-            m.imdb_rating = float(rating) if is_float(rating) else 10
+            m.imdb_rating = float(rating) if is_float(rating) else None
         else:
             m.imdb_id = None
             m.imdb_rating = None
@@ -184,7 +182,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
             # todo weak assumption for [4]; may be need add some checks
             m.kinopoisk_id = kinopoisk_part['href'].split('/')[4]
             rating = kinopoisk_part.find('span').text
-            m.kinopoisk_rating = float(rating) if is_float(rating) else 10
+            m.kinopoisk_rating = float(rating) if is_float(rating) else None
         else:
             m.kinopoisk_id = None
             m.kinopoisk_rating = None

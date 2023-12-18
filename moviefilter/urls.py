@@ -18,7 +18,7 @@ urlpatterns = [
 ]
 
 htmx = [
-    path('scan/', views.scan, name='scan'),
+    path('scan/', htmx_views.scan, name='scan'),
     path('reset_rss/', htmx_views.reset_rss, name='reset_rss'),
     path('ignore/<pk>', htmx_views.ignore_movie, name='ignore'),
     path('defer/<pk>', htmx_views.defer, name='defer'),

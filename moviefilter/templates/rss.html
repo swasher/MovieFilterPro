@@ -6,19 +6,29 @@
     <div class="container-fluid">
         <button class='btn btn-primary'
                 hx-get="{% url 'scan' %}"
-                hx-target="#rss-table"
-                hx-swap="innerHTML">
+                hx-swap="none">
             <span id="save-icon" class="bi-database"></span> SCAN
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
         </button>
         <span class="border rounded p-1 m-1">Last scan: <span
                 class="badge text-bg-success">{{ last_scan }}</span></span>
-        <span class="border rounded p-1 m-1">Primary: <span
-                class="badge text-bg-success">{{ total_high }}</span></span>
-        <span class="border rounded p-1 m-1">Low prio: <span
-                class="badge text-bg-success">{{ total_low_priority }}</span></span>
+
         <span class="border rounded p-1 m-1">Total: <span
-                class="badge text-bg-success">{{ total_high|add:total_low_priority }}</span></span>
+                class="badge text-bg-success">{{ total_high|add:total_low|add:total_defer }}</span></span>
+
+        <span class="border rounded p-1 m-1">High: <span
+                class="badge text-bg-secondary">{{ total_high }}</span></span>
+
+        <span class="border rounded p-1 m-1">Low: <span
+                class="badge text-bg-secondary">{{ total_low }}</span></span>
+
+        <span class="border rounded p-1 m-1">Defer: <span
+                class="badge text-bg-secondary">{{ total_defer }}</span></span>
+
+        <span class="border rounded p-1 m-1">Skip: <span
+                class="badge text-bg-light">{{ total_skip }}</span></span>
+
+
 
 
     <div class="border my-4 p-3 rounded" style="background: lightgray">
@@ -54,13 +64,15 @@
             
 
         <div class="form-check-inline">
-            <input type="text" class="form-control" name="textfilter" 
+            <input type="text" class="form-control" name="textfilter"
                    hx-trigger="keyup changed delay:0.4s" hx-get="{% url 'get_rss_table_data' %}">
         </div>
 
-        <button type="button" class="btn btn-light">
-          Filtered elements <span id="filtered_count" class="badge text-bg-secondary"></span>
-        </button>
+        <div class="form-check-inline">
+            <button type="button" class="btn btn-light mb-1" style="cursor: default">
+              Filtered elements <span id="filtered_count" class="badge text-bg-secondary"></span>
+            </button>
+        </div>
 
         </span>
 

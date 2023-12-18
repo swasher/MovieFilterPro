@@ -27,8 +27,6 @@ ENABLE_DEBUG_TOOLBAR = config('ENABLE_DEBUG_TOOLBAR', cast=bool)
 ENABLE_BROWSER_RELOAD = config('ENABLE_BROWSER_RELOAD', cast=bool)
 ENABLE_SAAS_COMPILER = False
 
-SILKY_PYTHON_PROFILER = True
-
 INFINITE_PAGINATION_BY = 4
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.fly.dev']
@@ -66,13 +64,11 @@ INSTALLED_APPS = [
     'django_htmx',
     'widget_tweaks',
     'debug_toolbar',
-    'silk',
 
     'moviefilter',
 ]
 
 MIDDLEWARE = [
-    'silk.middleware.SilkyMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

@@ -11,16 +11,14 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
 from plexapi.server import PlexServer
-from silk.profiling.profiler import silk_profile
 
 from .models import MovieRSS, Kinorium, UserPreferences
-from .classes import LinkConstructor
 from .forms import PreferencesForm
 from .parse_csv import parse_file_movie_list, parse_file_votes
 from .forms import UploadCsvForm
-from .parse import kinozal_scan
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
 
 logger = logging.getLogger('my_logger')
@@ -29,9 +27,12 @@ logger = logging.getLogger('my_logger')
 def rss(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
     total_high = MovieRSS.objects.filter(priority=HIGH).count()
-    total_low_priority = MovieRSS.objects.filter(priority=LOW).count()
+    total_low = MovieRSS.objects.filter(priority=LOW).count()
+    total_defer = MovieRSS.objects.filter(priority=DEFER).count()
+    total_skip = MovieRSS.objects.filter(priority=SKIP).count()
     return render(request, template_name='rss.html',
-                  context={'last_scan': last_scan, 'total_high': total_high, 'total_low_priority': total_low_priority})
+                  context={'last_scan': last_scan, 'total_high': total_high, 'total_low': total_low,
+                           'total_defer': total_defer, 'total_skip': total_skip})
 
 
 @login_required()
@@ -40,30 +41,6 @@ def log(request):
 
 
 @login_required()
-def scan(request):
-    last_scan = UserPreferences.objects.get(user=request.user).last_scan
-    context = {'last_scan': last_scan}
-    user = request.user
-
-    pref, _ = UserPreferences.objects.get_or_create(user=user)
-    start_page = pref.scan_from_page
-
-    if request.method == 'GET':
-
-        site = LinkConstructor(page=start_page)
-
-        # TODO тут что-то задумывалось, функция возвращает список фильмов, но с ним ничего не происходит.
-        movies = kinozal_scan(site, last_scan, user)
-
-        movies = MovieRSS.objects.filter(priority=HIGH, ignored=False)
-        paginator = Paginator(movies, 5)
-        page_number = request.GET.get("page")
-        movies_page = paginator.get_page(page_number)
-        context['movies'] = movies_page
-
-        UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
-        return render(request, 'partials/rss-table.html', context)
-
 def user_preferences_update(request):
     user = User.objects.get(pk=request.user.pk)
     pref, _ = UserPreferences.objects.get_or_create(user=user)

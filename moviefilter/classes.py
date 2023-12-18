@@ -23,7 +23,7 @@ class KinozalMovie:
     plot: str = None
     translate: str = None
     poster: str = None
-    low_priority: bool = None
+    priority: bool = None
     kinorium_partial_match: bool = None
 
 

@@ -25,7 +25,6 @@ django-widget-tweaks = "*"
 doppler-env = "*"
 django-browser-reload = "*"
 django-debug-toolbar = "*"
-django-silk = "*"
 ruff = "*"
 ruff-lsp = "*"
 

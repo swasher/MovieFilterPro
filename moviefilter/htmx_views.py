@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -6,13 +7,35 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.http import require_http_methods, require_GET
+from django.core.paginator import Paginator
 
 from .models import Kinorium
 from .models import MovieRSS
 from .models import UserPreferences
-from django.core.paginator import Paginator
+from .parse import kinozal_scan
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+from .classes import LinkConstructor
+
+
+@login_required()
+@require_GET
+def scan(request):
+    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    context = {'last_scan': last_scan}
+    user = request.user
+
+    pref, _ = UserPreferences.objects.get_or_create(user=user)
+    start_page = pref.scan_from_page
+
+    site = LinkConstructor(page=start_page)
+    counter = kinozal_scan(site, last_scan, user)
+
+    # update last scan to now()
+    UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
+
+    messages.success(request, f'Added {counter} movies.')
+    return HttpResponse(status=200)
 
 
 def kinorium_table_data(request):
