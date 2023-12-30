@@ -7,7 +7,7 @@ from .classes import KinozalMovie
 from .util import get_object_or_none
 from .util import not_match_rating
 
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 
 def exist_in_kinozal(m: KinozalMovie) -> bool:
     """

@@ -7,7 +7,7 @@ from moviefilter.models import MovieRSS
 from moviefilter.parse import parse_page, movie_audit
 from moviefilter.checks import exist_in_kinorium
 from django.core.exceptions import ObjectDoesNotExist
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 
 if __name__ == '__main__':
     user = User.objects.get(pk=1)

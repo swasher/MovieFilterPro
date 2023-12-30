@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.contrib import messages
 from django.http import HttpResponse
 from django.conf import settings
-from django.views.decorators.http import require_http_methods, require_GET
+from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.core.paginator import Paginator
 
 from .models import Kinorium
@@ -14,7 +14,7 @@ from .models import MovieRSS
 from .models import UserPreferences
 from .parse import kinozal_scan
 
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 from .classes import LinkConstructor
 
 
@@ -92,28 +92,37 @@ def rss_table_data(request):
                   {'movies': page_obj, 'priority': priority, 'found_total': found_total})
 
 
+@require_POST
 def ignore_movie(request, pk):
-    # htmx
-    if request.method == 'DELETE':
-        try:
-            MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
-            messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")
-            return HttpResponse(status=200)
-        except:
-            messages.error(request, f"Error with removing Movie pk={pk}")
-            return HttpResponse(status=500)
+    try:
+        MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
+        messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")
+        return HttpResponse(status=200)
+    except:
+        messages.error(request, f"Error with removing Movie pk={pk}")
+        return HttpResponse(status=500)
 
 
+@require_POST
 def defer(request, pk):
-    # htmx
-    if request.method == 'POST':
-        try:
-            MovieRSS.objects.filter(pk=pk).update(priority=DEFER)
-            messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' defer successfully")
-            return HttpResponse(status=200)
-        except:
-            messages.error(request, f"Error with defer Movie pk={pk}")
-            return HttpResponse(status=500)
+    try:
+        MovieRSS.objects.filter(pk=pk).update(priority=DEFER)
+        messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' defer successfully")
+        return HttpResponse(status=200)
+    except:
+        messages.error(request, f"Error with defer Movie pk={pk}")
+        return HttpResponse(status=500)
+
+
+@require_POST
+def wait_trains(request, pk):
+    try:
+        MovieRSS.objects.filter(pk=pk).update(priority=WAIT_TRANS)
+        messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' add to Wait Trans successfully")
+        return HttpResponse(status=200)
+    except:
+        messages.error(request, f"Error with Wait Trans, Movie pk={pk}")
+        return HttpResponse(status=500)
 
 
 def get_log(request, logtype):
@@ -136,3 +145,13 @@ def get_log(request, logtype):
         raise Exception('Unknown logtype')
 
     return render(request, template_name='partials/log-content.html', context={'log': log})
+
+
+from .parse import get_kinorium_first_search_results
+
+@require_GET
+def kinorium_search(request, kinozal_id: int):
+    m = MovieRSS.objects.get(id=kinozal_id)
+    data = ' '.join([m.title, m.original_title, m.year])
+    link = get_kinorium_first_search_results(data)
+    return HttpResponse(link)

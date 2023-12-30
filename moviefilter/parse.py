@@ -4,6 +4,7 @@ import logging
 import re
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
+from urllib.parse import urlencode, quote_plus
 
 from .classes import KinozalMovie
 from .classes import LinkConstructor
@@ -12,7 +13,7 @@ from .util import is_float
 from .models import Country, MovieRSS
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 
 logger = logging.getLogger('my_logger')
 
@@ -291,3 +292,26 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
             result.append(m)
 
     return result
+
+
+def get_kinorium_first_search_results(data: str):
+    """
+    https://ru.kinorium.com/search/?q=%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D1%82%D0%BE%D1%80%203
+    :param data:
+    :return:
+    """
+    payload = {'q': data}
+    params = urlencode(payload, quote_via=quote_plus)
+    # quote_plus - заменяет пробелы знаками +
+    link = f"https://ru.kinorium.com/search/?{params}"
+
+    response = requests.get(link)
+    print(f'GRAB URL: {link}')
+    soup = BeautifulSoup(response.content, "html.parser")
+    elements = soup.select_one('.list.movieList')  # <div class="list movieList">
+
+    id = soup.select_one('.list.movieList .item h3 a').attrs['href']  # like /2706046/
+    link = 'https://ru.kinorium.com' + id
+
+    first_result = None
+    return link

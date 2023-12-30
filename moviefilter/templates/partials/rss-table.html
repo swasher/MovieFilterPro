@@ -9,12 +9,12 @@
 
     <thead>
     <tr>
-        <th scope="col" style="width: 150px">poster</th>
-        <th scope="col" class="col-2">title</th>
-        <th scope="col" class="col-1">Some sata</th>
-        <th scope="col" class="col-3">common</th>
-        <th scope="col">plot</th>
-        <th scope="col" class="col-1">translate</th>
+        <th scope="col" style="width: 150px">Poster</th>
+        <th scope="col" class="col-2">Title</th>
+        <th scope="col" class="col-1">Some data</th>
+        <th scope="col" class="col-3">Common</th>
+        <th scope="col">Plot</th>
+        <th scope="col" class="col-1">Translate</th>
         <th scope="col" style="width:80px">BTN</th>
     </tr>
     </thead>
@@ -22,6 +22,7 @@
     <tbody id="loop">
 
     {% for f in movies %}
+
         <tr {% if f.kinorium_partial_match %} class="htmx-scroll table-warning" {% else %}  class="htmx-scroll" {% endif %}>
             <td>
                 <img
@@ -99,13 +100,22 @@
                     >Defer
                     </button>
 
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            data-bs-toggle="tooltip" title="Жду дубляж"
+                            hx-post="{% url 'wait_trains' f.pk %}"
+                            hx-target="closest tr"
+                            hx-swap="delete swap:0.7s"
+                            onclick="manualUpdate()"
+                    >Жду дубляж
+                    </button>
+
                     <button type="button" class="btn btn-danger btn-sm"
                             data-bs-toggle="tooltip" title="Add to ignore table"
-                            hx-delete="{% url 'ignore' f.pk %}"
+                            hx-post="{% url 'ignore' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.6s"
                             onclick="manualUpdate()"
-                    >Decline
+                    >Hide
                     </button>
 
                     <script>
@@ -116,22 +126,18 @@
                         }
                     </script>
                 
-                    {% comment %}                    <script>
-                                        document.body.addEventListener('htmx:afterOnLoad', function (evt) {
-                                          // only allow requests to the current server as well as myserver.com
-                                          // if (!evt.detail.sameHost && evt.detail.url.hostname !== "myserver.com") {
-                                          // evt.preventDefault();
-                                          // }
-                                            console.log('EVENT!')
-                                        });
-                                        </script>{% endcomment %}
-                
-                
-                
-                    <div class="d-flex flex-row mt-2">
+                    <div class="d-flex flex-row mb-2">
+                        {% comment %} old kinorium button, just open search page
                         {% with url='https://ru.kinorium.com/search/?q='|add:f.title|add:' '|add:f.original_title|add:' '|add:f.year %}
                             <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">KR</span>
                         {% endwith %}
+                        {% endcomment %}
+
+                        <span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
+                                        log result then
+                                        go to url `${result}` in new window">
+                       KR
+                       </span>
 
                         {% with url='https://www.imdb.com/title/'|add:f.imdb_id %}
                             <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">IMDB</span>
@@ -147,9 +153,8 @@
                         {% endif %}
                     </div>
 
-                    </div>
-
                 </div>
+
 
                 {% if movies.has_next and forloop.last %}
                     <span id='triggerElement' hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
@@ -164,4 +169,14 @@
 
 </table>
 
+<script>
+document.body.addEventListener('htmx:configRequest', (e) => {
+  if (e.detail.triggeringEvent.type === 'foo') {
+    e.detail.headers['someheader'] = 'foo_value'
+  }
+  if (e.detail.triggeringEvent.type === 'bar') {
+    e.detail.headers['someheader'] = 'bar_value'
+  }
+})
+</script>
 

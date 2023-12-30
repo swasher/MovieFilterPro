@@ -22,9 +22,12 @@ htmx = [
     path('reset_rss/', htmx_views.reset_rss, name='reset_rss'),
     path('ignore/<pk>', htmx_views.ignore_movie, name='ignore'),
     path('defer/<pk>', htmx_views.defer, name='defer'),
+    path('wait_trains/<pk>', htmx_views.wait_trains, name='wait_trains'),
     path('kinorium_table_data/', htmx_views.kinorium_table_data, name='kinorium_table_data'),
     path('get_rss_table_data/', htmx_views.rss_table_data, name='get_rss_table_data'),
     path('get_log/<str:logtype>', htmx_views.get_log, name='get_log'),
+
+    path('kinorium_search/<int:kinozal_id>', htmx_views.kinorium_search, name='kinorium_search'),
 ]
 
 urlpatterns += htmx

@@ -37,7 +37,7 @@ class KinoriumMovieDataClass:
 
 class LinkConstructor:
     """
-    https: // moviefilter.tv / browse.php?c = 1002 & v = 3 & page = 74
+    https: // kinozal.tv / browse.php?c = 1002 & v = 3 & page = 74
 
     Parameters:
     c = 1001 - Все сериалы

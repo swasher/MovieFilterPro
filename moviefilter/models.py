@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 
 """
 Логика такая:
@@ -34,7 +34,8 @@ class MovieRSS(models.Model):
         (LOW, 'Низкий'),
         (HIGH, 'Обычный'),
         (DEFER, 'Отложено'),
-        (SKIP, 'Отложено'),
+        (SKIP, 'Отказ'),
+        (WAIT_TRANS, 'Жду дубляж'),
     )
 
     class Meta:
