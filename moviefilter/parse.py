@@ -8,6 +8,7 @@ from urllib.parse import urlencode, quote_plus
 
 from .classes import KinozalMovie
 from .classes import LinkConstructor
+from .classes import KinozalSearch
 
 from .util import is_float
 from .models import Country, MovieRSS
@@ -315,3 +316,60 @@ def get_kinorium_first_search_results(data: str):
 
     first_result = None
     return link
+
+
+def kinozal_search(kinozal_id: int):
+    m = MovieRSS.objects.get(id=kinozal_id)
+
+    combined_titles = ' / '.join([m.title, m.original_title])
+    if len(combined_titles) < 64:
+        search_string = combined_titles
+    else:
+        search_string = m.title
+
+    try:
+        year = str(int(m.year))
+    except ValueError:
+        year = None
+
+    V_HD = 3  # Рипы HD(1080 и 720)
+    V_4K = 7  # 4K
+
+    if year is not None:
+        l = LinkConstructor(s=search_string, d=year, v=V_HD)
+    else:
+        l = LinkConstructor(s=search_string, v=V_HD)
+
+    # TERMINATOR = "https://kinozal.tv/browse.php?s=%F2%E5%F0%EC%E8%ED%E0%F2%EE%F0&g=0&c=1002&v=7&d=2019&w=0&t=0&f=0"
+
+    response = requests.get(l.search_url())
+    # response = requests.get(TERMINATOR)
+
+    print(f'GRAB URL: {l.search_url()}')
+    logger.info(f'GRAB URL: {l.search_url()}')
+
+    if response.ok:
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        movies_elements = soup.find_all('tr', 'bg')
+
+        results = []
+
+        if movies_elements:
+            for element in movies_elements:
+                m = KinozalSearch()
+
+                m.id = element.a['href'].split('=')[1]
+                m.header = element.a.text
+                m.size = element.find_all('td', 's')[1].text
+                m.seed = element.find('td', {'class': 'sl_s'}).text
+                m.peer = element.find('td', {'class': 'sl_p'}).text
+                m.created = element.find_all('td', 's')[2].text
+                m.link = 'https://kinozal.tv' + element.a['href']
+
+                results.append(m)
+
+        return results
+
+    else:
+        raise Exception(f'ERROR: {response.content}')

@@ -1,4 +1,5 @@
 import os
+import requests
 from datetime import datetime
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
@@ -16,6 +17,8 @@ from .parse import kinozal_scan
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 from .classes import LinkConstructor
+from .parse import get_kinorium_first_search_results
+from .parse import kinozal_search
 
 
 @login_required()
@@ -42,6 +45,7 @@ def kinorium_table_data(request):
     movies = Kinorium.objects.all()
     return render(request, 'partials/kinorium-table.html', {'movies': movies})
 
+
 @login_required()
 def reset_rss(requst):
     # htmx function
@@ -57,7 +61,6 @@ def reset_rss(requst):
 def rss_table_data(request):
     prefs = UserPreferences.objects.get(user=request.user)
     paginate_by = settings.INFINITE_PAGINATION_BY
-    print(request.GET)
 
     if 'priority' in request.GET:
         match request.GET['priority']:
@@ -68,7 +71,7 @@ def rss_table_data(request):
             case 'DEFER':
                 priority = DEFER
     else:
-        priority = HIGH
+        raise Exception('No priority in request!')
 
     movies_qs = MovieRSS.objects.filter(priority=priority)
 
@@ -94,6 +97,9 @@ def rss_table_data(request):
 
 @require_POST
 def ignore_movie(request, pk):
+    # DEPRECATED
+    # request.session['count_movies_in_table'] = request.session.get('count_movies_in_table') - 1
+
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")
@@ -105,6 +111,9 @@ def ignore_movie(request, pk):
 
 @require_POST
 def defer(request, pk):
+    # DEPRECATED
+    # request.session['count_movies_in_table'] = request.session.get('count_movies_in_table') - 1
+
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=DEFER)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' defer successfully")
@@ -116,6 +125,9 @@ def defer(request, pk):
 
 @require_POST
 def wait_trains(request, pk):
+    # DEPRECATED
+    # request.session['count_movies_in_table'] = request.session.get('count_movies_in_table') - 1
+
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=WAIT_TRANS)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' add to Wait Trans successfully")
@@ -147,11 +159,52 @@ def get_log(request, logtype):
     return render(request, template_name='partials/log-content.html', context={'log': log})
 
 
-from .parse import get_kinorium_first_search_results
-
 @require_GET
 def kinorium_search(request, kinozal_id: int):
     m = MovieRSS.objects.get(id=kinozal_id)
     data = ' '.join([m.title, m.original_title, m.year])
     link = get_kinorium_first_search_results(data)
     return HttpResponse(link)
+
+
+@require_GET
+def kinozal_download(request, kinozal_id: int):
+
+    found = kinozal_search(kinozal_id)
+
+    context = {'found': found}
+    return render(request, 'partials/kinozal_download.html', context)
+
+
+def get_torrent_file(request, kinozal_id: int):
+    # todo move it to user preferencies
+    cookie_pass = 'c1WSjB9vRK'
+    cookie_uid = '19200863'
+    destination = '//qnap/Torrents/'
+
+    print('GET torrent', kinozal_id)
+    url = f"https://dl.kinozal.tv/download.php?id={kinozal_id}"
+    print('LINK', url)
+
+    headers = {'user-agent': "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36"}
+    cookies = {'pass': cookie_pass, 'uid': cookie_uid}
+
+    s = requests.Session()
+    r = s.get(url, headers=headers, cookies=cookies)
+
+    bad_sign = '<i class="bi bi-x-lg" style="color: red"></i>'
+    good_sign = '<i class="bi bi-check-lg"></i>'
+
+    if r.status_code != 200:
+        return HttpResponse(bad_sign)
+
+    try:
+        filename = r.headers['content-disposition'].split('=')[1].strip('"')
+        with open(destination+filename, 'wb') as file:
+            file.write(r.content)
+
+        return HttpResponse(good_sign)
+    except FileNotFoundError:
+        return HttpResponse(bad_sign)
+
+

@@ -2,18 +2,13 @@
 {% load static %}
 {% block body %}
 
-
     <div class="container-fluid">
-
-        <script src="https://unpkg.com/htmx.org/dist/ext/debug.js"></script>
-        <button hx-ext="debug">Debug Me...</button>
-
-
 
         <button class='btn btn-primary'
                 hx-get="{% url 'scan' %}"
                 hx-swap="none">
-            <span id="save-icon" class="bi-database"></span> SCAN
+            <span id="save-icon" class="bi-database"></span>
+            SCAN
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
         </button>
         <span class="border rounded p-1 m-1">Last scan: <span
@@ -41,13 +36,13 @@
         </span>
 
 
-    <div class="border my-4 p-3 rounded" style="background: lightgray">
+        <div class="border my-4 p-3 rounded" style="background: lightgray">
 
         <span
-            hx-get="{% url 'get_rss_table_data' %}"
-            hx-trigger="change"
-            hx-target="#rss-table"
-            hx-include="[name='priority'], [name='reverse'], [name='textfilter']"
+                hx-get="{% url 'get_rss_table_data' %}"
+                hx-trigger="change"
+                hx-target="#rss-table"
+                hx-include="[name='priority'], [name='reverse'], [name='textfilter']"
         >
 
         <div class="form-check form-check-inline" id="form1">
@@ -73,8 +68,8 @@
             
 
         <div class="form-check-inline">
-            <input type="text" class="form-control" name="textfilter"
-                   placeholder="Type for search..."
+            <input type="search" class="form-control search" name="textfilter"
+                   placeholder="Type for search..." autocomplete="off"
                    hx-trigger="keyup changed delay:0.4s" hx-get="{% url 'get_rss_table_data' %}">
         </div>
 
@@ -86,7 +81,7 @@
 
         </span>
 
-    </div>
+        </div>
 
 
         <div id="rss-table"
@@ -109,6 +104,41 @@
         <!-- end Toast template -->
 
     </div>
+
+    <!-- Download Modal template -->
+    <div id="modal-kinozal" class="modal modal-blur" style="display: none" aria-hidden="false" tabindex="-1">
+        <div id="kinozal-results" class="modal-dialog modal-xl modal-dialog-centered" hx-target="this">
+            {# there is modal for edit Details #}
+        </div>
+    </div>
+    <!-- End Download Modal template -->
+
+    <script>
+        ;(function () {
+          const modal = new bootstrap.Modal(document.getElementById("modal-kinozal"))  // ЭТО ID ВНЕШНЕГО DIV ИЗ 'ЗАГЛУШКИ'
+
+          htmx.on("htmx:afterSwap", (e) => {
+            // Response targeting #dialog => show the modal
+            if (e.detail.target.id === "kinozal-results") {  // ЭТО ID ТАРГЕТА ИЗ hx-target
+              modal.show()
+            }
+          })
+
+          htmx.on("htmx:beforeSwap", (e) => {
+            // Empty response targeting #dialog => hide the modal
+            if (e.detail.target.id === "kinozal-results" && !e.detail.xhr.response) {   // ЭТО ID ТАРГЕТА ИЗ hx-target
+              modal.hide()
+              e.detail.shouldSwap = false
+            }
+          })
+
+{% comment %}          // Remove dialog content after hiding
+          htmx.on("hidden.bs.modal", () => {
+            document.getElementById("kinozal-results").innerHTML = ""
+          }){% endcomment %}
+        })()
+    </script>
+
 
 {% endblock %}
 

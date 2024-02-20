@@ -1,10 +1,8 @@
 <table class="table w-auto table-sm">
 
-    <!-- Этот код помещает переменную found_total во внешний HTML - rss.html,-->
-    <!-- в бейдж 'Filtered elements' -->
-    <span _="on load put '{{ found_total }}' into #filtered_count" hidden>
-    Click Me
-    </span>
+    <!-- Этот код помещает переменную found_total, которая передается в этот темплей,
+    во внешний темплейт - rss.html, в бейдж 'Filtered elements' -->
+    <span _="on load put '{{ found_total }}' into #filtered_count" hidden></span>
 
 
     <thead>
@@ -71,7 +69,7 @@
                     {% endif %}
                 {% endfor %}
             </td>
-            <td style="font-size: small">{{ f.plot|truncatechars:700 }}</td>
+            <td class="border" style="font-size: small">{{ f.plot|truncatechars:700 }}</td>
             <td style="width:5%; font-size: small">{{ f.translate }}</td>
             <td>
                 {% comment %}<div class="btn-group" role="group" aria-label="Basic mixed styles example">{% endcomment %}
@@ -83,20 +81,19 @@
                     </button>
 
                     <button type="button" class="btn btn-success btn-sm"
-                            data-bs-toggle="tooltip" title="Open search and add to ignore"
-                            hx-delete="{% url 'ignore' f.pk %}"
-                            hx-target="closest tr"
-                            hx-swap="delete swap:0.7s"
-                            _="on click go to url {{ f.search_link }} in new window"
+                            data-bs-toggle="tooltip" title="Open kinozal modal"
+                            hx-get="{% url 'kinozal_download' f.id %}"
+                            hx-target="#kinozal-results"
+                            hx-swap="innerHTML"
                     >Download
                     </button>
 
                     <button type="button" class="btn btn-primary btn-sm"
-                            data-bs-toggle="tooltip" title="Add to ignore table"
+                            data-bs-toggle="tooltip" title="Add to defer table"
                             hx-post="{% url 'defer' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.7s"
-                            onclick="manualUpdate()"
+                            onclick="triggerPotentialUpdate()"
                     >Defer
                     </button>
 
@@ -105,7 +102,7 @@
                             hx-post="{% url 'wait_trains' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.7s"
-                            onclick="manualUpdate()"
+                            onclick="triggerPotentialUpdate()"
                     >Жду дубляж
                     </button>
 
@@ -114,40 +111,36 @@
                             hx-post="{% url 'ignore' f.pk %}"
                             hx-target="closest tr"
                             hx-swap="delete swap:0.6s"
-                            onclick="manualUpdate()"
+                            onclick="triggerPotentialUpdate()"
                     >Hide
                     </button>
 
-                    <script>
-                        function manualUpdate() {
-                            // Use hx-sync to manually trigger an update
-                            htmx.trigger('#triggerElement', 'hx-sync');
-                            console.log('MANUAL UPDATE')
-                        }
-                    </script>
+
                 
                     <div class="d-flex flex-row mb-2">
-                        {% comment %} old kinorium button, just open search page
+
+                        {# old kinorium button, just open search page#}
                         {% with url='https://ru.kinorium.com/search/?q='|add:f.title|add:' '|add:f.original_title|add:' '|add:f.year %}
                             <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">KR</span>
                         {% endwith %}
-                        {% endcomment %}
 
-                        <span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
+
+                        {% comment %}<span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
                                         log result then
                                         go to url `${result}` in new window">
-                       KR
-                       </span>
+                        KR
+                        </span>{% endcomment %}
 
                         {% with url='https://www.imdb.com/title/'|add:f.imdb_id %}
-                            <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">IMDB</span>
+                            <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">
+                                IMDB</span>
                         {% endwith %}
 
                         {% if f.kinopoisk_id %}
-                        {% comment %}{% with url='https://www.kinopoisk.ru/film/'|add:f.kinopoisk_id %}{% endcomment %}
                         {% with id=f.kinopoisk_id|stringformat:'s' %}
                             {% with url='https://www.kinopoisk.ru/film/'|add:id %}
-                                <span class="badge text-bg-warning" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">KP</span>
+                                <span class="badge text-bg-warning" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">
+                                    KP</span>
                             {% endwith %}
                         {% endwith %}
                         {% endif %}
@@ -155,20 +148,76 @@
 
                 </div>
 
-
                 {% if movies.has_next and forloop.last %}
-                    <span id='triggerElement' hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
-                          hx-swap="beforeend" hx-target="#loop" hx-select=".htmx-scroll"
+                    <!--Триггер `revealed` возникает, когда объект появляется на экране в результате скролла.
+                        Тогда мы запускаем запрос к get_rss_table_data.
+                        Ответ содержит целую таблицу, но мы берем только сами строки - hx-select=".htmx-scroll"
+                        И вставляем к низу уже имебющихся.
+                        Получаем Infinite scroll -->
+                    <span id='triggerElement'
+                          hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
+                          hx-swap="beforeend"
+                          hx-target="#loop"
+                          hx-select=".htmx-scroll"
                           hx-trigger="revealed">
-                        </span>
+                    </span>
+                    <span id='triggerElementManual'
+                          hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
+                          hx-swap="beforeend"
+                          hx-target="#loop"
+                          hx-select=".htmx-scroll">
+                    </span>
                 {% endif %}
+
             </td>
+
         </tr>
     {% endfor %}
     </tbody>
 
+    <script>
+        /*
+        К примеру, если фильмов всего 4, и юзер начинает их скрывать, то просто так новые фильмы не появятся,
+        а infinite scroll и вовсе не будет работать. Поэтому если их становится мало (<4), то во фронтэнде возникает
+        событие, подгружающее еще фильмов
+        */
+        function triggerPotentialUpdate() {
+            console.log('MANUAL UPDATE')
+            const elements = document.querySelectorAll('.htmx-scroll');
+            const count = elements.length;
+            console.log(count);
+            if (count < 3) {
+                console.log('make request')
+                {#htmx.ajax(#}
+                {#    "GET",#}
+                {#    "{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}",#}
+                {#    {swap:'beforeend', select:'.htmx-scroll'}#}
+                {#)#}
+
+
+                {#const elem = document.getElementById("triggerElement");#}
+                {#elem.dispatchEvent(new Event('loadMore'));#}
+                {#document.body.dispatchEvent(new Event('loadMore'));#}
+
+
+                document.getElementById('triggerElementManual').click();
+            }
+            {#target:'#loop', #}
+        }
+        // <span id='triggerElement' hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
+        //      hx-swap="beforeend" hx-target="#loop" hx-select=".htmx-scroll"
+        //      hx-trigger="revealed">
+    </script>
+
+
 </table>
 
+
+
+
+
+{% comment %}
+    DEPRECATED
 <script>
 document.body.addEventListener('htmx:configRequest', (e) => {
   if (e.detail.triggeringEvent.type === 'foo') {
@@ -179,4 +228,5 @@ document.body.addEventListener('htmx:configRequest', (e) => {
   }
 })
 </script>
+{% endcomment %}
 

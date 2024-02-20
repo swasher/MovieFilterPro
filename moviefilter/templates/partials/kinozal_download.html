@@ -1,0 +1,45 @@
+<div class="modal-content">
+    <div class="modal-header">
+        <h5 class="modal-title">Available torrents</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+        <table class="table">
+            <thead>
+            <tr>
+                <th scope="col">Header</th>
+                <th scope="col">Size</th>
+                <th scope="col">Seed</th>
+                <th scope="col">Peer</th>
+                <th scope="col">Created</th>
+                <th scope="col">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for m in found %}
+                <tr>
+                    <td><a href="{{ m.link }}" target="_blank">{{ m.header }}</a></td>
+                    <td>{{ m.size }}</td>
+                    <td>{{ m.seed }}</td>
+                    <td>{{ m.peer }}</td>
+                    <td>{{ m.created }}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-info"
+                                hx-get="{% url 'get_torrent_file' m.id %}"
+                                hx-target="#answer-{{ m.id }}"
+                                hx-swap="innerHTML"
+                        >Down
+                        <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+                        <span id="answer-{{ m.id }}"></span>
+                        </button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% comment %}    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary">Save changes</button>
+    </div>{% endcomment %}
+</div>

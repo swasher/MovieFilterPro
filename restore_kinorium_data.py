@@ -16,7 +16,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 
 
-
 def modified_kinozal_scan(site: LinkConstructor, user):
     # Fake date
     scan_to_date = date(year=2000, month=1, day=1)

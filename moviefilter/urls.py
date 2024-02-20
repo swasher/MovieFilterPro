@@ -28,6 +28,9 @@ htmx = [
     path('get_log/<str:logtype>', htmx_views.get_log, name='get_log'),
 
     path('kinorium_search/<int:kinozal_id>', htmx_views.kinorium_search, name='kinorium_search'),
+
+    path('kinozal_available_torrents/<int:kinozal_id>', htmx_views.kinozal_download, name='kinozal_download'),
+    path('get_torrent_file/<int:kinozal_id>', htmx_views.get_torrent_file, name='get_torrent_file'),
 ]
 
 urlpatterns += htmx
