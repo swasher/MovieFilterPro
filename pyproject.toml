@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "moviefilterpro"
+version = "0.1.0"
+description = ""
+authors = ["Alexey <mr.swasher@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.31.0"
+beautifulsoup4 = "^4.12.3"
+django = "^5.0.2"
+django-crispy-forms = "^2.1"
+plexapi = "^4.15.10"
+pyyaml = "^6.0.1"
+python-decouple = "^3.8"
+dj-database-url = "^2.1.0"
+django-browser-reload = "^1.12.1"
+crispy-bootstrap5 = "^2024.2"
+django-compressor = "^4.4"
+django-htmx = "^1.17.2"
+django-widget-tweaks = "^1.5.0"
+whitenoise = "^6.6.0"
+
+
+[tool.poetry.group.dev.dependencies]
+doppler-env = "^0.3.1"
+django-debug-toolbar = "^4.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
