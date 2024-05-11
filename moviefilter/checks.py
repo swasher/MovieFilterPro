@@ -9,6 +9,7 @@ from .util import not_match_rating
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 
+
 def exist_in_kinozal(m: KinozalMovie) -> bool:
     """
     Возвращает True, если такой фильм уже присутствует в базе MovieRSS
@@ -39,26 +40,26 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
 
     year = m.year if m.year.isdigit() else m.year[:4]
 
-    exist = get_object_or_none(Kinorium, title=m.title, original_title=m.original_title, year=year)
+    exist = Kinorium.objects.filter(title=m.title, original_title=m.original_title, year=year)
     if exist:
-        return MATCH, FULL, exist.get_status_display()
+        return MATCH, FULL, exist.first().get_status_display()
 
-    exist = get_object_or_none(Kinorium, title=m.title, original_title=m.original_title)
+    exist = Kinorium.objects.filter(title=m.title, original_title=m.original_title)
     if exist:
         print(f' ┣━ KINORIUM PARTIAL MATCH [title+original]: {m.title} + {m.original_title}')
-        return MATCH, PARTIAL, exist.get_status_display()
+        return MATCH, PARTIAL, exist.first().get_status_display()
 
     if m.title:
-        exist = get_object_or_none(Kinorium, title=m.title, year=year)
+        exist = Kinorium.objects.filter(title=m.title, year=year)
         if exist:
             print(f' ┣━ KINORIUM PARTIAL MATCH [title+year]: {m.title} + {year}')
-            return MATCH, PARTIAL, exist.get_status_display()
+            return MATCH, PARTIAL, exist.first().get_status_display()
 
     if m.original_title:
-        exist = get_object_or_none(Kinorium, original_title=m.original_title, year=year)
+        exist = Kinorium.objects.filter(original_title=m.original_title, year=year)
         if exist:
             print(f' ┣━ KINORIUM PARTIAL MATCH [original+year]: {m.original_title} + {year}')
-            return MATCH, PARTIAL, exist.get_status_display()
+            return MATCH, PARTIAL, exist.first().get_status_display()
 
     """
     answer = True if exist else False  --> Возможно, заменить на bool(exist)

@@ -44,6 +44,7 @@ class KinozalSearch:
     peer: int = None
     created: str = None
     link: str = None
+    is_4k: bool = None
 
 
 class LinkConstructor:

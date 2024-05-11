@@ -86,6 +86,7 @@ def rss_table_data(request):
         )
 
     page_number = request.GET.get('page', 1)
+    print('LEN:', movies_qs.count())
     paginator = Paginator(movies_qs, paginate_by)
     page_obj = paginator.get_page(page_number)
 

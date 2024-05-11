@@ -41,7 +41,10 @@ class MovieRSS(models.Model):
     class Meta:
         ordering = ['date_added']
 
+    # Похоже, что этот флаг не используется нигде
+    # POSSIBLE DEPRECATED
     ignored_deprecated = models.BooleanField(default=False, help_text='Пользователь не хочет, чтобы этот фильм снова появился в ленте')
+
     low_priority_deprecated = models.BooleanField(default=False)
     priority = models.PositiveSmallIntegerField(choices=PRIORITY, verbose_name='Priority')
     kinozal_id = models.PositiveSmallIntegerField()
@@ -61,7 +64,7 @@ class MovieRSS(models.Model):
 
     director = models.CharField(max_length=300)
     actors = models.CharField(max_length=300)
-    plot = models.CharField(max_length=300)
+    plot = models.CharField(max_length=600)
     translate = models.CharField(max_length=300, blank=True, null=True)
     poster = models.CharField(max_length=100)
 

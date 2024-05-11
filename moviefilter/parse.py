@@ -144,13 +144,14 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
                 else:
                     year = str(datetime.now().year)
 
-            print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
+            # print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
             logger.debug(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
             m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
 
             movies.append(m)
 
+        print(f'FOUND {len(movies)} movies.')
         return movies, END_DATE_NOT_REACHED
 
     else:
@@ -363,6 +364,8 @@ def kinozal_search(kinozal_id: int):
                     m.peer = element.find('td', {'class': 'sl_p'}).text
                     m.created = element.find_all('td', 's')[2].text
                     m.link = 'https://kinozal.tv' + element.a['href']
+                    if quality == V_4K:
+                        m.is_4k = True
 
                     results.append(m)
 

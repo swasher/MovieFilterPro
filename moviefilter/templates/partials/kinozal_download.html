@@ -18,7 +18,8 @@
             <tbody>
             {% for m in found %}
                 <tr>
-                    <td><a href="{{ m.link }}" target="_blank">{{ m.header }}</a></td>
+                    <td>{% if m.is_4k %}<i class="bi bi-badge-4k-fill"></i>{% endif %}
+                        <a href="{{ m.link }}" target="_blank">{{ m.header }}</a></td>
                     <td>{{ m.size }}</td>
                     <td>{{ m.seed }}</td>
                     <td>{{ m.peer }}</td>

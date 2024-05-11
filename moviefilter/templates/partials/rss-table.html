@@ -1,3 +1,4 @@
+{% if found_total %}
 <table class="table w-auto table-sm">
 
     <!-- Этот код помещает переменную found_total, которая передается в этот темплей,
@@ -23,13 +24,7 @@
 
         <tr {% if f.kinorium_partial_match %} class="htmx-scroll table-warning" {% else %}  class="htmx-scroll" {% endif %}>
             <td>
-                <img
-                        src="{{ f.poster }}"
-                        class="imgdiv img-thumbnail"
-                        data-bs-toggle="tooltip"
-                        data-bs-html="true"
-                        data-bs-title="<img src='{{ f.poster }}' />"
-                >
+                <img src="{{ f.poster }}" class="imgdiv" >
             </td>
             <td>
                 <h5><strong>{{ f.title }}</strong></h5>
@@ -47,22 +42,22 @@
             </td>
 
             <td>
-                <strong>Genres</strong>
+                <strong class="common-header">Genres</strong>
                 {% for g in f.genres_as_list %}
                     <span class="badge text-bg-light">{{ g }}</span>
                 {% endfor %}
                 <hr>
-                <strong>Countries</strong>
+                <strong class="common-header">Countries</strong>
                 {% for c in f.countries_as_list %}
                     <span class="badge text-bg-light">{{ c }}</span>
                 {% endfor %}
                 <hr>
-                <strong>Director</strong>
+                <strong class="common-header">Director</strong>
                 {% for d in f.director_as_list %}
                     <span class="badge text-bg-light">{{ d }}</span>
                 {% endfor %}
                 <hr>
-                <strong>Actors</strong>
+                <strong class="common-header">Actors</strong>
                 {% for a in f.actors_as_list %}
                     {% if forloop.counter < 7 %}
                         <span class="badge text-bg-light">{{ a }}</span>
@@ -86,6 +81,7 @@
                             hx-target="#kinozal-results"
                             hx-swap="innerHTML"
                     >Download
+                        <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
                     </button>
 
                     <button type="button" class="btn btn-primary btn-sm"
@@ -116,7 +112,7 @@
                     </button>
 
 
-                
+
                     <div class="d-flex flex-row mb-2">
 
                         {# old kinorium button, just open search page#}
@@ -182,10 +178,9 @@
         событие, подгружающее еще фильмов
         */
         function triggerPotentialUpdate() {
-            console.log('MANUAL UPDATE')
             const elements = document.querySelectorAll('.htmx-scroll');
             const count = elements.length;
-            console.log(count);
+            console.log('MANUAL UPDATE [becouse page have only:', count, 'movies]')
             if (count < 3) {
                 console.log('make request')
                 {#htmx.ajax(#}
@@ -194,25 +189,24 @@
                 {#    {swap:'beforeend', select:'.htmx-scroll'}#}
                 {#)#}
 
-
                 {#const elem = document.getElementById("triggerElement");#}
                 {#elem.dispatchEvent(new Event('loadMore'));#}
                 {#document.body.dispatchEvent(new Event('loadMore'));#}
-
 
                 document.getElementById('triggerElementManual').click();
             }
             {#target:'#loop', #}
         }
-        // <span id='triggerElement' hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
-        //      hx-swap="beforeend" hx-target="#loop" hx-select=".htmx-scroll"
-        //      hx-trigger="revealed">
     </script>
 
 
 </table>
 
+{% else %}
 
+    NO RESULT
+
+{% endif %}
 
 
 
