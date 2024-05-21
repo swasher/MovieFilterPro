@@ -47,6 +47,7 @@ LOW = 1
 DEFER = 2
 SKIP = 3
 WAIT_TRANS = 4
+TRANS_FOUND = 5
 
 # Application definition
 

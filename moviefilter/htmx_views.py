@@ -9,13 +9,15 @@ from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.core.paginator import Paginator
+from django.shortcuts import get_object_or_404
+
 
 from .models import Kinorium
 from .models import MovieRSS
 from .models import UserPreferences
 from .parse import kinozal_scan
 
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from .classes import LinkConstructor
 from .parse import get_kinorium_first_search_results
 from .parse import kinozal_search
@@ -24,20 +26,28 @@ from .parse import kinozal_search
 @login_required()
 @require_GET
 def scan(request):
+    """
+    Вызывается при нажатии на кнопку Scan
+    :param request:
+    :return:
+    """
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
     context = {'last_scan': last_scan}
     user = request.user
 
-    pref, _ = UserPreferences.objects.get_or_create(user=user)
+    # pref, _ = UserPreferences.objects.get_or_create(user=user)
+    pref = get_object_or_404(UserPreferences, user=user)
     start_page = pref.scan_from_page
+    pref.scan_from_page = None
+    pref.save(update_fields=['scan_from_page'])
 
     site = LinkConstructor(page=start_page)
-    counter = kinozal_scan(site, last_scan, user)
+    number_of_new_movies = kinozal_scan(site, last_scan, user)
 
     # update last scan to now()
     UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
 
-    messages.success(request, f'Added {counter} movies.')
+    messages.success(request, f'Added {number_of_new_movies} movies.')
     return HttpResponse(status=200)
 
 
@@ -70,6 +80,8 @@ def rss_table_data(request):
                 priority = LOW
             case 'DEFER':
                 priority = DEFER
+            case 'TRANS':
+                priority = TRANS_FOUND
     else:
         raise Exception('No priority in request!')
 
@@ -98,9 +110,6 @@ def rss_table_data(request):
 
 @require_POST
 def ignore_movie(request, pk):
-    # DEPRECATED
-    # request.session['count_movies_in_table'] = request.session.get('count_movies_in_table') - 1
-
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")

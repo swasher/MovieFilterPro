@@ -117,29 +117,34 @@
 
                         {# old kinorium button, just open search page#}
                         {% with url='https://ru.kinorium.com/search/?q='|add:f.title|add:' '|add:f.original_title|add:' '|add:f.year %}
-                            <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">KR</span>
+                            <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url {{ url|iriencode }} in new window">KR</span>
                         {% endwith %}
-
 
                         {% comment %}<span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
                                         log result then
                                         go to url `${result}` in new window">
                         KR
                         </span>{% endcomment %}
-
-                        {% with url='https://www.imdb.com/title/'|add:f.imdb_id %}
-                            <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">
-                                IMDB</span>
-                        {% endwith %}
+                        {% if f.imdb_id %}
+                            {% with url='https://www.imdb.com/title/'|add:f.imdb_id %}
+                                <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url {{ url|iriencode }} in new window">
+                                    IMDB</span>
+                            {% endwith %}
+                        {% else %}
+                            <span class="badge text-bg-light" >IMDB</span>
+                        {% endif %}
 
                         {% if f.kinopoisk_id %}
-                        {% with id=f.kinopoisk_id|stringformat:'s' %}
-                            {% with url='https://www.kinopoisk.ru/film/'|add:id %}
-                                <span class="badge text-bg-warning" style="cursor: pointer" _="on click go to url '{{ url|iriencode }}' in new window">
-                                    KP</span>
+                            {% with id=f.kinopoisk_id|stringformat:'s' %}
+                                {% with url='https://www.kinopoisk.ru/film/'|add:id %}
+                                    <span class="badge text-bg-warning" style="cursor: pointer" _="on click go to url {{ url|iriencode }} in new window">
+                                        KP</span>
+                                {% endwith %}
                             {% endwith %}
-                        {% endwith %}
+                        {% else %}
+                            <span class="badge text-bg-light" >KP</span>
                         {% endif %}
+
                     </div>
 
                 </div>
@@ -174,8 +179,8 @@
     <script>
         /*
         К примеру, если фильмов всего 4, и юзер начинает их скрывать, то просто так новые фильмы не появятся,
-        а infinite scroll и вовсе не будет работать. Поэтому если их становится мало (<4), то во фронтэнде возникает
-        событие, подгружающее еще фильмов
+        потому что infinite scroll не будет работать - не возникает событие, что фильм достиг нижней границы экрана.
+        Поэтому если их становится мало (<4), то мы возбуждаем во фронтэнде событие (triggerElementManual), подгружающее еще фильмов.
         */
         function triggerPotentialUpdate() {
             const elements = document.querySelectorAll('.htmx-scroll');
@@ -183,19 +188,11 @@
             console.log('MANUAL UPDATE [becouse page have only:', count, 'movies]')
             if (count < 3) {
                 console.log('make request')
-                {#htmx.ajax(#}
-                {#    "GET",#}
-                {#    "{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}",#}
-                {#    {swap:'beforeend', select:'.htmx-scroll'}#}
-                {#)#}
-
                 {#const elem = document.getElementById("triggerElement");#}
                 {#elem.dispatchEvent(new Event('loadMore'));#}
                 {#document.body.dispatchEvent(new Event('loadMore'));#}
-
                 document.getElementById('triggerElementManual').click();
             }
-            {#target:'#loop', #}
         }
     </script>
 
@@ -207,20 +204,3 @@
     NO RESULT
 
 {% endif %}
-
-
-
-{% comment %}
-    DEPRECATED
-<script>
-document.body.addEventListener('htmx:configRequest', (e) => {
-  if (e.detail.triggeringEvent.type === 'foo') {
-    e.detail.headers['someheader'] = 'foo_value'
-  }
-  if (e.detail.triggeringEvent.type === 'bar') {
-    e.detail.headers['someheader'] = 'bar_value'
-  }
-})
-</script>
-{% endcomment %}
-

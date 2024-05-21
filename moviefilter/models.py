@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
 """
 Логика такая:
@@ -36,6 +36,7 @@ class MovieRSS(models.Model):
         (DEFER, 'Отложено'),
         (SKIP, 'Отказ'),
         (WAIT_TRANS, 'Жду дубляж'),
+        (TRANS_FOUND, 'Найден дубляж или ПМ'),
     )
 
     class Meta:
@@ -52,8 +53,9 @@ class MovieRSS(models.Model):
     original_title = models.CharField(max_length=70)
     year = models.CharField(max_length=9, help_text='Год может быть представлен как диапазон: 1982-1994')
     date_added = models.DateField()
+    dubbed = models.BooleanField(blank=True, null=True, help_text='Раздача имеет дубляж или ПМ. Нужно для передачи этой информации из сканера в чекер.')
 
-    imdb_id = models.CharField(max_length=9, blank=True, null=True)
+    imdb_id = models.CharField(max_length=15, blank=True, null=True)
     imdb_rating = models.FloatField(blank=True, null=True)
 
     kinopoisk_id = models.PositiveSmallIntegerField(blank=True, null=True)

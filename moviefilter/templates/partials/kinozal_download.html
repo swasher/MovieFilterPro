@@ -4,26 +4,26 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
     </div>
     <div class="modal-body">
-        <table class="table">
+        <table class="table table-sm">
             <thead>
             <tr>
-                <th scope="col">Header</th>
+                <th scope="col" class="col-8">Title</th>
                 <th scope="col">Size</th>
                 <th scope="col">Seed</th>
                 <th scope="col">Peer</th>
                 <th scope="col">Created</th>
-                <th scope="col">Actions</th>
+                <th scope="col" style="width:85px">Actions</th>
             </tr>
             </thead>
             <tbody>
             {% for m in found %}
                 <tr>
-                    <td>{% if m.is_4k %}<i class="bi bi-badge-4k-fill"></i>{% endif %}
-                        <a href="{{ m.link }}" target="_blank">{{ m.header }}</a></td>
-                    <td>{{ m.size }}</td>
-                    <td>{{ m.seed }}</td>
-                    <td>{{ m.peer }}</td>
-                    <td>{{ m.created }}</td>
+                    <td><small>{% if m.is_4k %}<i class="bi bi-badge-4k-fill"></i>{% endif %}
+                        <a href="{{ m.link }}" target="_blank">{{ m.header }}</a></small></td>
+                    <td class="border"><small>{{ m.size }}</small></td>
+                    <td class="border text-center"><small>{{ m.seed }}</small></td>
+                    <td class="border text-center"><small>{{ m.peer }}</small></td>
+                    <td><small>{{ m.created }}</small></td>
                     <td>
                         <button type="button" class="btn btn-sm btn-info"
                                 hx-get="{% url 'get_torrent_file' m.id %}"

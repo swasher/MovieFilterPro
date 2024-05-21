@@ -13,8 +13,8 @@ from .classes import KinozalSearch
 from .util import is_float
 from .models import Country, MovieRSS
 
-from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
+from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
 logger = logging.getLogger('my_logger')
 
@@ -24,19 +24,20 @@ def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
     last_day_reached = False
     last_page_reached = False
     counter = 0
-    while not last_day_reached and site.page<=100:
+    while not last_day_reached and site.page <= 100:
 
-        # Получаем список всех фильмов со страницы. Если достигли нужной даты, то reach_last_day возврашается как True
+        # Получаем список всех фильмов со страницы. Если достигли нужной даты, то last_day_reached возврашается как True
         movies, last_day_reached = parse_page(site, scan_to_date)
 
-        # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу
+        # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу.
+        # movie_audit удаляет из списка movies фильмы, не прошедшие проверку, а так-же заполняет каждый movie дополнительными данными.
         movies = movie_audit(movies, user)
 
         # записываем фильмы в базу
         if movies:
-            logger.debug(f"SAVE TO DB")
-            logger.info(f"SAVE TO DB infoinfoinfoinfoinfo")
-            logger.error(f"SAVE TO DB ERROR ERROR ERROR ERROR ERROR ")
+            # logger.debug(f"SAVE TO DB")
+            # logger.info(f"SAVE TO DB infoinfoinfoinfoinfo")
+            # logger.error(f"SAVE TO DB ERROR ERROR ERROR ERROR ERROR ")
             print(f'SAVE TO DB: [{len(movies)} movies]')
 
             counter += len(movies)
@@ -50,6 +51,7 @@ def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
         site.next_page()
 
     return counter
+
 
 def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool):
     """
@@ -97,6 +99,12 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
 
             if date_added < scan_to_date:
                 return movies, END_DATE_REACHED
+
+            # фильм имеет `нормальную` озвучку - дубляж или профессиональный многоголосый
+            if 'ПМ' in s.text or 'ДБ' in s.text:
+                dubbed = True
+            else:
+                dubbed = False
 
             header = s.text.split(' / ')
             if header[2].strip().isdigit() and len(header[2].strip()) == 4:  # normal format
@@ -147,7 +155,7 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
             # print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
             logger.debug(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
-            m = KinozalMovie(kinozal_id, title, original_title, year, date_added)
+            m = KinozalMovie(kinozal_id, title, original_title, year, date_added, dubbed)
 
             movies.append(m)
 
@@ -221,7 +229,6 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
             print("WARNING! CAN'T GET [plot]")
             m.plot = ''
 
-
         translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
         if translate_search:
             m.translate = translate_search.next_sibling.strip()
@@ -256,6 +263,17 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         - и вот теперь только заносим в базу 
         """
         print(f'PROCESS: {m.title} - {m.original_title} - {m.year}')
+
+        """
+        В этом месте нужно проверить наличие у релиза нормальной озвучки.
+        Если у фильма есть норм. озвучка И у такого же фильма в базе MovieRSS статус "жду озвучку", то присвоить статус "есть озвучка" и continue
+        """
+        if m.dubbed and need_dubbed(m):
+            print(' ┣━ FOUND DUBBING [x]')
+            movie_in_db = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year).first()
+            movie_in_db.priority = TRANS_FOUND
+            movie_in_db.save(update_fields=['priority'])
+            continue
 
         if exist_in_kinozal(m):
             print(' ┣━ SKIP [exist in kinozal]')

@@ -11,8 +11,11 @@ class KinoriumMovieAdmin(admin.ModelAdmin):
 class CountryAdmin(admin.ModelAdmin):
     pass
 
+
 class MovieRssAdmin(admin.ModelAdmin):
-    pass
+    list_display = ["title", "original_title", "year", "priority", "date_added"]
+    list_display_links = ["title"]
+    list_filter = ["priority"]
     search_fields = ['title', 'original_title']
 
 

@@ -7,15 +7,26 @@ from .classes import KinozalMovie
 from .util import get_object_or_none
 from .util import not_match_rating
 
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
 
 def exist_in_kinozal(m: KinozalMovie) -> bool:
     """
     Возвращает True, если такой фильм уже присутствует в базе MovieRSS
     """
-    exist = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year)
-    return bool(exist)
+    movie_exist = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year)
+    return bool(movie_exist)
+
+
+def need_dubbed(m: KinozalMovie) -> bool:
+    """
+    Возвращает True, если фильм ждет дубляж.
+    :param m:
+    :return:
+    """
+    movie_exist = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year)
+    if movie_exist and movie_exist.first().priority == WAIT_TRANS:
+        return True
 
 
 def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
@@ -99,7 +110,7 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
         if priority == LOW:
             print(f' ┣━ MARK LOW: [country] {country_intersection}')
         else:
-            print(f' ┣━ SKIP: [country] {country_intersection}]')
+            print(f' ┣━ SKIP: [country] {country_intersection}')
         return False
 
     ### 2 Genres

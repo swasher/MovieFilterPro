@@ -12,6 +12,7 @@ class KinozalMovie:
     original_title: str = None
     year: str = None
     date_added: datetime.date = None
+    dubbed: bool = None
     imdb_id: str = None
     imdb_rating: float = None
     kinopoisk_id: int = None

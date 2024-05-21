@@ -32,7 +32,7 @@
         <span class="border rounded p-1 m-1">Wait trans.:
             <span class="badge text-bg-light">{{ total_wait_trans }}</span>
             Found:
-            <span class="badge text-bg-success">{{ total_wait_trans }}</span>
+            <span class="badge text-bg-success">{{ total_trans_found }}</span>
         </span>
 
 
@@ -61,12 +61,16 @@
             <label class="form-check-label" for="r-defer"><strong>Defer</strong></label>
         </div>
 
+        <div class="form-check form-check-inline">
+            <input class="form-check-input aaa" type="radio" name="priority" id="r-trans" value="TRANS">
+            <label class="form-check-label" for="r-trans"><strong>Trans found</strong></label>
+        </div>
+
         <div class="form-check-inline">
             <input class="form-check-input aaa" type="checkbox" name="reverse" id="checkbox-reverse">
             <label class="form-check-label" for="checkbox-reverse"><strong>Reverse</strong></label>
         </div>
             
-
         <div class="form-check-inline">
             <input type="search" class="form-control search" name="textfilter"
                    placeholder="Type for search..." autocomplete="off"
