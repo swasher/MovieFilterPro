@@ -11,7 +11,6 @@ from django.views.decorators.http import require_http_methods, require_GET, requ
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
 
-
 from .models import Kinorium
 from .models import MovieRSS
 from .models import UserPreferences
@@ -112,7 +111,7 @@ def rss_table_data(request):
 def ignore_movie(request, pk):
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
-        messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' remove successfully")
+        messages.success(request, f"Hide: '{MovieRSS.objects.get(pk=pk).title}'")
         return HttpResponse(status=200)
     except:
         messages.error(request, f"Error with removing Movie pk={pk}")
@@ -170,11 +169,40 @@ def get_log(request, logtype):
 
 
 @require_GET
-def kinorium_search(request, kinozal_id: int):
+def kinorium_search_111(request, kinozal_id: int):
+    """
+    Сначала выполняет поиск на кинориуме, берет первый результат и переходит по нему.
+    По этой схеме Кинориум банит за поиск
+    :param request:
+    :param kinozal_id:
+    :return:
+    """
     m = MovieRSS.objects.get(id=kinozal_id)
     data = ' '.join([m.title, m.original_title, m.year])
     link = get_kinorium_first_search_results(data)
     return HttpResponse(link)
+
+
+@require_GET
+def kinorium_search(request, kinozal_id: int):
+    """
+    Просто выполняет поиск.
+    Вырезает ненужные слова, заданные в настройках.
+    """
+    url = 'https://ru.kinorium.com/search/?q='
+    m = MovieRSS.objects.get(id=kinozal_id)
+
+    search_string = ' '.join([m.title, m.original_title, m.year])
+
+    ignored_words_qs = UserPreferences.objects.get(user=request.user).ignore_title
+    ignored_words = map(str.strip, ignored_words_qs.split(','))
+    for w in ignored_words:
+        search_string = search_string.replace(w, '')
+
+    link = url + search_string
+
+    return HttpResponse(link)
+
 
 
 @require_GET
@@ -192,6 +220,8 @@ def get_torrent_file(request, kinozal_id: int):
     cookie_uid = '19200863'
     destination = '//qnap/Torrents/'
 
+    out_of_torrent_number_message = 'Вам недоступен торрент-файл для скачивания'
+
     print('GET torrent', kinozal_id)
     url = f"https://dl.kinozal.tv/download.php?id={kinozal_id}"
     print('LINK', url)
@@ -205,7 +235,12 @@ def get_torrent_file(request, kinozal_id: int):
     bad_sign = '<i class="bi bi-x-lg" style="color: red"></i>'
     good_sign = '<i class="bi bi-check-lg"></i>'
 
+    if out_of_torrent_number_message in r.content.decode('windows-1251'):
+        messages.error(request, f"Too much torrents today!")
+        return HttpResponse(bad_sign)
+
     if r.status_code != 200:
+        messages.error(request, f"Bad kinozal response")
         return HttpResponse(bad_sign)
 
     try:
@@ -214,7 +249,8 @@ def get_torrent_file(request, kinozal_id: int):
             file.write(r.content)
 
         return HttpResponse(good_sign)
-    except FileNotFoundError:
+    except (FileNotFoundError, KeyError):
+        messages.error(request, f"Unknown error, can't get torrent")
         return HttpResponse(bad_sign)
 
 

@@ -115,16 +115,28 @@
 
                     <div class="d-flex flex-row mb-2">
 
+                        {% comment %}
                         {# old kinorium button, just open search page#}
                         {% with url='https://ru.kinorium.com/search/?q='|add:f.title|add:' '|add:f.original_title|add:' '|add:f.year %}
                             <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url {{ url|iriencode }} in new window">KR</span>
                         {% endwith %}
+                        {% endcomment %}
 
-                        {% comment %}<span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
+                        {% comment %}
+                        <span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
                                         log result then
                                         go to url `${result}` in new window">
                         KR
-                        </span>{% endcomment %}
+                        </span>
+                        {% endcomment %}
+
+                        <span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
+                                        log result then
+                                        go to url `${result}` in new window">
+                        KR
+                        </span>
+
+
                         {% if f.imdb_id %}
                             {% with url='https://www.imdb.com/title/'|add:f.imdb_id %}
                                 <span class="badge text-bg-primary mx-1" style="cursor: pointer" _="on click go to url {{ url|iriencode }} in new window">

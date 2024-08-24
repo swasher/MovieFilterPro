@@ -46,6 +46,7 @@ class KinozalSearch:
     created: str = None
     link: str = None
     is_4k: bool = None
+    is_sdr: bool = None
 
 
 class LinkConstructor:

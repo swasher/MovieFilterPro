@@ -371,21 +371,22 @@ def kinozal_search(kinozal_id: int):
             soup = BeautifulSoup(response.content, "html.parser")
             movies_elements = soup.find_all('tr', 'bg')
 
-            if movies_elements:
-                for element in movies_elements:
-                    m = KinozalSearch()
+            for element in movies_elements:
+                m = KinozalSearch()
 
-                    m.id = element.a['href'].split('=')[1]
-                    m.header = element.a.text
-                    m.size = element.find_all('td', 's')[1].text
-                    m.seed = element.find('td', {'class': 'sl_s'}).text
-                    m.peer = element.find('td', {'class': 'sl_p'}).text
-                    m.created = element.find_all('td', 's')[2].text
-                    m.link = 'https://kinozal.tv' + element.a['href']
-                    if quality == V_4K:
-                        m.is_4k = True
+                m.id = element.a['href'].split('=')[1]
+                m.header = element.a.text
+                m.size = element.find_all('td', 's')[1].text
+                m.seed = element.find('td', {'class': 'sl_s'}).text
+                m.peer = element.find('td', {'class': 'sl_p'}).text
+                m.created = element.find_all('td', 's')[2].text
+                m.link = 'https://kinozal.tv' + element.a['href']
+                if quality == V_4K:
+                    m.is_4k = True
+                if 'SDR' in m.header:
+                    m.is_sdr = True
 
-                    results.append(m)
+                results.append(m)
 
         else:
             raise Exception(f'ERROR: {response.content}')

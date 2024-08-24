@@ -18,8 +18,12 @@
             <tbody>
             {% for m in found %}
                 <tr>
-                    <td><small>{% if m.is_4k %}<i class="bi bi-badge-4k-fill"></i>{% endif %}
-                        <a href="{{ m.link }}" target="_blank">{{ m.header }}</a></small></td>
+                    <td>
+                        <small>
+                            {% if m.is_4k %}<i class="bi bi-badge-4k-fill"></i>{% endif %}
+                            {% if m.is_sdr %}<i class="bi bi-badge-sd-fill"></i>{% endif %}
+                            <a href="{{ m.link }}" target="_blank">{{ m.header }}</a>
+                        </small></td>
                     <td class="border"><small>{{ m.size }}</small></td>
                     <td class="border text-center"><small>{{ m.seed }}</small></td>
                     <td class="border text-center"><small>{{ m.peer }}</small></td>

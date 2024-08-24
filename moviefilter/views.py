@@ -64,20 +64,28 @@ def user_preferences_update(request):
             pref.low_genres = form.cleaned_data['low_genres']
             pref.low_max_year = int(form.cleaned_data['low_max_year'])
             pref.low_min_rating = float(form.cleaned_data['low_min_rating'])
+
+            pref.plex_address = form.cleaned_data['plex_address']
+            pref.plex_token = form.cleaned_data['plex_token']
+
             pref.save()
             return redirect(reverse('user_preferences'))
     return render(request, 'preferences_update_form.html', {'form': form})
 
 
+@login_required
 def plex(request):
-    baseurl = 'http://127.0.0.1:32400'
-    token = '4xNQeFuz8ty2A4omgxXB'
+    user = request.user
+    prefs = UserPreferences.objects.get(user=user)
+    baseurl = prefs.plex_address
+    token = prefs.plex_token
     try:
         plex = PlexServer(baseurl, token)
     except:
-        return render(request, 'plex.html', {'error': 'No Plex connection'})
+        return render(request, 'plex.html', {'error': 'Plex Server not found: '+baseurl})
 
-    m = plex.library.section('Фильмы')
+    # m = plex.library.section('Фильмы')
+    m = plex.library.section('Review')
     movies = m.search()
     for mov in movies:
         print(mov)

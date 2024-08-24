@@ -170,6 +170,11 @@ class UserPreferences(models.Model):
     low_max_year = models.PositiveSmallIntegerField(default=2000)
     low_min_rating = models.FloatField(default=5.0)
 
+    plex_address = models.CharField(max_length=100, blank=True, null=True)
+    plex_token = models.CharField(max_length=25, blank=True, null=True)
+
+    ignore_title = models.CharField(max_length=500, default='')
+
     def get_normal_preferences(self) -> Tuple[List[str], List[str], int, float]:
         countries = self.countries.split(', ') if self.countries else []
         genres = self.genres.split(', ') if self.genres else []
