@@ -201,6 +201,19 @@ tunnel:
 	# first run `ngrok config add-authtoken <ngrok token>`  - token on page 'your-autotoken', not 'tunnels->autotoken'!!!
 	ngrok http 8000
 
-#fly_deploy:
-#	doppler run -c prd -- -> for get doppler's vars
-#	fly deploy --build-secret MY_SUPER_SECRET=some_value
+
+login:
+	docker login
+
+push:
+	# build and upload
+	uv export --format requirements-txt > requirements.txt
+	docker buildx build --platform linux/arm/v7 -t swasher/movie-filter-pro:armv7 --push .
+	rm requirements.txt
+
+run:
+	# if you need run, you must build image with x86 compatible settings
+	docker run -p 8000:8000 movie-filter-pro
+
+pack:
+	docker save -o movie-filter-pro.tar movie-filter-pro

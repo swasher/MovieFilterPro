@@ -9,8 +9,12 @@
     </h1><br>
     {% endif %}
 <div class="container">
-<div class="d-inline-block p-2 "><h1 class="p-3"> <span class="badge bg-secondary">Plex</span></h1></div>
-<div class="d-inline-block p-2 "><div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div></div>
+    <div class="d-inline-block p-2 ">
+        <h1 class="p-3">
+            <a href="{% url 'plex_section' %}" class="badge bg-secondary">Plex</a>
+        </h1>
+    </div>
+    <div class="d-inline-block p-2 "><div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div></div>
 
 
     <table class="table">

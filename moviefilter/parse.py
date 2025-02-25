@@ -1,5 +1,6 @@
 import dataclasses
 import requests
+from requests.exceptions import HTTPError, Timeout, RequestException
 import logging
 import re
 from bs4 import BeautifulSoup
@@ -173,72 +174,83 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
 def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     site = LinkConstructor(id=m.kinozal_id)
 
-    response = requests.get(site.detail_url())
+    try:
+        response = requests.get(site.detail_url(), timeout=10)
+        response.raise_for_status()
+    except HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+    except Timeout:
+        print("The request timed out")
+    except RequestException as req_err:
+        print(f"An error occurred: {req_err}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
-    if response.ok:
-        soup = BeautifulSoup(response.content, "html.parser")
+    soup = BeautifulSoup(response.content, "html.parser")
 
-        imdb_part = soup.select_one('a:-soup-contains("IMDb")')
-        if imdb_part:
-            # todo weak assumption for [4]; may be need add some checks
-            m.imdb_id = imdb_part['href'].split('/')[4]
-            rating = imdb_part.find('span').text
-            m.imdb_rating = float(rating) if is_float(rating) else None
-        else:
-            m.imdb_id = None
-            m.imdb_rating = None
+    imdb_part = soup.select_one('a:-soup-contains("IMDb")')
+    if imdb_part:
+        # todo weak assumption for [4]; may be need add some checks
+        m.imdb_id = imdb_part['href'].split('/')[4]
+        rating = imdb_part.find('span').text
+        m.imdb_rating = float(rating) if is_float(rating) else None
+    else:
+        m.imdb_id = None
+        m.imdb_rating = None
 
-        kinopoisk_part = soup.select_one('a:-soup-contains("Кинопоиск")')
-        if kinopoisk_part:
-            # todo weak assumption for [4]; may be need add some checks
-            m.kinopoisk_id = kinopoisk_part['href'].split('/')[4]
-            rating = kinopoisk_part.find('span').text
-            m.kinopoisk_rating = float(rating) if is_float(rating) else None
-        else:
-            m.kinopoisk_id = None
-            m.kinopoisk_rating = None
+    kinopoisk_part = soup.select_one('a:-soup-contains("Кинопоиск")')
+    if kinopoisk_part:
+        # todo weak assumption for [4]; may be need add some checks
+        m.kinopoisk_id = kinopoisk_part['href'].split('/')[4]
+        rating = kinopoisk_part.find('span').text
+        m.kinopoisk_rating = float(rating) if is_float(rating) else None
+    else:
+        m.kinopoisk_id = None
+        m.kinopoisk_rating = None
 
-        try:
-            m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
-        except AttributeError:
-            print("WARNING! CAN'T GET [genres]")
-            m.genres = ''
+    try:
+        m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
+    except AttributeError:
+        print("WARNING! CAN'T GET [genres]")
+        m.genres = ''
 
-        countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
-        countries_list = Country.objects.values_list('name', flat=True)
-        if countries:
-            m.countries = ', '.join(list(c for c in countries.split(', ') if c in countries_list))
-        else:
-            m.countries = ''
+    countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
+    countries_list = Country.objects.values_list('name', flat=True)
+    if countries:
+        m.countries = ', '.join(list(c for c in countries.split(', ') if c in countries_list))
+    else:
+        m.countries = ''
 
-        try:
-            m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
-        except AttributeError:
-            print("WARNING! CAN'T GET [director]")
-            m.director = ''
+    try:
+        m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
+    except AttributeError:
+        print("WARNING! CAN'T GET [director]")
+        m.director = ''
 
-        try:
-            m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
-        except AttributeError:
-            print("WARNING! CAN'T GET [actors]")
-            m.actors = ''
+    try:
+        m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
+    except AttributeError:
+        print("WARNING! CAN'T GET [actors]")
+        m.actors = ''
 
-        try:
-            m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
-        except:
-            print("WARNING! CAN'T GET [plot]")
-            m.plot = ''
+    try:
+        m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
+    except:
+        print("WARNING! CAN'T GET [plot]")
+        m.plot = ''
 
-        translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
-        if translate_search:
-            m.translate = translate_search.next_sibling.strip()
+    translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
+    if translate_search:
+        m.translate = translate_search.next_sibling.strip()
 
-        poster = soup.find('img', 'p200').attrs['src']
-        if poster[:4] != 'http':
-            poster = 'https://kinozal.tv' + poster
-        m.poster = poster
+    poster = soup.find('img', 'p200').attrs['src']
+    if poster[:4] != 'http':
+        poster = 'https://kinozal.tv' + poster
+    m.poster = poster
 
-        return m, response.elapsed.total_seconds()
+    return m, response.elapsed.total_seconds()
+
+
 
 
 def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
@@ -381,10 +393,8 @@ def kinozal_search(kinozal_id: int):
                 m.peer = element.find('td', {'class': 'sl_p'}).text
                 m.created = element.find_all('td', 's')[2].text
                 m.link = 'https://kinozal.tv' + element.a['href']
-                if quality == V_4K:
-                    m.is_4k = True
-                if 'SDR' in m.header:
-                    m.is_sdr = True
+                m.is_4k = True if quality == V_4K else False
+                m.is_sdr = True if 'SDR' in m.header else False
 
                 results.append(m)
 

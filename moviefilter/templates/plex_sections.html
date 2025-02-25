@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load cutfilename %}
+
+{% block body %}
+
+    {% if error %}
+    <h1 style="color: red">
+        {{ error }}
+    </h1><br>
+    {% endif %}
+<div class="container">
+{#<div class="d-inline-block p-2 "><h1 class="p-3"> <span class="badge bg-secondary">Plex</span></h1></div>#}
+<div class="d-inline-block p-2 ">
+    <h1 class="p-3">
+        <a href="{% url 'plex_section' %}" class="badge bg-secondary">Plex</a>
+    </h1>
+</div>
+
+<div class="d-inline-block p-2 "><div class="p-2">Total: <span class="badge text-bg-success">{{ movies|length }}</span></div></div>
+
+
+{# sections #}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Section</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for section in sections %}
+            <tr>
+                <td><a href="{% url 'plex' section=section %}">{{ section }}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+
+
+</div>
+
+<style>
+    table {
+        counter-reset: rowNumber 1;
+    }
+    table tr:not(:first-child) {
+        counter-increment: rowNumber;
+    }
+    table tr td:first-child::before {
+        content: counter(rowNumber);
+        min-width: 1em;
+        margin-right: 0.5em;
+        font-weight: bold;
+    }
+</style>
+
+{% endblock %}

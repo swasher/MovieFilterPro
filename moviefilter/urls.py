@@ -1,5 +1,6 @@
 from django.urls import path
 from moviefilter import views
+from moviefilter import plex
 from moviefilter import htmx_views
 from moviefilter import auth
 
@@ -9,7 +10,10 @@ urlpatterns = [
     path('', views.rss, name='rss'),
     # DEPRECATED path('movies_low/', views.movies_low, name='movies_low'),
     # DEPRECATED path('parse_kinorium_csv/', views.parse_kinorium_csv, name='parse_kinorium_csv'),
-    path('plex/', views.plex, name='plex'),
+
+    path('plex/<section>', plex.plex, name='plex'),
+    path('plex_section/', plex.plex_section, name='plex_section'),
+
     path('kinorium/', views.kinorium, name='kinorium'),
     path('preferences/', views.user_preferences_update, name='user_preferences'),
     path('log/', views.log, name='log'),

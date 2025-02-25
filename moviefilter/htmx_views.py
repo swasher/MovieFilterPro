@@ -40,8 +40,13 @@ def scan(request):
     pref.scan_from_page = None
     pref.save(update_fields=['scan_from_page'])
 
-    site = LinkConstructor(page=start_page)
-    number_of_new_movies = kinozal_scan(site, last_scan, user)
+    try:
+        site = LinkConstructor(page=start_page)
+        number_of_new_movies = kinozal_scan(site, last_scan, user)
+    except Exception as e:
+        print(f'ERROR! {e}')
+    else:
+        print(f"Scan complete,  add new: {number_of_new_movies}")
 
     # update last scan to now()
     UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
@@ -235,9 +240,13 @@ def get_torrent_file(request, kinozal_id: int):
     bad_sign = '<i class="bi bi-x-lg" style="color: red"></i>'
     good_sign = '<i class="bi bi-check-lg"></i>'
 
-    if out_of_torrent_number_message in r.content.decode('windows-1251'):
-        messages.error(request, f"Too much torrents today!")
-        return HttpResponse(bad_sign)
+    if r.headers.get('Content-Type') != 'application/x-bittorrent':
+        if out_of_torrent_number_message in r.content.decode('windows-1251'):
+            messages.error(request, f"Too much torrents today!")
+            return HttpResponse(bad_sign)
+        else:
+            messages.error(request, f"Kinozal return html instead torrent")
+            return HttpResponse(bad_sign)
 
     if r.status_code != 200:
         messages.error(request, f"Bad kinozal response")

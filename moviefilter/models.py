@@ -66,7 +66,7 @@ class MovieRSS(models.Model):
 
     director = models.CharField(max_length=300)
     actors = models.CharField(max_length=300)
-    plot = models.CharField(max_length=600)
+    plot = models.CharField(max_length=1000)
     translate = models.CharField(max_length=300, blank=True, null=True)
     poster = models.CharField(max_length=100)
 

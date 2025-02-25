@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST, require_GET
 from django.core.paginator import Paginator
-from plexapi.server import PlexServer
+
 
 from .models import MovieRSS, Kinorium, UserPreferences
 from .forms import PreferencesForm
@@ -73,23 +73,7 @@ def user_preferences_update(request):
     return render(request, 'preferences_update_form.html', {'form': form})
 
 
-@login_required
-def plex(request):
-    user = request.user
-    prefs = UserPreferences.objects.get(user=user)
-    baseurl = prefs.plex_address
-    token = prefs.plex_token
-    try:
-        plex = PlexServer(baseurl, token)
-    except:
-        return render(request, 'plex.html', {'error': 'Plex Server not found: '+baseurl})
 
-    # m = plex.library.section('Фильмы')
-    m = plex.library.section('Review')
-    movies = m.search()
-    for mov in movies:
-        print(mov)
-    return render(request, 'plex.html', {'movies': movies})
 
 
 @login_required()

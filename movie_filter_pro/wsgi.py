@@ -9,6 +9,10 @@ https://docs.djangoproject.com/en/4.2/howto/deployment/wsgi/
 
 import os
 
+# debug
+import sys
+print("sys.path in wsgi.py:", sys.path)
+
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_filter_pro.settings')
