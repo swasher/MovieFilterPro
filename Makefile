@@ -212,7 +212,7 @@ push:
 	rm requirements.txt
 
 run:
-	# if you need run, you must build image with x86 compatible settings
+	# if you need run, you must build image with x86 compatible settings (not implemented)
 	docker run -p 8000:8000 movie-filter-pro
 
 pack:
