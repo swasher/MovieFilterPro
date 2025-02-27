@@ -95,6 +95,7 @@ def rss_table_data(request):
         movies_qs = movies_qs.reverse()
 
     if 'textfilter' in request.GET:
+        print('FILTER by:', request.GET['textfilter'])
         movies_qs = movies_qs.filter(
             Q(title__icontains=request.GET['textfilter']) |
             Q(original_title__icontains=request.GET['textfilter']) |
@@ -177,7 +178,7 @@ def get_log(request, logtype):
 def kinorium_search_111(request, kinozal_id: int):
     """
     Сначала выполняет поиск на кинориуме, берет первый результат и переходит по нему.
-    По этой схеме Кинориум банит за поиск
+    По этой схеме Кинориум банит за поиск, поэтому выпилил этот подход.
     :param request:
     :param kinozal_id:
     :return:
@@ -261,5 +262,3 @@ def get_torrent_file(request, kinozal_id: int):
     except (FileNotFoundError, KeyError):
         messages.error(request, f"Unknown error, can't get torrent")
         return HttpResponse(bad_sign)
-
-

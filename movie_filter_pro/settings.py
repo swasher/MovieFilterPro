@@ -107,21 +107,33 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'movie_filter_pro.wsgi.application'
 
+
 #
 # Database
 #
 # got DATABASE_URL from environment variable, i.e. Doppler. In case local dev, it's just `sqlite:///db.sqlite3`
+
+
 DATABASES = {
     # 'default': dj_database_url.config(
     #     conn_max_age=600,
     #     conn_health_checks=True,
     # ),
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-
+    # 'default': {
+    #     'ENGINE': 'django.db.backends.sqlite3',
+    #     'NAME': BASE_DIR / 'db.sqlite3',
+    # }
+    'default': dj_database_url.config(
+        default=config('DATABASE_URL')
+    )
 }
+# if not os.getenv('IN_DOCKER'):
+#     database_path = config('DATABASE_URL').split('///')[-1]
+#     if not os.path.exists(database_path):
+#         print(f"Database file not found at {database_path}")
+#         raise FileNotFoundError(f"Database file not found at {database_path}")
+#     else:
+#         print(f"Database file found at {database_path}")
 
 
 # Password validation
