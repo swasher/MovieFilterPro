@@ -1,6 +1,7 @@
 import os
 import requests
 from datetime import datetime
+from pathlib import Path
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -10,6 +11,7 @@ from django.conf import settings
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
+
 
 from .models import Kinorium
 from .models import MovieRSS
@@ -222,13 +224,17 @@ def kinozal_download(request, kinozal_id: int):
 
 def get_torrent_file(request, kinozal_id: int):
     # todo move it to user preferencies
-    cookie_pass = 'c1WSjB9vRK'
-    cookie_uid = '19200863'
-    destination = '//qnap/Torrents/'
+    # cookie_pass = 'c1WSjB9vRK'
+    # cookie_uid = '19200863'
+    # destination = '//qnap/Torrents/'
+    cookie_pass = UserPreferences.objects.get(user=request.user).cookie_pass
+    cookie_uid = UserPreferences.objects.get(user=request.user).cookie_uid
+    destination = UserPreferences.objects.get(user=request.user).torrents_hotfolder
 
     out_of_torrent_number_message = 'Вам недоступен торрент-файл для скачивания'
 
     print('GET torrent', kinozal_id)
+    # TODO Гвозди
     url = f"https://dl.kinozal.tv/download.php?id={kinozal_id}"
     print('LINK', url)
 
@@ -255,7 +261,8 @@ def get_torrent_file(request, kinozal_id: int):
 
     try:
         filename = r.headers['content-disposition'].split('=')[1].strip('"')
-        with open(destination+filename, 'wb') as file:
+        full_path = Path(destination) / filename
+        with open(full_path, 'wb') as file:
             file.write(r.content)
 
         return HttpResponse(good_sign)

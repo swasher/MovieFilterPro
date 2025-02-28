@@ -173,6 +173,10 @@ class UserPreferences(models.Model):
     plex_address = models.CharField(max_length=100, blank=True, null=True)
     plex_token = models.CharField(max_length=25, blank=True, null=True)
 
+    cookie_pass = models.CharField(max_length=25, blank=True, null=True)
+    cookie_uid = models.CharField(max_length=25, blank=True, null=True)
+    torrents_hotfolder = models.CharField(max_length=70, blank=True, null=True)
+
     ignore_title = models.CharField(max_length=500, default='')
 
     def get_normal_preferences(self) -> Tuple[List[str], List[str], int, float]:

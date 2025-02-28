@@ -5,6 +5,9 @@ FROM arm32v7/python:3.12-slim
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
+# Создаем директорию /torrents_hotfolder
+RUN mkdir /torrents_hotfolder
+
 # Копируем зависимости
 COPY requirements.txt /app
 
@@ -23,17 +26,15 @@ COPY . /app
 # Собираем статические файлы
 RUN python manage.py collectstatic --noinput
 
+# Копируем entrypoint.sh
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Открываем порт
 EXPOSE 8008
 
-# Задаем PYTHONPATH через ENV
-#ENV PYTHONPATH=/app
+# Устанавливаем entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
 
-# Запускаем сервер
-#CMD ["python", "manage.py", "runserver", "0.0.0.0:8008"]
-# Запускаем Gunicorn
+# CMD остаётся как запасной вариант, но entrypoint его перехватит
 CMD ["gunicorn", "--bind", "0.0.0.0:8008", "movie_filter_pro.wsgi:application"]
-#CMD ["sh", "-c", "cd /app && echo \"Current dir: $(pwd)\" && gunicorn --bind 0.0.0.0:8008 --pythonpath /app movie_filter_pro.wsgi:application"]
-#CMD ["sh", "-c", "PYTHONPATH=/app gunicorn --bind 0.0.0.0:8008 movie_filter_pro.wsgi:application"]
-# Запускаем Gunicorn с выводом ls и pwd
-#CMD ["sh", "-c", "echo 'Listing /app:' && ls -la /app && echo 'Listing /data:' && ls -la /data && echo 'Current working directory:' && pwd && PYTHONPATH=/app gunicorn --bind 0.0.0.0:8008 movie_filter_pro.wsgi:application"]

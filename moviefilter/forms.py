@@ -9,7 +9,7 @@ class PreferencesForm(forms.ModelForm):
     class Meta:
         model = UserPreferences
         fields = ['last_scan', 'scan_from_page', 'plex_address', 'plex_token', 'countries', 'genres', 'max_year', 'min_rating',
-                  'low_countries', 'low_genres', 'low_max_year', 'low_min_rating', 'ignore_title']
+                  'low_countries', 'low_genres', 'low_max_year', 'low_min_rating', 'ignore_title', 'cookie_pass', 'cookie_uid', 'torrents_hotfolder']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -20,14 +20,16 @@ class PreferencesForm(forms.ModelForm):
         # self.helper.add_input(Submit('submit', 'Save11'))
 
         self.helper.layout = Layout(
-            HTML("""
-              <h3>Last scan</h3><hr>
-              """),
+            HTML("""<h3>Last scan</h3><hr>"""),
             Field('last_scan'),
             Field('scan_from_page'),
 
-            HTML("""<h3>Plex</h3><hr>
-            """),
+            HTML("""<h3>Torrent</h3><hr>"""),
+            Field('cookie_pass'),
+            Field('cookie_uid'),
+            Field('torrents_hotfolder'),
+
+            HTML("""<h3>Plex</h3><hr>"""),
             Field('plex_address'),
             Field('plex_token'),
 

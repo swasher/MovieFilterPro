@@ -1,0 +1,10 @@
+services:
+  movie-filter-pro:
+    image: swasher/movie-filter-pro:armv7
+    container_name: movie-filter-pro
+    ports:
+      - "8008:8008"
+    volumes:
+      - /share/CACHEDEV1_DATA/homes/swasher/PERSISTENT_VOLUME:/app/data
+      - /share/CACHEDEV1_DATA/Torrents:/torrents_hotfolder
+    restart: no
