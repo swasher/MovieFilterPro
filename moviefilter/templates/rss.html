@@ -4,13 +4,7 @@
 
     <div class="container-fluid">
 
-        <button class='btn btn-primary'
-                hx-get="{% url 'scan' %}"
-                hx-swap="none">
-            <span id="save-icon" class="bi-database"></span>
-            SCAN
-            <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
-        </button>
+
         <span class="border rounded p-1 m-1">Last scan: <span
                 class="badge text-bg-success">{{ last_scan }}</span></span>
 
@@ -136,10 +130,12 @@
             }
           })
 
-{% comment %}          // Remove dialog content after hiding
+          {% comment %}
+          // Remove dialog content after hiding
           htmx.on("hidden.bs.modal", () => {
             document.getElementById("kinozal-results").innerHTML = ""
-          }){% endcomment %}
+          })
+          {% endcomment %}
         })()
     </script>
 

@@ -40,11 +40,6 @@ def rss(request):
 
 
 @login_required()
-def log(request):
-    return render(request, template_name='log.html')
-
-
-@login_required()
 def user_preferences_update(request):
     user = User.objects.get(pk=request.user.pk)
     pref, _ = UserPreferences.objects.get_or_create(user=user)
@@ -139,3 +134,7 @@ def tst(request):
         return HttpResponse('SOME HTMX DATA')
     else:
         return render(request, 'testing.html')
+
+
+def scan_page(request):
+    return render(request, 'scan_page.html')

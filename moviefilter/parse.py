@@ -16,8 +16,8 @@ from .models import Country, MovieRSS
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
+from .util import log
 
-logger = logging.getLogger('my_logger')
 
 
 def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
@@ -39,14 +39,14 @@ def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
             # logger.debug(f"SAVE TO DB")
             # logger.info(f"SAVE TO DB infoinfoinfoinfoinfo")
             # logger.error(f"SAVE TO DB ERROR ERROR ERROR ERROR ERROR ")
-            print(f'SAVE TO DB: [{len(movies)} movies]')
+            log(f'SAVE TO DB: [{len(movies)} movies]')
 
             counter += len(movies)
             for m in movies:
                 # todo использовать bulk_create
                 MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
                                                defaults=dataclasses.asdict(m))
-        print('')
+        log('')
 
         # переходим к сканированию следующей странице
         site.next_page()
@@ -68,8 +68,7 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
     # with an HTTP GET request
     response = requests.get(site.url())
 
-    print(f'GRAB URL: {site.url()}')
-    logger.info(f'GRAB URL: {site.url()}')
+    log(f'GRAB URL: {site.url()}')
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")
@@ -154,13 +153,13 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
                     year = str(datetime.now().year)
 
             # print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
-            logger.debug(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
+            log(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
 
             m = KinozalMovie(kinozal_id, title, original_title, year, date_added, dubbed)
 
             movies.append(m)
 
-        print(f'FOUND {len(movies)} movies.')
+        log(f'FOUND {len(movies)} movies.')
         return movies, END_DATE_NOT_REACHED
 
     else:
@@ -178,13 +177,13 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         response = requests.get(site.detail_url(), timeout=10)
         response.raise_for_status()
     except HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
+        log(f"HTTP error occurred: {http_err}")
     except Timeout:
-        print("The request timed out")
+        log("The request timed out")
     except RequestException as req_err:
-        print(f"An error occurred: {req_err}")
+        log(f"An error occurred: {req_err}")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        log(f"An unexpected error occurred: {e}")
 
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -211,7 +210,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     try:
         m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
     except AttributeError:
-        print("WARNING! CAN'T GET [genres]")
+        log("WARNING! CAN'T GET [genres]")
         m.genres = ''
 
     countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
@@ -224,19 +223,19 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     try:
         m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
     except AttributeError:
-        print("WARNING! CAN'T GET [director]")
+        log("WARNING! CAN'T GET [director]")
         m.director = ''
 
     try:
         m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
     except AttributeError:
-        print("WARNING! CAN'T GET [actors]")
+        log("WARNING! CAN'T GET [actors]")
         m.actors = ''
 
     try:
         m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
     except:
-        print("WARNING! CAN'T GET [plot]")
+        log("WARNING! CAN'T GET [plot]")
         m.plot = ''
 
     translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
@@ -274,21 +273,21 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         - проверяем через пользовательские фильтры
         - и вот теперь только заносим в базу 
         """
-        print(f'PROCESS: {m.title} - {m.original_title} - {m.year}')
+        log(f'<b>PROCESS</b>: {m.title} - {m.original_title} - {m.year}')
 
         """
         В этом месте нужно проверить наличие у релиза нормальной озвучки.
         Если у фильма есть норм. озвучка И у такого же фильма в базе MovieRSS статус "жду озвучку", то присвоить статус "есть озвучка" и continue
         """
         if m.dubbed and need_dubbed(m):
-            print(' ┣━ FOUND DUBBING [x]')
+            log(' ┣━ FOUND DUBBING [x]')
             movie_in_db = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year).first()
             movie_in_db.priority = TRANS_FOUND
             movie_in_db.save(update_fields=['priority'])
             continue
 
         if exist_in_kinozal(m):
-            print(' ┣━ SKIP [exist in kinozal]')
+            log(' ┣━ SKIP [exist in kinozal]')
             continue
         """
         Возможна такая ситуация, что фильм попал в RSS, а потом я его посмотрел.
@@ -298,14 +297,14 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
 
         exist, match_full, status = exist_in_kinorium(m)
         if exist and match_full:
-            print(f' ┣━ SKIP [{status}]')
+            log(f' ┣━ SKIP [{status}]')
             continue
         elif exist and not match_full:
-            print(f' ┣━ MARK AS PARTIAL [{status}]')
+            log(f' ┣━ MARK AS PARTIAL [{status}]')
             m.kinorium_partial_match = True
 
         m, sec = get_details(m)
-        print(f' ┣━ GET DETAILS: {sec:.1f}s')
+        log(f' ┣━ GET DETAILS: {sec:.1f}s')
 
         # Эта проверка выкидывает все, что через него не прошло
         if check_users_filters(user, m, priority=HIGH):
@@ -318,8 +317,7 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
                 m.priority = LOW
 
         if m.priority in [LOW, HIGH]:  # Если фильм прошел проверки, то приорити будет или LOW или HIGH. Тогда записываем в базу, иначе - просто пропускаем.
-            print(
-                f' ┣━ ADD TO DB [prio={"low" if m.priority==LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
+            log(f' ┣━ ADD TO DB [prio={"low" if m.priority==LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
 
             result.append(m)
 
@@ -338,7 +336,7 @@ def get_kinorium_first_search_results(data: str):
     link = f"https://ru.kinorium.com/search/?{params}"
 
     response = requests.get(link)
-    print(f'GRAB URL: {link}')
+    log(f'GRAB URL: {link}')
     soup = BeautifulSoup(response.content, "html.parser")
     elements = soup.select_one('.list.movieList')  # <div class="list movieList">
 
@@ -376,8 +374,7 @@ def kinozal_search(kinozal_id: int):
         # for TERMINATOR, l = "https://kinozal.tv/browse.php?s=%F2%E5%F0%EC%E8%ED%E0%F2%EE%F0&g=0&c=1002&v=7&d=2019&w=0&t=0&f=0"
 
         response = requests.get(l.search_url())
-        print(f'GRAB URL: {l.search_url()}')
-        logger.info(f'GRAB URL: {l.search_url()}')
+        log(f'GRAB URL: {l.search_url()}')
 
         if response.ok:
             soup = BeautifulSoup(response.content, "html.parser")

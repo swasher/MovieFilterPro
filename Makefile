@@ -207,8 +207,10 @@ login:
 
 push:
 	# build and upload
+	python manage.py collectstatic --noinput
 	uv export --format requirements-txt > requirements.txt
-	docker buildx build --platform linux/arm/v7  -t swasher/movie-filter-pro:armv7 --push .
+	docker buildx build --platform linux/arm/v7 -t swasher/movie-filter-pro:armv7 --push .
+	#docker buildx build --platform linux/arm/v7 --no-cache -t swasher/movie-filter-pro:armv7 --push .
 	rm requirements.txt
 
 run:

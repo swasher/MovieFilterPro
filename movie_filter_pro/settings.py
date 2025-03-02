@@ -32,6 +32,10 @@ ALLOWED_HOSTS = ['*']
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = 'login'
 
+DEBUG_LOG = os.path.join(BASE_DIR, 'logs', 'debug.log')
+ERROR_LOG = os.path.join(BASE_DIR, 'logs', 'error.log')
+SCAN_LOG = os.path.join(BASE_DIR, 'logs', 'scan.log')
+
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
@@ -60,6 +64,7 @@ INSTALLED_APPS = [
     'compressor',
     'django_htmx',
     'widget_tweaks',
+    'channels',
     'moviefilter',
 ]
 if DEBUG and ENABLE_BROWSER_RELOAD:
@@ -232,20 +237,39 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        'full_log': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'full.log'),
-        },
-        'short_log': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'short.log'),
-        },
-        'error_log': {
+        # 'full_log': {
+        #     'level': 'DEBUG',
+        #     'class': 'logging.FileHandler',
+        #     'filename': os.path.join(BASE_DIR, 'logs', 'full.log'),
+        # },
+        # 'short_log': {
+        #     'level': 'INFO',
+        #     'class': 'logging.FileHandler',
+        #     'filename': os.path.join(BASE_DIR, 'logs', 'short.log'),
+        # },
+        # 'error_log': {
+        #     'level': 'ERROR',
+        #     'class': 'logging.FileHandler',
+        #     'filename': os.path.join(BASE_DIR, 'logs', 'error.log'),
+        # },
+        'error_log': {  # Django errors
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'error.log'),
+            'filename': ERROR_LOG,
+        },
+        'console': {  # New handler for console output
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+        },
+        'debug_log': {  # Replace for 'print' in production
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': DEBUG_LOG,
+        },
+        'scan_log': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': SCAN_LOG,
         },
     },
 
@@ -261,10 +285,31 @@ LOGGING = {
     },
 
     'loggers': {
-        'my_logger': {
-            'handlers': ['full_log', 'short_log', 'error_log'],
-            'level': 'DEBUG',
+        # 'my_logger': {
+        #     'handlers': ['full_log', 'short_log', 'error_log'],
+        #     'level': 'DEBUG',
+        #     'propagate': True,
+        # },
+        'django': {  # django errors logger
+            'handlers': ['console' if DEBUG else 'error_log'],  # Conditional handler
+            'level': 'ERROR',
             'propagate': True,
         },
+        'debug_logger': {
+            'handlers': ['debug_log'],
+            'level': 'DEBUG',
+            'propagate': False,  # it need to stop double logging
+        },
+        'scan_logger': {
+            'handlers': ['scan_log'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',  # Для разработки
     },
 }

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+    <div class="container-fluid">
+
+        <button class='btn btn-primary'
+                hx-get="{% url 'scan' %}"
+                hx-swap="none">
+            <span id="save-icon" class="bi-database"></span>
+            SCAN
+            <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+        </button>
+
+        <button class='btn btn-primary'
+                hx-get="{% url 'clear_log' %}"
+                hx-include="[name='inlineRadioOptions']:checked"
+                hx-swap="innerHTML"
+                hx-target="#log-content">
+            <span id="clear-icon" class="bi-x-lg"></span>
+            Clear
+            <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+        </button>
+
+        <div class="border my-4 p-3 rounded" style="background: lightgray">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-scan" value="scan" checked
+                       hx-get="{% url 'get_log' 'scan' %}"
+                       hx-trigger="change"
+                       hx-target="#log-content"
+                        {#                   hx-include="this"#}
+                       hx-swap="innerHTML"
+                >
+                <label class="form-check-label" for="r-scan"><strong>Scan</strong></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-debug" value="debug"
+                       hx-get="{% url 'get_log' 'debug' %}"
+                       hx-trigger="change"
+                       hx-target="#log-content"
+                        {#                   hx-include="this"#}
+                       hx-swap="innerHTML"
+                >
+                <label class="form-check-label" for="r-debug"><strong>Debug</strong></label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-error" value="error"
+                       hx-get="{% url 'get_log' 'error' %}"
+                       hx-trigger="change"
+                       hx-target="#log-content"
+                        {#                   hx-include="this"#}
+                       hx-swap="innerHTML"
+                >
+                <label class="form-check-label" for="r-error"><strong>Error</strong></label>
+            </div>
+        </div>
+
+
+        <div id="log-content"></div>
+
+        <script>
+            const socket = new WebSocket('ws://' + window.location.host + '/ws/log/');
+            const logContent = document.getElementById('log-content');
+            const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
+
+            socket.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+                const newLogEntry = document.createElement('div');
+                newLogEntry.innerHTML = data.content;
+
+                {% comment %}console.log('Socket message:', newLogEntry);{% endcomment %}
+
+                // Check which radio button is selected and filter messages
+                if (document.getElementById('r-debug').checked && data.content.startsWith('DEBUG')) {
+                    logContent.appendChild(newLogEntry);
+                } else if (document.getElementById('r-scan').checked && data.content.startsWith('INFO')) {
+                    newLogEntry.innerHTML = newLogEntry.innerHTML.replace("INFO:", "").trim();
+                    logContent.appendChild(newLogEntry);
+                } else if (document.getElementById('r-error').checked && data.content.startsWith('ERROR')) {
+                    logContent.appendChild(newLogEntry);
+                }
+
+                logContent.scrollTop = logContent.scrollHeight;
+            };
+
+            // initial load
+            htmx.ajax('GET', '{% url "get_log" "scan" %}', '#log-content');
+        </script>
+
+
+        <!-- Toast template -->
+        <div data-toast-container class="toast-container position-fixed top-0 end-0 p-3">
+            <div data-toast-template class="toast align-items-center border-0" role="alert" aria-live="assertive"
+                 aria-atomic="true">
+                <div class="d-flex">
+                    <div data-toast-body class="toast-body"></div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                            aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+        <!-- end Toast template -->
+
+
+    </div>
+
+{% endblock %}
+
+{% block css %}
+    <style>
+        #log-content {
+            height: 600px;
+            border: 1px solid black;
+            overflow-y: scroll;
+            white-space: pre-wrap; /* Key fix: Preserve line breaks */
+            {#font-size: medium;#}
+            font-family: monospace; /* Optional: Use a monospace font for logs */
+        }
+    </style>
+{% endblock %}

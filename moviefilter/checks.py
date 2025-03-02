@@ -6,6 +6,7 @@ from .models import UserPreferences
 from .classes import KinozalMovie
 from .util import get_object_or_none
 from .util import not_match_rating
+from .util import log
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
@@ -57,19 +58,19 @@ def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
 
     exist = Kinorium.objects.filter(title=m.title, original_title=m.original_title)
     if exist:
-        print(f' ┣━ KINORIUM PARTIAL MATCH [title+original]: {m.title} + {m.original_title}')
+        log(f' ┣━ KINORIUM PARTIAL MATCH [title+original]: {m.title} + {m.original_title}')
         return MATCH, PARTIAL, exist.first().get_status_display()
 
     if m.title:
         exist = Kinorium.objects.filter(title=m.title, year=year)
         if exist:
-            print(f' ┣━ KINORIUM PARTIAL MATCH [title+year]: {m.title} + {year}')
+            log(f' ┣━ KINORIUM PARTIAL MATCH [title+year]: {m.title} + {year}')
             return MATCH, PARTIAL, exist.first().get_status_display()
 
     if m.original_title:
         exist = Kinorium.objects.filter(original_title=m.original_title, year=year)
         if exist:
-            print(f' ┣━ KINORIUM PARTIAL MATCH [original+year]: {m.original_title} + {year}')
+            log(f' ┣━ KINORIUM PARTIAL MATCH [original+year]: {m.original_title} + {year}')
             return MATCH, PARTIAL, exist.first().get_status_display()
 
     """
@@ -108,18 +109,18 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
     # country_passes = not bool(country_intersection)
     if bool(country_intersection):
         if priority == LOW:
-            print(f' ┣━ MARK LOW: [country] {country_intersection}')
+            log(f' ┣━ MARK LOW: [country] {country_intersection}')
         else:
-            print(f' ┣━ SKIP: [country] {country_intersection}')
+            log(f' ┣━ SKIP: [country] {country_intersection}')
         return False
 
     ### 2 Genres
     genre_intersection = set(m.genres) & set(stop_genres)
     if bool(genre_intersection):
         if priority is LOW:
-            print(f' ┣━ MARK LOW: [genres] {genre_intersection}')
+            log(f' ┣━ MARK LOW: [genres] {genre_intersection}')
         else:
-            print(f' ┣━ SKIP: [genres] {genre_intersection}')
+            log(f' ┣━ SKIP: [genres] {genre_intersection}')
         return False
 
     ### 3 Max year
@@ -132,9 +133,9 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
             year = int(m.year)
         if year < max_year:
             if priority is LOW:
-                print(f' ┣━ MARK LOW: [year] {year}')
+                log(f' ┣━ MARK LOW: [year] {year}')
             else:
-                print(f' ┣━ SKIP: [year] {year}')
+                log(f' ┣━ SKIP: [year] {year}')
             return False
     except:
         print('ERROR in checks.py -> checking_all_filters -> year converting')
@@ -142,9 +143,9 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
     ### 4 Min rating
     if not_match_rating(m.kinopoisk_rating, min_rating) and not_match_rating(m.imdb_rating, min_rating):
         if priority is LOW:
-            print(f' ┣━ MARK LOW: [rating] {m.kinopoisk_rating}/{m.imdb_rating}')
+            log(f' ┣━ MARK LOW: [rating] {m.kinopoisk_rating}/{m.imdb_rating}')
         else:
-            print(f' ┣━ SKIP: [rating] {m.kinopoisk_rating}/{m.imdb_rating}')
+            log(f' ┣━ SKIP: [rating] {m.kinopoisk_rating}/{m.imdb_rating}')
         return False
 
     return True

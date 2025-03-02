@@ -22,8 +22,9 @@ from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_
 from .classes import LinkConstructor
 from .parse import get_kinorium_first_search_results
 from .parse import kinozal_search
+from .util import log
 
-
+import random
 @login_required()
 @require_GET
 def scan(request):
@@ -46,9 +47,9 @@ def scan(request):
         site = LinkConstructor(page=start_page)
         number_of_new_movies = kinozal_scan(site, last_scan, user)
     except Exception as e:
-        print(f'ERROR! {e}')
+        log(f'ERROR! {e}')
     else:
-        print(f"Scan complete,  add new: {number_of_new_movies}")
+        log(f"Scan complete,  add new: {number_of_new_movies}")
 
     # update last scan to now()
     UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
@@ -71,6 +72,33 @@ def reset_rss(requst):
             rss.delete()
         messages.success(requst, 'Success!')
         return HttpResponse(status=200)
+
+
+@login_required()
+def clear_log(request):
+    log_type = request.GET.get('inlineRadioOptions')
+    log_file_map = {
+        'scan': settings.SCAN_LOG,
+        'debug': settings.DEBUG_LOG,
+        'error': settings.ERROR_LOG,
+    }
+
+    if log_type not in log_file_map:
+        messages.error(request, f"Invalid log type: {log_type}")
+        return HttpResponse(f"Invalid log type: {log_type}", status=400)
+
+    log_file = log_file_map[log_type]
+    print('log_file', log_file)
+
+    try:
+        if os.path.exists(log_file):
+            with open(log_file, 'r+') as file:
+                file.truncate(0)
+        messages.success(request, 'Clear success!')
+        return HttpResponse(status=200)
+    except Exception as e:
+        messages.error(request, f"Ошибка при очистке логов: {e}")
+        return HttpResponse(status=500)
 
 
 @require_GET
@@ -97,7 +125,7 @@ def rss_table_data(request):
         movies_qs = movies_qs.reverse()
 
     if 'textfilter' in request.GET:
-        print('FILTER by:', request.GET['textfilter'])
+        print(f"FILTER by: {request.GET['textfilter']}")
         movies_qs = movies_qs.filter(
             Q(title__icontains=request.GET['textfilter']) |
             Q(original_title__icontains=request.GET['textfilter']) |
@@ -105,7 +133,7 @@ def rss_table_data(request):
         )
 
     page_number = request.GET.get('page', 1)
-    print('LEN:', movies_qs.count())
+    log(f'LEN: {movies_qs.count()}', 'debug')
     paginator = Paginator(movies_qs, paginate_by)
     page_obj = paginator.get_page(page_number)
 
@@ -152,28 +180,6 @@ def wait_trains(request, pk):
     except:
         messages.error(request, f"Error with Wait Trans, Movie pk={pk}")
         return HttpResponse(status=500)
-
-
-def get_log(request, logtype):
-    # import datetime
-    # def write_to_file(file_path, content):
-    #     with open(file_path, 'a') as file:
-    #         file.write(content)
-    #
-    # # Пример использования
-    # file_path = 'media/logs/' + 'full' + '.log'
-    # content = str(datetime.datetime.now())+'\n'
-    # write_to_file(file_path, content)
-
-    if logtype in ['full', 'short', 'error']:
-        file_path = os.path.join('logs', f'{logtype}.log')
-        with open(file_path, 'r') as file:
-            log = file.read().split('\n')
-            log = '\n'.join(list(reversed(log)))
-    else:
-        raise Exception('Unknown logtype')
-
-    return render(request, template_name='partials/log-content.html', context={'log': log})
 
 
 @require_GET
@@ -269,3 +275,44 @@ def get_torrent_file(request, kinozal_id: int):
     except (FileNotFoundError, KeyError):
         messages.error(request, f"Unknown error, can't get torrent")
         return HttpResponse(bad_sign)
+
+
+
+
+
+@login_required
+def get_log(request, log_type):
+    """
+    Reads and returns the content of a specified log file.
+
+    Args:
+        request: The HTTP request object.
+        log_type: The type of log ('error', 'debug', or 'scan').
+
+    Returns:
+        An HTTP response with the log file content.
+    """
+    log_file_map = {
+        'error': 'error.log',
+        'debug': 'debug.log',
+        'scan': 'scan.log',
+        # 'full': 'full.log',
+        # 'short': 'short.log',
+    }
+
+    if log_type not in log_file_map:
+        return HttpResponse(f"Invalid log type: {log_type}", status=400)
+
+    log_filename = log_file_map[log_type]
+    log_filepath = os.path.join(settings.BASE_DIR, 'logs', log_filename)
+
+    if not os.path.exists(log_filepath):
+        return HttpResponse(f"Log file not found: {log_filename}", status=404)
+
+    try:
+        with open(log_filepath, 'r') as f:
+            log_content = f.read()
+    except Exception as e:
+        return HttpResponse(f"Error reading log file: {e}", status=500)
+
+    return HttpResponse(log_content, content_type="text/plain")
