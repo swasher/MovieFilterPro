@@ -229,10 +229,6 @@ def kinozal_download(request, kinozal_id: int):
 
 
 def get_torrent_file(request, kinozal_id: int):
-    # todo move it to user preferencies
-    # cookie_pass = 'c1WSjB9vRK'
-    # cookie_uid = '19200863'
-    # destination = '//qnap/Torrents/'
     cookie_pass = UserPreferences.objects.get(user=request.user).cookie_pass
     cookie_uid = UserPreferences.objects.get(user=request.user).cookie_uid
     destination = UserPreferences.objects.get(user=request.user).torrents_hotfolder

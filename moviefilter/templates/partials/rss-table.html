@@ -81,7 +81,7 @@
                             hx-target="#kinozal-results"
                             hx-swap="innerHTML"
                     >Download
-                        <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+                        <span id="open-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
                     </button>
 
                     <button type="button" class="btn btn-primary btn-sm"
@@ -91,6 +91,7 @@
                             hx-swap="delete swap:0.7s"
                             onclick="triggerPotentialUpdate()"
                     >Defer
+                        <span id="defer-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
                     </button>
 
                     <button type="button" class="btn btn-outline-primary btn-sm"
@@ -100,6 +101,7 @@
                             hx-swap="delete swap:0.7s"
                             onclick="triggerPotentialUpdate()"
                     >Жду дубляж
+                        <span id="wait-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
                     </button>
 
                     <button type="button" class="btn btn-danger btn-sm"
@@ -109,6 +111,7 @@
                             hx-swap="delete swap:0.6s"
                             onclick="triggerPotentialUpdate()"
                     >Hide
+                        <span id="hide-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
                     </button>
 
 
