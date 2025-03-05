@@ -1,4 +1,6 @@
 import os
+import time
+
 import requests
 from datetime import datetime
 from pathlib import Path
@@ -156,9 +158,6 @@ def ignore_movie(request, pk):
 
 @require_POST
 def defer(request, pk):
-    # DEPRECATED
-    # request.session['count_movies_in_table'] = request.session.get('count_movies_in_table') - 1
-
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=DEFER)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' defer successfully")
@@ -170,9 +169,6 @@ def defer(request, pk):
 
 @require_POST
 def wait_trains(request, pk):
-    # DEPRECATED
-    # request.session['count_movies_in_table'] = request.session.get('count_movies_in_table') - 1
-
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=WAIT_TRANS)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' add to Wait Trans successfully")

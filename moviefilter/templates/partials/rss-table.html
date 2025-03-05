@@ -1,10 +1,10 @@
 {% if found_total %}
+<div id="popup" class="copied-popup">Copied!</div>
 <table class="table w-auto table-sm">
 
     <!-- Этот код помещает переменную found_total, которая передается в этот темплей,
     во внешний темплейт - rss.html, в бейдж 'Filtered elements' -->
     <span _="on load put '{{ found_total }}' into #filtered_count" hidden></span>
-
 
     <thead>
     <tr>
@@ -27,9 +27,15 @@
                 <img src="{{ f.poster }}" class="imgdiv" >
             </td>
             <td>
-                <h5><strong>{{ f.title }}</strong></h5>
+                <h5>
+                    <strong>{{ f.title }}</strong>
+                    <i class="bi bi-copy copy-btn" style="cursor: pointer; color: gray; font-size: 0.6em;" data-text="{{ f.title }}"></i>
+                </h5>
                 <hr>
-                <h6>{{ f.original_title }}</h6>
+                <h6>
+                    {{ f.original_title }}
+                    <i class="bi bi-copy copy-btn" style="cursor: pointer; color: gray; font-size: 0.6em;" data-text="{{ f.original_title }}"></i>
+                </h6>
             </td>
             <td>
                 Year: <strong>{{ f.year }}</strong>
@@ -191,25 +197,7 @@
     {% endfor %}
     </tbody>
 
-    <script>
-        /*
-        К примеру, если фильмов всего 4, и юзер начинает их скрывать, то просто так новые фильмы не появятся,
-        потому что infinite scroll не будет работать - не возникает событие, что фильм достиг нижней границы экрана.
-        Поэтому если их становится мало (<4), то мы возбуждаем во фронтэнде событие (triggerElementManual), подгружающее еще фильмов.
-        */
-        function triggerPotentialUpdate() {
-            const elements = document.querySelectorAll('.htmx-scroll');
-            const count = elements.length;
-            console.log('MANUAL UPDATE [becouse page have only:', count, 'movies]')
-            if (count < 3) {
-                console.log('make request')
-                {#const elem = document.getElementById("triggerElement");#}
-                {#elem.dispatchEvent(new Event('loadMore'));#}
-                {#document.body.dispatchEvent(new Event('loadMore'));#}
-                document.getElementById('triggerElementManual').click();
-            }
-        }
-    </script>
+
 
 
 </table>
@@ -219,3 +207,86 @@
     NO RESULT
 
 {% endif %}
+
+
+{% block js %}
+    <script>
+
+    /*
+    К примеру, если фильмов всего 4, и юзер начинает их скрывать, то просто так новые фильмы не появятся,
+    потому что infinite scroll не будет работать - не возникает событие, что фильм достиг нижней границы экрана.
+    Поэтому если их становится мало (<4), то мы возбуждаем во фронтэнде событие (triggerElementManual), подгружающее еще фильмов.
+    */
+    function triggerPotentialUpdate() {
+        const elements = document.querySelectorAll('.htmx-scroll');
+        const count = elements.length;
+        console.log('MANUAL UPDATE [becouse page have only:', count, 'movies]')
+        if (count < 3) {
+            console.log('make request')
+            {#const elem = document.getElementById("triggerElement");#}
+            {#elem.dispatchEvent(new Event('loadMore'));#}
+            {#document.body.dispatchEvent(new Event('loadMore'));#}
+            document.getElementById('triggerElementManual').click();
+        }
+    }
+
+
+    // Делегируем события клика для всех элементов с классом copy-btn
+    document.body.addEventListener('click', function(event) {
+        const element = event.target;
+        if (element.classList.contains('copy-btn')) {
+            const text = element.getAttribute('data-text');
+
+            // Копируем текст
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    console.log('Text copied to clipboard:', text);
+
+                    // Настраиваем popup
+                    const popup = document.getElementById('popup');
+                    const rect = element.getBoundingClientRect();
+
+                    // Позиционируем popup
+                    popup.style.top = (rect.top + window.scrollY - 30) + 'px';
+                    popup.style.left = (rect.left + window.scrollX + (rect.width / 2)) + 'px';
+                    popup.style.transform = 'translateX(-50%)';
+
+                    // Показываем и скрываем
+                    popup.classList.add('show');
+                    setTimeout(() => {
+                        popup.classList.remove('show');
+                    }, 1000);
+                })
+                .catch(error => {
+                    console.error('Error copying text:', error);
+                });
+        }
+    });
+    </script>
+{% endblock %}
+
+
+
+{% block css %}
+    <style>
+        .copied-popup {
+            position: absolute;
+            top: -30px; /* Подстройте под ваши нужды */
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffffff;
+            color: #333;
+            border: 1px solid #555;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none; /* Чтобы не мешало кликам */
+            z-index: 1000;
+        }
+        .copied-popup.show {
+            opacity: 1;
+        }
+    </style>
+{% endblock %}

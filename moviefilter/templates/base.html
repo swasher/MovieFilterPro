@@ -22,8 +22,8 @@
     <link rel="stylesheet" href="{% static 'bootstrap/bootstrap.min.css' %} ">
     <script defer src="{% static 'bootstrap/bootstrap-theme-toggler.js' %}"></script>
 
-    <!-- ALPINE JS -->
-    <script defer src="{% static 'alpine/alpine.min.js' %}"></script>
+{% comment %}    <!-- ALPINE JS -->
+    <script defer src="{% static 'alpine/alpine.min.js' %}"></script>{% endcomment %}
 
     <!-- HTMX -->
     <script src="{% static 'htmx/htmx.min.js' %}"></script>
@@ -32,11 +32,14 @@
     <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
 
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="{% static 'bootstrap-icons/font/bootstrap-icons.css' %} ">
+    <link rel="stylesheet" href="{% static 'bootstrap-icons/font/bootstrap-icons.min.css' %} ">
 
     <!-- Sweet alert 2 -->
     <link rel="stylesheet" href="{% static 'sweetalert2/bootstrap-4.min.css' %}">
     <script src="{% static 'sweetalert2/sweetalert2.js' %}"></script>
+
+    <!-- hint.ccs (tooltips) -->
+    <link href="{% static 'hint.css-2.7.0/hint.base.min.css' %}" rel="stylesheet">
 
     {% compress css %}
         <link type="text/x-scss" href="{% static 'style.scss' %}" rel="stylesheet" media="screen">
@@ -54,7 +57,7 @@
 
     <title>{% block title %}KinoRSS{% endblock %}</title>
     {% block css %}{% endblock %}
-    {% block js %}{% endblock %}
+
 
 </head>
 
@@ -63,15 +66,21 @@
 {% include "header.html" %}
 {% block body %}  {% endblock %}
 
+
 {% block scripts %}
     {% comment %}   <!-- My toast injecting -->
     <script src="{% static 'js/toasts.js' %}" defer></script>{% endcomment %}
+
+
+{% comment %}
+отказался от bootstrap tooltips
     <script>
         // Initialize bootstrap tooltips (need load popper.js)
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
         const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-    </script>
+    </script>{% endcomment %}
 {% endblock %}
+
 
 {% comment %}
 <div x-data="{ open: false }">
@@ -81,6 +90,8 @@
         Content...
     </div>
 </div>{% endcomment %}
+
+{% block js %}{% endblock %}
 
 </body>
 
