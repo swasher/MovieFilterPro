@@ -22,6 +22,8 @@ ENABLE_DEBUG_TOOLBAR = config('ENABLE_DEBUG_TOOLBAR', cast=bool)
 ENABLE_BROWSER_RELOAD = config('ENABLE_BROWSER_RELOAD', cast=bool)
 ENABLE_SAAS_COMPILER = False
 
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
 INFINITE_PAGINATION_BY = 4
 
 # ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.fly.dev']
@@ -67,9 +69,9 @@ INSTALLED_APPS = [
     'channels',
     'moviefilter',
 ]
-if DEBUG and ENABLE_BROWSER_RELOAD:
+if ENABLE_BROWSER_RELOAD:
     INSTALLED_APPS.append('django_browser_reload')
-if DEBUG and ENABLE_DEBUG_TOOLBAR:
+if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append('debug_toolbar')
 
 
@@ -85,9 +87,9 @@ MIDDLEWARE = [
     'moviefilter.middleware.toast_middleware.HtmxMessageMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
 ]
-if DEBUG and ENABLE_DEBUG_TOOLBAR:
+if ENABLE_DEBUG_TOOLBAR:
     MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
-if DEBUG and ENABLE_BROWSER_RELOAD:
+if ENABLE_BROWSER_RELOAD:
     MIDDLEWARE.append('django_browser_reload.middleware.BrowserReloadMiddleware')
 
 ROOT_URLCONF = 'movie_filter_pro.urls'
@@ -206,6 +208,7 @@ STORAGES = {
 }
 
 MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

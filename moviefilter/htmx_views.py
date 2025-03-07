@@ -25,6 +25,8 @@ from .classes import LinkConstructor
 from .parse import get_kinorium_first_search_results
 from .parse import kinozal_search
 from .util import log
+from .util import get_cached_image_url
+from .util import remove_cached_image
 
 import random
 @login_required()
@@ -141,14 +143,23 @@ def rss_table_data(request):
 
     found_total = movies_qs.count()
 
-    return render(request, 'partials/rss-table.html',
-                  {'movies': page_obj, 'priority': priority, 'found_total': found_total})
+    # Cache images in the view
+    for f in page_obj:
+        f.poster_url = get_cached_image_url(f.poster, f.pk, f.priority)
+
+    context = {
+        "movies": page_obj,
+        "found_total": found_total
+    }
+
+    return render(request, 'partials/rss-table.html', context)
 
 
 @require_POST
 def ignore_movie(request, pk):
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
+        remove_cached_image(pk)
         messages.success(request, f"Hide: '{MovieRSS.objects.get(pk=pk).title}'")
         return HttpResponse(status=200)
     except:
@@ -171,6 +182,7 @@ def defer(request, pk):
 def wait_trains(request, pk):
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=WAIT_TRANS)
+        remove_cached_image(pk)
         messages.success(request, f"'{MovieRSS.objects.get(pk=pk).title}' add to Wait Trans successfully")
         return HttpResponse(status=200)
     except:

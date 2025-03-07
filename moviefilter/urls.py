@@ -2,6 +2,8 @@ from django.urls import path
 from moviefilter import views
 from moviefilter import plex
 from moviefilter import htmx_views
+from django.conf import settings
+from django.conf.urls.static import static
 
 # app_name = "moviefilter"
 
@@ -38,3 +40,6 @@ htmx = [
 ]
 
 urlpatterns += htmx
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

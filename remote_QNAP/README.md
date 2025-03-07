@@ -15,10 +15,7 @@ C:\Users\<user>\GitHub\MovieFilterPro\remote_QNAP\init.d -> /share/CACHEDEV1_DAT
 Эта папка монтируется в контейнер, это задается в `docker-compose.yml`
 
 
-Попасть внурь контейнера
-----------------------
 
-    docker exec -it movie-filter-pro /bin/sh
 
 Hotfolder
 ----------------------------
@@ -31,3 +28,25 @@ Movie-filter-pro, чтобы в нее скачивались торренты, 
 
 Чтобы применить новые миграции базы данных, проект специально для этого запускается через `entrypoint.sh`.
 Этот файл нужен для того, чтобы ПОСЛЕ обновления образа и запуска контейнера, но ДО запуска gunicorn мы могли запустить миграции.
+
+Логи
+--------------------
+
+tail -f /share/CACHEDEV1_DATA/homes/swasher/webhook/initd.log
+tail -f /share/CACHEDEV1_DATA/homes/swasher/webhook/webhook.log
+
+Команды docker
+---------------------
+
+### Попасть внутрь запущенного контейнера
+
+    docker exec -it movie-filter-pro /bin/sh
+
+### Запустить образ и зайти в него 
+
+    docker run -it --entrypoint /bin/sh swasher/movie-filter-pro:armv7
+
+### Логи
+
+    docker ps -a
+    docker logs <container_id>

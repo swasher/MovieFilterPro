@@ -129,7 +129,10 @@ def docker_check():
 
 
 def update_compose():
-    command = "docker compose pull && docker compose down && docker compose up -d && docker container prune -f && docker image prune --all -f"
+    # command = "docker compose pull && docker compose down && docker compose up -d && docker container prune -f && docker image prune --all -f"
+    docker = "/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker"
+    # command = f"{docker} compose pull && {docker} compose up -d --remove-orphans && {docker} system prune -f"
+    command = f"{docker} compose pull && {docker} compose up -d --remove-orphans"
 
     try:
         # Выполняем команду в указанной папке
@@ -139,7 +142,8 @@ def update_compose():
         print(f"Ошибка: {e.stderr}")
 
 
-
+# вместо команд через питоновский docker я тепер использую докер компосе через шелл - функция update_compose():
+# deprecated
 def update_container():
     client = docker.from_env()
 
@@ -243,6 +247,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
         try:
             # Парсим JSON из тела запроса
             payload = json.loads(post_data)
+            log('\n PAYLOAD:')
+            log(payload)
+            log('\n')
 
             # Извлекаем информацию о репозитории и теге
             repo_name = payload['repository']['repo_name']
@@ -278,7 +285,8 @@ if __name__ == '__main__':
 
     os.environ['DOCKER_HOST'] = 'unix:///var/run/docker.sock'
     os.environ["DOCKER_CONFIG"] = "/share/CACHEDEV1_DATA/homes/swasher/webhook"
-    docker_check()
+
+    # docker_check() не проверяем наличие докер, потому что вроде как при этой проверке возникает ошибка, даже если докер есть (не успел стартануть?)
 
     if len(sys.argv) > 1 and sys.argv[1] == "update":
         update_container()

@@ -23,8 +23,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем файл .env.production и переименовываем его в .env
 COPY .env.production /app/.env
 
+
+
+
 # Копируем проект
 COPY . /app
+
+
 
 # Не запускаем миграции, так как база у нас отдельно
 # RUN python manage.py migrate
@@ -36,6 +41,9 @@ COPY . /app
 # Копируем entrypoint.sh
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+
+RUN echo "$(date +'%Y-%m-%d %H:%M:%S')" > /app/timestamp
 
 # Открываем порт
 EXPOSE 8008

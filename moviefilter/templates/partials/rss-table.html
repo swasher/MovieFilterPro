@@ -24,7 +24,7 @@
 
         <tr {% if f.kinorium_partial_match %} class="htmx-scroll table-warning" {% else %}  class="htmx-scroll" {% endif %}>
             <td>
-                <img src="{{ f.poster }}" class="imgdiv" >
+                <img src="{{ f.poster_url }}" class="imgdiv" alt="Poster of {{ f.title }}">
             </td>
             <td>
                 <h5>
@@ -237,31 +237,52 @@
         if (element.classList.contains('copy-btn')) {
             const text = element.getAttribute('data-text');
 
-            // Копируем текст
-            navigator.clipboard.writeText(text)
-                .then(() => {
-                    console.log('Text copied to clipboard:', text);
-
-                    // Настраиваем popup
-                    const popup = document.getElementById('popup');
-                    const rect = element.getBoundingClientRect();
-
-                    // Позиционируем popup
-                    popup.style.top = (rect.top + window.scrollY - 30) + 'px';
-                    popup.style.left = (rect.left + window.scrollX + (rect.width / 2)) + 'px';
-                    popup.style.transform = 'translateX(-50%)';
-
-                    // Показываем и скрываем
-                    popup.classList.add('show');
-                    setTimeout(() => {
-                        popup.classList.remove('show');
-                    }, 1000);
-                })
-                .catch(error => {
-                    console.error('Error copying text:', error);
-                });
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                // Копируем текст с использованием Clipboard API
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        console.log('Text copied to clipboard with Clipboard API:', text);
+                        showPopup(element);
+                    })
+                    .catch(error => {
+                        console.error('Error copying text with Clipboard API:', error);
+                    });
+            } else {
+                console.warn('navigator.clipboard.writeText is not supported or accessible.');
+                // Альтернативный метод копирования текста
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    console.log('Text copied to clipboard (alternate):', text);
+                    showPopup(element);
+                } catch (error) {
+                    console.error('Error copying text (alternate):', error);
+                }
+                document.body.removeChild(textarea);
+            }
         }
     });
+
+    function showPopup(element) {
+        const popup = document.getElementById('popup');
+        const rect = element.getBoundingClientRect();
+
+        // Позиционируем popup
+        popup.style.top = (rect.top + window.scrollY - 30) + 'px';
+        popup.style.left = (rect.left + window.scrollX + (rect.width / 2)) + 'px';
+        popup.style.transform = 'translateX(-50%)';
+
+        // Показываем и скрываем
+        popup.classList.add('show');
+        setTimeout(() => {
+            popup.classList.remove('show');
+        }, 1000);
+    }
+
+
     </script>
 {% endblock %}
 

@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="{% static 'bootstrap/bootstrap.min.css' %} ">
     <script defer src="{% static 'bootstrap/bootstrap-theme-toggler.js' %}"></script>
 
-{% comment %}    <!-- ALPINE JS -->
+    {% comment %}    <!-- ALPINE JS -->
     <script defer src="{% static 'alpine/alpine.min.js' %}"></script>{% endcomment %}
 
     <!-- HTMX -->
@@ -41,9 +41,9 @@
     <!-- hint.ccs (tooltips) -->
     <link href="{% static 'hint.css-2.7.0/hint.base.min.css' %}" rel="stylesheet">
 
-    {% compress css %}
+{% comment %}    {% compress css %}
         <link type="text/x-scss" href="{% static 'style.scss' %}" rel="stylesheet" media="screen">
-    {% endcompress %}
+    {% endcompress %}{% endcomment %}
 
     <script src="{% static 'toasts.js' %}"></script>
 

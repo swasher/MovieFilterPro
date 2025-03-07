@@ -205,13 +205,21 @@ tunnel:
 login:
 	docker login
 
-push:
+build-and-push:
 	# build and upload
 	python manage.py collectstatic --noinput
-	uv export --format requirements-txt > requirements.txt
-	docker buildx build --platform linux/arm/v7 -t swasher/movie-filter-pro:armv7 --push .
-	#docker buildx build --platform linux/arm/v7 --no-cache -t swasher/movie-filter-pro:armv7 --push .
+	uv export --no-dev --format requirements-txt > requirements.txt
+	#docker buildx build --platform linux/arm/v7 -t swasher/movie-filter-pro:armv7 --push .
+	docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
 	rm requirements.txt
+
+# Цель с кэшем
+push: CACHE_OPTION=
+push: build-and-push
+
+# Цель без кэша
+push-no-cache: CACHE_OPTION=--no-cache
+push-no-cache: build-and-push
 
 run:
 	# if you need run, you must build image with x86 compatible settings (not implemented)

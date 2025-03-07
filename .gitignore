@@ -8,3 +8,5 @@ collectstatic
 api.md
 .env
 .env.production
+media/cached_images/
+.make_targets_cache

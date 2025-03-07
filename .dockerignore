@@ -25,3 +25,4 @@ uv.lock
 pyproject.toml
 db.sqlite3
 logs/*.log
+media/cached_images/

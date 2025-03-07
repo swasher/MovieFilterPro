@@ -13,18 +13,16 @@ urlpatterns = [
     path('', include('moviefilter.urls')),
 ]
 
-# For development only!
-# if settings.DEBUG:
-#     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-if settings.DEBUG:
+
+if settings.ENABLE_BROWSER_RELOAD:
     # django_browser_reload APP
     urlpatterns += path("__reload__/", include("django_browser_reload.urls")),
-
+if settings.ENABLE_DEBUG_TOOLBAR:
     # add debug_toolbar APP
     urlpatterns += [
         path('__debug__/', include('debug_toolbar.urls')),
     ]
-
+if settings.DEBUG:
     # add serve for Media during development
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)[0],
     # urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
