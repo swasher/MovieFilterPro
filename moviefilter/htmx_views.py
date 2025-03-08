@@ -105,11 +105,75 @@ def clear_log(request):
         return HttpResponse(status=500)
 
 
+# @require_GET
+# def rss_table_data(request):
+#     prefs = UserPreferences.objects.get(user=request.user)
+#     paginate_by = settings.INFINITE_PAGINATION_BY
+#
+#     if 'priority' in request.GET:
+#         match request.GET['priority']:
+#             case 'HIGH':
+#                 priority = HIGH
+#             case 'LOW':
+#                 priority = LOW
+#             case 'DEFER':
+#                 priority = DEFER
+#             case 'TRANS':
+#                 priority = TRANS_FOUND
+#     else:
+#         raise Exception('No priority in request!')
+#
+#     # Получаем уже показанные ID из запроса
+#     displayed_ids = request.GET.getlist('displayed_ids[]', [])
+#     displayed_ids = [int(id) for id in displayed_ids if id.isdigit()]
+#
+#     movies_qs = MovieRSS.objects.filter(priority=priority)
+#
+#     # Исключаем уже показанные фильмы
+#     if displayed_ids:
+#         movies_qs = movies_qs.exclude(id__in=displayed_ids)
+#
+#     if 'reverse' in request.GET:
+#         movies_qs = movies_qs.reverse()
+#
+#     if 'textfilter' in request.GET:
+#         # print(f"FILTER by: {request.GET['textfilter']}")
+#         movies_qs = movies_qs.filter(
+#             Q(title__icontains=request.GET['textfilter']) |
+#             Q(original_title__icontains=request.GET['textfilter']) |
+#             Q(year__icontains=request.GET['textfilter'])
+#         )
+#
+#     page_number = request.GET.get('page', 1)
+#     log(f'LEN: {movies_qs.count()}', 'debug')
+#     paginator = Paginator(movies_qs, paginate_by)
+#     page_obj = paginator.get_page(page_number)
+#
+#     found_total = movies_qs.count()
+#
+#     # Cache images in the view
+#     for f in page_obj:
+#         f.poster_url = get_cached_image_url(f.poster, f.pk, f.priority)
+#
+#     context = {
+#         "movies": page_obj,
+#         "found_total": found_total
+#     }
+#
+#     # debug
+#     print('\nAdded:')
+#     for m in page_obj:
+#         print(f'\t{m}')
+#
+#     return render(request, 'partials/rss-table.html', context)
+
 @require_GET
 def rss_table_data(request):
+    print('\nREQUEST NEW DATA')
     prefs = UserPreferences.objects.get(user=request.user)
-    paginate_by = settings.INFINITE_PAGINATION_BY
+    chunk_size = settings.INFINITE_PAGINATION_BY
 
+    # Получаем приоритет
     if 'priority' in request.GET:
         match request.GET['priority']:
             case 'HIGH':
@@ -123,34 +187,46 @@ def rss_table_data(request):
     else:
         raise Exception('No priority in request!')
 
+    # Получаем уже показанные ID
+    displayed_ids_str = request.GET.get('displayed_ids', '')
+    print(f'{displayed_ids_str=}')
+    displayed_ids = [int(id) for id in displayed_ids_str.split(',') if id.isdigit()]
+    print(f'{displayed_ids=}')
+
+    # Основной QuerySet
     movies_qs = MovieRSS.objects.filter(priority=priority)
+
+    # Фильтрация
+    if displayed_ids:
+        movies_qs = movies_qs.exclude(id__in=displayed_ids)
 
     if 'reverse' in request.GET:
         movies_qs = movies_qs.reverse()
 
     if 'textfilter' in request.GET:
-        print(f"FILTER by: {request.GET['textfilter']}")
         movies_qs = movies_qs.filter(
             Q(title__icontains=request.GET['textfilter']) |
             Q(original_title__icontains=request.GET['textfilter']) |
             Q(year__icontains=request.GET['textfilter'])
         )
 
-    page_number = request.GET.get('page', 1)
-    log(f'LEN: {movies_qs.count()}', 'debug')
-    paginator = Paginator(movies_qs, paginate_by)
-    page_obj = paginator.get_page(page_number)
-
+    # Берём следующую порцию
+    movies = movies_qs[:chunk_size]
     found_total = movies_qs.count()
 
-    # Cache images in the view
-    for f in page_obj:
-        f.poster_url = get_cached_image_url(f.poster, f.pk, f.priority)
+    # Кэшируем изображения
+    for movie in movies:
+        movie.poster_url = get_cached_image_url(movie.poster, movie.pk, movie.priority)
 
     context = {
-        "movies": page_obj,
+        "movies": movies,
         "found_total": found_total
     }
+
+    # debug
+    print('\nAdded:')
+    for m in movies:
+        print(f'\t{m}')
 
     return render(request, 'partials/rss-table.html', context)
 

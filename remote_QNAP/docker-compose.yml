@@ -7,4 +7,5 @@ services:
     volumes:
       - /share/CACHEDEV1_DATA/homes/swasher/PERSISTENT_VOLUME:/app/data
       - /share/CACHEDEV1_DATA/Torrents:/torrents_hotfolder
+      - /tmp/IMAGE_CACHE:/app/media/image_cached_images
     restart: no
