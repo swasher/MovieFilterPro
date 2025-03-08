@@ -207,6 +207,7 @@ login:
 
 build-and-push:
 	# build and upload
+	bump-my-version bump patch
 	python manage.py collectstatic --noinput
 	uv export --no-dev --format requirements-txt > requirements.txt
 	#docker buildx build --platform linux/arm/v7 -t swasher/movie-filter-pro:armv7 --push .

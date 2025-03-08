@@ -5,10 +5,11 @@ Adopted by SWASHER for using Django 5.1.5.
 
 """
 
-from pathlib import Path
 import os
-from decouple import config
+import tomllib
 import dj_database_url
+from pathlib import Path
+from decouple import config
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,6 +38,10 @@ LOGIN_URL = 'login'
 DEBUG_LOG = os.path.join(BASE_DIR, 'logs', 'debug.log')
 ERROR_LOG = os.path.join(BASE_DIR, 'logs', 'error.log')
 SCAN_LOG = os.path.join(BASE_DIR, 'logs', 'scan.log')
+
+with open("pyproject.toml", "rb") as f:
+    pyproject = tomllib.load(f)
+    VERSION = pyproject["project"]["version"]
 
 INTERNAL_IPS = [
     "127.0.0.1",
@@ -85,7 +90,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'moviefilter.middleware.toast_middleware.HtmxMessageMiddleware',
-    'moviefilter.middleware.debugbanner_middleware.DevBannerMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
 ]
 if ENABLE_DEBUG_TOOLBAR:
@@ -108,6 +112,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                "moviefilter.context_processors.version_processor",
+                "moviefilter.context_processors.dev_banner_processor",
             ],
         },
     },
