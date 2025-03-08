@@ -30,14 +30,12 @@
                 <td>
                     <h5>
                         <strong>{{ f.title }}</strong>
-                        <i class="bi bi-copy copy-btn" style="cursor: pointer; color: gray; font-size: 0.6em;"
-                           data-text="{{ f.title }}"></i>
+                        <i class="bi bi-copy copy-btn" data-text="{{ f.title }}"></i>
                     </h5>
                     <hr>
                     <h6>
                         {{ f.original_title }}
-                        <i class="bi bi-copy copy-btn" style="cursor: pointer; color: gray; font-size: 0.6em;"
-                           data-text="{{ f.original_title }}"></i>
+                        <i class="bi bi-copy copy-btn" data-text="{{ f.original_title }}"></i>
                     </h6>
                 </td>
                 <td>
@@ -316,6 +314,12 @@
     .fade-out {
             opacity: 0;
             transition: opacity 0.5s ease-out;
+    }
+
+    .copy-btn {
+        cursor: pointer;
+        color: gray;
+        font-size: 0.5em;
     }
 </style>
 {% block css %}
