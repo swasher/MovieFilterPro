@@ -63,8 +63,9 @@
 
 <body class="" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
-{% if request.is_dev %}
-<div class="alert center-aligned alert-success" role="alert">
+{% if is_dev %}
+{#<div class="alert center-aligned alert-success" role="alert">#}
+<div class="alert center-aligned alert-success sticky-top" style="z-index: 1050;" role="alert">
     <strong>DEVELOPER ENVIRONMENT</strong>
 </div>
 {% endif %}
