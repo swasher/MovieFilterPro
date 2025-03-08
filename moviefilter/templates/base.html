@@ -63,6 +63,12 @@
 
 <body class="" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
+{% if request.is_dev %}
+<div class="alert center-aligned alert-success" role="alert">
+    <strong>DEVELOPER ENVIRONMENT</strong>
+</div>
+{% endif %}
+
 {% include "header.html" %}
 {% block body %}  {% endblock %}
 

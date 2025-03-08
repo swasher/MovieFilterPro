@@ -213,11 +213,11 @@ build-and-push:
 	docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
 	rm requirements.txt
 
-# Цель с кэшем
+# Деплой с кэшем
 push: CACHE_OPTION=
 push: build-and-push
 
-# Цель без кэша
+# Деплой без кэша
 push-no-cache: CACHE_OPTION=--no-cache
 push-no-cache: build-and-push
 

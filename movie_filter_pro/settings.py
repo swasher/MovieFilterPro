@@ -85,6 +85,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'moviefilter.middleware.toast_middleware.HtmxMessageMiddleware',
+    'moviefilter.middleware.debugbanner_middleware.DevBannerMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
 ]
 if ENABLE_DEBUG_TOOLBAR:

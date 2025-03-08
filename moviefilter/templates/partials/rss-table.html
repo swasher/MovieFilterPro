@@ -94,7 +94,7 @@
                                   role="status"></span>
                         </button>
 
-                        <button type="button" class="btn btn-primary btn-sm"
+                        <button type="button" class="btn btn-primary btn-sm do-hide"
                                 data-bs-toggle="tooltip" title="Add to defer table"
                                 hx-post="{% url 'defer' f.pk %}"
                                 hx-target="closest tr"
@@ -105,7 +105,7 @@
                                   role="status"></span>
                         </button>
 
-                        <button type="button" class="btn btn-outline-primary btn-sm"
+                        <button type="button" class="btn btn-outline-primary btn-sm do-hide"
                                 data-bs-toggle="tooltip" title="Жду дубляж"
                                 hx-post="{% url 'wait_trains' f.pk %}"
                                 hx-target="closest tr"
@@ -116,7 +116,7 @@
                                   role="status"></span>
                         </button>
 
-                        <button type="button" class="btn btn-danger btn-sm"
+                        <button type="button" class="btn btn-danger btn-sm do-hide"
                                 data-bs-toggle="tooltip" title="Add to ignore table"
                                 hx-post="{% url 'ignore' f.pk %}"
                                 hx-target="closest tr"
@@ -129,21 +129,6 @@
 
 
                         <div class="d-flex flex-row mb-2">
-
-                            {% comment %}
-                        {# old kinorium button, just open search page#}
-                        {% with url='https://ru.kinorium.com/search/?q='|add:f.title|add:' '|add:f.original_title|add:' '|add:f.year %}
-                            <span class="badge text-bg-info" style="cursor: pointer" _="on click go to url {{ url|iriencode }} in new window">KR</span>
-                        {% endwith %}
-                        {% endcomment %}
-
-                            {% comment %}
-                        <span  class="badge text-bg-info" style="cursor: pointer" _="on click fetch '{% url 'kinorium_search' f.pk %}' then
-                                        log result then
-                                        go to url `${result}` in new window">
-                        KR
-                        </span>
-                        {% endcomment %}
 
                             <span class="badge text-bg-info" style="cursor: pointer"
                                   _="on click fetch '{% url 'kinorium_search' f.pk %}' then
@@ -174,40 +159,15 @@
                             {% else %}
                                 <span class="badge text-bg-light">KP</span>
                             {% endif %}
-
                         </div>
-
                     </div>
-
-                    {% comment %}
-                {% if movies.has_next and forloop.last %}
-                    <!--Триггер `revealed` возникает, когда объект появляется на экране в результате скролла.
-                        Тогда мы запускаем запрос к get_rss_table_data.
-                        Ответ содержит целую таблицу, но мы берем только сами строки - hx-select=".htmx-scroll"
-                        И вставляем к низу уже имебющихся.
-                        Получаем Infinite scroll -->
-                    <span id='triggerElement'
-                          hx-get="{% url 'get_rss_table_data' %}?page={{ movies.next_page_number }}"
-                          hx-swap="beforeend"
-                          hx-target="#loop"
-                          hx-select=".htmx-scroll"
-                          hx-trigger="revealed">
-                    </span>
-                {% endif %}
-{% endcomment %}
-
                 </td>
-
             </tr>
         {% endfor %}
         </tbody>
 
 
     </table>
-
-{% comment %}    <form id="movie-form">
-        <input type="hidden" id="displayed-ids-input" name="displayed_ids" value="">
-    </form>{% endcomment %}
 
     <!-- Сторожевой элемент после таблицы для отслеживания "нижнего" элемента -->
     <div id="sentinel"
@@ -239,78 +199,10 @@
     <script>
 
 
-        /*
-        К примеру, если фильмов всего 4, и юзер начинает их скрывать, то просто так новые фильмы не появятся,
-        потому что infinite scroll не будет работать - не возникает событие, что фильм достиг нижней границы экрана.
-        Поэтому если их становится мало (<4), то мы возбуждаем во фронтэнде событие (triggerElementManual), подгружающее еще фильмов.
-        */
-
-        {% comment %}    function triggerPotentialUpdate() {
-                       const elements = document.querySelectorAll('.htmx-scroll');
-                       const count = elements.length;
-                       console.log('MANUAL UPDATE [becouse page have only:', count, 'movies]')
-                       if (count < 3) {
-                           console.log('make request')
-                           {#const elem = document.getElementById("triggerElement");#}
-                           {#elem.dispatchEvent(new Event('loadMore'));#}
-                           {#document.body.dispatchEvent(new Event('loadMore'));#}
-                           document.getElementById('triggerElementManual').click();
-                       }
-                   }{% endcomment %}
-
-
-        console.log(11111)
-
 
         // Флаг для отслеживания загрузки
         let isLoading = false;
 
-{% comment %}
-        // Функция для проверки необходимости подгрузки
-        function checkForLoad() {
-            console.log('Check for load...')
-            if (isLoading) {
-                console.log("-->Already loading, skipping checkForLoad");
-                return;
-            }
-
-            const contentHeight = document.getElementById('loop').getBoundingClientRect().height;
-            const windowHeight = window.innerHeight;
-            const scrollTop = window.scrollY || document.documentElement.scrollTop;
-
-            console.log('-->Content height:', contentHeight);
-            console.log('-->Window height:', windowHeight);
-            console.log('-->Scroll position:', scrollTop);
-
-            // Если контента меньше высоты окна или скролл близко к концу
-            if (contentHeight <= windowHeight || (contentHeight - (scrollTop + windowHeight) < 200)) {
-                console.log("-->Conditions met, calling requestNewContent");
-                requestNewContent();
-            } else {
-                console.log("-->Conditions not met, not calling requestNewContent");
-            }
-        }
-{% endcomment %}
-
-{% comment %}        // Функция запроса нового контента
-        function requestNewContent() {
-            console.log("Run requestNewContent")
-            if (isLoading) {
-                console.log('--> But already loading, skipping requestNewContent')
-                return
-            }
-
-            const sentinel = document.getElementById('sentinel');
-            if (sentinel) {
-                // Обновляем значение скрытого поля перед запросом
-                const displayedIds = getVisibleMovieIds();
-                console.log("-->displayedIds=", displayedIds)
-                document.getElementById('displayed-ids-input').value = displayedIds.join(',');
-
-                isLoading = true;
-                htmx.trigger(sentinel, 'intersect');
-            }
-        }{% endcomment %}
 
        // Получение ID видимых фильмов
         function getVisibleMovieIds() {
@@ -322,81 +214,11 @@
             return answer
         }
 
-        {% comment %}
-       // Инициализация IntersectionObserver для sentinel
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('Init IntersectionObserver...')
-            const sentinel = document.getElementById('sentinel');
-            if (!sentinel) return;
-
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting && !isLoading) {
-                        requestNewContent();
-                    }
-                });
-            }, {
-                root: null,
-                rootMargin: '0px',
-                threshold: 1.0
-            });
-
-            observer.observe(sentinel);
-
-            // При завершении подгрузки сбрасываем флаг
-            htmx.on("htmx:afterSwap", () => {
-                isLoading = false;
-            });
-        });{% endcomment %}
-
-
-
-
-
-{% comment %}
-        // Отслеживаем завершение HTMX-запросов
-        htmx.on("htmx:afterSwap", (e) => {
-            console.log('Content swapped');
-            isLoading = false;
-            checkForLoad();
-        });
-
-
-        // Отслеживаем удаление элементов
-        htmx.on("htmx:afterDelete", (e) => {
-            console.log('Element deleted');
-            setTimeout(checkForLoad, 100); // Небольшая задержка для обновления DOM
-        });
-
-        htmx.on("htmx:beforeRequest", () => {
-            isLoading = true;
-        });
-
-        // ResizeObserver для отслеживания изменений размера
-        const resizeObserver = new ResizeObserver(entries => {
-            checkForLoad();
-        });
-
-        // Инициализация при загрузке страницы
-        document.addEventListener('DOMContentLoaded', () => {
-            const loop = document.getElementById('loop');
-            if (loop) {
-                resizeObserver.observe(loop);
-                checkForLoad();
-            }
-        });
-
-        // Наблюдаем за tbody
-        resizeObserver.observe(document.getElementById('loop'));
-{% endcomment %}
-
-
-
-
-        // Обработчик для кнопок "copy to clipboard"
-        // Делегируем события клика для всех элементов с классом copy-btn
         document.body.addEventListener('click', function (event) {
             const element = event.target;
+
+            // Обработчик для кнопок "copy to clipboard"
+            // Делегируем события клика для всех элементов с классом copy-btn
             if (element.classList.contains('copy-btn')) {
                 const text = element.getAttribute('data-text');
 
@@ -427,6 +249,14 @@
                     document.body.removeChild(textarea);
                 }
             }
+
+            // Аниимация удаления строки, тут только добавляется анимация
+            if (element.closest('button')?.classList.contains('do-hide')) {
+                // Не нужно вручную удалять строку, так как HTMX сам это сделает
+                const row = element.closest('tr');
+                row.classList.add('fade-out');
+            }
+
         });
 
         // popup "Copied!" (для copy to clipboard)
@@ -446,44 +276,47 @@
             }, 1000);
         }
 
-
     </script>
 {% endblock %}
 
 
 
-{% block css %}
-    <style>
-        .copied-popup {
-            position: absolute;
-            top: -30px; /* Подстройте под ваши нужды */
-            left: 50%;
-            transform: translateX(-50%);
-            background: #ffffff;
-            color: #333;
-            border: 1px solid #555;
-            padding: 4px 6px;
-            border-radius: 3px;
-            font-size: 12px;
-            opacity: 0;
-            transition: opacity 0.2s;
-            pointer-events: none; /* Чтобы не мешало кликам */
-            z-index: 1000;
-        }
+<style>
+    .copied-popup {
+        position: absolute;
+        top: -30px; /* Подстройте под ваши нужды */
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ffffff;
+        color: #333;
+        border: 1px solid #555;
+        padding: 4px 6px;
+        border-radius: 3px;
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none; /* Чтобы не мешало кликам */
+        z-index: 1000;
+    }
 
-        .copied-popup.show {
-            opacity: 1;
-        }
+    .copied-popup.show {
+        opacity: 1;
+    }
 
-        #sentinel {
-            height: 1px;
-            margin: 0;
-            {#visibility: hidden;#}
-            opacity: 0;
-        }
+    #sentinel {
+        height: 1px;
+        margin: 0;
+        opacity: 0;
+    }
 
-        #loop {
+    #loop {
             min-height: 100px;
         }
-    </style>
+
+    .fade-out {
+            opacity: 0;
+            transition: opacity 0.5s ease-out;
+    }
+</style>
+{% block css %}
 {% endblock %}
