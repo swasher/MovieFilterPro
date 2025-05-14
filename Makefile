@@ -14,9 +14,6 @@ dummy:
 factory:
 	doppler run --  python -m factory_boy.main
 
-install:
-	pipenv install
-
 superuser:
 	# this environment variables came from doppler:
 	#	DJANGO_SUPERUSER_USERNAME=testuser

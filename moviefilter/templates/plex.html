@@ -24,6 +24,7 @@
             <th scope="col">originalTitle</th>
             <th scope="col">file</th>
             <th scope="col">year</th>
+            <th scope="col">IDs</th>
         </tr>
         </thead>
         <tbody>
@@ -34,6 +35,11 @@
                 <td>{{ f.originalTitle }}</td>
                 <td>{{ f.media.0.parts.0.file | cutfilename  }}</td>
                 <td>{{ f.year }}</td>
+                <td>
+                    {% for guid in f.guids %}
+                        {{ guid|cut:"<Guid:"|cut:">" }}<br>
+                    {% endfor %}
+                </td>
             </tr>
         {% endfor %}
 
