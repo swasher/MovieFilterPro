@@ -18,6 +18,7 @@ from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, ne
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from .util import log
 
+from telegram_bot import send_telegram_message
 
 
 def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
@@ -207,30 +208,80 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         m.kinopoisk_id = None
         m.kinopoisk_rating = None
 
-    try:
-        m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
-    except AttributeError:
-        log("WARNING! CAN'T GET [genres]")
+
+    """
+    ПРОБЛЕМА НАЧИНАЕТСЯ ТУТ - В find_next_sibling 
+    """
+    # DEPRECATED
+    # try:
+    #     m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
+    # except AttributeError:
+    #     log("WARNING! CAN'T GET [genres]")
+    #     m.genres = ''
+
+    genres_element = soup.select_one('b:-soup-contains("Жанр:")')
+    if genres_element:
+        next_element = genres_element.find_next_sibling('span', class_='lnks_tobrs')
+        if next_element:
+            m.genres = next_element.text
+        else:
+            m.genres = ''
+    else:
         m.genres = ''
 
-    countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
-    countries_list = Country.objects.values_list('name', flat=True)
+    # countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
+    countries_element = soup.select_one('b:-soup-contains("Выпущено:")')
+    if countries_element:
+        next_element = countries_element.find_next_sibling('span', class_='lnks_tobrs')
+        if next_element:
+            countries = next_element.text
+        else:
+            countries = ''
+    else:
+        countries = ''
+
+    known_countries_list = Country.objects.values_list('name', flat=True)
+
     if countries:
-        m.countries = ', '.join(list(c for c in countries.split(', ') if c in countries_list))
+        m.countries = ', '.join(list(c for c in countries.split(', ') if c in known_countries_list))
     else:
         m.countries = ''
 
-    try:
-        m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
-    except AttributeError:
-        log("WARNING! CAN'T GET [director]")
+    director_element = soup.select_one('b:-soup-contains("Режиссер:")')
+    if director_element:
+        next_element = director_element.find_next_sibling('span', class_='lnks_toprs')
+        if next_element:
+            m.director = next_element.text
+        else:
+            m.director = ''
+    else:
         m.director = ''
 
-    try:
-        m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
-    except AttributeError:
-        log("WARNING! CAN'T GET [actors]")
+    # deprecated
+    # try:
+    #     m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
+    # except AttributeError:
+    #     log("WARNING! CAN'T GET [director]")
+    #     m.director = ''
+
+
+    actors_element = soup.select_one('b:-soup-contains("В ролях:")')
+    if actors_element:
+        next_element = actors_element.find_next_sibling('span', class_='lnks_toprs')
+        if next_element:
+            m.actors = next_element.text
+        else:
+            m.actors = ''
+    else:
         m.actors = ''
+
+
+    # deprecated
+    # try:
+    #     m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
+    # except AttributeError:
+    #     log("WARNING! CAN'T GET [actors]")
+    #     m.actors = ''
 
     try:
         m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
@@ -246,6 +297,20 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     if poster[:4] != 'http':
         poster = 'https://kinozal.tv' + poster
     m.poster = poster
+
+    print(f'\n == FETCHED DATA FOR {m.title} ==')
+    print(f'{m.original_title=}', f'{m.year=}')
+    print(f'{m.imdb_id=}')
+    print(f'{m.imdb_rating=}')
+    print(f'{m.kinopoisk_id=}')
+    print(f'{m.kinopoisk_rating=}')
+    print(f'{m.genres=}')
+    print(f'{m.countries=}')
+    print(f'{m.director=}')
+    print(f'{m.actors=}')
+    print(f'{m.plot=}'[:200])
+    print(f'{m.translate=}')
+    print(f'{m.poster=}')
 
     return m, response.elapsed.total_seconds()
 
@@ -303,7 +368,7 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
             log(f' ┣━ MARK AS PARTIAL [{status}]')
             m.kinorium_partial_match = True
 
-        m, sec = get_details(m)
+        m, sec = get_details(m)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS
         log(f' ┣━ GET DETAILS: {sec:.1f}s')
 
         # Эта проверка выкидывает все, что через него не прошло

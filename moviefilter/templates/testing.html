@@ -2,34 +2,8 @@
 {% load static %}
 
 {% block body %}
-    <!-- Form with HTMX integration -->
-    <form id="myForm" hx-post="/tst">
+    <button hx-post="/run_deleting_since_date/" hx-trigger="click" hx-target=".result">Удалить с...</button>
 
-        <!-- Radio buttons -->
-        <label>
-            <input type="radio" name="radioOption" value="option1" hx-trigger="click" /> Option 1
-        </label>
-        <label>
-            <input type="radio" name="radioOption" value="option2" hx-trigger="click" /> Option 2
-        </label>
+    <div class="result"></div>
 
-        <br>
-
-        <!-- Checkbox -->
-        <label>
-            <input type="checkbox" name="checkBox" hx-trigger="click" /> Check me
-        </label>
-
-        <br>
-
-        <!-- Text field -->
-        <label>
-            Enter text:
-            <input type="text" name="textField" hx-trigger="change" />
-        </label>
-
-    </form>
-
-    <!-- Display result here -->
-    <div id="result" hx-trigger="load"></div>
 {% endblock %}

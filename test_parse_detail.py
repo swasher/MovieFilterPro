@@ -27,7 +27,7 @@ def modified_kinozal_scan(site: LinkConstructor, user):
 
 
 if __name__ == '__main__':
-    page = 32
+    page = 1
 
     page = LinkConstructor(page=page)
     user = User.objects.get(pk=1)
