@@ -11,9 +11,6 @@ _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
 dummy:
 	echo Do not run without arguments! $(_R)
 
-factory:
-	doppler run --  python -m factory_boy.main
-
 superuser:
 	# this environment variables came from doppler:
 	#	DJANGO_SUPERUSER_USERNAME=testuser
@@ -131,67 +128,6 @@ freeze:
 
 ssh:
 	docker exec -it sandglass_db_1 bash
-
-messages:
-	echo 'First `make messages`, then POEdit, then `compile`!'
-	# update translation strings
-	django-admin makemessages --all --ignore=env
-
-compile:
-	echo 'First `make messages`, then POEdit, then `compile`!'
-	django-admin compilemessages --ignore=env
-
-provision:
-	# === work under WSL ===
-	# Install server fron scratch. Only ssh access needed.
-	# -vvv for three level verbosity
-	# usage:
-	#    make provision server=[production|stage]
-	wsl doppler run -p print_mes -c $(server) -- ansible-playbook --limit $(server) ansible/provision.yml
-
-full_deploy:
-	# === work under WSL ===
-	# Deploy software on tuned server. Full deploy.
-	wsl ansible-playbook --limit $(server) ansible/provision.yml --tags "deploy_tag"
-
-deploy:
-	# === work under WSL ===
-	# Deploy software on tuned server. Quick deploy.
-	wsl doppler run -p print_mes -c $(server) -- ansible-playbook --limit $(server) ansible/deploy.yml
-
-vault-edit:
-	# === work under WSL ===
-	ansible-vault edit --vault-password-file=.vault_password -v ansible/group_vars/vault.yml
-
-vault-decrypt:
-	# === work under WSL ===
-	ansible-vault decrypt --vault-password-file=.vault_password -v ansible/group_vars/vault.yml
-
-vault-encrypt:
-	# === work under WSL ===
-	ansible-vault encrypt --encrypt-vault-id=default --vault-password-file=.vault_password -v ansible/group_vars/vault.yml
-
-ssl:
-	# DEPRECATED
-	# === work under WSL ===
-	# creating ssl certificates
-	openssl req -x509 -sha256 -days 3560 -nodes -newkey rsa:2048 -subj "/CN=production/C=LV/L=Riga" -keyout rootCA.key -out rootCA.crt
-
-copydb-dev-prod:
-	@read  -p "Are you sure? This will delete PRODUCTION database!!! [y/N] " ans && ans=$${ans:-N} ; \
-    if [ $${ans} = y ] || [ $${ans} = Y ]; then \
-		printf $(_RED) "YES" ; \
-		pg_dump --format=custom --dbname=postgresql://postgres:postgres@localhost:5432/postgres \
-		| PGPASSWORD=$(DATABASE_PASSWORD) pg_restore -v --clean --host=$(DATABASE_HOST) --username=$(DATABASE_USER) --dbname=$(DATABASE_NAME) ; \
-	else \
-        printf $(_GREEN) "NO" ; \
-    fi
-	# pg_dump --clean --create --format=custom --dbname=postgresql://postgres:postgres@localhost:5432/postgres | pg_restore --clean --create --dbname=postgresql://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):5432/$(DATABASE_NAME) ; \
-
-DB_PROD := $(shell doppler secrets -p print_mes -c production get DB_URL --plain)
-DB_STAGE := $(shell doppler secrets -p print_mes -c stage get DB_URL --plain)
-copydb-prod-stage:
-	pg_dump --format=custom --dbname=$(DB_PROD)| pg_restore -v --clean -d $(DB_STAGE)
 
 
 tunnel:
