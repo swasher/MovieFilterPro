@@ -298,19 +298,20 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         poster = 'https://kinozal.tv' + poster
     m.poster = poster
 
-    print(f'\n == FETCHED DATA FOR {m.title} ==')
-    print(f'{m.original_title=}', f'{m.year=}')
-    print(f'{m.imdb_id=}')
-    print(f'{m.imdb_rating=}')
-    print(f'{m.kinopoisk_id=}')
-    print(f'{m.kinopoisk_rating=}')
-    print(f'{m.genres=}')
-    print(f'{m.countries=}')
-    print(f'{m.director=}')
-    print(f'{m.actors=}')
-    print(f'{m.plot=}'[:200])
-    print(f'{m.translate=}')
-    print(f'{m.poster=}')
+    # DEBUG
+    # print(f'\n == FETCHED DATA FOR {m.title} ==')
+    # print(f'{m.original_title=}', f'{m.year=}')
+    # print(f'{m.imdb_id=}')
+    # print(f'{m.imdb_rating=}')
+    # print(f'{m.kinopoisk_id=}')
+    # print(f'{m.kinopoisk_rating=}')
+    # print(f'{m.genres=}')
+    # print(f'{m.countries=}')
+    # print(f'{m.director=}')
+    # print(f'{m.actors=}')
+    # print(f'{m.plot=}'[:200])
+    # print(f'{m.translate=}')
+    # print(f'{m.poster=}')
 
     return m, response.elapsed.total_seconds()
 

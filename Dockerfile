@@ -5,14 +5,18 @@ FROM arm32v7/python:3.12-slim
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем инструменты сборки
+# Устанавливаем инструменты сборки и nginx
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем директорию /torrents_hotfolder
-RUN mkdir /torrents_hotfolder
+RUN mkdir -p /torrents_hotfolder /run/nginx
+
+# Копируем конфиг nginx
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Копируем зависимости
 COPY requirements.txt /app
@@ -23,13 +27,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем файл .env.production и переименовываем его в .env
 COPY .env.production /app/.env
 
-
-
-
 # Копируем проект
 COPY . /app
-
-
 
 # Не запускаем миграции, так как база у нас отдельно
 # RUN python manage.py migrate
@@ -53,4 +52,4 @@ ENTRYPOINT ["/app/entrypoint.sh"]
 
 # CMD остаётся как запасной вариант, но entrypoint его перехватит
 #CMD ["gunicorn", "--bind", "0.0.0.0:8008", "movie_filter_pro.wsgi:application"]
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8008", "movie_filter_pro.asgi:application"]
+#CMD ["daphne", "-b", "0.0.0.0", "-p", "8008", "movie_filter_pro.asgi:application"]
