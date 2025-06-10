@@ -116,8 +116,10 @@ def remove_cached_image(movie_pk):
     """
     log(f"Trying to remove cached image by movie_pk: {movie_pk}", 'debug')
     try:
+        # cached_dir = Path(settings.MEDIA_ROOT) / "cached_images"
+        cached_dir = settings.CACHE_ROOT
+
         # Ищем имя файла, который связан с этим movie_pk
-        cached_dir = Path(settings.MEDIA_ROOT) / "cached_images"
         for filename in os.listdir(cached_dir):
             if filename.startswith(f"{movie_pk}_"):
                 cached_filepath = cached_dir / filename
@@ -162,7 +164,7 @@ def download_and_cache_image(image_url, movie_pk, priority):
     Скачивает и кэширует изображение.
     Потокобезопасная функция.
     """
-    # Проверяем, нужно ли кэшировать изображение для данного приоритета
+    # Проверяем, нужно ли кэшировать изображение для данного приоритета (для редко используемых приоритетов не кешируем)
     if priority not in VALID_PRIORITY:
         log(f"Skipping caching for movie_pk: {movie_pk}, priority: {priority}", 'debug')
         return
@@ -190,7 +192,7 @@ def download_and_cache_image(image_url, movie_pk, priority):
         file_extension = os.path.splitext(base_name)[1]
         cached_filename = f"{movie_pk}_{file_name_hash}{file_extension}"  # Используем PK фильма
 
-        cached_filepath = Path(settings.MEDIA_ROOT) / "cached_images" / cached_filename
+        cached_filepath = settings.CACHE_ROOT / cached_filename
 
         # Check if the image is already cached
         if cached_filepath.exists():
@@ -227,7 +229,7 @@ def get_cached_image_url(image_url, movie_pk, priority):
     Если нет, то возвращает исходный URL, но запускает скачивание в фоне.
     Возвращает URL к изображению.
     """
-    # Проверяем, нужно ли кэшировать изображение для данного приоритета
+    # Проверяем, нужно ли кэшировать изображение для данного приоритета (для редко используемых приоритетов не кешируем)
     if priority not in VALID_PRIORITY:
         log(f"Skipping getting cached image url, movie_pk: {movie_pk}, priority: {priority}", 'debug')
         return image_url  # Изображение не нужно кешировать, возвращаем оригинальный URL
@@ -241,18 +243,22 @@ def get_cached_image_url(image_url, movie_pk, priority):
     if not base_name:
         base_name = hashlib.sha256(image_url.encode()).hexdigest() + ".jpg"  # fallback for base name
 
+        # TODO Чисто теоретически, изображения могут быть не только в jpg, а в png, к примеру.
+
     file_name_hash = hashlib.sha256(image_url.encode()).hexdigest()
     file_extension = os.path.splitext(base_name)[1]
     cached_filename = f"{movie_pk}_{file_name_hash}{file_extension}"  # Используем PK фильма
 
-    cached_filepath = Path(settings.MEDIA_ROOT) / "cached_images" / cached_filename
+    cached_filepath = settings.CACHE_ROOT / cached_filename
 
     # Проверяем, есть ли уже изображение в кэше
     if cached_filepath.exists():
-        return settings.MEDIA_URL + "cached_images/" + cached_filename
+        print(f'CACHE: return cached url {settings.CACHE_URL + cached_filename}')
+        return settings.CACHE_URL + cached_filename
 
     # Изображения нет в кэше, запускаем скачивание в фоне
     threading.Thread(target=download_and_cache_image, args=(image_url, movie_pk, priority)).start()
 
     # Возвращаем оригинальный URL (как заглушку)
+    print(f'CACHE: return original url {image_url}')
     return image_url
