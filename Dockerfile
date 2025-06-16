@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем директорию /torrents_hotfolder
+# Создаем директорию /torrents_hotfolder и /run/nginx
 RUN mkdir -p /torrents_hotfolder /run/nginx
 
 # Копируем конфиг nginx
@@ -30,7 +30,7 @@ COPY .env.production /app/.env
 # Копируем проект
 COPY . /app
 
-# Не запускаем миграции, так как база у нас отдельно
+# Не запускаем миграции, так как база у нас отдельно от проекта и еще не примонтирована
 # RUN python manage.py migrate
 
 # Собираем статические файлы
