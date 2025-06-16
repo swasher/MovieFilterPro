@@ -25,4 +25,3 @@ uv.lock
 db.sqlite3
 logs/*.log
 media/cached_images/
-collectstatic/

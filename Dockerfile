@@ -36,8 +36,6 @@ COPY . /app
 # Собираем статические файлы
 # Просто копируем статику из папки collectstatic
 # RUN python manage.py collectstatic --noinput
-# Сборка статики:
-RUN python manage.py collectstatic --noinput
 
 # Копируем entrypoint.sh
 COPY entrypoint.sh /app/entrypoint.sh
