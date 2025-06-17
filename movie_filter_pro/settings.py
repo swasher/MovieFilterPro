@@ -328,4 +328,4 @@ CHANNEL_LAYERS = {
     },
 }
 
-CSRF_FAILURE_VIEW = 'your_project.views.csrf_failure'  # временно
+CSRF_FAILURE_VIEW = 'moviefilter.views.csrf_failure'  # временно
