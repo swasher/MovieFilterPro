@@ -327,3 +327,5 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',  # Для разработки
     },
 }
+
+CSRF_FAILURE_VIEW = 'your_project.views.csrf_failure'  # временно

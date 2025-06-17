@@ -24,6 +24,13 @@ from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_
 logger = logging.getLogger('my_logger')
 
 
+
+from django.http import HttpResponseForbidden
+def csrf_failure(request, reason=""):
+    return HttpResponseForbidden(f"CSRF Failure: {reason}")
+
+
+
 @login_required
 def rss(request):
     last_scan = UserPreferences.objects.get(user=request.user).last_scan
