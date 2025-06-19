@@ -235,7 +235,6 @@ from django.views.decorators.csrf import csrf_exempt
 
 
 @require_POST
-@csrf_exempt
 def ignore_movie(request, pk):
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=SKIP)

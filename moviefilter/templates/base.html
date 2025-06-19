@@ -59,9 +59,30 @@
     {% block css %}{% endblock %}
 
 
+    <script>
+        document.body.addEventListener('htmx:configRequest', (event) => {
+           // Пытаемся получить CSRF токен либо из скрытого поля формы, либо из cookie
+           const token = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                         (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+
+           if (token) {
+               event.detail.headers['X-CSRFToken'] = token;
+           }
+       });
+   </script>
+
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{% comment %}
+    DEPRECATED - Заменено на js скрипт, потому что этот старый метод не пригоден для ОБНОВЛЯЮЩИХСЯ частей страницы,
+    в них нужно динамически обновлять токен. Например, в подгружающихся частях основного списка фильмов.
+    <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+{% endcomment %}
+
+<body>
+
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
 
 {% if is_dev %}
 {#<div class="alert center-aligned alert-success" role="alert">#}
