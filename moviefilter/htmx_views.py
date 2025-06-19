@@ -232,6 +232,7 @@ def rss_table_data(request):
 
 
 @require_POST
+@csrf_exempt
 def ignore_movie(request, pk):
     try:
         MovieRSS.objects.filter(pk=pk).update(priority=SKIP)
