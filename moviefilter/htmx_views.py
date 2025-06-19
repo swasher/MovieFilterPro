@@ -231,9 +231,6 @@ def rss_table_data(request):
     return render(request, 'partials/rss-table.html', context)
 
 
-from django.views.decorators.csrf import csrf_exempt
-
-
 @require_POST
 def ignore_movie(request, pk):
     try:

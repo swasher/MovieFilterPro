@@ -59,17 +59,7 @@
     {% block css %}{% endblock %}
 
 
-    <script>
-        document.body.addEventListener('htmx:configRequest', (event) => {
-           // Пытаемся получить CSRF токен либо из скрытого поля формы, либо из cookie
-           const token = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-                         (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
 
-           if (token) {
-               event.detail.headers['X-CSRFToken'] = token;
-           }
-       });
-   </script>
 
 </head>
 
@@ -120,6 +110,18 @@
 </div>{% endcomment %}
 
 {% block js %}{% endblock %}
+
+<script>
+    document.body.addEventListener('htmx:configRequest', (event) => {
+       // Пытаемся получить CSRF токен либо из скрытого поля формы, либо из cookie
+       const token = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                     (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+
+       if (token) {
+           event.detail.headers['X-CSRFToken'] = token;
+       }
+   });
+</script>
 
 </body>
 
