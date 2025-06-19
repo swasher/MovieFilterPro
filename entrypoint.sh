@@ -1,7 +1,7 @@
 #!/bin/sh
 
-echo "Starting nginx..."
-service nginx start
+#echo "Starting nginx..."
+#service nginx start
 
 echo "Running migrations..."
 python /app/manage.py migrate
