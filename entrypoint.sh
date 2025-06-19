@@ -1,8 +1,5 @@
 #!/bin/sh
 
-#echo "Starting nginx..."
-#service nginx start
-
 echo "Running migrations..."
 python /app/manage.py migrate
 if [ $? -ne 0 ]; then

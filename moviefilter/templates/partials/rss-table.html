@@ -194,9 +194,7 @@
 
 
 {% block js %}
-    <script>
-
-
+{% comment %}    <script>
 
         // Флаг для отслеживания загрузки
         let isLoading = false;
@@ -274,53 +272,5 @@
             }, 1000);
         }
 
-    </script>
-{% endblock %}
-
-
-
-<style>
-    .copied-popup {
-        position: absolute;
-        top: -30px; /* Подстройте под ваши нужды */
-        left: 50%;
-        transform: translateX(-50%);
-        background: #ffffff;
-        color: #333;
-        border: 1px solid #555;
-        padding: 4px 6px;
-        border-radius: 3px;
-        font-size: 12px;
-        opacity: 0;
-        transition: opacity 0.2s;
-        pointer-events: none; /* Чтобы не мешало кликам */
-        z-index: 1000;
-    }
-
-    .copied-popup.show {
-        opacity: 1;
-    }
-
-    #sentinel {
-        height: 1px;
-        margin: 0;
-        opacity: 0;
-    }
-
-    #loop {
-            min-height: 100px;
-        }
-
-    .fade-out {
-            opacity: 0;
-            transition: opacity 0.5s ease-out;
-    }
-
-    .copy-btn {
-        cursor: pointer;
-        color: gray;
-        font-size: 0.5em;
-    }
-</style>
-{% block css %}
+    </script>{% endcomment %}
 {% endblock %}

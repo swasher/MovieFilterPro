@@ -137,6 +137,92 @@
           })
           {% endcomment %}
         })()
+
+
+
+
+
+        // Флаг для отслеживания загрузки
+        let isLoading = false;
+
+
+       // Получение ID видимых фильмов
+        function getVisibleMovieIds() {
+            console.log('Run getVisibleMovieIds...')
+            let answer = Array.from(document.querySelectorAll('#loop tr'))
+                .map(row => row.getAttribute('data-movie-id'))
+                .filter(id => id);
+            console.log('-->Movies on page:', answer)
+            return answer
+        }
+
+        document.body.addEventListener('click', function (event) {
+            const element = event.target;
+
+            // Обработчик для кнопок "copy to clipboard"
+            // Делегируем события клика для всех элементов с классом copy-btn
+            if (element.classList.contains('copy-btn')) {
+                const text = element.getAttribute('data-text');
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    // Копируем текст с использованием Clipboard API
+                    navigator.clipboard.writeText(text)
+                        .then(() => {
+                            console.log('Text copied to clipboard with Clipboard API:', text);
+                            showPopup(element);
+                        })
+                        .catch(error => {
+                            console.error('Error copying text with Clipboard API:', error);
+                        });
+                } else {
+                    console.warn('navigator.clipboard.writeText is not supported or accessible.');
+                    // Альтернативный метод копирования текста
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        console.log('Text copied to clipboard (alternate):', text);
+                        showPopup(element);
+                    } catch (error) {
+                        console.error('Error copying text (alternate):', error);
+                    }
+                    document.body.removeChild(textarea);
+                }
+            }
+
+            // Аниимация удаления строки, тут только добавляется анимация
+            if (element.closest('button')?.classList.contains('do-hide')) {
+                // Не нужно вручную удалять строку, так как HTMX сам это сделает
+                const row = element.closest('tr');
+                row.classList.add('fade-out');
+            }
+
+        });
+
+        // popup "Copied!" (для copy to clipboard)
+        function showPopup(element) {
+            const popup = document.getElementById('popup');
+            const rect = element.getBoundingClientRect();
+
+            // Позиционируем popup
+            popup.style.top = (rect.top + window.scrollY - 30) + 'px';
+            popup.style.left = (rect.left + window.scrollX + (rect.width / 2)) + 'px';
+            popup.style.transform = 'translateX(-50%)';
+
+            // Показываем и скрываем
+            popup.classList.add('show');
+            setTimeout(() => {
+                popup.classList.remove('show');
+            }, 1000);
+        }
+
+
+
+
+
+
     </script>
 
 
@@ -185,6 +271,54 @@
             color: #7e7d7d;
             {#text-decoration: underline;#}
         }
+
+
+        /* НАЧАЛО БЛОКА ДЛЯ ПОДГРУЖАЕМОГО ФРАГМЕНТА RSS-TABLE.HTML */
+
+        .copied-popup {
+            position: absolute;
+            top: -30px; /* Подстройте под ваши нужды */
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffffff;
+            color: #333;
+            border: 1px solid #555;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none; /* Чтобы не мешало кликам */
+            z-index: 1000;
+        }
+
+        .copied-popup.show {
+            opacity: 1;
+        }
+
+        #sentinel {
+            height: 1px;
+            margin: 0;
+            opacity: 0;
+        }
+
+        #loop {
+                min-height: 100px;
+            }
+
+        .fade-out {
+                opacity: 0;
+                transition: opacity 0.5s ease-out;
+        }
+
+        .copy-btn {
+            cursor: pointer;
+            color: gray;
+            font-size: 0.5em;
+        }
+        /* КОНЕЦ БЛОКА ДЛЯ ПОДГРУЖАЕМОГО ФРАГМЕНТА RSS-TABLE.HTML */
+
+
 
     </style>
 {% endblock %}

@@ -6,23 +6,13 @@ FROM arm32v7/python:3.12-slim
 WORKDIR /app
 
 # Устанавливаем инструменты сборки и nginx
-# deprecated
-#RUN apt-get update && apt-get install -y --no-install-recommends \
-#    build-essential \
-#    libffi-dev \
-#    nginx \
-#    && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем директорию /torrents_hotfolder и /run/nginx
-# deprecated RUN mkdir -p /torrents_hotfolder /run/nginx
+# Создаем директорию /torrents_hotfolder
 RUN mkdir -p /torrents_hotfolder
-
-# Копируем конфиг nginx
-# deprecated COPY nginx.conf /etc/nginx/nginx.conf
 
 # Копируем зависимости
 COPY requirements.txt /app
