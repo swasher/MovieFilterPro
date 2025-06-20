@@ -192,13 +192,6 @@
                 }
             }
 
-            // Аниимация удаления строки, тут только добавляется анимация
-            if (element.closest('button')?.classList.contains('do-hide')) {
-                // Не нужно вручную удалять строку, так как HTMX сам это сделает
-                const row = element.closest('tr');
-                row.classList.add('fade-out');
-            }
-
         });
 
         // popup "Copied!" (для copy to clipboard)
@@ -218,8 +211,25 @@
             }, 1000);
         }
 
+        // Анимация удаления строки. ПОСЛЕ того, как сервер вернет ответ, плавно скрывает строку (стиль fade-out) и
+        // затем ее удаляем. В самой кнопке htmx удаление hx-swap="delete swap:0.3s" не нужно.
+        document.body.addEventListener('htmx:beforeSwap', function (event) {
+           // Проверяем, что это delete swap (то есть удаление строки)
+           const elt = event.target;
 
+           if (event.detail.xhr.status === 200 && event.detail.shouldSwap && elt.matches('tr')) {
+               // Отменяем немедленное удаление
+               event.detail.shouldSwap = false; // Это означает: «HTMX, не удаляй элемент сам — я сам этим займусь».
 
+               // Добавляем fade-out
+               elt.classList.add('fade-out');
+
+               // Ждем окончания анимации (0.6s), затем удаляем строку из таблицы вручную
+               setTimeout(() => {
+                   elt.remove();
+               }, 600); // должно совпадать с CSS transition
+           }
+       });
 
 
 
@@ -308,7 +318,7 @@
 
         .fade-out {
                 opacity: 0;
-                transition: opacity 0.5s ease-out;
+                transition: opacity 0.6s ease-out;
         }
 
         .copy-btn {

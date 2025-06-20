@@ -18,6 +18,8 @@
         </tr>
         </thead>
 
+
+
         <tbody id="loop">
 
         {% for f in movies %}
@@ -96,7 +98,7 @@
                                 data-bs-toggle="tooltip" title="Add to defer table"
                                 hx-post="{% url 'defer' f.pk %}"
                                 hx-target="closest tr"
-                                hx-swap="delete swap:0.7s"
+                                hx-swap="delete"
                                 {% comment %}onclick="triggerPotentialUpdate()"{% endcomment %}
                         >Defer
                             <span id="defer-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
@@ -107,7 +109,7 @@
                                 data-bs-toggle="tooltip" title="Жду дубляж"
                                 hx-post="{% url 'wait_trains' f.pk %}"
                                 hx-target="closest tr"
-                                hx-swap="delete swap:0.7s"
+                                hx-swap="delete"
                                 {% comment %}onclick="triggerPotentialUpdate()"{% endcomment %}
                         >Жду дубляж
                             <span id="wait-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
@@ -118,7 +120,7 @@
                                 data-bs-toggle="tooltip" title="Add to ignore table"
                                 hx-post="{% url 'ignore' f.pk %}"
                                 hx-target="closest tr"
-                                hx-swap="delete swap:0.6s"
+                                hx-swap="delete"
                                 {% comment %}onclick="triggerPotentialUpdate()"{% endcomment %}
                         >Hide
                             <span id="hide-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
@@ -190,87 +192,3 @@
     NO RESULT
 
 {% endif %}
-
-
-
-{% block js %}
-{% comment %}    <script>
-
-        // Флаг для отслеживания загрузки
-        let isLoading = false;
-
-
-       // Получение ID видимых фильмов
-        function getVisibleMovieIds() {
-            console.log('Run getVisibleMovieIds...')
-            let answer = Array.from(document.querySelectorAll('#loop tr'))
-                .map(row => row.getAttribute('data-movie-id'))
-                .filter(id => id);
-            console.log('-->Movies on page:', answer)
-            return answer
-        }
-
-        document.body.addEventListener('click', function (event) {
-            const element = event.target;
-
-            // Обработчик для кнопок "copy to clipboard"
-            // Делегируем события клика для всех элементов с классом copy-btn
-            if (element.classList.contains('copy-btn')) {
-                const text = element.getAttribute('data-text');
-
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    // Копируем текст с использованием Clipboard API
-                    navigator.clipboard.writeText(text)
-                        .then(() => {
-                            console.log('Text copied to clipboard with Clipboard API:', text);
-                            showPopup(element);
-                        })
-                        .catch(error => {
-                            console.error('Error copying text with Clipboard API:', error);
-                        });
-                } else {
-                    console.warn('navigator.clipboard.writeText is not supported or accessible.');
-                    // Альтернативный метод копирования текста
-                    const textarea = document.createElement('textarea');
-                    textarea.value = text;
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    try {
-                        document.execCommand('copy');
-                        console.log('Text copied to clipboard (alternate):', text);
-                        showPopup(element);
-                    } catch (error) {
-                        console.error('Error copying text (alternate):', error);
-                    }
-                    document.body.removeChild(textarea);
-                }
-            }
-
-            // Аниимация удаления строки, тут только добавляется анимация
-            if (element.closest('button')?.classList.contains('do-hide')) {
-                // Не нужно вручную удалять строку, так как HTMX сам это сделает
-                const row = element.closest('tr');
-                row.classList.add('fade-out');
-            }
-
-        });
-
-        // popup "Copied!" (для copy to clipboard)
-        function showPopup(element) {
-            const popup = document.getElementById('popup');
-            const rect = element.getBoundingClientRect();
-
-            // Позиционируем popup
-            popup.style.top = (rect.top + window.scrollY - 30) + 'px';
-            popup.style.left = (rect.left + window.scrollX + (rect.width / 2)) + 'px';
-            popup.style.transform = 'translateX(-50%)';
-
-            // Показываем и скрываем
-            popup.classList.add('show');
-            setTimeout(() => {
-                popup.classList.remove('show');
-            }, 1000);
-        }
-
-    </script>{% endcomment %}
-{% endblock %}
