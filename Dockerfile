@@ -5,7 +5,7 @@ FROM arm32v7/python:3.12-slim
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем инструменты сборки и nginx
+# Устанавливаем инструменты сборки
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
