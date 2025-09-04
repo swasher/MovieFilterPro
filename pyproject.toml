@@ -1,6 +1,6 @@
 [project]
 name = "moviefilterpro"
-version = "0.1.31"
+version = "0.1.32"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,7 +30,7 @@ dev = [
 ]
 
 [tool.bumpversion]
-current_version = "0.1.31"
+current_version = "0.1.32"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
