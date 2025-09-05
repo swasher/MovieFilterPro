@@ -3,7 +3,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 import datetime
 from typing import Any, List
-
+from .models import UserPreferences
 
 @dataclass
 class KinozalMovie:
@@ -68,16 +68,24 @@ class LinkConstructor:
     d - year
     """
 
-    browse = 'https://kinozal.tv/browse.php?'
-    details = 'https://kinozal.tv/details.php?'
-
-    def __init__(self, c=1002, v=3, page=0, d=None, s=None, id: int = None):
+    def __init__(self, base_domain: str, c=1002, v=3, page=0, d=None, s=None, id: int = None):
         self.c = c
         self.v = v
         self.page = page if page else 0
         self.id = id
         self.d = d
         self.s = s
+        self.domain = base_domain
+
+    @property
+    def browse(self):
+        # 'https://kinozal.tv/browse.php?'
+        return f'https://{self.domain}/browse.php?'
+
+    @property
+    def details(self):
+        # 'https://kinozal.tv/details.php?'
+        return f'https://{self.domain}/details.php?'
 
     @staticmethod
     def link(root, payload):

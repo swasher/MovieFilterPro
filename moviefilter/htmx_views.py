@@ -316,12 +316,14 @@ def get_torrent_file(request, kinozal_id: int):
     cookie_pass = UserPreferences.objects.get(user=request.user).cookie_pass
     cookie_uid = UserPreferences.objects.get(user=request.user).cookie_uid
     destination = UserPreferences.objects.get(user=request.user).torrents_hotfolder
+    prefs = UserPreferences.objects.get(user=request.user)
+    kinozal_domain = prefs.kinozal_domain
 
     out_of_torrent_number_message = 'Вам недоступен торрент-файл для скачивания'
 
     print('GET torrent', kinozal_id)
-    # TODO Гвозди
-    url = f"https://dl.kinozal.tv/download.php?id={kinozal_id}"
+
+    url = f"https://dl.{kinozal_domain}/download.php?id={kinozal_id}"
     print('LINK', url)
 
     headers = {'user-agent': "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36"}

@@ -90,7 +90,7 @@ class MovieRSS(models.Model):
         return self.director.split(', ')
 
     @property
-    def search_link(self):
+    def search_link(self, user):
         # for "Мизантроп / Misanthrope" and 2023
         # link = "https://kinozal.tv/browse.php?s=%CC%E8%E7%E0%ED%F2%F0%EE%EF+%2F+Misanthrope&g=0&c=1002&v=3&d=2023&w=0&t=0&f=0"
 
@@ -175,6 +175,7 @@ class UserPreferences(models.Model):
 
     cookie_pass = models.CharField(max_length=25, blank=True, null=True)
     cookie_uid = models.CharField(max_length=25, blank=True, null=True)
+    kinozal_domain = models.CharField(max_length=50, blank=True, null=True)
     torrents_hotfolder = models.CharField(max_length=70, blank=True, null=True)
 
     ignore_title = models.CharField(max_length=500, default='')

@@ -60,6 +60,8 @@ def user_preferences_update(request):
             pref.low_max_year = int(form.cleaned_data['low_max_year'])
             pref.low_min_rating = float(form.cleaned_data['low_min_rating'])
 
+            pref.kinozal_domain = form.cleaned_data['kinozal_domain']
+
             pref.plex_address = form.cleaned_data['plex_address']
             pref.plex_token = form.cleaned_data['plex_token']
 

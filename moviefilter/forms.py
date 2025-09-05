@@ -8,7 +8,7 @@ from crispy_bootstrap5.bootstrap5 import FloatingField
 class PreferencesForm(forms.ModelForm):
     class Meta:
         model = UserPreferences
-        fields = ['last_scan', 'scan_from_page', 'plex_address', 'plex_token', 'countries', 'genres', 'max_year', 'min_rating',
+        fields = ['last_scan', 'scan_from_page', 'plex_address', 'plex_token', 'countries', 'genres', 'max_year', 'min_rating', 'kinozal_domain',
                   'low_countries', 'low_genres', 'low_max_year', 'low_min_rating', 'ignore_title', 'cookie_pass', 'cookie_uid', 'torrents_hotfolder']
 
     def __init__(self, *args, **kwargs):
@@ -27,6 +27,7 @@ class PreferencesForm(forms.ModelForm):
             HTML("""<h3>Torrent</h3><hr>"""),
             Field('cookie_pass'),
             Field('cookie_uid'),
+            Field('kinozal_domain'),
             Field('torrents_hotfolder'),
 
             HTML("""<h3>Plex</h3><hr>"""),
