@@ -118,7 +118,7 @@ build:
 	doppler run -- docker compose up -d  --build
 
 up:
-	doppler run -- docker compose up -d
+	docker compose up -d
 
 down:
 	docker compose down
