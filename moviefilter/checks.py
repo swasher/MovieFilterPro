@@ -6,7 +6,7 @@ from .models import UserPreferences
 from .classes import KinozalMovie
 from .util import get_object_or_none
 from .util import not_match_rating
-from .util import log
+from .weblogger import log
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
@@ -25,9 +25,9 @@ def need_dubbed(m: KinozalMovie) -> bool:
     :param m:
     :return:
     """
+    # todo move to model property
     movie_exist = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year)
-    if movie_exist and movie_exist.first().priority == WAIT_TRANS:
-        return True
+    return bool(movie_exist and movie_exist.first().priority == WAIT_TRANS)
 
 
 def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
@@ -97,7 +97,7 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
     def prio(s: bool) -> str:
         return 'Low priority' if s else 'High priority'
 
-    prefs = UserPreferences.objects.get(user=user)
+    prefs = UserPreferences.get()
     if priority is LOW:
         stop_countries, stop_genres, max_year, min_rating = prefs.get_low_priority_preferences()
     elif priority is HIGH:

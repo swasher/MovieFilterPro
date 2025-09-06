@@ -26,7 +26,9 @@ logger = logging.getLogger('my_logger')
 
 @login_required
 def rss(request):
-    last_scan = UserPreferences.objects.get(user=request.user).last_scan
+    pref = UserPreferences.get()
+    last_scan = pref.last_scan
+
     total_high = MovieRSS.objects.filter(priority=HIGH).count()
     total_low = MovieRSS.objects.filter(priority=LOW).count()
     total_defer = MovieRSS.objects.filter(priority=DEFER).count()
@@ -41,8 +43,8 @@ def rss(request):
 
 @login_required()
 def user_preferences_update(request):
-    user = User.objects.get(pk=request.user.pk)
-    pref, _ = UserPreferences.objects.get_or_create(user=user)
+    # deprecated  user = User.objects.get(pk=request.user.pk)
+    pref = UserPreferences.get()
     form = PreferencesForm(request.POST or None, instance=pref)
 
     if request.method == 'POST':
@@ -68,9 +70,6 @@ def user_preferences_update(request):
             pref.save()
             return redirect(reverse('user_preferences'))
     return render(request, 'preferences_update_form.html', {'form': form})
-
-
-
 
 
 @login_required()
@@ -126,6 +125,10 @@ def kinorium(request):
     return render(request, 'kinorium.html', {'movies': movies})
 
 
+def scan_page(request):
+    return render(request, 'scan_page.html')
+
+
 def tst(request):
     if request.method == 'POST':
         print(request.POST)
@@ -136,7 +139,3 @@ def tst(request):
         return HttpResponse('SOME HTMX DATA')
     else:
         return render(request, 'testing.html')
-
-
-def scan_page(request):
-    return render(request, 'scan_page.html')

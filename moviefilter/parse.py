@@ -7,29 +7,50 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode, quote_plus
 
+from twisted.words.protocols.jabber.jstrports import client
+
+# from twisted.words.protocols.jabber.jstrports import client
+# from twisted.web.http import responses
+# from twisted.words.protocols.jabber.jstrports import client
+
 from .classes import KinozalMovie
-from .classes import LinkConstructor
+from moviefilter.kinozal import KinozalClient
+from moviefilter.kinozal import LinkConstructor
 from .classes import KinozalSearch
 
 from .util import is_float
 from .models import Country, MovieRSS
+from .models import UserPreferences
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
-from .util import log
+from .weblogger import log
 
 from .telegram_bot import send_telegram_message
 
 
-def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
+def kinozal_scan(start_page, scan_to_date: date, user):
+    """
+
+    :param start_page: стартовая страница, начинается от нуля.
+    :param scan_to_date:
+    :param user:
+    :return:
+    """
 
     last_day_reached = False
     last_page_reached = False
     counter = 0
-    while not last_day_reached and site.page <= 100:
+
+    if start_page is None:
+        current_page = 0
+    else:
+        current_page = start_page
+
+    while not last_day_reached and current_page <= 100:
 
         # Получаем список всех фильмов со страницы. Если достигли нужной даты, то last_day_reached возврашается как True
-        movies, last_day_reached = parse_page(site, scan_to_date)
+        movies, last_day_reached = parse_page(current_page, scan_to_date)
 
         # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу.
         # movie_audit удаляет из списка movies фильмы, не прошедшие проверку, а так-же заполняет каждый movie дополнительными данными.
@@ -50,26 +71,29 @@ def kinozal_scan(site: LinkConstructor, scan_to_date: date, user):
         log('')
 
         # переходим к сканированию следующей странице
-        site.next_page()
+        current_page += 1
 
     return counter
 
 
-def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool):
+def parse_page(page_number: int, scan_to_date: date) -> (list[KinozalMovie], bool):
     """
-    Принимает URL и дату, до которой будет сканировать.
-    URL - это объект Link_constructor
+    Принимает:
+     - номер страницы, которую будем сканировать.
+     - дату, до которой нужно будет сканировать.
     """
     END_DATE_REACHED = True
     END_DATE_NOT_REACHED = False
 
+    client = KinozalClient()
     movies: list[KinozalMovie] = []
 
     # download the HTML document
     # with an HTTP GET request
-    response = requests.get(site.url())
+    # response = requests.get(site.url())
+    response = client.browse_movies(page=page_number)
 
-    log(f'GRAB URL: {site.url()}')
+    log('GRAB URL: {}')
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")
@@ -80,7 +104,7 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
             """
             movie head format:
             
-            'Красная жара / Red Heat / 1988 / ПМ / UHD / BDRip (1080p)' - обычно такой форма
+            'Красная жара / Red Heat / 1988 / ПМ / UHD / BDRip (1080p)' - обычно такая форма
             'Наследие / 2023 / РУ, СТ / WEB-DL (1080p)'                 - если русский, то нет original_title
             'Телекинез / 2022-2023 / РУ / WEB-DL (1080p)'               - встречается и такое (тогда берем первые 4 цифры)
             
@@ -172,10 +196,14 @@ def parse_page(site: LinkConstructor, scan_to_date) -> (list[KinozalMovie], bool
 
 
 def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
-    site = LinkConstructor(id=m.kinozal_id)
+    pref = UserPreferences.get()
+
+    #site = LinkConstructor(id=m.kinozal_id)
+    client = KinozalClient()
 
     try:
-        response = requests.get(site.detail_url(), timeout=10)
+        # response = requests.get(site.detail_url(), timeout=10)
+        response = client.get_movie_details(m.kinozal_id)
         response.raise_for_status()
     except HTTPError as http_err:
         log(f"HTTP error occurred: {http_err}")
@@ -190,7 +218,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
 
     imdb_part = soup.select_one('a:-soup-contains("IMDb")')
     if imdb_part:
-        # todo weak assumption for [4]; may be need add some checks
+        # todo weak assumption for [4]; probably needs to add some checks
         m.imdb_id = imdb_part['href'].split('/')[4]
         rating = imdb_part.find('span').text
         m.imdb_rating = float(rating) if is_float(rating) else None
@@ -208,16 +236,6 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         m.kinopoisk_id = None
         m.kinopoisk_rating = None
 
-
-    """
-    ПРОБЛЕМА НАЧИНАЕТСЯ ТУТ - В find_next_sibling 
-    """
-    # DEPRECATED
-    # try:
-    #     m.genres = soup.select_one('b:-soup-contains("Жанр:")').find_next_sibling().text
-    # except AttributeError:
-    #     log("WARNING! CAN'T GET [genres]")
-    #     m.genres = ''
 
     genres_element = soup.select_one('b:-soup-contains("Жанр:")')
     if genres_element:
@@ -257,13 +275,6 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     else:
         m.director = ''
 
-    # deprecated
-    # try:
-    #     m.director = soup.select_one('b:-soup-contains("Режиссер:")').find_next_sibling().text
-    # except AttributeError:
-    #     log("WARNING! CAN'T GET [director]")
-    #     m.director = ''
-
 
     actors_element = soup.select_one('b:-soup-contains("В ролях:")')
     if actors_element:
@@ -271,17 +282,12 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         if next_element:
             m.actors = next_element.text
         else:
+            # todo replace with []
             m.actors = ''
     else:
+        # todo replace with []
         m.actors = ''
 
-
-    # deprecated
-    # try:
-    #     m.actors = soup.select_one('b:-soup-contains("В ролях:")').find_next_sibling().text
-    # except AttributeError:
-    #     log("WARNING! CAN'T GET [actors]")
-    #     m.actors = ''
 
     try:
         m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
@@ -294,8 +300,9 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         m.translate = translate_search.next_sibling.strip()
 
     poster = soup.find('img', 'p200').attrs['src']
+    # используют и внешние линки (тогда в нем есть http), и внутренние относительные линки (тогда надо добавить домен)
     if poster[:4] != 'http':
-        poster = 'https://kinozal.tv' + poster
+        poster = f'https://{pref.kinozal_domain}/{poster}'
     m.poster = poster
 
     # DEBUG
@@ -314,8 +321,6 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     # print(f'{m.poster=}')
 
     return m, response.elapsed.total_seconds()
-
-
 
 
 def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
@@ -360,7 +365,6 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         Тогда уже существующий в RSS фильм нужно обновить (установить priority=SKIP)
         """
 
-
         exist, match_full, status = exist_in_kinorium(m)
         if exist and match_full:
             log(f' ┣━ SKIP [{status}]')
@@ -369,7 +373,7 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
             log(f' ┣━ MARK AS PARTIAL [{status}]')
             m.kinorium_partial_match = True
 
-        m, sec = get_details(m)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS
+        m, sec = get_details(m)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS FOR THE MOVIE
         log(f' ┣━ GET DETAILS: {sec:.1f}s')
 
         # Эта проверка выкидывает все, что через него не прошло
@@ -383,13 +387,15 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
                 m.priority = LOW
 
         if m.priority in [LOW, HIGH]:  # Если фильм прошел проверки, то приорити будет или LOW или HIGH. Тогда записываем в базу, иначе - просто пропускаем.
-            log(f' ┣━ ADD TO DB [prio={"low" if m.priority==LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
+            log(f' ┣━ ADD TO DB [prio={"low" if m.priority == LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
 
             result.append(m)
 
     return result
 
-
+#
+# === DEPRECATED ===
+#
 def get_kinorium_first_search_results(data: str):
     """
     https://ru.kinorium.com/search/?q=%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D1%82%D0%BE%D1%80%203
@@ -414,6 +420,16 @@ def get_kinorium_first_search_results(data: str):
 
 
 def kinozal_search(kinozal_id: int):
+    """
+    Принимает фильм на входе, и ищет на кинозале разновидности этого фильма. Используется для
+    таблички Download где можно выбрать подходящую версию.
+    :param kinozal_domain: текущий рабочий домен кинозала (только домен, типа 'kinozal.tv')
+    :param kinozal_id:
+    :return:
+    """
+    client = KinozalClient()
+    pref = UserPreferences.get()
+
     m = MovieRSS.objects.get(id=kinozal_id)
     results = []
 
@@ -433,14 +449,14 @@ def kinozal_search(kinozal_id: int):
 
     for quality in [V_HD, V_4K]:
 
-        if year is not None:
-            l = LinkConstructor(s=search_string, d=year, v=quality)
+        if year:
+            link_builder = LinkConstructor(s=search_string, d=year, v=quality)
         else:
-            l = LinkConstructor(s=search_string, v=quality)
+            link_builder = LinkConstructor(s=search_string, v=quality)
         # for TERMINATOR, l = "https://kinozal.tv/browse.php?s=%F2%E5%F0%EC%E8%ED%E0%F2%EE%F0&g=0&c=1002&v=7&d=2019&w=0&t=0&f=0"
 
-        response = requests.get(l.search_url())
-        log(f'GRAB URL: {l.search_url()}')
+        response = client.get_html_response(link_builder.search_url())
+        log(f'GRAB URL: {link_builder.search_url()}')
 
         if response.ok:
             soup = BeautifulSoup(response.content, "html.parser")
@@ -455,7 +471,7 @@ def kinozal_search(kinozal_id: int):
                 m.seed = element.find('td', {'class': 'sl_s'}).text
                 m.peer = element.find('td', {'class': 'sl_p'}).text
                 m.created = element.find_all('td', 's')[2].text
-                m.link = 'https://kinozal.tv' + element.a['href']
+                m.link = f'https://{pref.kinozal_domain}{element.a['href']}'
                 m.is_4k = True if quality == V_4K else False
                 m.is_sdr = True if 'SDR' in m.header else False
 

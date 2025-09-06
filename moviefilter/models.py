@@ -1,12 +1,6 @@
-from urllib.parse import urlencode, quote_plus
-from typing import List, Tuple
-from datetime import datetime
-
 from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
@@ -89,21 +83,6 @@ class MovieRSS(models.Model):
     def director_as_list(self):
         return self.director.split(', ')
 
-    @property
-    def search_link(self, user):
-        # for "Мизантроп / Misanthrope" and 2023
-        # link = "https://kinozal.tv/browse.php?s=%CC%E8%E7%E0%ED%F2%F0%EE%EF+%2F+Misanthrope&g=0&c=1002&v=3&d=2023&w=0&t=0&f=0"
-
-        # c = 1002 for movies, 1001 for serials
-        # v = 3 for Рипы HD(1080|720)
-        payload = {'s': f'{self.title} / {self.original_title}', 'd': f'{self.year}', 'c': '1002', 'v': 3}
-        params = urlencode(payload, quote_via=quote_plus)
-        # quote_plus - заменяет пробелы знаками +
-        # 'password=xyz&username=administrator'
-
-        link = f"https://kinozal.tv/browse.php?{params}"
-        return link
-
     def __str__(self):
         name = self.original_title if self.original_title else self.title
         return f"{name} - {self.year}"
@@ -154,7 +133,19 @@ class Kinorium(models.Model):
 
 class UserPreferences(models.Model):
     """
-    Settings per user.
+    Global Settings.
+    Внимание! Я выпилил мультипользовательскую функциональность.
+    Теперь настройки как бы едины для всех пользователей.
+    Такой подход упрощает доступ к настройкам в разных частях приложения - им не требуется аутентифицированный юзер.
+    Если понадобиться вернуться к поддерже мультипользователей - нужно передавать user по всей цепочке, особенно в parsing логику,
+    и там брать настройки per user.
+
+    Добавил удобный метод get(): теперь пользоваться настройками можно так:
+
+        from moviefilter.models import UserPreferences
+
+        preferences = UserPreferences.get()
+        cookie_pass = preferences.cookie_pass
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
     last_scan = models.DateField(blank=True, null=True, default=timezone.now)
@@ -180,30 +171,34 @@ class UserPreferences(models.Model):
 
     ignore_title = models.CharField(max_length=500, default='')
 
-    def get_normal_preferences(self) -> Tuple[List[str], List[str], int, float]:
+    def save(self, *args, **kwargs):
+        self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def get_normal_preferences(self) -> tuple[list[str], list[str], int, float]:
         countries = self.countries.split(', ') if self.countries else []
         genres = self.genres.split(', ') if self.genres else []
         return countries, genres, self.max_year, self.min_rating
 
-    def get_low_priority_preferences(self) -> Tuple[List[str], List[str], int, float]:
+    def get_low_priority_preferences(self) -> tuple[list[str], list[str], int, float]:
         countries = self.low_countries.split(', ') if self.countries else []
         genres = self.low_genres.split(', ') if self.genres else []
         return countries, genres, self.low_max_year, self.low_min_rating
 
-"""
-Когда создается юзер, для него сразу создается записть UserPreferences.
-Мне удобнее здесь держать, а не в signals.py
-Потому что это нужно 
-"""
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        UserPreferences.objects.create(user=instance)
+    class Meta:
+        verbose_name = "User Preferences"
+        verbose_name_plural = "User Preferences"
+
 
 class Country(models.Model):
     """
-    Нужно потому, что в Kinozale в одном поле и страны и студии. С помощью списка известных стран будем отделять одни о
-    от других.
+    Нужно потому, что в Kinozale в одном поле и страны и студии. С помощью списка известных стран будем отделять
+     одни от других.
     """
     name = models.CharField(max_length=60, unique=True)
 
