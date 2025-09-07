@@ -2,7 +2,7 @@ from django.urls import path
 from moviefilter import views
 from moviefilter import plex
 from moviefilter import htmx_views
-from moviefilter import testing
+from moviefilter import deleting_since_date
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -39,7 +39,7 @@ htmx = [
     path('kinozal_available_torrents/<int:kinozal_id>', htmx_views.kinozal_download, name='kinozal_download'),
     path('get_torrent_file/<int:kinozal_id>', htmx_views.get_torrent_file, name='get_torrent_file'),
 
-    path('run_deleting_since_date/', testing.run_deleting_since_date, name='run_deleting_since_date'),
+    path('run_deleting_since_date/', deleting_since_date.run_deleting_since_date, name='run_deleting_since_date'),
 ]
 
 urlpatterns += htmx

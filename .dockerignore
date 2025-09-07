@@ -1,5 +1,7 @@
 *.pyc
 .pycache__/
+.git/
+.github/
 .env
 .idea
 .venv
@@ -13,15 +15,11 @@ old/
 sample_detail_pages/
 remote_QNAP/
 README.md
-fix_rating_10.py
 Makefile
-manual_migrate.py
 tst.py
 tst.torrent
-test_parse_detail.py
-restore_kinorium_data.py
-read_country.py
 uv.lock
 db.sqlite3
 logs/*.log
 media/cached_images/
+one_time_scripts/

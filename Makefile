@@ -7,6 +7,8 @@ _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
 # $  -> makefile variable => use a single dollar sign
 # $$ -> shell variable => use two dollar signs
 
+include .env
+export WATCHTOWER_TOKEN
 
 dummy:
 	echo Do not run without arguments! $(_R)
@@ -140,12 +142,12 @@ login:
 
 build-and-push:
 	# build and upload
-	bump-my-version bump patch
+	uv version --frozen --bump patch
 	python manage.py collectstatic --noinput
 	uv export --no-dev --format requirements-txt > requirements.txt
-	#docker buildx build --platform linux/arm/v7 -t swasher/movie-filter-pro:armv7 --push .
 	docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
 	rm requirements.txt
+	curl -H "Authorization: Bearer $$WATCHTOWER_TOKEN" qnap:9090/v1/update
 
 # Деплой с кэшем
 push: CACHE_OPTION=
@@ -154,6 +156,21 @@ push: build-and-push
 # Деплой без кэша
 push-no-cache: CACHE_OPTION=--no-cache
 push-no-cache: build-and-push
+
+#docker_github_login:
+#	echo $$GITHUB_TOKEN | docker login ghcr.io -u $$GITHUB_USERNAME --password-stdin
+#
+#github_build_and_push: CACHE_OPTION=--no-cache
+#github_build_and_push:
+#	uv version --frozen --bump patch
+#	uv run python manage.py collectstatic --noinput
+#	uv export --no-dev --format requirements-txt > requirements.txt
+#	docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) \
+#    -t ghcr.io/$$GITHUB_USERNAME/movie-filter-pro:armv7 \
+#    --push .
+#	rm requirements.txt
+
+
 
 run:
 	# if you need run, you must build image with x86 compatible settings (not implemented)

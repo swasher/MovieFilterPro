@@ -26,7 +26,7 @@ from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, ne
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from .weblogger import log
 
-from .telegram_bot import send_telegram_message
+# from .telegram_bot import send_telegram_message
 
 
 def kinozal_scan(start_page, scan_to_date: date, user):

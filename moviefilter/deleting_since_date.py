@@ -1,20 +1,12 @@
-# Удадяем из базы все записи, сделанные после 10.01.25, включая эту дату
-# Поле называется "date_added"
-# Эти фильмы отсканились с пустыми жанрами, актерами, описаниями и т.д
-
-from movie_filter_pro import wsgi
+from django.http import HttpResponse
 from datetime import datetime, date
 from django.db.models import Q
 from moviefilter.models import MovieRSS
 
-# PRIORITY = (
-#     (LOW, 'Низкий'),
-#     (HIGH, 'Обычный'),
-#     (DEFER, 'Отложено'),
-#     (SKIP, 'Отказ'),
-#     (WAIT_TRANS, 'Жду дубляж'),
-#     (TRANS_FOUND, 'Найден дубляж или ПМ'),
-# )
+"""
+Если в парсинге что-то пошло не так, например, он напарсил фильмы с пустнымы данными,
+можно с по помощью этого скрипта удалить фильмы, добавленные после определённой даты.
+"""
 
 
 def delete_movies_since_date(since_date: date):
@@ -40,9 +32,15 @@ def delete_movies_since_date(since_date: date):
     return return_string
 
 
-
-
-if __name__ == '__main__':
-    since_date_str = '2025-01-09'
+def run_deleting_since_date(request):
+    since_date_str = '2025-01-10'
     since_date = datetime.strptime(since_date_str, '%Y-%m-%d').date()
-    delete_movies_since_date(since_date)
+
+    if request.method == 'POST':
+        try:
+            result_string = delete_movies_since_date(since_date)  # Вызовите функцию напрямую
+            return HttpResponse(result_string)
+        except Exception as e:
+            return HttpResponse(f"Ошибка при запуске скрипта: {e}", status=500)
+    else:
+        return HttpResponse("Недопустимый метод", status=400)

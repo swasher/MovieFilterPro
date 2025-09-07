@@ -14,23 +14,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Создаем директорию /torrents_hotfolder
 RUN mkdir -p /torrents_hotfolder
 
-# Копируем зависимости
+# Копируем файл зависимостей
 COPY requirements.txt /app
 
 # Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем файл .env.production и переименовываем его в .env
-COPY .env.production /app/.env
-
 # Копируем проект
 COPY . /app
 
+# Копируем файл .env.production и переименовываем его в .env
+COPY .env.production /app/.env
+
 # Не запускаем миграции, так как база у нас отдельно от проекта и еще не примонтирована
+# Миграции будет запущены через entrypoint.sh при старте контейнера
 # RUN python manage.py migrate
 
-# Собираем статические файлы
-# Просто копируем статику из папки collectstatic
+# Статику не собираем, а
+# просто копируем всю статику collectstatic вместе со всем проектом
 # RUN python manage.py collectstatic --noinput
 
 # Копируем entrypoint.sh
