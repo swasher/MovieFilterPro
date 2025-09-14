@@ -7,13 +7,14 @@ import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
-channel_layer = get_channel_layer()
+# channel_layer = get_channel_layer()
 debug_logger = logging.getLogger('debug_logger')
 scan_logger = logging.getLogger('scan_logger')
 
 
 def send_log_to_websocket(log_message):
-    async_to_sync(channel_layer.group_send)(
+    # async_to_sync(channel_layer.group_send)(
+    async_to_sync(get_channel_layer().group_send)(
         "log_updates",
         {
             "type": "send_log_update",  # Это имя метода, который будет вызван в LogConsumer

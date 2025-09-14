@@ -93,7 +93,7 @@ def parse_page(page_number: int, scan_to_date: date) -> (list[KinozalMovie], boo
     # response = requests.get(site.url())
     response = client.browse_movies(page=page_number)
 
-    log('GRAB URL: {}')
+
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")

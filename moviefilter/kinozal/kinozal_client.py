@@ -4,6 +4,7 @@ from urllib.parse import urlencode, quote_plus
 from requests import Response
 
 from moviefilter.models import UserPreferences
+from moviefilter.weblogger import log
 
 
 class LinkConstructor:
@@ -271,6 +272,7 @@ class KinozalClient:
             Response с HTML страницей каталога фильмов
         """
         constructor = self.create_link_constructor(c=1002, page=page, v=quality, **kwargs)
+        log(f'GRAB URL: {constructor.url()}')
         return self.get_html_response(constructor.url())
 
     def browse_series(self, page=0, quality=3, **kwargs):
