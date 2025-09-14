@@ -4,7 +4,6 @@ from .models import MovieRSS
 from .models import Kinorium
 from .models import UserPreferences
 from .classes import KinozalMovie
-from .util import get_object_or_none
 from .util import not_match_rating
 from web_logger import log
 
@@ -32,11 +31,10 @@ def need_dubbed(m: KinozalMovie) -> bool:
 
 def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
     """
-
     Выполняет частичные проверки.
-    Первый возвращаемый аргумент - True, если такой фильм уже присутствует  в базе Kinorium.
+    Первый возвращаемый аргумент - True, если такой фильм уже присутствует в базе Kinorium.
     Второй возвращаемый аргумент показывает, было ли совпадение полное (True) или частичное (False)
-    Если было совпадение, - третий аргумент это статус фильма в Кинориум - Просмотрен, Буду смотреть etc.
+    Если было совпадение,- третий аргумент это статус фильма в Кинориум - "Просмотрен", "Буду смотреть" etc.
     """
 
     """

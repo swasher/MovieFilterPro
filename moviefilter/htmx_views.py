@@ -1,8 +1,4 @@
 import os
-import time
-import random
-import requests
-
 from datetime import datetime
 from pathlib import Path
 from django.db.models import Q
@@ -12,9 +8,6 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
-from django.core.paginator import Paginator
-from django.shortcuts import get_object_or_404
-from twisted.words.protocols.jabber.jstrports import client
 
 from .models import Kinorium
 from .models import MovieRSS
@@ -29,6 +22,7 @@ from web_logger import log
 from .image_caching import get_cached_image_url
 from .image_caching import remove_cached_image
 from .kinozal import KinozalClient
+
 
 @login_required()
 @require_GET
@@ -62,7 +56,6 @@ def scan(request):
 
         messages.success(request, f'Added {number_of_new_movies} movies.')
         return HttpResponse(status=200)
-
 
 
 def kinorium_table_data(request):
@@ -363,8 +356,6 @@ def get_torrent_file(request, kinozal_id: int):
         # Общая обработка других ошибок
         messages.error(request, f"Unexpected error: {str(e)}")
         return HttpResponse(bad_sign)
-
-
 
 
 @login_required

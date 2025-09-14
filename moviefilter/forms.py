@@ -2,7 +2,6 @@ from django import forms
 from .models import UserPreferences
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, Submit, HTML, Field
-from crispy_bootstrap5.bootstrap5 import FloatingField
 
 
 class PreferencesForm(forms.ModelForm):
