@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'widget_tweaks',
     'channels',
     'moviefilter',
+    'web_logger',
 ]
 if ENABLE_BROWSER_RELOAD:
     INSTALLED_APPS.append('django_browser_reload')

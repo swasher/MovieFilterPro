@@ -6,7 +6,7 @@ from .models import UserPreferences
 from .classes import KinozalMovie
 from .util import get_object_or_none
 from .util import not_match_rating
-from .weblogger import log
+from web_logger import log
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 

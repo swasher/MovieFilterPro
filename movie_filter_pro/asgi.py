@@ -5,7 +5,7 @@ from starlette.routing import Mount
 from starlette.applications import Starlette
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from moviefilter.routing import websocket_urlpatterns
+from web_logger.routing import websocket_urlpatterns
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_filter_pro.settings')
 

@@ -25,7 +25,7 @@ from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_
 from moviefilter.kinozal import LinkConstructor
 from .parse import get_kinorium_first_search_results
 from .parse import kinozal_search
-from .weblogger import log
+from web_logger import log
 from .image_caching import get_cached_image_url
 from .image_caching import remove_cached_image
 from .kinozal import KinozalClient

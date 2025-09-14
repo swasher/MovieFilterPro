@@ -6,7 +6,7 @@ from django.conf import settings
 from urllib.parse import urlparse
 from pathlib import Path
 
-from .weblogger import log
+from web_logger import log
 
 # Глобальный словарь для отслеживания скачиваемых изображений
 downloading_images = {}

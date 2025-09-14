@@ -25,6 +25,7 @@ def send_log_to_websocket(log_message):
 
 def log(message: str, logger_name: str = 'scan'):
     """
+    wlog - aka web-log, то есть логирует в веб (через вебсокет).
     Logs a message to a specific log file AND to web-socket.
 
     Args:

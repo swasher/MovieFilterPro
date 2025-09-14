@@ -4,7 +4,7 @@ from urllib.parse import urlencode, quote_plus
 from requests import Response
 
 from moviefilter.models import UserPreferences
-from moviefilter.weblogger import log
+from web_logger import log
 
 
 class LinkConstructor:

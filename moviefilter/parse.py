@@ -24,7 +24,7 @@ from .models import UserPreferences
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
-from .weblogger import log
+from web_logger import log
 
 # from .telegram_bot import send_telegram_message
 

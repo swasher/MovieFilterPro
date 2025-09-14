@@ -1,10 +1,6 @@
-import os
 import json
 import logging
-from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 
 logger = logging.getLogger(__name__)
 
