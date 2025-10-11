@@ -3,10 +3,10 @@ import threading
 import hashlib
 import requests
 from django.conf import settings
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from pathlib import Path
 
-from web_logger import log
+from web_logger import log, LogType
 
 # Глобальный словарь для отслеживания скачиваемых изображений
 downloading_images = {}
@@ -15,12 +15,22 @@ downloading_images_lock = threading.Lock()
 VALID_PRIORITY = [settings.HIGH, settings.LOW, settings.DEFER]
 
 
+def resolve_mirror_url(image_url: str) -> str:
+    parsed = urlparse(image_url)
+    domain = parsed.netloc
+    if domain in getattr(settings, "SOURCE_MIRRORS", {}):
+        mirror = settings.SOURCE_MIRRORS[domain]
+        parsed = parsed._replace(netloc=mirror)
+        return urlunparse(parsed)
+    return image_url
+
+
 def remove_cached_image(movie_pk):
     """
     Удаляет закешированное изображение по movie_pk.
     Потокобезопасная функция.
     """
-    log(f"Trying to remove cached image by movie_pk: {movie_pk}", 'debug')
+    log(f"Trying to remove cached image by movie_pk: {movie_pk}", LogType.DEBUG)
     try:
         # cached_dir = Path(settings.MEDIA_ROOT) / "cached_images"
         cached_dir = settings.CACHE_ROOT
@@ -31,11 +41,11 @@ def remove_cached_image(movie_pk):
                 cached_filepath = cached_dir / filename
                 try:
                     os.remove(cached_filepath)
-                    log(f"Removed cached image: {cached_filepath}", 'debug')
+                    log(f"Removed cached image: {cached_filepath}", LogType.DEBUG)
                 except FileNotFoundError:
-                    log(f"Cached image not found (already removed?): {cached_filepath}", 'debug')
+                    log(f"Cached image not found (already removed?): {cached_filepath}", LogType.DEBUG)
                 except Exception as e:
-                    log(f"Error removing cached image: {e}", 'error')
+                    log(f"Error removing cached image: {e}", LogType.ERROR)
                 finally:
                     # В любом случае - удаляем из downloading_images
                     with downloading_images_lock:
@@ -56,13 +66,13 @@ def remove_cached_image(movie_pk):
                             if cached_filename == filename:
                                 if image_url in downloading_images:
                                     del downloading_images[image_url]
-                                    log(f"Removed from downloading_images: {image_url}", 'debug')
+                                    log(f"Removed from downloading_images: {image_url}", LogType.DEBUG)
                                     break  # удалили - выходим из цикла.
 
     except FileNotFoundError:
-        log(f"Cached image dir not found.", 'debug')
+        log(f"Cached image dir not found.", LogType.DEBUG)
     except Exception as e:
-        log(f"Error in remove_cached_image: {e}", 'error')
+        log(f"Error in remove_cached_image: {e}", LogType.ERROR)
 
 
 def download_and_cache_image(image_url, movie_pk, priority):
@@ -70,9 +80,11 @@ def download_and_cache_image(image_url, movie_pk, priority):
     Скачивает и кэширует изображение.
     Потокобезопасная функция.
     """
+    image_url = resolve_mirror_url(image_url)
+
     # Проверяем, нужно ли кэшировать изображение для данного приоритета (для редко используемых приоритетов не кешируем)
     if priority not in VALID_PRIORITY:
-        log(f"Skipping caching for movie_pk: {movie_pk}, priority: {priority}", 'debug')
+        log(f"Skipping caching for movie_pk: {movie_pk}, priority: {priority}", LogType.DEBUG)
         return
 
     # Захватываем блокировку перед тем, как работать с downloading_images
@@ -85,7 +97,7 @@ def download_and_cache_image(image_url, movie_pk, priority):
         # Это сигнализирует другим потокам, что изображение сейчас скачивается.
         downloading_images[image_url] = True
 
-    log(f"Start downloading: {image_url}, movie_pk: {movie_pk}", 'debug')
+    log(f"Start downloading: {image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
 
     try:
         # Generate a unique filename based on the image URL
@@ -102,7 +114,7 @@ def download_and_cache_image(image_url, movie_pk, priority):
 
         # Check if the image is already cached
         if cached_filepath.exists():
-            log(f"Already cached: {image_url}, movie_pk: {movie_pk}", 'debug')
+            log(f"Already cached: {image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
             return
 
         response = requests.get(image_url, stream=True, timeout=5)  # added timeout
@@ -115,10 +127,10 @@ def download_and_cache_image(image_url, movie_pk, priority):
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        log(f"Downloaded and cached: {image_url}, movie_pk: {movie_pk}", 'debug')
+        log(f"Downloaded and cached: {image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
 
     except requests.exceptions.RequestException as e:
-        log(f"Error downloading image: {e}", 'error')
+        log(f"Error downloading image: {e}", LogType.ERROR)
     finally:
         # В блоке finally, который всегда выполняется,
         # удаляем информацию о скачивании изображения из словаря.
@@ -137,7 +149,7 @@ def get_cached_image_url(image_url, movie_pk, priority):
     """
     # Проверяем, нужно ли кэшировать изображение для данного приоритета (для редко используемых приоритетов не кешируем)
     if priority not in VALID_PRIORITY:
-        log(f"Skipping getting cached image url, movie_pk: {movie_pk}, priority: {priority}", 'debug')
+        log(f"Skipping getting cached image url, movie_pk: {movie_pk}, priority: {priority}", LogType.DEBUG)
         return image_url  # Изображение не нужно кешировать, возвращаем оригинальный URL
 
     if not image_url:

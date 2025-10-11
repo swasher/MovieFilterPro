@@ -1,22 +1,15 @@
+import re
 import dataclasses
 import requests
-from requests.exceptions import HTTPError, Timeout, RequestException
-import logging
-import re
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode, quote_plus
-
-from twisted.words.protocols.jabber.jstrports import client
-
-# from twisted.words.protocols.jabber.jstrports import client
-# from twisted.web.http import responses
-# from twisted.words.protocols.jabber.jstrports import client
+from requests.exceptions import HTTPError, Timeout, RequestException
 
 from .classes import KinozalMovie
+from .classes import KinozalSearch
 from moviefilter.kinozal import KinozalClient
 from moviefilter.kinozal import LinkConstructor
-from .classes import KinozalSearch
 
 from .util import is_float
 from .models import Country, MovieRSS
@@ -24,9 +17,12 @@ from .models import UserPreferences
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
-from web_logger import log
+from web_logger import log, LogType
 
-# from .telegram_bot import send_telegram_message
+
+class DetailsFetchError(Exception):
+    """Custom exception for critical errors during movie details fetching."""
+    pass
 
 
 def kinozal_scan(start_page, scan_to_date: date, user):
@@ -49,12 +45,19 @@ def kinozal_scan(start_page, scan_to_date: date, user):
 
     while not last_day_reached and current_page <= 100:
 
-        # Получаем список всех фильмов со страницы. Если достигли нужной даты, то last_day_reached возврашается как True
-        movies, last_day_reached = parse_page(current_page, scan_to_date)
+        try:
+            # Получаем список всех фильмов со страницы. Если достигли нужной даты, то last_day_reached возврашается как True
+            movies, last_day_reached = parse_page(current_page, scan_to_date)
 
-        # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу.
-        # movie_audit удаляет из списка movies фильмы, не прошедшие проверку, а так-же заполняет каждый movie дополнительными данными.
-        movies = movie_audit(movies, user)
+            # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу.
+            # movie_audit удаляет из списка movies фильмы, не прошедшие проверку, а так-же заполняет каждый movie дополнительными данными.
+            movies = movie_audit(movies, user)
+        except DetailsFetchError as e:
+            log(
+                "Scan terminated due to a critical error while fetching movie details.",
+                logger_name=LogType.ERROR,
+            )
+            raise e
 
         # записываем фильмы в базу
         if movies:
@@ -92,8 +95,6 @@ def parse_page(page_number: int, scan_to_date: date) -> (list[KinozalMovie], boo
     # with an HTTP GET request
     # response = requests.get(site.url())
     response = client.browse_movies(page=page_number)
-
-
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")
@@ -196,49 +197,62 @@ def parse_page(page_number: int, scan_to_date: date) -> (list[KinozalMovie], boo
 
 
 def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
-    pref = UserPreferences.get()
+    """
+    Скрапит данные со страницы фильма. Получает на вход частично заполненный данными объект KinozalMovie,
+    добавляет найденные данные и возвращает этот же объект.
 
-    #site = LinkConstructor(id=m.kinozal_id)
+    :param m:
+    :return: KinozalMovie, время сканирования
+    """
     client = KinozalClient()
 
     try:
-        # response = requests.get(site.detail_url(), timeout=10)
         response = client.get_movie_details(m.kinozal_id)
         response.raise_for_status()
-    except HTTPError as http_err:
-        log(f"HTTP error occurred: {http_err}")
-    except Timeout:
-        log("The request timed out")
-    except RequestException as req_err:
-        log(f"An error occurred: {req_err}")
+    # except HTTPError as http_err:
+    #     log(f"HTTP error occurred: {http_err}", logger_name=LogType.ERROR)
+    #     return None, 0
+    # except Timeout:
+    #     log("The request timed out", logger_name=LogType.ERROR)
+    #     return None, 0
+    # except RequestException as req_err:
+    #     log(f"An error occurred: {req_err}", logger_name=LogType.ERROR)
+    #     return None, 0
+    # except Exception as e:
+    #     log(f"An unexpected error occurred: {e}", logger_name=LogType.ERROR)
+    #     return None, 0
+    except RequestException as e:
+        log(f"Failed to get details for movie id {m.kinozal_id} due to a network error.", logger_name=LogType.ERROR,)
+        raise DetailsFetchError(f"Network error for movie id {m.kinozal_id}") from e
     except Exception as e:
-        log(f"An unexpected error occurred: {e}")
+        log(f"An unexpected error occurred while getting details for movie id {m.kinozal_id}.", logger_name=LogType.ERROR)
+        raise DetailsFetchError(f"Unexpected error for movie id {m.kinozal_id}") from e
 
     soup = BeautifulSoup(response.content, "html.parser")
+    pref = UserPreferences.get()
 
-    imdb_part = soup.select_one('a:-soup-contains("IMDb")')
-    if imdb_part:
+    if imdb_part := soup.select_one('a:-soup-contains("IMDb")'):
         # todo weak assumption for [4]; probably needs to add some checks
         m.imdb_id = imdb_part['href'].split('/')[4]
-        rating = imdb_part.find('span').text
-        m.imdb_rating = float(rating) if is_float(rating) else None
-    else:
-        m.imdb_id = None
-        m.imdb_rating = None
+        try:
+            # Иногда уроды неправильно оформляют раздачу, и imdb блок есть, но он криво сделан, не в том месте, не содержит рейтинга.
+            # Было такое, что imdb_part.find('span') становился None
+            rating = imdb_part.find('span').text
+            m.imdb_rating = float(rating) if is_float(rating) else None
+        except AttributeError:
+            log(f"Failed to parse IMDB rating for movie id {m.kinozal_id}", logger_name=LogType.ERROR)
 
-    kinopoisk_part = soup.select_one('a:-soup-contains("Кинопоиск")')
-    if kinopoisk_part:
+    if kinopoisk_part := soup.select_one('a:-soup-contains("Кинопоиск")'):
         # todo weak assumption for [4]; may be need add some checks
         m.kinopoisk_id = kinopoisk_part['href'].split('/')[4]
-        rating = kinopoisk_part.find('span').text
-        m.kinopoisk_rating = float(rating) if is_float(rating) else None
-    else:
-        m.kinopoisk_id = None
-        m.kinopoisk_rating = None
+        try:
+            rating = kinopoisk_part.find('span').text
+            m.kinopoisk_rating = float(rating) if is_float(rating) else None
+        except AttributeError:
+            log(f"Failed to parse Kinopoisk rating for movie id {m.kinozal_id}", logger_name=LogType.ERROR)
 
 
-    genres_element = soup.select_one('b:-soup-contains("Жанр:")')
-    if genres_element:
+    if genres_element := soup.select_one('b:-soup-contains("Жанр:")'):
         next_element = genres_element.find_next_sibling('span', class_='lnks_tobrs')
         if next_element:
             m.genres = next_element.text
@@ -247,53 +261,35 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     else:
         m.genres = ''
 
-    # countries = soup.select_one('b:-soup-contains("Выпущено:")').find_next_sibling().text
-    countries_element = soup.select_one('b:-soup-contains("Выпущено:")')
-    if countries_element:
+
+    if countries_element := soup.select_one('b:-soup-contains("Выпущено:")'):
         next_element = countries_element.find_next_sibling('span', class_='lnks_tobrs')
         if next_element:
             countries = next_element.text
-        else:
-            countries = ''
-    else:
-        countries = ''
 
     known_countries_list = Country.objects.values_list('name', flat=True)
 
     if countries:
         m.countries = ', '.join(list(c for c in countries.split(', ') if c in known_countries_list))
-    else:
-        m.countries = ''
 
     director_element = soup.select_one('b:-soup-contains("Режиссер:")')
     if director_element:
         next_element = director_element.find_next_sibling('span', class_='lnks_toprs')
         if next_element:
             m.director = next_element.text
-        else:
-            m.director = ''
-    else:
-        m.director = ''
-
 
     actors_element = soup.select_one('b:-soup-contains("В ролях:")')
     if actors_element:
         next_element = actors_element.find_next_sibling('span', class_='lnks_toprs')
         if next_element:
             m.actors = next_element.text
-        else:
-            # todo replace with []
-            m.actors = ''
-    else:
-        # todo replace with []
-        m.actors = ''
 
 
     try:
         m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()
     except:
-        log("WARNING! CAN'T GET [plot]")
-        m.plot = ''
+        log(f"CAN'T GET [plot] for {m.original_title} with kinozal_id {m.kinozal_id}", logger_name=LogType.DEBUG)
+
 
     translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
     if translate_search:
@@ -327,7 +323,7 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
     """
     Принимает на входе список объектов KinozalMovie.
     Объекты заполнены только самой просто инфой со страницы списка фильмов (но не со страницы фильма!)
-    Каждый Объект сначала проходит простые проверки.
+    Каждый Объект сначала проходит простые проверки, нужно ли продолжать с ним работу.
     Если прошел, тогда парсер сканирует страницу фильма, заполняет объект.
 
     Возвращает список объектов KinozalMovie, которые осталось только записать в базу.
@@ -364,13 +360,12 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         Возможна такая ситуация, что фильм попал в RSS, а потом я его посмотрел.
         Тогда уже существующий в RSS фильм нужно обновить (установить priority=SKIP)
         """
-
         exist, match_full, status = exist_in_kinorium(m)
         if exist and match_full:
-            log(f' ┣━ SKIP [{status}]')
+            log(f" ┣━ SKIP [{status}]")
             continue
         elif exist and not match_full:
-            log(f' ┣━ MARK AS PARTIAL [{status}]')
+            log(f" ┣━ MARK AS PARTIAL [{status}]")
             m.kinorium_partial_match = True
 
         m, sec = get_details(m)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS FOR THE MOVIE

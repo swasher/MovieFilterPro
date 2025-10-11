@@ -4,8 +4,15 @@ TODO Перенести все, связанное с этим, в отдель�
 """
 
 import logging
+from enum import Enum
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+
+
+class LogType(Enum):
+    SCAN = 1
+    ERROR = 2
+    DEBUG = 3
 
 # channel_layer = get_channel_layer()
 debug_logger = logging.getLogger('debug_logger')
@@ -23,28 +30,31 @@ def send_log_to_websocket(log_message):
     )
 
 
-def log(message: str, logger_name: str = 'scan'):
+def log(message: str, logger_name: LogType = LogType.SCAN):
     """
-    wlog - aka web-log, то есть логирует в веб (через вебсокет).
     Logs a message to a specific log file AND to web-socket.
+    DEBUG - замена print, особенно для production, если что-то не работает.
+    ERROR - вывод полного trace в лог + кастомное сообщение, использование:
+        log(f"Failed to do something: {some_variable}", logger_name=LogType.ERROR)
+    SCAN - вывод информации во время парсинга
 
     Args:
         message: The message to log.
-        logger_name: The name of the logger to use ('debug' or 'scan'). Defaults to 'debug'.
-        show_log_level: Whether to include the log level in the message sent to the WebSocket.
+        logger_name: The name of the logger to use. Defaults to LogType.SCAN.
+        exc_info: If True, exception info is added to the log message.
     """
-    if logger_name == 'debug':
-        log_level = 'DEBUG'
-        debug_logger.debug(message)
-    elif logger_name == 'scan':
-        log_level = 'INFO'
-        scan_logger.info(message)
-    elif logger_name == 'error':
-        log_level = 'ERROR'
-        logging.getLogger('django').error(message)  # this line will add error message to django errors
-    else:
-        log_level = 'ERROR'
-        raise ValueError("Invalid logger_name. Must be 'debug' or 'scan' or 'error'.")
+    match logger_name:
+        case LogType.DEBUG:
+            log_level = 'DEBUG'
+            debug_logger.debug(message, exc_info=False)
+        case LogType.SCAN:
+            log_level = 'INFO'
+            scan_logger.info(message, exc_info=False)
+        case LogType.ERROR:
+            log_level = 'ERROR'
+            logging.getLogger("django").error(f"\n{message}", exc_info=True)  # this line will add error message to django errors
+        case _:
+            raise ValueError(f"Invalid logger_name: {logger_name}. Must be a LogType member.")
 
     # log_level нужно добавлять, чтобы различать scan и debug сообщения на стороне фронта. Там эта часть удаляется.
     log_message = f"{log_level}: {message}"

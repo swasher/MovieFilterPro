@@ -278,7 +278,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
         },
-        'debug_log': {  # Replace for 'print' in production
+        'debug_log': {  # Use as 'print' for debugging info
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
             'filename': DEBUG_LOG,
@@ -308,7 +308,7 @@ LOGGING = {
         #     'propagate': True,
         # },
         'django': {  # django errors logger
-            'handlers': ['console' if DEBUG else 'error_log'],  # Conditional handler
+            'handlers': ['console', 'error_log'] if DEBUG else ['error_log'],
             'level': 'ERROR',
             'propagate': True,
         },
@@ -329,4 +329,9 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',  # Для разработки
     },
+}
+
+SOURCE_MIRRORS = {
+    "kinozal.tv": "kinozal.guru",
+    # можно добавить другие источники при необходимости
 }

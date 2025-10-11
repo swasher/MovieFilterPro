@@ -1,3 +1,3 @@
-from .weblogger import log
+from .weblogger import log, LogType
 
-__all__ = ['log']
+__all__ = ['log', 'LogType']

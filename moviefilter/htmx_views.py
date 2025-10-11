@@ -12,13 +12,13 @@ from django.views.decorators.http import require_http_methods, require_GET, requ
 from .models import Kinorium
 from .models import MovieRSS
 from .models import UserPreferences
-from .parse import kinozal_scan
+from .parse import kinozal_scan, DetailsFetchError
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from moviefilter.kinozal import LinkConstructor
 from .parse import get_kinorium_first_search_results
 from .parse import kinozal_search
-from web_logger import log
+from web_logger import log, LogType
 from .image_caching import get_cached_image_url
 from .image_caching import remove_cached_image
 from .kinozal import KinozalClient
@@ -41,9 +41,15 @@ def scan(request):
 
     try:
         number_of_new_movies = kinozal_scan(start_page, last_scan, user)
+    except DetailsFetchError:
+        # Эта ошибка уже залогирована на более низком уровне с полным traceback.
+        # Здесь мы просто сообщаем пользователю о проблеме.
+        messages.error(request, 'Сканирование прервано. Не удалось получить данные со страницы фильма. Возможно, сайт недоступен или IP заблокирован. Проверьте error.log для деталей.')
+        return HttpResponse(status=500)
     except Exception as e:
-        log(f'ERROR! {e}')
-        messages.error(request, f'Error parsing! {e}')
+        # Ловим любые другие непредвиденные ошибки
+        log(f'An unexpected error occurred in the scan view: {e}', logger_name=LogType.ERROR)
+        messages.error(request, f'Произошла непредвиденная ошибка: {e}')
         return HttpResponse(status=500)
     else:
         log(f"Scan complete, new entries: {number_of_new_movies}")

@@ -171,10 +171,15 @@ push-no-cache: build-and-push
 #	rm requirements.txt
 
 
-
 run:
 	# if you need run, you must build image with x86 compatible settings (not implemented)
 	docker run -p 8000:8000 movie-filter-pro
 
 pack:
 	docker save -o movie-filter-pro.tar movie-filter-pro
+
+#
+# DEBUGGING
+#
+get_details_one_movie:
+	python manage.py get_details_one_movie 2104619
