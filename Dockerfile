@@ -1,4 +1,5 @@
-FROM arm32v7/python:3.12-slim
+#FROM arm32v7/python:3.12-slim
+FROM python:3.12-slim
 
 #ENV IN_DOCKER=True
 

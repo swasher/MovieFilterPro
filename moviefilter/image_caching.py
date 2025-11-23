@@ -80,7 +80,9 @@ def download_and_cache_image(image_url, movie_pk, priority):
     Скачивает и кэширует изображение.
     Потокобезопасная функция.
     """
-    image_url = resolve_mirror_url(image_url)
+    # Используем оригинальный URL для ключей и имен файлов, чтобы избежать несоответствий
+    original_image_url = image_url
+    resolved_image_url = resolve_mirror_url(original_image_url)
 
     # Проверяем, нужно ли кэшировать изображение для данного приоритета (для редко используемых приоритетов не кешируем)
     if priority not in VALID_PRIORITY:
@@ -89,24 +91,23 @@ def download_and_cache_image(image_url, movie_pk, priority):
 
     # Захватываем блокировку перед тем, как работать с downloading_images
     with downloading_images_lock:
-        # Проверяем, скачивается ли уже это изображение.
-        if image_url in downloading_images:
+        # Проверяем, скачивается ли уже это изображение (по оригинальному URL).
+        if original_image_url in downloading_images:
             return  # Уже скачивается или скачано.
 
         # Если не скачивается, добавляем его в словарь.
-        # Это сигнализирует другим потокам, что изображение сейчас скачивается.
-        downloading_images[image_url] = True
+        downloading_images[original_image_url] = True
 
-    log(f"Start downloading: {image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
+    log(f"Start downloading: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
 
     try:
-        # Generate a unique filename based on the image URL
-        parsed_url = urlparse(image_url)
+        # Генерируем имя файла на основе ОРИГИНАЛЬНОГО URL
+        parsed_url = urlparse(original_image_url)
         base_name = Path(parsed_url.path).name
         if not base_name:
-            base_name = hashlib.sha256(image_url.encode()).hexdigest() + ".jpg"  # fallback for base name
+            base_name = hashlib.sha256(original_image_url.encode()).hexdigest() + ".jpg"  # fallback for base name
 
-        file_name_hash = hashlib.sha256(image_url.encode()).hexdigest()
+        file_name_hash = hashlib.sha256(original_image_url.encode()).hexdigest()
         file_extension = os.path.splitext(base_name)[1]
         cached_filename = f"{movie_pk}_{file_name_hash}{file_extension}"  # Используем PK фильма
 
@@ -114,10 +115,10 @@ def download_and_cache_image(image_url, movie_pk, priority):
 
         # Check if the image is already cached
         if cached_filepath.exists():
-            log(f"Already cached: {image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
+            log(f"Already cached: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
             return
 
-        response = requests.get(image_url, stream=True, timeout=5)  # added timeout
+        response = requests.get(resolved_image_url, stream=True, timeout=5)  # added timeout
         response.raise_for_status()  # Raise an exception for bad status codes
 
         # Create the directory if it doesn't exist
@@ -127,24 +128,21 @@ def download_and_cache_image(image_url, movie_pk, priority):
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        log(f"Downloaded and cached: {image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
+        log(f"Downloaded and cached: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
 
     except requests.exceptions.RequestException as e:
         log(f"Error downloading image: {e}", LogType.ERROR)
     finally:
-        # В блоке finally, который всегда выполняется,
-        # удаляем информацию о скачивании изображения из словаря.
-        # Это делается, чтобы другие потоки могли снова начать скачивание,
-        # если это потребуется в будущем.
+        # Удаляем информацию о скачивании изображения из словаря по оригинальному URL
         with downloading_images_lock:
-            if image_url in downloading_images:
-                del downloading_images[image_url]
+            if original_image_url in downloading_images:
+                del downloading_images[original_image_url]
 
 
 def get_cached_image_url(image_url, movie_pk, priority):
     """
     Проверяет, закешировано ли изображение локально.
-    Если нет, то возвращает исходный URL, но запускает скачивание в фоне.
+    Если нет, то возвращает URL с зеркалом и запускает скачивание в фоне.
     Возвращает URL к изображению.
     """
     # Проверяем, нужно ли кэшировать изображение для данного приоритета (для редко используемых приоритетов не кешируем)
@@ -155,7 +153,7 @@ def get_cached_image_url(image_url, movie_pk, priority):
     if not image_url:
         return None  # Обработка пустого image_url
 
-    # Generate a unique filename based on the image URL
+    # Генерируем имя файла на основе ОРИГИНАЛЬНОГО URL
     parsed_url = urlparse(image_url)
     base_name = Path(parsed_url.path).name
     if not base_name:
@@ -174,9 +172,10 @@ def get_cached_image_url(image_url, movie_pk, priority):
         print(f'CACHE: return cached url {settings.CACHE_URL + cached_filename}')
         return settings.CACHE_URL + cached_filename
 
-    # Изображения нет в кэше, запускаем скачивание в фоне
+    # Изображения нет в кэше, запускаем скачивание в фоне (используем оригинальный URL)
     threading.Thread(target=download_and_cache_image, args=(image_url, movie_pk, priority)).start()
 
-    # Возвращаем оригинальный URL (как заглушку)
-    print(f'CACHE: return original url {image_url}')
-    return image_url
+    # Резолвим URL в зеркало для отображения пользователю
+    resolved_url = resolve_mirror_url(image_url)
+    print(f'CACHE: return resolved url {resolved_url}')
+    return resolved_url

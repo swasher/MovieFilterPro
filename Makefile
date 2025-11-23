@@ -145,7 +145,8 @@ build-and-push:
 	uv version --frozen --bump patch
 	python manage.py collectstatic --noinput
 	uv export --no-dev --format requirements-txt > requirements.txt
-	docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
+	#docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
+	docker build -t swasher/movie-filter-pro:amd64 . && docker push swasher/movie-filter-pro:amd64
 	rm requirements.txt
 	curl -H "Authorization: Bearer $$WATCHTOWER_TOKEN" qnap:9090/v1/update
 
