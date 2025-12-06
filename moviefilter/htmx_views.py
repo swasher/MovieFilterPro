@@ -402,21 +402,22 @@ def get_log(request, log_type):
     return HttpResponse(log_content, content_type="text/plain")
 
 
-import random
 def total_downloads_for_movie(request):
-
     # Получаем pk из GET-параметров, которые передаются через hx-vars
     pk = request.GET.get('pk')
     if not pk:
-        return HttpResponse("", status=400) # Плохой запрос, если pk отсутствует
+        return HttpResponse("", status=400)  # Плохой запрос, если pk отсутствует
 
-    try:
-        # Ваша логика для получения количества скачиваний
-        # movie = MovieRSS.objects.get(pk=pk)
-        # download_count = movie.get_total_downloads()
+    found = kinozal_search(pk)
+    torrents_count = len(found)
+    # return HttpResponse(download_count)
 
-        download_count = random.randint(5, 150)
-        return HttpResponse(download_count)
-        # return HttpResponse(f'<span class="badge text-bg-secondary">{download_count}</span>')
-    except: #Movie.DoesNotExist:
-        return HttpResponse("")  # Возвращаем пустоту, если фильм не найден
+    if torrents_count <= 2:
+        style_class = "secondary"
+    elif torrents_count <= 6:
+        style_class = "primary"
+    else:
+        style_class = "danger"
+
+    htmx_string = f'<span class="badge text-bg-{style_class}">DOWNLOADS: {torrents_count}</span>'
+    return HttpResponse(htmx_string)

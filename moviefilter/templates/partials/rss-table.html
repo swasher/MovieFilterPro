@@ -20,7 +20,7 @@
 
 
 
-        <tbody id="loop" _="on htmx:afterSwap trigger updateFirstRow on me">
+        <tbody id="loop">
 
 
         {% for f in movies %}
@@ -44,6 +44,15 @@
                         {{ f.original_title }}
                         <i class="bi bi-copy copy-btn" data-text="{{ f.original_title }}"></i>
                     </h6>
+
+                    <span class="download-count"
+                          data-count-loaded="false"
+                          hx-get="{% url 'total_downloads_for_movie' %}"
+                          hx-vars="pk:{{ f.pk }}"
+                          hx-trigger="load-count"
+                          hx-swap="outerHTML"
+                    ></span>
+
                 </td>
                 <td>
                     Year: <strong>{{ f.year }}</strong>
@@ -95,29 +104,7 @@
                                 hx-target="#kinozal-results"
                                 hx-swap="innerHTML"
                         >Download
-
-                            <span class="download-count badge text-bg-dark ms-1"
-                                  data-count-loaded="false"
-                                  hx-get="{% url 'total_downloads_for_movie' %}"
-                                  hx-vars="pk:{{ f.pk }}"
-                                  hx-trigger="loadCount"
-                                  hx-swap="innerHTML"
-                                  _="init
-                                       if my.closest('tr').parentElement.firstElementChild == my.closest('tr') then
-                                           htmx.trigger(me, 'loadCount')
-                                       end
-                                     on updateFirstRow from #loop
-                                       if my.closest('tr').parentElement.firstElementChild == my.closest('tr') and my.dataset.countLoaded == 'false' then
-                                           htmx.trigger(me, 'loadCount')
-                                       end
-                                     on htmx:beforeRequest
-                                       if my.dataset.countLoaded == 'true' then halt
-                                       else set my.dataset.countLoaded to 'true'
-                                     end"
-                            ></span>
-
                             <span id="open-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
-
                         </button>
 
                         <button type="button" class="btn btn-primary btn-sm do-hide"

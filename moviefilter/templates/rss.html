@@ -225,9 +225,46 @@
                // Ждем окончания анимации (0.6s), затем удаляем строку из таблицы вручную
                setTimeout(() => {
                    elt.remove();
+                   // Запускаем событие для проверки, какая строка стала верхней. В ней отобразим кол-во доступных торрентов.
+                   checkAndTriggerTopRow();
                }, 600); // должно совпадать с CSS transition
            }
        });
+
+
+
+        // Этот скрипт нужен для того, чтобы когда таблица обновляется, в первой строке
+        // инициировался запрос на получение количества скачиваний для этого фильма.
+            /**
+             * Эта функция находит первую строку в таблице и, если для нее еще не был загружен
+             * счетчик торрентов, инициирует htmx-запрос.
+             */
+            function checkAndTriggerTopRow() {
+                const firstRow = document.querySelector("#loop tr:first-child");
+
+                // Если таблицы или строк нет, выходим
+                if (!firstRow) {
+                    return;
+                }
+
+                const downloadCountSpan = firstRow.querySelector(".download-count");
+
+                // Проверяем, что у спана есть атрибут data-count-loaded="false"
+                if (downloadCountSpan && downloadCountSpan.dataset.countLoaded === 'false') {
+                    // Немедленно меняем флаг, чтобы избежать повторных запросов
+                    downloadCountSpan.dataset.countLoaded = 'true';
+
+                    // Запускаем htmx-запрос
+                    htmx.trigger(downloadCountSpan, 'load-count');
+                }
+            }
+
+            // Слушаем событие htmx:afterSettle. Оно происходит после ЛЮБОГО htmx-запроса,
+            // когда DOM уже гарантированно обновлен. Это ловит и загрузку, и удаление.
+            document.body.addEventListener('htmx:afterSettle', function(evt) {
+                checkAndTriggerTopRow();
+            });
+
 
     </script>
 
@@ -324,7 +361,10 @@
         }
         /* КОНЕЦ БЛОКА ДЛЯ ПОДГРУЖАЕМОГО ФРАГМЕНТА RSS-TABLE.HTML */
 
-
+        /* Этот блок добавляет слово Downloads к счетчику загрузок в верхнем фильме */
+        .download-count:not(:empty)::before {
+            content: "DOWNLOADS: ";
+        }
 
     </style>
 {% endblock %}
