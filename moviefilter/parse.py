@@ -25,9 +25,10 @@ class DetailsFetchError(Exception):
     pass
 
 
-def kinozal_scan(start_page, scan_to_date: date, user):
+def kinozal_scan(start_page: int, scan_to_date: date, user):
     """
-
+    Запускает сканирование кинозала. Проходит сканированием по всем страницам, начиная с start_page (обычно 0, но
+    пользователь может указать конкретную страницу, если оборвался длинный скан, и до даты последнего сканирования.)
     :param start_page: стартовая страница, начинается от нуля.
     :param scan_to_date:
     :param user:
@@ -36,7 +37,7 @@ def kinozal_scan(start_page, scan_to_date: date, user):
 
     last_day_reached = False
     last_page_reached = False
-    counter = 0
+    counter = 0  # сколько нашлось фильмов для записи в базу
 
     if start_page is None:
         current_page = 0
@@ -251,7 +252,6 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         except AttributeError:
             log(f"Failed to parse Kinopoisk rating for movie id {m.kinozal_id}", logger_name=LogType.ERROR)
 
-
     if genres_element := soup.select_one('b:-soup-contains("Жанр:")'):
         next_element = genres_element.find_next_sibling('span', class_='lnks_tobrs')
         if next_element:
@@ -261,29 +261,31 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     else:
         m.genres = ''
 
-
     if countries_element := soup.select_one('b:-soup-contains("Выпущено:")'):
         next_element = countries_element.find_next_sibling('span', class_='lnks_tobrs')
         if next_element:
             countries = next_element.text
 
-    known_countries_list = Country.objects.values_list('name', flat=True)
+            known_countries_list = Country.objects.values_list('name', flat=True)
 
-    if countries:
-        m.countries = ', '.join(list(c for c in countries.split(', ') if c in known_countries_list))
+            if countries:
+                m.countries = ', '.join(list(c for c in countries.split(', ') if c in known_countries_list))
+            else:
+                m.countries = ''
 
     director_element = soup.select_one('b:-soup-contains("Режиссер:")')
     if director_element:
         next_element = director_element.find_next_sibling('span', class_='lnks_toprs')
-        if next_element:
-            m.director = next_element.text
+        m.director = next_element.text.strip() if next_element else ""
+    else:
+        m.director = ''
 
     actors_element = soup.select_one('b:-soup-contains("В ролях:")')
     if actors_element:
         next_element = actors_element.find_next_sibling('span', class_='lnks_toprs')
-        if next_element:
-            m.actors = next_element.text
-
+        m.actors = next_element.text.strip() if next_element else ""
+    else:
+        m.actors = ['']
 
     try:
         m.plot = soup.select_one('b:-soup-contains("О фильме:")').next_sibling.text.strip()

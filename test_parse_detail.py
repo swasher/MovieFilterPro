@@ -17,7 +17,6 @@ application = get_wsgi_application()
 from django.shortcuts import get_object_or_404
 
 # from movie_filter_pro import wsgi
-from moviefilter.classes import LinkConstructor
 from datetime import date
 import dataclasses
 from django.contrib.auth.models import User
@@ -41,7 +40,7 @@ def modified_kinozal_scan(site: LinkConstructor, user):
 
 
 if __name__ == '__main__':
-    page = 1
+    page = 15
 
     user = User.objects.filter(email='mr.swasher@gmail.com').first()
     pref = get_object_or_404(UserPreferences, user=user)

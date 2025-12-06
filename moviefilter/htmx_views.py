@@ -400,3 +400,23 @@ def get_log(request, log_type):
         return HttpResponse(f"Error reading log file: {e}", status=500)
 
     return HttpResponse(log_content, content_type="text/plain")
+
+
+import random
+def total_downloads_for_movie(request):
+
+    # Получаем pk из GET-параметров, которые передаются через hx-vars
+    pk = request.GET.get('pk')
+    if not pk:
+        return HttpResponse("", status=400) # Плохой запрос, если pk отсутствует
+
+    try:
+        # Ваша логика для получения количества скачиваний
+        # movie = MovieRSS.objects.get(pk=pk)
+        # download_count = movie.get_total_downloads()
+
+        download_count = random.randint(5, 150)
+        return HttpResponse(download_count)
+        # return HttpResponse(f'<span class="badge text-bg-secondary">{download_count}</span>')
+    except: #Movie.DoesNotExist:
+        return HttpResponse("")  # Возвращаем пустоту, если фильм не найден

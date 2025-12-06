@@ -20,12 +20,17 @@
 
 
 
-        <tbody id="loop">
+        <tbody id="loop" _="on htmx:afterSwap trigger updateFirstRow on me">
+
 
         {% for f in movies %}
 
-            <tr data-movie-id="{{ f.id }}" {% if f.kinorium_partial_match %}
-                class="htmx-scroll table-warning" {% else %}  class="htmx-scroll" {% endif %}>
+            <tr data-movie-id="{{ f.id }}"
+                {% if f.kinorium_partial_match %}
+                    class="htmx-scroll table-warning"
+                {% else %}
+                    class="htmx-scroll"
+                {% endif %}>
                 <td>
                     <img src="{{ f.poster_url }}" class="imgdiv" alt="Poster of {{ f.title }}">
                 </td>
@@ -90,8 +95,29 @@
                                 hx-target="#kinozal-results"
                                 hx-swap="innerHTML"
                         >Download
-                            <span id="open-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
-                                  role="status"></span>
+
+                            <span class="download-count badge text-bg-dark ms-1"
+                                  data-count-loaded="false"
+                                  hx-get="{% url 'total_downloads_for_movie' %}"
+                                  hx-vars="pk:{{ f.pk }}"
+                                  hx-trigger="loadCount"
+                                  hx-swap="innerHTML"
+                                  _="init
+                                       if my.closest('tr').parentElement.firstElementChild == my.closest('tr') then
+                                           htmx.trigger(me, 'loadCount')
+                                       end
+                                     on updateFirstRow from #loop
+                                       if my.closest('tr').parentElement.firstElementChild == my.closest('tr') and my.dataset.countLoaded == 'false' then
+                                           htmx.trigger(me, 'loadCount')
+                                       end
+                                     on htmx:beforeRequest
+                                       if my.dataset.countLoaded == 'true' then halt
+                                       else set my.dataset.countLoaded to 'true'
+                                     end"
+                            ></span>
+
+                            <span id="open-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+
                         </button>
 
                         <button type="button" class="btn btn-primary btn-sm do-hide"
@@ -99,7 +125,6 @@
                                 hx-post="{% url 'defer' f.pk %}"
                                 hx-target="closest tr"
                                 hx-swap="delete"
-                                {% comment %}onclick="triggerPotentialUpdate()"{% endcomment %}
                         >Defer
                             <span id="defer-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
                                   role="status"></span>
@@ -110,7 +135,6 @@
                                 hx-post="{% url 'wait_trains' f.pk %}"
                                 hx-target="closest tr"
                                 hx-swap="delete"
-                                {% comment %}onclick="triggerPotentialUpdate()"{% endcomment %}
                         >Жду дубляж
                             <span id="wait-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
                                   role="status"></span>
@@ -121,7 +145,6 @@
                                 hx-post="{% url 'ignore' f.pk %}"
                                 hx-target="closest tr"
                                 hx-swap="delete"
-                                {% comment %}onclick="triggerPotentialUpdate()"{% endcomment %}
                         >Hide
                             <span id="hide-spinner-{{ f.pk }}" class="htmx-indicator spinner-border spinner-border-sm"
                                   role="status"></span>
