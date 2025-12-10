@@ -10,3 +10,4 @@ api.md
 .env.production
 media/cached_images/
 .make_targets_cache
+!/firebase_adapter/movie-vault-17cc7-firebase-adminsdk-fbsvc-1eeb501dbf.json
