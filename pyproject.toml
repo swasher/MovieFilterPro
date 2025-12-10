@@ -3,22 +3,29 @@ name = "moviefilterpro"
 version = "0.1.83"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "aiofiles>=24.1.0",
     "beautifulsoup4>=4.13.2",
     "channels>=4.2.0",
     "crispy-bootstrap5>=2024.10",
-    "daphne>=4.1.2",
+    "daphne>=4.2.1",
     "dj-database-url>=2.3.0",
-    "django>=5.1.5",
+    "django>=5.2.9",
     "django-compressor>=4.5.1",
     "django-crispy-forms>=2.3",
     "django-htmx>=1.21.0",
     "django-widget-tweaks>=1.5.0",
+    "firebase-admin>=7.1.0",
     "gunicorn>=23.0.0",
     "plexapi>=4.16.1",
     "python-decouple>=3.8",
     "starlette>=0.47.0",
+    "tmdbapis>=1.2.30",
     "whitenoise>=6.8.2",
+]
+
+[dependency-groups]
+dev = [
+    "django-browser-reload>=1.21.0",
 ]

@@ -1,6 +1,5 @@
 from django.urls import path
 from moviefilter import views
-from moviefilter import plex
 from moviefilter import htmx_views
 from moviefilter import deleting_since_date
 from django.conf import settings
@@ -13,11 +12,7 @@ urlpatterns = [
     # DEPRECATED path('movies_low/', views.movies_low, name='movies_low'),
     # DEPRECATED path('parse_kinorium_csv/', views.parse_kinorium_csv, name='parse_kinorium_csv'),
 
-    path('plex/<section>', plex.plex, name='plex'),
-    path('plex_section/', plex.plex_section, name='plex_section'),
-
     path('kinorium/', views.kinorium, name='kinorium'),
-    path('preferences/', views.user_preferences_update, name='user_preferences'),
     path('scan_page/', views.scan_page, name='scan_page'),
     path('tst/', views.tst, name='tst'),
     # path('order_print/<orderid>', views.order_print, name='order_print'),

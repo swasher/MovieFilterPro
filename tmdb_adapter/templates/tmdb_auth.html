@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+    <div class="container-fluid vh-100 ">
+
+        <h3>TMDb OAuth</h3>
+
+        <button type="button" class="btn btn-primary " hx-get="/tmdb/start/" hx-target="#result">
+            Start auth
+        </button>
+
+        <div id="result" style="margin-top:20px;">
+            {% if write_token %}
+                <strong>Saved write access token:</strong>
+
+                <code class="d-inline-block text-break" style="max-width: 100%;">
+                    {{ write_token }}
+                </code>
+
+
+            {% endif %}
+        </div>
+    </div>
+
+
+{% endblock %}

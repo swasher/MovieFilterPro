@@ -10,6 +10,7 @@ import tomllib
 import dj_database_url
 from pathlib import Path
 from decouple import config
+from django.contrib import messages
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -73,6 +74,11 @@ INSTALLED_APPS = [
     'widget_tweaks',
     'channels',
     'moviefilter',
+    'tmdb_adapter',
+    'firebase_adapter',
+    'core',
+    'plex',
+    'vault',
     'web_logger',
 ]
 if ENABLE_BROWSER_RELOAD:
@@ -238,7 +244,6 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 #
 # HTMX Toasts
 #
-from django.contrib import messages
 MESSAGE_TAGS = {
     messages.DEBUG: "bg-light",
     messages.INFO: "text-white bg-primary",

@@ -11,6 +11,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('django.contrib.auth.urls')),
     path('', include('moviefilter.urls')),
+    path('', include('tmdb_adapter.urls')),
+    path('', include('core.urls')),
+    path('', include('plex.urls')),
+    path('', include('vault.urls')),
 ]
 
 

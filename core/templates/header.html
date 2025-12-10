@@ -35,6 +35,11 @@
                     </li>
 
                     <li class="nav-item">
+                        <a class="nav-link {% active 'vault' %}"
+                           href="{% url 'vault' %}"><i class="bi-database me-1"></i>Vault</a>
+                    </li>
+
+                    <li class="nav-item">
                         <a class="nav-link {% active 'plex_section' %}"
                            href="{% url 'plex_section' %}"><i class="bi-database me-1"></i>Plex</a>
                     </li>
@@ -60,6 +65,11 @@
                 {% if user.is_authenticated %}
                     <div class="Header-item m-lg-1">
                         <span class="badge text-bg-success"><i class="bi-person-check-fill"></i> {{ user.username }}</span>
+                    </div>
+
+                    <div class="Header-item">
+                        <a href="{% url 'tmdb_auth' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'tmdb_auth' %}" type="button" >
+                            TMDB</a>
                     </div>
 
                     <div class="Header-item">

@@ -1,5 +1,5 @@
 from plexapi.server import PlexServer
-from .models import UserPreferences
+from core.views import UserPreferences
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
