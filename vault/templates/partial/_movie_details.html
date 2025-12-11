@@ -1,0 +1,62 @@
+<div class="container-fluid p-3">
+
+    <!-- HEADER BLOCK -->
+    <div class="d-flex flex-column flex-md-row gap-4">
+
+        <!-- POSTER -->
+        <div style="width: 240px; flex-shrink: 0;">
+            {% if poster_path %}
+                <img src="https://image.tmdb.org/t/p/w200/{{ poster_path }}" class="img-fluid rounded" alt="{{ title }}">
+            {% else %}
+                <div class="bg-secondary bg-opacity-10 rounded" style="width:100%; height:360px;"></div>
+            {% endif %}
+        </div>
+
+        <!-- TEXT INFO -->
+        <div class="flex-grow-1">
+
+            <!-- TITLE -->
+            <h3 class="mb-1">{{ title }}</h3>
+            <div class="text-muted mb-3">
+                {{ original_title }}
+                {% if release_date %}
+                    • {{ release_date }}
+                {% endif %}
+            </div>
+
+            <!-- GENRES -->
+            {% if genres %}
+                <div class="mb-3 d-flex flex-wrap gap-2">
+                    {% for g in genres %}
+                        <span class="badge bg-secondary bg-opacity-25 text-dark">
+                            {{ g.name }}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <!-- COUNTRIES -->
+            {% if countries %}
+                <div class="mb-3 text-muted small">
+                    <strong>Страны:</strong>
+                    {% for c in countries %}
+                        {{ c.name }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <!-- OVERVIEW -->
+            {% if overview %}
+                <div class="bg-light rounded-2 p-3 border">
+                    {{ overview }}
+                </div>
+            {% else %}
+                <div class="bg-light rounded-2 p-3 border text-muted fst-italic">
+                    Описание отсутствует.
+                </div>
+            {% endif %}
+
+        </div>
+    </div>
+
+</div>

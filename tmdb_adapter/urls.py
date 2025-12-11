@@ -1,15 +1,15 @@
 from django.urls import path
 from . import auth, views
 
-#app_name = 'tmdb'
+app_name = 'tmdb'
 
 urlpatterns = [
 
     # auth
-    path("tmdb/auth/", auth.tmdb_auth, name="tmdb_auth"),
-    path("tmdb/auth/create_auth_link/", auth.tmdb_start, name="tmdb-start"),
-    path("tmdb/auth/approve_link/", auth.tmdb_approve, name="tmdb-approve"),
-    path("tmdb/auth/logout/", auth.tmdb_logout, name="tmdb-logout"),
+    path("tmdb/auth/", auth.tmdb_auth, name="auth"),
+    path("tmdb/auth/create_auth_link/", auth.tmdb_start, name="start"),
+    path("tmdb/auth/approve_link/", auth.tmdb_approve, name="approve"),
+    path("tmdb/auth/logout/", auth.tmdb_logout, name="logout"),
 
 
 

@@ -1,9 +1,10 @@
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
 
 from tmdbapis import TMDbAPIs, FindResults, Video, Movie, TVShow
 from tmdbapis.api3 import API3
 from tmdbapis.api4 import API4
-from tmdbapis.exceptions import Authentication
+from tmdbapis.exceptions import Authentication, NotFound
 
 from moviefilter.models import UserPreferences
 from tmdb_adapter.client_singleton import get_tmdb_client
@@ -28,11 +29,39 @@ def vault(request):
     return render(request, 'vault.html', context={'movie_lists': movie_lists})
 
 
-def search_movies(request, search_string):
+def search_movies(request):
+    print('\nSearch Movies')
 
     tmdb = get_tmdb_client()
-    result = tmdb.movie_search(search_string)
 
-    print(result)
+    query = request.POST.get('query', '').strip()
 
-    return result
+    # Логика для отладки
+    print(f"Поисковый запрос: '{query}'")
+
+    try:
+        movies = tmdb.movie_search(query)
+    except NotFound:
+        movies = None
+
+    print(movies)
+
+    return HttpResponse(render(request, "partial/search-responce.html", context={'movies': movies}))
+
+def movie(request, movie_id):
+    tmdb = get_tmdb_client()
+    details = tmdb.movie(movie_id=movie_id)
+
+    context = {
+        "id": details.id,
+        "title": details.title,
+        "original_title": details.original_title,
+        "overview": details.overview,
+        "poster_path": details.poster_path,
+        "genres": details.genres,
+        "countries": details.countries,
+        "release_date": details.release_date,
+    }
+
+    return HttpResponse(render(request, "partial/_movie_details.html", context=context))
+

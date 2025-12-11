@@ -6,5 +6,6 @@ app_name = "vault"
 urlpatterns = [
     path('vault/', views.vault, name='vault'),
     path('search_movies/', views.search_movies, name='search_movies'),
+    path('movie/<int:movie_id>/', views.movie, name='movie'),
 
 ]

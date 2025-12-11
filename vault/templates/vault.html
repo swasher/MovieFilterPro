@@ -20,22 +20,46 @@
             <div class="container-fluid">
                 <div class="row justify-content-center">
                     <div class="col-12 col-md-7 col-lg-5"> <!-- Здесь ограничиваем ширину -->
+
+{% comment %}                        <form
+                                hx-get="{% url 'vault:search_movies' %}"
+                                hx-trigger="keyup changed delay:1000ms"
+                                hx-target="#search-results"
+                                hx-swap="innerHTML"
+                                autocomplete="off"
+                        >
+
                         <div class="input-group">
                             <input type="text"
                                    class="form-control shadow-sm"
                                    placeholder="Поиск фильма..."
-                                   id="movie-search"
                                    name="query"
-                                   hx-get="{% url 'search_movies' %}"
-                                   hx-trigger="keyup changed delay:1000ms"
-                                   hx-target="#search-results"
-                                   hx-swap="innerHTML"
-                                   autocomplete="off"
                                    >
                         </div>
+
+                        </form>{% endcomment %}
+
+                        <!-- ВАЖНО: позиционный контейнер -->
+                        <div class="position-relative">
+
+                        <input class="form-control" type="search"
+                               name="query" placeholder="Поиск фильма..."
+                               hx-post="{% url 'vault:search_movies' %}"
+                               hx-trigger="input changed delay:1000ms, keyup[key=='Enter']"
+                               hx-target="#search-results"
+                               hx-indicator=".htmx-indicator"
+                               autocomplete="off">
+
+
                         <!-- Контейнер для результатов -->
-                        <div id="search-results" class="mt-2 list-group shadow-sm rounded">
-                            <!-- Здесь HTMX будет подставлять результаты -->
+                        <div
+                                id="search-results"
+                                class="list-group position-absolute w-100 mt-2 shadow rounded d-none"
+                                style="z-index: 2000; max-height: 350px; overflow-y: auto;"
+                        >
+                        <!-- Здесь HTMX будет подставлять результаты -->
+                        </div>
+
                         </div>
                     </div>
                 </div>
@@ -62,7 +86,7 @@
 
 
             <!-- CONTENT AREA -->
-            <main class="flex-grow-1 p-3 overflow-auto">
+            <main class="flex-grow-1 p-3 overflow-auto" id="main-content">
 
                 <!-- GRID WRAPPER -->
                 <div class="d-grid gap-3"
@@ -83,5 +107,16 @@
         </div>
     </div>
 
+
+    <script>
+        document.addEventListener("htmx:afterSwap", () => {
+            const box = document.getElementById("search-results");
+            if (box.innerHTML.trim() === "") {
+                box.classList.add("d-none");
+            } else {
+                box.classList.remove("d-none");
+            }
+        });
+    </script>
 
 {% endblock %}
