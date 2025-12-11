@@ -10,6 +10,9 @@ tmdb_approve -> Что мы и делаем в этой функции
 import requests
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.urls import reverse
+from django.utils.html import format_html
+
 from moviefilter.models import UserPreferences
 
 
@@ -44,11 +47,21 @@ def tmdb_start(request):
     request.session["tmdb_request_token"] = request_token
 
     approve_url = TMDB_APPROVE_URL + request_token
+    finish_url = reverse('tmdb-approve')
 
-    return HttpResponse(
-        f'<a href="{approve_url}" target="_blank">{approve_url}</a>'
-        f'<br><button type="button" class="btn btn-primary" hx-get="/tmdb/approve/" hx-target="#result">Finish auth</button>'
+    # return HttpResponse(
+    #     f'<a href="{approve_url}" target="_blank">{approve_url}</a>'
+    #     f'<br><button type="button" class="btn btn-primary" hx-get="{% url '' %}" hx-target="#result">Finish auth</button>'
+    # )
+
+    html = format_html(
+        '<a href="{}" target="_blank">{}</a>'
+        '<br><button type="button" class="btn btn-primary" '
+        'hx-get="{}" hx-target="#result">Finish auth</button>',
+        approve_url, approve_url, finish_url
     )
+
+    return HttpResponse(html)
 
 
 def tmdb_approve(request):

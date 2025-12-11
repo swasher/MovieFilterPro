@@ -22,7 +22,7 @@ class PreferencesForm(forms.ModelForm):
         # self.helper.add_input(Submit('submit', 'Save11'))
 
         self.fields["tmdb_v4_authenticated_access_token"].disabled = True
-        self.fields["tmdb_v4_authenticated_access_token"].label = "Authenticated Access Token"
+        self.fields["tmdb_v4_authenticated_access_token"].label = "Authenticated Write Access Token"
 
         self.helper.layout = Layout(
             HTML("""<h3>Last scan</h3><hr>"""),

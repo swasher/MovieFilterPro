@@ -6,20 +6,55 @@
 
         <h3>TMDb OAuth</h3>
 
-        <button type="button" class="btn btn-primary " hx-get="/tmdb/start/" hx-target="#result">
+
+        <div class="card p-3">
+            <h5 class="card-title">Краткая инструкция</h5>
+            <ul class="list-unstyled">
+                <li class="mb-2">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    Шаг 1: Заполни в настройках <code>Tmdb api key</code> и <code>Tmdb v4 read access token</code>, которые нужно взять на странице настроек сайта TMDB.
+                </li>
+                <li class="mb-2">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    Шаг 2: Нажми Start auth
+                </li>
+                <li class="mb-2">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    Шаг 3: Перейди по ссылке и нажми Approve
+                </li>
+                <li>
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    Шаг 4: Вернись на эту страницу и нажми кнопку Finish Auth
+                </li>
+            </ul>
+        </div>
+
+
+        <br>
+
+        <button type="button" class="btn btn-primary " hx-get="{% url 'tmdb-start' %}" hx-target="#result">
             Start auth
         </button>
 
+
         <div id="result" style="margin-top:20px;">
             {% if write_token %}
-                <strong>Saved write access token:</strong>
+                <strong>Saved <code>TMDB Write Access Token</code></strong>:
 
                 <code class="d-inline-block text-break" style="max-width: 100%;">
                     {{ write_token }}
                 </code>
 
-
+            {% else %}
+                <div class="alert alert-info">
+                    <strong>TMDB Write Access Token</strong> не создан.
+                </div>
             {% endif %}
+
+            {% comment %}
+            КНОПКА "Finish Auth" появляется тут после ответа от HTMX! Тот возвращает целый html блок.
+            {% endcomment %}
+
         </div>
     </div>
 

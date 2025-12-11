@@ -5,8 +5,8 @@ urlpatterns = [
 
     # auth
     path("tmdb/auth/", auth.tmdb_auth, name="tmdb_auth"),
-    path("tmdb/auth/create_auth_link/", auth.tmdb_start, name="tmdb_start"),
-    path("tmdb/auth/approve_link/", auth.tmdb_approve, name="tmdb_approve"),
+    path("tmdb/auth/create_auth_link/", auth.tmdb_start, name="tmdb-start"),
+    path("tmdb/auth/approve_link/", auth.tmdb_approve, name="tmdb-approve"),
 
     # Страницы списков
     # path("tmdb/lists/", views.list_list, name="list_list"),
