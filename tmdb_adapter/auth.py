@@ -18,7 +18,7 @@ from tmdbapis import TMDbAPIs
 
 
 from moviefilter.models import UserPreferences
-from .tmdb_singleton import get_tmdb_client
+from .client_singleton import get_tmdb_client
 
 
 TMDB_CREATE_REQUEST_TOKEN = "https://api.themoviedb.org/4/auth/request_token"
@@ -117,7 +117,8 @@ def tmdb_logout(request):
     # 1. Получаем клиент (если токен есть)
     if prefs.tmdb_v4_authenticated_access_token:
         try:
-            tmdb = get_tmdb_client(prefs.tmdb_api_key, prefs.tmdb_v4_authenticated_access_token)
+            # tmdb = get_tmdb_client(prefs.tmdb_api_key, prefs.tmdb_v4_authenticated_access_token)
+            tmdb = get_tmdb_client()
             tmdb.logout()
         except Exception as e:
             print(f"Logout API call failed (maybe token already expired): {e}")
