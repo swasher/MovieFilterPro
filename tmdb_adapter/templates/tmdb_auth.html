@@ -39,11 +39,16 @@
 
         <div id="result" style="margin-top:20px;">
             {% if write_token %}
-                <strong>Saved <code>TMDB Write Access Token</code></strong>:
+                <strong>Successfully Saved <code>TMDB Write Access Token</code></strong>:
 
                 <code class="d-inline-block text-break" style="max-width: 100%;">
                     {{ write_token }}
                 </code>
+
+                <a class="btn btn-primary" href="{% url 'tmdb-logout' %}">
+                    Logout from TMDB
+                </a>
+
 
             {% else %}
                 <div class="alert alert-info">
