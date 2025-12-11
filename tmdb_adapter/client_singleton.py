@@ -10,7 +10,6 @@ _last_token = None
 _lock = Lock()
 
 
-#def get_tmdb_client(api_key: str, v4_token: str) -> TMDbAPIs:
 def get_tmdb_client() -> TMDbAPIs:
     global _tmdb_instance, _last_key, _last_token
 

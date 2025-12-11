@@ -8,6 +8,7 @@ from tmdbapis.exceptions import Authentication
 from moviefilter.models import UserPreferences
 from tmdb_adapter.client_singleton import get_tmdb_client
 
+
 def vault(request):
     pref = UserPreferences.get()
     tmdb_api_key = pref.tmdb_api_key
@@ -29,46 +30,9 @@ def vault(request):
 
 def search_movies(request, search_string):
 
-    # movies_list = [
-    #     "Интерстеллар",
-    #     "Начало",
-    #     "Побег из Шоушенка",
-    #     "Криминальное чтиво",
-    #     "Форрест Гамп",
-    #     "Бойцовский клуб",
-    #     "Матрица",
-    #     "Список Шиндлера",
-    #     "Леон",
-    #     "1+1",
-    #     "Зеленая миля",
-    #     "Властелин колец: Возвращение короля",
-    #     "Темный рыцарь",
-    #     "Крестный отец",
-    #     "Пианист",
-    #     "Гладиатор",
-    #     "Титаник",
-    #     "Паразиты",
-    #     "Джентльмены",
-    #     "Джокер",
-    #     "Остров проклятых",
-    #     "Семь",
-    #     "Молчание ягнят",
-    #     "Большой куш",
-    #     "Карты, деньги, два ствола",
-    #     "Достучаться до небес",
-    #     "Игры разума",
-    #     "Шерлок Холмс",
-    #     "По соображениям совести",
-    #     "Зверополис"
-    # ]
-    #
-    # search_string = search_string.lower()
-    # result = []
-    #
-    # for movie in movies_list:
-    #     if search_string in movie.lower():
-    #         result.append(movie)
-
     tmdb = get_tmdb_client()
+    result = tmdb.movie_search(search_string)
+
+    print(result)
 
     return result

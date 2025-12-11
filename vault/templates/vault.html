@@ -2,7 +2,7 @@
 
 {% block body %}
 
-{% comment %}    {% for spisok in movie_lists.results %}
+    {% comment %}    {% for spisok in movie_lists.results %}
         <h3>{{ spisok }}</h3>
         <ul>
             {% for picture in spisok.results %}
@@ -15,60 +15,73 @@
 
     <div class="container-fluid vh-100 d-flex flex-column">
 
-    <!-- SEARCH BAR -->
-    <div class="bg-body-tertiary border-bottom p-3 flex-shrink-0">
-      <div class="container-fluid">
-        <div class="row justify-content-center">
-          <div class="col-12 col-md-7 col-lg-5"> <!-- Здесь ограничиваем ширину -->
-            <div class="input-group">
-              <input type="text" class="form-control" placeholder="Поиск фильма...">
+        <!-- SEARCH BAR -->
+        <div class="bg-body-tertiary border-bottom p-3 flex-shrink-0">
+            <div class="container-fluid">
+                <div class="row justify-content-center">
+                    <div class="col-12 col-md-7 col-lg-5"> <!-- Здесь ограничиваем ширину -->
+                        <div class="input-group">
+                            <input type="text"
+                                   class="form-control shadow-sm"
+                                   placeholder="Поиск фильма..."
+                                   id="movie-search"
+                                   name="query"
+                                   hx-get="{% url 'search_movies' %}"
+                                   hx-trigger="keyup changed delay:1000ms"
+                                   hx-target="#search-results"
+                                   hx-swap="innerHTML"
+                                   autocomplete="off"
+                                   >
+                        </div>
+                        <!-- Контейнер для результатов -->
+                        <div id="search-results" class="mt-2 list-group shadow-sm rounded">
+                            <!-- Здесь HTMX будет подставлять результаты -->
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
-      </div>
+
+        <!-- MAIN LAYOUT -->
+        <div class="d-flex flex-grow-1 overflow-hidden">
+
+            <!-- SIDEBAR -->
+            <aside class="bg-body-tertiary border-end p-3"
+                   style="width: 280px; min-width: 240px;">
+
+                <div class="list-group list-group-flush gap-2">
+
+                    {% for spisok in movie_lists.results %}
+                        <button class="list-group-item list-group-item-action bg-body-secondary border-1 rounded-2 fw-semibold text-body-secondary">
+                            {{ spisok.name }}
+                        </button>
+                    {% endfor %}
+
+                </div>
+            </aside>
+
+
+            <!-- CONTENT AREA -->
+            <main class="flex-grow-1 p-3 overflow-auto">
+
+                <!-- GRID WRAPPER -->
+                <div class="d-grid gap-3"
+                     style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+
+                    <!-- MOVIE CARD PLACEHOLDERS -->
+                    <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
+                    <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
+                    <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
+                    <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
+                    <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
+                    <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
+
+                </div>
+
+            </main>
+
+        </div>
     </div>
-
-    <!-- MAIN LAYOUT -->
-    <div class="d-flex flex-grow-1 overflow-hidden">
-
-        <!-- SIDEBAR -->
-        <aside class="bg-body-tertiary border-end p-3"
-               style="width: 280px; min-width: 240px;">
-
-            <div class="list-group list-group-flush gap-2">
-
-                {% for spisok in movie_lists.results %}
-                    <button class="list-group-item list-group-item-action bg-body-secondary border-1 rounded-2 fw-semibold text-body-secondary">
-                        {{ spisok.name }}
-                    </button>
-                {% endfor %}
-
-            </div>
-        </aside>
-
-
-
-        <!-- CONTENT AREA -->
-        <main class="flex-grow-1 p-3 overflow-auto">
-
-            <!-- GRID WRAPPER -->
-            <div class="d-grid gap-3"
-                 style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
-
-                <!-- MOVIE CARD PLACEHOLDERS -->
-                <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
-                <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
-                <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
-                <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
-                <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
-                <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
-
-            </div>
-
-        </main>
-
-    </div>
-</div>
 
 
 {% endblock %}
