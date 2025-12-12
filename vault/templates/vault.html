@@ -2,17 +2,6 @@
 
 {% block body %}
 
-    {% comment %}    {% for spisok in movie_lists.results %}
-        <h3>{{ spisok }}</h3>
-        <ul>
-            {% for picture in spisok.results %}
-                <li>{{ picture.name }}</li>
-            {% endfor %}
-        </ul>
-
-    {% endfor %}{% endcomment %}
-
-
     <div class="container-fluid vh-100 d-flex flex-column">
 
         <!-- SEARCH BAR -->
@@ -20,24 +9,6 @@
             <div class="container-fluid">
                 <div class="row justify-content-center">
                     <div class="col-12 col-md-7 col-lg-5"> <!-- Здесь ограничиваем ширину -->
-
-{% comment %}                        <form
-                                hx-get="{% url 'vault:search_movies' %}"
-                                hx-trigger="keyup changed delay:1000ms"
-                                hx-target="#search-results"
-                                hx-swap="innerHTML"
-                                autocomplete="off"
-                        >
-
-                        <div class="input-group">
-                            <input type="text"
-                                   class="form-control shadow-sm"
-                                   placeholder="Поиск фильма..."
-                                   name="query"
-                                   >
-                        </div>
-
-                        </form>{% endcomment %}
 
                         <!-- ВАЖНО: позиционный контейнер -->
                         <div class="position-relative">
@@ -47,7 +18,7 @@
                                hx-post="{% url 'vault:search_movies' %}"
                                hx-trigger="input changed delay:1000ms, keyup[key=='Enter']"
                                hx-target="#search-results"
-                               hx-indicator=".htmx-indicator"
+                               {% comment %}hx-indicator=".htmx-indicator"{% endcomment %}
                                autocomplete="off">
 
 
@@ -57,7 +28,9 @@
                                 class="list-group position-absolute w-100 mt-2 shadow rounded d-none"
                                 style="z-index: 2000; max-height: 350px; overflow-y: auto;"
                         >
-                        <!-- Здесь HTMX будет подставлять результаты -->
+                        <div class="htmx-indicator spinner-border spinner-border-sm text-secondary ms-2" role="status"></div>
+
+                            <!-- Здесь HTMX будет подставлять результаты -->
                         </div>
 
                         </div>
@@ -109,6 +82,7 @@
 
 
     <script>
+        // Очистка выпадающего списка фильмов (в поиске) после клика
         document.addEventListener("htmx:afterSwap", () => {
             const box = document.getElementById("search-results");
             if (box.innerHTML.trim() === "") {
@@ -117,6 +91,37 @@
                 box.classList.remove("d-none");
             }
         });
+
+        // Закрытие при клике вне списка
+        document.addEventListener("click", (evt) => {
+            const box = document.getElementById("search-results");
+            if (!box) return;
+            if (!box.contains(evt.target) && !evt.target.matches('input[name="query"]')) {
+                box.classList.add("d-none");
+            }
+        });
     </script>
+
+{% comment %}    <script>
+
+        {# Очистка выпадающего списка фильмов (в поиске) после клика  #}
+        document.addEventListener("htmx:afterSwap", (evt) => {
+            const box = document.getElementById("search-results");
+            if (box && box.innerHTML.trim() !== "") {
+                box.classList.remove("d-none");
+            } else {
+                box.classList.add("d-none");
+            }
+        });
+
+        // Закрытие при клике вне списка
+        document.addEventListener("click", (evt) => {
+            const box = document.getElementById("search-results");
+            if (!box) return;
+            if (!box.contains(evt.target) && !evt.target.matches('input[name="query"]')) {
+                box.classList.add("d-none");
+            }
+        });
+    </script>{% endcomment %}
 
 {% endblock %}

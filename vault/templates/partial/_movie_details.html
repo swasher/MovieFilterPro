@@ -1,62 +1,77 @@
-<div class="container-fluid p-3">
-
-    <!-- HEADER BLOCK -->
-    <div class="d-flex flex-column flex-md-row gap-4">
-
-        <!-- POSTER -->
-        <div style="width: 240px; flex-shrink: 0;">
-            {% if poster_path %}
-                <img src="https://image.tmdb.org/t/p/w200/{{ poster_path }}" class="img-fluid rounded" alt="{{ title }}">
-            {% else %}
-                <div class="bg-secondary bg-opacity-10 rounded" style="width:100%; height:360px;"></div>
-            {% endif %}
-        </div>
-
-        <!-- TEXT INFO -->
-        <div class="flex-grow-1">
-
-            <!-- TITLE -->
-            <h3 class="mb-1">{{ title }}</h3>
-            <div class="text-muted mb-3">
-                {{ original_title }}
-                {% if release_date %}
-                    • {{ release_date }}
-                {% endif %}
+<div class="movie-details d-flex gap-4 p-3 rounded-3 border bg-light-subtle">
+    <!-- Poster -->
+    <div class="movie-poster flex-shrink-0">
+        {% if poster_path %}
+            <img src="https://image.tmdb.org/t/p/w300{{ poster_path }}"
+                 class="rounded shadow-sm" alt="{{ title }}">
+        {% else %}
+            <div class="bg-secondary rounded d-flex align-items-center justify-content-center"
+                 style="width: 200px; height: 300px;">
+                <span class="text-white-50">No image</span>
             </div>
-
-            <!-- GENRES -->
-            {% if genres %}
-                <div class="mb-3 d-flex flex-wrap gap-2">
-                    {% for g in genres %}
-                        <span class="badge bg-secondary bg-opacity-25 text-dark">
-                            {{ g.name }}
-                        </span>
-                    {% endfor %}
-                </div>
-            {% endif %}
-
-            <!-- COUNTRIES -->
-            {% if countries %}
-                <div class="mb-3 text-muted small">
-                    <strong>Страны:</strong>
-                    {% for c in countries %}
-                        {{ c.name }}{% if not forloop.last %}, {% endif %}
-                    {% endfor %}
-                </div>
-            {% endif %}
-
-            <!-- OVERVIEW -->
-            {% if overview %}
-                <div class="bg-light rounded-2 p-3 border">
-                    {{ overview }}
-                </div>
-            {% else %}
-                <div class="bg-light rounded-2 p-3 border text-muted fst-italic">
-                    Описание отсутствует.
-                </div>
-            {% endif %}
-
-        </div>
+        {% endif %}
     </div>
 
+    <!-- Info -->
+    <div class="movie-info flex-grow-1">
+
+        <!-- Title -->
+        <h2 class="h4 mb-1">{{ title }}</h2>
+        <div class="text-muted small mb-3">{{ original_title }}</div>
+
+        <!-- Genres -->
+        {% if genres %}
+            <div class="mb-3">
+                {% for g in genres %}
+                    <span class="badge bg-secondary bg-opacity-25 text-dark me-1">
+                    {{ g.name }}
+                    </span>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- COUNTRIES -->
+        {% if countries %}
+            <div class="mb-3 text-muted small">
+                <strong>Страны:</strong>
+                {% for c in countries %}
+                    {{ c.name }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Overview -->
+        {% if overview %}
+            <div class="mb-4">
+                <h6 class="text-muted">Overview</h6>
+                <p class="mb-0">{{ overview }}</p>
+            </div>
+        {% endif %}
+
+        <!-- Production countries -->
+        {% if production_countries %}
+            <div class="mb-3">
+                <h6 class="text-muted">Production countries</h6>
+                <div class="small">
+                    {% for c in production_countries %}
+                        <span class="badge bg-light text-dark border me-1">{{ c.name }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Release date -->
+        {% if release_date %}
+            <div class="mb-3">
+                <h6 class="text-muted">Release date</h6>
+                <div>{{ release_date }}</div>
+            </div>
+        {% endif %}
+
+        <!-- Technical block (ID) -->
+        <div class="border-top pt-3 mt-3 small text-muted">
+            TMDB ID: {{ id }}, IMDB ID: {{ imdb_id }}
+        </div>
+
+    </div>
 </div>

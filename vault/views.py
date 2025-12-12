@@ -48,14 +48,17 @@ def search_movies(request):
 
     return HttpResponse(render(request, "partial/search-responce.html", context={'movies': movies}))
 
+
 def movie(request, movie_id):
     tmdb = get_tmdb_client()
     details = tmdb.movie(movie_id=movie_id)
 
     context = {
         "id": details.id,
+        "imdb_id": details.imdb_id,
         "title": details.title,
         "original_title": details.original_title,
+        "tagline": details.tagline,
         "overview": details.overview,
         "poster_path": details.poster_path,
         "genres": details.genres,
@@ -64,4 +67,3 @@ def movie(request, movie_id):
     }
 
     return HttpResponse(render(request, "partial/_movie_details.html", context=context))
-
