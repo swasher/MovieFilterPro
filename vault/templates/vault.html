@@ -2,7 +2,7 @@
 
 {% block body %}
 
-    <div class="container-fluid vh-100 d-flex flex-column">
+    <div class="container-fluid d-flex flex-column">
 
         <!-- SEARCH BAR -->
         <div class="bg-body-tertiary border-bottom p-3 flex-shrink-0">
@@ -10,30 +10,64 @@
                 <div class="row justify-content-center">
                     <div class="col-12 col-md-7 col-lg-5"> <!-- Здесь ограничиваем ширину -->
 
-                        <!-- ВАЖНО: позиционный контейнер -->
-                        <div class="position-relative">
+                        <form hx-post="{% url 'vault:search_movies_fullpage' %}"
+                              hx-target="#main-content"
+                              hx-push-url="false"
+                              class="d-flex w-100">
 
-                        <input class="form-control" type="search"
-                               name="query" placeholder="Поиск фильма..."
-                               hx-post="{% url 'vault:search_movies' %}"
-                               hx-trigger="input changed delay:1000ms, keyup[key=='Enter']"
-                               hx-target="#search-results"
-                               {% comment %}hx-indicator=".htmx-indicator"{% endcomment %}
-                               autocomplete="off">
+                            <div class="dropdown position-relative w-100">
 
+                                <input type="search"
+                                       id="movie-search-input"
+                                       class="form-control"
+                                       name="query"
+                                       placeholder="Поиск фильма..."
+                                       hx-post="{% url 'vault:search_movies_dropdown' %}"
+                                       hx-trigger="input changed delay:500ms"
+                                       hx-target="#search-results"
+                                       hx-push-url="false"
+                                       autocomplete="off"
+                                       aria-expanded="false">
 
-                        <!-- Контейнер для результатов -->
-                        <div
-                                id="search-results"
-                                class="list-group position-absolute w-100 mt-2 shadow rounded d-none"
-                                style="z-index: 2000; max-height: 350px; overflow-y: auto;"
-                        >
-                        <div class="htmx-indicator spinner-border spinner-border-sm text-secondary ms-2" role="status"></div>
+                                <ul class="dropdown-menu w-100"
+                                    id="search-results"
+                                    style="max-height: 300px; overflow-y: auto;">
+                                </ul>
+                            </div>
+                        </form>
 
-                            <!-- Здесь HTMX будет подставлять результаты -->
-                        </div>
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function () {
+                                const searchInput = document.getElementById('movie-search-input');
+                                const searchResults = document.getElementById('search-results');
+                                const mainContent = document.getElementById('main-content');
+                                const searchForm = searchInput.closest('form');
 
-                        </div>
+                                // Показываем меню при приходе данных
+                                searchResults.addEventListener('htmx:afterSwap', function() {
+                                    if (searchResults.children.length > 0) {
+                                        searchResults.classList.add('show');
+                                    }
+                                });
+
+                                //  Очищаем input после fullpage-поиска (Enter)
+                                mainContent.addEventListener('htmx:afterSwap', function () {
+                                    searchInput.value = '';
+                                    searchResults.classList.remove('show');
+                                });
+
+                                // Клик вне input и dropdown — скрываем dropdown и очищаем строку поиска
+                                document.addEventListener('click', function (e) {
+                                    if (
+                                        !searchInput.contains(e.target) &&
+                                        !searchResults.contains(e.target)
+                                    ) {
+                                        searchResults.classList.remove('show');
+                                        searchInput.value = '';
+                                    }
+                                });
+                            });
+                        </script>
                     </div>
                 </div>
             </div>
@@ -49,9 +83,14 @@
                 <div class="list-group list-group-flush gap-2">
 
                     {% for spisok in movie_lists.results %}
-                        <button class="list-group-item list-group-item-action bg-body-secondary border-1 rounded-2 fw-semibold text-body-secondary">
-                            {{ spisok.name }}
-                        </button>
+                        <a class="list-group-item list-group-item-action bg-body-secondary border-1 rounded-2 fw-semibold text-body-secondary"
+                           hx-post="{% url 'vault:list_get_movies' spisok.id %}"
+                           hx-trigger="click"
+                           hx-target="#main-content"
+                           role="button"
+                        >
+                            {{ spisok.name }} <small><i class="bi bi-trash3-fill"></i></small>
+                        </a>
                     {% endfor %}
 
                 </div>
@@ -73,6 +112,7 @@
                     <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
                     <div class="bg-secondary bg-opacity-10 rounded" style="height: 240px;"></div>
 
+
                 </div>
 
             </main>
@@ -80,48 +120,12 @@
         </div>
     </div>
 
+<style>
+    #main-content {
+        height: auto;
+        overflow: visible;
+    }
+</style>
 
-    <script>
-        // Очистка выпадающего списка фильмов (в поиске) после клика
-        document.addEventListener("htmx:afterSwap", () => {
-            const box = document.getElementById("search-results");
-            if (box.innerHTML.trim() === "") {
-                box.classList.add("d-none");
-            } else {
-                box.classList.remove("d-none");
-            }
-        });
-
-        // Закрытие при клике вне списка
-        document.addEventListener("click", (evt) => {
-            const box = document.getElementById("search-results");
-            if (!box) return;
-            if (!box.contains(evt.target) && !evt.target.matches('input[name="query"]')) {
-                box.classList.add("d-none");
-            }
-        });
-    </script>
-
-{% comment %}    <script>
-
-        {# Очистка выпадающего списка фильмов (в поиске) после клика  #}
-        document.addEventListener("htmx:afterSwap", (evt) => {
-            const box = document.getElementById("search-results");
-            if (box && box.innerHTML.trim() !== "") {
-                box.classList.remove("d-none");
-            } else {
-                box.classList.add("d-none");
-            }
-        });
-
-        // Закрытие при клике вне списка
-        document.addEventListener("click", (evt) => {
-            const box = document.getElementById("search-results");
-            if (!box) return;
-            if (!box.contains(evt.target) && !evt.target.matches('input[name="query"]')) {
-                box.classList.add("d-none");
-            }
-        });
-    </script>{% endcomment %}
 
 {% endblock %}

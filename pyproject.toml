@@ -30,4 +30,5 @@ dependencies = [
 dev = [
     "django-browser-reload>=1.21.0",
     "django-debug-toolbar>=6.1.0",
+    "django-watchfiles>=1.4.0",
 ]

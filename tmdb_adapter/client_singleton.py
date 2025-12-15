@@ -5,13 +5,14 @@ from threading import Lock
 from moviefilter.models import UserPreferences
 
 _tmdb_instance: Optional[TMDbAPIs] = None
+_tmdb_config: Optional[dict] = None
 _last_key = None
 _last_token = None
 _lock = Lock()
 
 
 def get_tmdb_client() -> TMDbAPIs:
-    global _tmdb_instance, _last_key, _last_token
+    global _tmdb_instance, _tmdb_config, _last_key, _last_token
 
     pref = UserPreferences.get()
     api_key = pref.tmdb_api_key
@@ -28,4 +29,14 @@ def get_tmdb_client() -> TMDbAPIs:
             _last_key = api_key
             _last_token = v4_token
 
+            # запрашиваем конфигурацию 1 раз
+            try:
+                _tmdb_config = _tmdb_instance.configuration()
+            except Exception:
+                _tmdb_config = None
+
         return _tmdb_instance
+
+
+def get_tmdb_config() -> Optional[dict]:
+    return _tmdb_config

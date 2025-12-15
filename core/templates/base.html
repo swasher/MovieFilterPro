@@ -12,6 +12,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <link rel="shortcut icon" type="image/png" href="{% static 'favicon.ico' %}"/>
 
     <!-- Popper [before bootstrap]-->
@@ -32,7 +33,7 @@
     <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
 
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="{% static 'bootstrap-icons/font/bootstrap-icons.min.css' %} ">
+    <link rel="stylesheet" href="{% static 'bootstrap-icons/bootstrap-icons.min.css' %} ">
 
     <!-- Sweet alert 2 -->
     <link rel="stylesheet" href="{% static 'sweetalert2/bootstrap-4.min.css' %}">
@@ -76,7 +77,7 @@
 
 {% if is_dev %}
 {#<div class="alert center-aligned alert-success" role="alert">#}
-<div class="alert center-aligned alert-success sticky-top" style="z-index: 1050;" role="alert">
+<div class="alert center-aligned alert-success sticky-top py-2 " style="z-index: 1050;" role="alert">
     <strong>DEVELOPER ENVIRONMENT</strong>
 </div>
 {% endif %}
@@ -90,9 +91,9 @@
     <script src="{% static 'js/toasts.js' %}" defer></script>{% endcomment %}
 
 
-{% comment %}
-отказался от bootstrap tooltips
-    <script>
+
+{#отказался от bootstrap tooltips#}
+{% comment %}    <script>
         // Initialize bootstrap tooltips (need load popper.js)
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
         const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))

@@ -83,6 +83,7 @@ INSTALLED_APPS = [
 ]
 if ENABLE_BROWSER_RELOAD:
     INSTALLED_APPS.append('django_browser_reload')
+    INSTALLED_APPS.append('django_watchfiles')
 if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append('debug_toolbar')
 
