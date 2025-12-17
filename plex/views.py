@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
 
+@login_required
 def plex_section(request):
     user = request.user
     prefs = UserPreferences.objects.get(user=user)
