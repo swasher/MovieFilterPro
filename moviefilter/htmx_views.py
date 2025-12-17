@@ -16,7 +16,6 @@ from .parse import kinozal_scan, DetailsFetchError
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from moviefilter.kinozal import LinkConstructor
-from .parse import get_kinorium_first_search_results
 from .parse import kinozal_search
 from web_logger import log, LogType
 from .image_caching import get_cached_image_url
@@ -114,7 +113,8 @@ def rss_table_data(request):
 
     # Получаем приоритет
     if 'priority' in request.GET:
-        match request.GET['priority']:
+        level = request.GET['priority']
+        match level:
             case 'HIGH':
                 priority = HIGH
             case 'LOW':
@@ -123,6 +123,8 @@ def rss_table_data(request):
                 priority = DEFER
             case 'TRANS':
                 priority = TRANS_FOUND
+            case _:
+                raise Exception('Unknown priority value!')
     else:
         raise Exception('No priority in request!')
 
@@ -212,24 +214,6 @@ def wait_trains(request, pk):
     except:
         messages.error(request, f"Error with Wait Trans, Movie pk={pk}")
         return HttpResponse(status=500)
-
-
-#
-# === DEPRECATED ===
-#
-@require_GET
-def kinorium_search_111(request, kinozal_id: int):
-    """
-    Сначала выполняет поиск на кинориуме, берет первый результат и переходит по нему.
-    По этой схеме Кинориум банит за поиск, поэтому выпилил этот подход.
-    :param request:
-    :param kinozal_id:
-    :return:
-    """
-    m = MovieRSS.objects.get(id=kinozal_id)
-    data = ' '.join([m.title, m.original_title, m.year])
-    link = get_kinorium_first_search_results(data)
-    return HttpResponse(link)
 
 
 @require_GET

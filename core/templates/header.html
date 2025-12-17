@@ -73,20 +73,21 @@
                     </div>
 
                     <div class="Header-item">
-                        <a href="{% url 'user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
+                        <a href="{% url 'core:user_preferences' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'preferences' %}" type="button" >
                             {% comment %}<i class="bi-person-check-fill" style="color: #66f566;"></i>{% endcomment %}
                             Preferences</a>
                     </div>
 
                     <div class="Header-item">
-                        <a href="{% url 'logout' %}?next=/" class="btn btn-sm btn-outline-secondary mx-1" type="button">
+                        <a href="{% url 'core:logout' %}?next={% url 'core:login' %}" class="btn btn-sm btn-outline-secondary mx-1" type="button">
+                        {% comment %}<a href="{% url 'core:logout' %}" class="btn btn-sm btn-outline-secondary mx-1" type="button">{% endcomment %}
                             <i class="bi bi-box-arrow-left"></i>
                             Logout</a>
                     </div>
 
                 {% else %}
 
-                    <form class="d-flex mx-2" name='AuthenticationForm' method="post" action="{% url 'login' %}">
+                    <form class="d-flex mx-2" name='AuthenticationForm' method="post" action="{% url 'core:login' %}">
                         {% csrf_token %}
                         <input type="text" class="form-control form-control-sm me-2" id="input1" placeholder="Username"
                                name="username">

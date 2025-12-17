@@ -2,14 +2,10 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
-from django.contrib.auth.views import LoginView
-from moviefilter import auth
+
 
 urlpatterns = [
-    path('login/', LoginView.as_view(template_name='login.html'), name='login'),
-    path('logout/', auth.user_logout, name="logout"),
     path('admin/', admin.site.urls),
-    path('', include('django.contrib.auth.urls')),
     path('', include('moviefilter.urls')),
     path('', include('tmdb_adapter.urls')),
     path('', include('core.urls')),

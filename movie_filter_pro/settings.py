@@ -24,6 +24,8 @@ ENABLE_DEBUG_TOOLBAR = config('ENABLE_DEBUG_TOOLBAR', cast=bool)
 ENABLE_BROWSER_RELOAD = config('ENABLE_BROWSER_RELOAD', cast=bool)
 ENABLE_SAAS_COMPILER = False
 
+KINOZAL_SCAN_PRINT = True  # Выводить ли логи сканирования kinozal в консоль.
+
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 INFINITE_PAGINATION_BY = 4
@@ -34,7 +36,8 @@ ALLOWED_HOSTS = ['*']
 # CSRF_TRUSTED_ORIGINS = ['*']
 
 LOGIN_REDIRECT_URL = "/"
-LOGIN_URL = 'login'
+LOGIN_URL = 'core:login'
+LOGOUT_REDIRECT_URL = 'core:login'
 
 DEBUG_LOG = os.path.join(BASE_DIR, 'logs', 'debug.log')
 ERROR_LOG = os.path.join(BASE_DIR, 'logs', 'error.log')
@@ -259,22 +262,15 @@ MESSAGE_TAGS = {
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+
+    'filters': {
+        'require_scan_debug': {
+            '()': 'django.utils.log.CallbackFilter',
+            'callback': lambda record: KINOZAL_SCAN_PRINT,
+        },
+    },
+
     'handlers': {
-        # 'full_log': {
-        #     'level': 'DEBUG',
-        #     'class': 'logging.FileHandler',
-        #     'filename': os.path.join(BASE_DIR, 'logs', 'full.log'),
-        # },
-        # 'short_log': {
-        #     'level': 'INFO',
-        #     'class': 'logging.FileHandler',
-        #     'filename': os.path.join(BASE_DIR, 'logs', 'short.log'),
-        # },
-        # 'error_log': {
-        #     'level': 'ERROR',
-        #     'class': 'logging.FileHandler',
-        #     'filename': os.path.join(BASE_DIR, 'logs', 'error.log'),
-        # },
         'error_log': {  # Django errors
             'level': 'ERROR',
             'class': 'logging.FileHandler',
@@ -293,6 +289,12 @@ LOGGING = {
             'level': 'INFO',
             'class': 'logging.FileHandler',
             'filename': SCAN_LOG,
+        },
+        'kinozal_console': {  # use as kinozal_logger = logging.getLogger('kinozal'); kinozal_logger.debug("Сообщение") или любой уровень. Выключается/включается переменной KINOZAL_SCAN_PRINT
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'filters': ['require_scan_debug'],
+            'formatter': 'simple',
         },
     },
 
@@ -321,11 +323,16 @@ LOGGING = {
         'debug_logger': {
             'handlers': ['debug_log'],
             'level': 'DEBUG',
-            'propagate': False,  # it need to stop double logging
+            'propagate': False,  # it needs to stop double logging
         },
         'scan_logger': {
             'handlers': ['scan_log'],
             'level': 'INFO',
+            'propagate': False,
+        },
+        'kinozal': {   # use as kinozal_logger = logging.getLogger('kinozal'); kinozal_logger.debug("Сообщение") или любой уровень. Выключается/включается переменной KINOZAL_SCAN_PRINT
+            'handlers': ['kinozal_console'],
+            'level': 'DEBUG',
             'propagate': False,
         },
     },

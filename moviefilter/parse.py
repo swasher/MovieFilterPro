@@ -1,6 +1,7 @@
 import re
 import dataclasses
 import requests
+import logging
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode, quote_plus
@@ -18,6 +19,8 @@ from .models import UserPreferences
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from web_logger import log, LogType
+
+kinozal_logger = logging.getLogger('kinozal')
 
 
 class DetailsFetchError(Exception):
@@ -206,6 +209,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     :return: KinozalMovie, время сканирования
     """
     client = KinozalClient()
+    pref = UserPreferences.get()
 
     try:
         response = client.get_movie_details(m.kinozal_id)
@@ -230,7 +234,14 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
         raise DetailsFetchError(f"Unexpected error for movie id {m.kinozal_id}") from e
 
     soup = BeautifulSoup(response.content, "html.parser")
-    pref = UserPreferences.get()
+
+    # validate if sout contain valid kinozal detail page
+    download_link = soup.find('a', href=lambda x: x and f'download.php?id={m.kinozal_id}' in x)
+    if not download_link:
+        #return f"Movie details page validation failed for ID {m.kinozal_id}: download link not found"
+        kinozal_logger.error(f'NO VALID SOUP FOR id {m.kinozal_id}.')
+    else:
+        kinozal_logger.info(f'Successfully load detaild for id {m.kinozal_id}.')
 
     if imdb_part := soup.select_one('a:-soup-contains("IMDb")'):
         # todo weak assumption for [4]; probably needs to add some checks
@@ -283,7 +294,7 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     actors_element = soup.select_one('b:-soup-contains("В ролях:")')
     if actors_element:
         next_element = actors_element.find_next_sibling('span', class_='lnks_toprs')
-        m.actors = next_element.text.strip() if next_element else ""
+        m.actors = next_element.text.strip() if next_element else ['']
     else:
         m.actors = ['']
 
@@ -342,7 +353,8 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         - проверяем через пользовательские фильтры
         - и вот теперь только заносим в базу 
         """
-        log(f'<b>PROCESS</b>: {m.title} - {m.original_title} - {m.year}')
+        log(f'<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
+        kinozal_logger.info(f'<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
 
         """
         В этом месте нужно проверить наличие у релиза нормальной озвучки.
@@ -389,31 +401,6 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
             result.append(m)
 
     return result
-
-#
-# === DEPRECATED ===
-#
-def get_kinorium_first_search_results(data: str):
-    """
-    https://ru.kinorium.com/search/?q=%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D1%82%D0%BE%D1%80%203
-    :param data:
-    :return:
-    """
-    payload = {'q': data}
-    params = urlencode(payload, quote_via=quote_plus)
-    # quote_plus - заменяет пробелы знаками +
-    link = f"https://ru.kinorium.com/search/?{params}"
-
-    response = requests.get(link)
-    log(f'GRAB URL: {link}')
-    soup = BeautifulSoup(response.content, "html.parser")
-    elements = soup.select_one('.list.movieList')  # <div class="list movieList">
-
-    id = soup.select_one('.list.movieList .item h3 a').attrs['href']  # like /2706046/
-    link = 'https://ru.kinorium.com' + id
-
-    first_result = None
-    return link
 
 
 def kinozal_search(kinozal_id: int):

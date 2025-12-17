@@ -29,7 +29,7 @@ def need_dubbed(m: KinozalMovie) -> bool:
     return bool(movie_exist and movie_exist.first().priority == WAIT_TRANS)
 
 
-def exist_in_kinorium(m: KinozalMovie) -> [bool, bool, str | None]:
+def exist_in_kinorium(m: KinozalMovie) -> tuple[bool, bool, str | None]:
     """
     Выполняет частичные проверки.
     Первый возвращаемый аргумент - True, если такой фильм уже присутствует в базе Kinorium.

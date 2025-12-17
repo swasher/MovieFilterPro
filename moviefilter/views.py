@@ -41,7 +41,6 @@ def rss(request):
                            'total_wait_trans': total_wait_trans, 'total_trans_found': total_trans_found})
 
 
-
 @login_required()
 def kinorium(request):
     htmx = request.htmx

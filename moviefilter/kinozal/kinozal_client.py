@@ -272,7 +272,7 @@ class KinozalClient:
             Response с HTML страницей каталога фильмов
         """
         constructor = self.create_link_constructor(c=1002, page=page, v=quality, **kwargs)
-        log(f'GRAB URL: {constructor.url()}')
+        #log(f'GRAB URL: {constructor.url()}')
         return self.get_html_response(constructor.url())
 
     def browse_series(self, page=0, quality=3, **kwargs):
@@ -342,7 +342,7 @@ if __name__ == "__main__":
     client = KinozalClient()
 
     # Использование через удобные методы
-    movies_page = client.browse_movies(page=1, quality=7)  # 4K фильмы, страница 1
+    movies_page = client.browse_movies(page=1, quality=7)  # первая страница, 4K фильмы
     search_results = client.search_movies("Дюна", year=2021)
     movie_details = client.get_movie_details(12345)
 
