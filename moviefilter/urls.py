@@ -20,6 +20,7 @@ urlpatterns = [
 
 htmx = [
     path('scan/', htmx_views.scan, name='scan'),
+    path('cancel_scan/<str:task_id>/', htmx_views.cancel_scan, name='cancel_scan'),
     path('reset_rss/', htmx_views.reset_rss, name='reset_rss'),
     path('clear_log/', htmx_views.clear_log, name='clear_log'),
     path('ignore/<pk>', htmx_views.ignore_movie, name='ignore'),

@@ -2,6 +2,7 @@ import re
 import dataclasses
 import requests
 import logging
+import asyncio
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode, quote_plus
@@ -9,12 +10,13 @@ from requests.exceptions import HTTPError, Timeout, RequestException
 
 from .classes import KinozalMovie
 from .classes import KinozalSearch
-from moviefilter.kinozal import KinozalClient
-from moviefilter.kinozal import LinkConstructor
+from .kinozal import KinozalClient
+from .kinozal import LinkConstructor
 
 from .util import is_float
 from .models import Country, MovieRSS
 from .models import UserPreferences
+from .exceptions import DetailsFetchError, ScanCancelled
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
@@ -23,18 +25,14 @@ from web_logger import log, LogType
 kinozal_logger = logging.getLogger('kinozal')
 
 
-class DetailsFetchError(Exception):
-    """Custom exception for critical errors during movie details fetching."""
-    pass
-
-
-def kinozal_scan(start_page: int, scan_to_date: date, user):
+def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asyncio.Event):
     """
     Запускает сканирование кинозала. Проходит сканированием по всем страницам, начиная с start_page (обычно 0, но
     пользователь может указать конкретную страницу, если оборвался длинный скан, и до даты последнего сканирования.)
     :param start_page: стартовая страница, начинается от нуля.
     :param scan_to_date:
     :param user:
+    :cancel_event: объект, который меняется, если пользователь нажал Cancel во время сканирования.
     :return:
     """
 
@@ -51,17 +49,22 @@ def kinozal_scan(start_page: int, scan_to_date: date, user):
 
         try:
             # Получаем список всех фильмов со страницы. Если достигли нужной даты, то last_day_reached возврашается как True
-            movies, last_day_reached = parse_page(current_page, scan_to_date)
+            movies, last_day_reached = parse_page(current_page, scan_to_date, cancel_event)
 
             # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу.
             # movie_audit удаляет из списка movies фильмы, не прошедшие проверку, а так-же заполняет каждый movie дополнительными данными.
             movies = movie_audit(movies, user)
         except DetailsFetchError as e:
+            if cancel_event.is_set():
+                raise ScanCancelled()
             log(
                 "Scan terminated due to a critical error while fetching movie details.",
                 logger_name=LogType.ERROR,
             )
             raise e
+        except ScanCancelled:
+            log("Scan cancelled by user")
+            return counter
 
         # записываем фильмы в базу
         if movies:
@@ -83,7 +86,7 @@ def kinozal_scan(start_page: int, scan_to_date: date, user):
     return counter
 
 
-def parse_page(page_number: int, scan_to_date: date) -> (list[KinozalMovie], bool):
+def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list[KinozalMovie], bool]:
     """
     Принимает:
      - номер страницы, которую будем сканировать.
@@ -114,6 +117,10 @@ def parse_page(page_number: int, scan_to_date: date) -> (list[KinozalMovie], boo
             'Телекинез / 2022-2023 / РУ / WEB-DL (1080p)'               - встречается и такое (тогда берем первые 4 цифры)
             
             """
+
+            if cancel_event.is_set():
+                raise ScanCancelled()
+
             s = m.find('a')
 
             kinozal_id: int = int(s['href'].split('id=')[1])
@@ -353,8 +360,8 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
         - проверяем через пользовательские фильтры
         - и вот теперь только заносим в базу 
         """
-        log(f'<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
-        kinozal_logger.info(f'<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
+        log(f'11<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
+        kinozal_logger.info(f'22<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
 
         """
         В этом месте нужно проверить наличие у релиза нормальной озвучки.

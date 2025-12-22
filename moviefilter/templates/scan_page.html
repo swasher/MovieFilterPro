@@ -4,9 +4,17 @@
 
     <div class="container-fluid">
 
-        <button class='btn btn-primary'
+        <button id="scan-button"
+                class='btn btn-primary'
                 hx-get="{% url 'scan' %}"
-                hx-swap="none">
+                hx-swap="none"
+                hx-trigger="click"
+                {% comment %}        hx-on="htmx:afterRequest:
+                        if (event.detail.xhr.getResponseHeader('X-Task-ID')) {
+                          window.currentTaskId =
+                            event.detail.xhr.getResponseHeader('X-Task-ID');
+                        }"{% endcomment %}
+        >
             <span id="save-icon" class="bi-database"></span>
             SCAN
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
@@ -21,6 +29,63 @@
             Clear
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
         </button>
+
+        <button id="cancel-button"
+                class="btn btn-danger ms-2  d-none"
+                hx-post=""
+                hx-trigger="click"
+                {% comment %} hx-on="click:
+                        if (window.currentTaskId) {
+                          this.setAttribute(
+                            'hx-post',
+                            `/cancel/${window.currentTaskId}`
+                          );
+                        }"{% endcomment %}
+                hx-swap="none"
+        >
+            Cancel scan
+        </button>
+
+        <script>
+            // ===  ЛОГИКА УПРАВЛЕНИЯ КНОПКАМИ SCAN/CANCEL===
+            const scanButton = document.getElementById('scan-button');
+            const cancelButton = document.getElementById('cancel-button');
+            let currentTaskId = null;
+
+            // Событие ПЕРЕД отправкой запроса на сканирование
+            scanButton.addEventListener('htmx:beforeRequest', function () {
+                // Блокируем кнопку, чтобы избежать двойного клика
+                scanButton.disabled = true;
+            });
+
+            // Событие ПОСЛЕ получения ответа от сервера сканирования
+            scanButton.addEventListener('htmx:afterRequest', function (event) {
+                // Снова делаем кнопку активной
+                scanButton.disabled = false;
+
+                if (event.detail.successful) {
+                    const taskId = event.detail.xhr.getResponseHeader('X-Task-ID');
+                    if (taskId) {
+                        currentTaskId = taskId;
+                        // Устанавливаем URL для кнопки отмены
+                        cancelButton.setAttribute('hx-post', `/cancel/${currentTaskId}`);
+                        // Показываем кнопку отмены
+                        cancelButton.classList.remove('d-none');
+                    }
+                }
+            });
+
+            // Событие ПОСЛЕ успешной отмены
+            cancelButton.addEventListener('htmx:afterOnLoad', function () {
+                // Скрываем кнопку отмены
+                cancelButton.classList.add('d-none');
+                // Очищаем hx-post на всякий случай
+                cancelButton.removeAttribute('hx-post');
+                currentTaskId = null;
+            });
+
+        </script>
+
 
         <div class="border my-4 p-3 rounded" style="background: lightgray">
             <div class="form-check form-check-inline">
@@ -113,8 +178,7 @@
             border: 1px solid black;
             overflow-y: scroll;
             white-space: pre-wrap; /* Key fix: Preserve line breaks */
-            {#font-size: medium;#}
-            font-family: monospace; /* Optional: Use a monospace font for logs */
+        {#font-size: medium;#} font-family: monospace; /* Optional: Use a monospace font for logs */
         }
     </style>
 {% endblock %}

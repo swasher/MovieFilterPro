@@ -1,4 +1,7 @@
 import os
+import uuid
+from asgiref.sync import async_to_sync
+
 from datetime import datetime
 from pathlib import Path
 from django.db.models import Q
@@ -12,7 +15,8 @@ from django.views.decorators.http import require_http_methods, require_GET, requ
 from .models import Kinorium
 from .models import MovieRSS
 from .models import UserPreferences
-from .parse import kinozal_scan, DetailsFetchError
+from .parse import kinozal_scan
+from .exceptions import DetailsFetchError
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from moviefilter.kinozal import LinkConstructor
@@ -21,46 +25,85 @@ from web_logger import log, LogType
 from .image_caching import get_cached_image_url
 from .image_caching import remove_cached_image
 from .kinozal import KinozalClient
+from .runtime import cancel_events, tasks
+from .service import start_scan_task
 
 
-@login_required()
+# @login_required()
+# @require_GET
+# def scan(request):
+#     """
+#     Вызывается при нажатии на кнопку Scan
+#     :param request:
+#     :return:
+#     """
+#     pref = UserPreferences.get()
+#     last_scan = pref.last_scan
+#     start_page = pref.scan_from_page
+#     user = request.user
+#
+#     # TODO Сдлать функцию-проверку всех необходимых параметров в preferences, если чего-то не хвататет, рисовать красный алерт.
+#
+#     try:
+#         number_of_new_movies = kinozal_scan(start_page, last_scan, user)
+#     except DetailsFetchError:
+#         # Эта ошибка уже залогирована на более низком уровне с полным traceback.
+#         # Здесь мы просто сообщаем пользователю о проблеме.
+#         messages.error(request, 'Сканирование прервано. Не удалось получить данные со страницы фильма. Возможно, сайт недоступен или IP заблокирован. Проверьте error.log для деталей.')
+#         return HttpResponse(status=500)
+#     except Exception as e:
+#         # Ловим любые другие непредвиденные ошибки
+#         log(f'An unexpected error occurred in the scan view: {e}', logger_name=LogType.ERROR)
+#         messages.error(request, f'Произошла непредвиденная ошибка: {e}')
+#         return HttpResponse(status=500)
+#     else:
+#         log(f"Scan complete, new entries: {number_of_new_movies}")
+#         pref.scan_from_page = None
+#         pref.save()
+#
+#         # update last scan to now()
+#         # UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
+#         UserPreferences.objects.filter(pk=1).update(last_scan=datetime.now().date())
+#
+#         messages.success(request, f'Added {number_of_new_movies} movies.')
+#         return HttpResponse(status=200)
+
+@login_required
 @require_GET
 def scan(request):
-    """
-    Вызывается при нажатии на кнопку Scan
-    :param request:
-    :return:
-    """
     pref = UserPreferences.get()
-    last_scan = pref.last_scan
-    start_page = pref.scan_from_page
+
+    task_id = uuid.uuid4().hex
     user = request.user
 
-    # TODO Сдлать функцию-проверку всех необходимых параметров в preferences, если чего-то не хвататет, рисовать красный алерт.
+    async_to_sync(start_scan_task)(
+        task_id=task_id,
+        start_page=pref.scan_from_page or 0,
+        scan_to_date=pref.last_scan,
+        user=user,
+    )
 
-    try:
-        number_of_new_movies = kinozal_scan(start_page, last_scan, user)
-    except DetailsFetchError:
-        # Эта ошибка уже залогирована на более низком уровне с полным traceback.
-        # Здесь мы просто сообщаем пользователю о проблеме.
-        messages.error(request, 'Сканирование прервано. Не удалось получить данные со страницы фильма. Возможно, сайт недоступен или IP заблокирован. Проверьте error.log для деталей.')
-        return HttpResponse(status=500)
-    except Exception as e:
-        # Ловим любые другие непредвиденные ошибки
-        log(f'An unexpected error occurred in the scan view: {e}', logger_name=LogType.ERROR)
-        messages.error(request, f'Произошла непредвиденная ошибка: {e}')
-        return HttpResponse(status=500)
-    else:
-        log(f"Scan complete, new entries: {number_of_new_movies}")
-        pref.scan_from_page = None
-        pref.save()
+    return HttpResponse(
+        status=202,
+        headers={
+            "X-Task-ID": task_id
+        }
+    )
 
-        # update last scan to now()
-        # UserPreferences.objects.filter(user=request.user).update(last_scan=datetime.now().date())
-        UserPreferences.objects.filter(pk=1).update(last_scan=datetime.now().date())
 
-        messages.success(request, f'Added {number_of_new_movies} movies.')
-        return HttpResponse(status=200)
+@require_POST
+def cancel_scan(request, task_id):
+    print('Scan was canceled by user.')
+    event = cancel_events.get(task_id)
+    if event:
+        event.set()
+
+    task = tasks.get(task_id)
+    if task:
+        task.cancel()  # ускоряет завершение await
+
+    return HttpResponse(status=204)
+
 
 
 def kinorium_table_data(request):
@@ -112,21 +155,21 @@ def rss_table_data(request):
     chunk_size = settings.INFINITE_PAGINATION_BY
 
     # Получаем приоритет
-    if 'priority' in request.GET:
-        level = request.GET['priority']
-        match level:
-            case 'HIGH':
-                priority = HIGH
-            case 'LOW':
-                priority = LOW
-            case 'DEFER':
-                priority = DEFER
-            case 'TRANS':
-                priority = TRANS_FOUND
-            case _:
-                raise Exception('Unknown priority value!')
-    else:
+    if 'priority' not in request.GET:
         raise Exception('No priority in request!')
+
+    level = request.GET['priority']
+    match level:
+        case 'HIGH':
+            priority = HIGH
+        case 'LOW':
+            priority = LOW
+        case 'DEFER':
+            priority = DEFER
+        case 'TRANS':
+            priority = TRANS_FOUND
+        case _:
+            raise Exception('Unknown priority value!')
 
     # Получаем уже показанные ID
     displayed_ids_str = request.GET.get('displayed_ids', '')

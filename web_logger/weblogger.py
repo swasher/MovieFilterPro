@@ -14,6 +14,7 @@ class LogType(Enum):
     ERROR = 2
     DEBUG = 3
 
+
 # channel_layer = get_channel_layer()
 debug_logger = logging.getLogger('debug_logger')
 scan_logger = logging.getLogger('scan_logger')
