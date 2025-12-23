@@ -9,9 +9,6 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('', views.rss, name='rss'),
-    # DEPRECATED path('movies_low/', views.movies_low, name='movies_low'),
-    # DEPRECATED path('parse_kinorium_csv/', views.parse_kinorium_csv, name='parse_kinorium_csv'),
-
     path('kinorium/', views.kinorium, name='kinorium'),
     path('scan_page/', views.scan_page, name='scan_page'),
     path('tst/', views.tst, name='tst'),

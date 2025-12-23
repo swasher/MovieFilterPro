@@ -1,0 +1,13 @@
+*sqlite3*
+*.log
+.idea/
+__pycache__/
+collectstatic
+/fixtures/auth.Group.json
+/current_csv/
+api.md
+.env
+.env.production
+media/cached_images/
+.make_targets_cache
+!/firebase_adapter/movie-vault-17cc7-firebase-adminsdk-fbsvc-1eeb501dbf.json

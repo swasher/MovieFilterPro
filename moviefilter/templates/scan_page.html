@@ -20,16 +20,6 @@
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
         </button>
 
-        <button class='btn btn-primary'
-                hx-get="{% url 'clear_log' %}"
-                hx-include="[name='inlineRadioOptions']:checked"
-                hx-swap="innerHTML"
-                hx-target="#log-content">
-            <span id="clear-icon" class="bi-x-lg"></span>
-            Clear
-            <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
-        </button>
-
         <button id="cancel-button"
                 class="btn btn-danger ms-2  d-none"
                 hx-post=""
@@ -46,110 +36,102 @@
             Cancel scan
         </button>
 
+        <button class='btn btn-primary'
+                hx-get="{% url 'clear_log' %}"
+                hx-include="[name='inlineRadioOptions']:checked"
+                hx-swap="innerHTML"
+                hx-target="#log-content">
+            <span id="clear-icon" class="bi-x-lg"></span>
+            Clear
+            <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
+        </button>
+
+
+
         <script>
-            // ===  ЛОГИКА УПРАВЛЕНИЯ КНОПКАМИ SCAN/CANCEL===
-            const scanButton = document.getElementById('scan-button');
-            const cancelButton = document.getElementById('cancel-button');
-            let currentTaskId = null;
+            // --- Toast Notification Logic ---
+            function showToast(message, status = 'success') {
+                const toastContainer = document.querySelector('[data-toast-container]');
+                const toastTemplate = document.querySelector('[data-toast-template]');
 
-            // Событие ПЕРЕД отправкой запроса на сканирование
-            scanButton.addEventListener('htmx:beforeRequest', function () {
-                // Блокируем кнопку, чтобы избежать двойного клика
-                scanButton.disabled = true;
-            });
+                const newToast = toastTemplate.cloneNode(true);
+                delete newToast.dataset.toastTemplate; // remove template marker
 
-            // Событие ПОСЛЕ получения ответа от сервера сканирования
-            scanButton.addEventListener('htmx:afterRequest', function (event) {
-                // Снова делаем кнопку активной
-                scanButton.disabled = false;
+                const toastBody = newToast.querySelector('[data-toast-body]');
+                toastBody.textContent = message;
 
-                if (event.detail.successful) {
-                    const taskId = event.detail.xhr.getResponseHeader('X-Task-ID');
-                    if (taskId) {
-                        currentTaskId = taskId;
-                        // Устанавливаем URL для кнопки отмены
-                        cancelButton.setAttribute('hx-post', `/cancel/${currentTaskId}`);
-                        // Показываем кнопку отмены
-                        cancelButton.classList.remove('d-none');
-                    }
+                if (status === 'success') {
+                    newToast.classList.add('text-bg-success');
+                } else {
+                    newToast.classList.add('text-bg-danger');
                 }
-            });
 
-            // Событие ПОСЛЕ успешной отмены
-            cancelButton.addEventListener('htmx:afterOnLoad', function () {
-                // Скрываем кнопку отмены
-                cancelButton.classList.add('d-none');
-                // Очищаем hx-post на всякий случай
-                cancelButton.removeAttribute('hx-post');
-                currentTaskId = null;
-            });
+                toastContainer.appendChild(newToast);
+                const toast = new bootstrap.Toast(newToast);
+                toast.show();
+            }
 
-        </script>
-
-
-        <div class="border my-4 p-3 rounded" style="background: lightgray">
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-scan" value="scan" checked
-                       hx-get="{% url 'get_log' 'scan' %}"
-                       hx-trigger="change"
-                       hx-target="#log-content"
-                        {#                   hx-include="this"#}
-                       hx-swap="innerHTML"
-                >
-                <label class="form-check-label" for="r-scan"><strong>Scan</strong></label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-debug" value="debug"
-                       hx-get="{% url 'get_log' 'debug' %}"
-                       hx-trigger="change"
-                       hx-target="#log-content"
-                        {#                   hx-include="this"#}
-                       hx-swap="innerHTML"
-                >
-                <label class="form-check-label" for="r-debug"><strong>Debug</strong></label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="inlineRadioOptions" id="r-error" value="error"
-                       hx-get="{% url 'get_log' 'error' %}"
-                       hx-trigger="change"
-                       hx-target="#log-content"
-                        {#                   hx-include="this"#}
-                       hx-swap="innerHTML"
-                >
-                <label class="form-check-label" for="r-error"><strong>Error</strong></label>
-            </div>
-        </div>
-
-
-        <div id="log-content"></div>
-
-        <script>
+            // --- WebSocket Logic ---
             const socket = new WebSocket('ws://' + window.location.host + '/ws/log/');
             const logContent = document.getElementById('log-content');
             const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
 
             socket.onmessage = function (event) {
                 const data = JSON.parse(event.data);
-                const newLogEntry = document.createElement('div');
-                newLogEntry.innerHTML = data.content;
 
-                {% comment %}console.log('Socket message:', newLogEntry);{% endcomment %}
+                // Dispatch based on message type
+                if (data.type === 'scan_complete') {
+                    showToast(data.message, data.status);
+                    // Hide the cancel button after scan is complete
+                    document.getElementById('cancel-button').classList.add('d-none');
+                    currentTaskId = null;
+                } else if (data.type === 'log') {
+                    const newLogEntry = document.createElement('div');
+                    newLogEntry.innerHTML = data.content;
 
-                // Check which radio button is selected and filter messages
-                if (document.getElementById('r-debug').checked && data.content.startsWith('DEBUG')) {
-                    logContent.appendChild(newLogEntry);
-                } else if (document.getElementById('r-scan').checked && data.content.startsWith('INFO')) {
-                    newLogEntry.innerHTML = newLogEntry.innerHTML.replace("INFO:", "").trim();
-                    logContent.appendChild(newLogEntry);
-                } else if (document.getElementById('r-error').checked && data.content.startsWith('ERROR')) {
-                    logContent.appendChild(newLogEntry);
+                    // Check which radio button is selected and filter messages
+                    if (document.getElementById('r-debug').checked && data.content.startsWith('DEBUG')) {
+                        logContent.appendChild(newLogEntry);
+                    } else if (document.getElementById('r-scan').checked && data.content.startsWith('INFO')) {
+                        newLogEntry.innerHTML = newLogEntry.innerHTML.replace("INFO:", "").trim();
+                        logContent.appendChild(newLogEntry);
+                    } else if (document.getElementById('r-error').checked && data.content.startsWith('ERROR')) {
+                        logContent.appendChild(newLogEntry);
+                    }
+                    logContent.scrollTop = logContent.scrollHeight;
                 }
-
-                logContent.scrollTop = logContent.scrollHeight;
             };
 
-            // initial load
+            // --- Initial Log Load ---
             htmx.ajax('GET', '{% url "get_log" "scan" %}', '#log-content');
+
+
+            // --- Scan/Cancel Button Logic ---
+            const scanButton = document.getElementById('scan-button');
+            const cancelButton = document.getElementById('cancel-button');
+            let currentTaskId = null;
+
+            scanButton.addEventListener('htmx:beforeRequest', function () {
+                scanButton.disabled = true;
+            });
+
+            scanButton.addEventListener('htmx:afterRequest', function (event) {
+                scanButton.disabled = false;
+                if (event.detail.successful) {
+                    const taskId = event.detail.xhr.getResponseHeader('X-Task-ID');
+                    if (taskId) {
+                        currentTaskId = taskId;
+                        cancelButton.setAttribute('hx-post', `/cancel/${currentTaskId}`);
+                        cancelButton.classList.remove('d-none');
+                    }
+                }
+            });
+
+            cancelButton.addEventListener('htmx:afterOnLoad', function () {
+                cancelButton.classList.add('d-none');
+                cancelButton.removeAttribute('hx-post');
+                currentTaskId = null;
+            });
         </script>
 
 

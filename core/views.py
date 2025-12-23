@@ -33,6 +33,5 @@ def user_preferences_update(request):
             pref.plex_token = form.cleaned_data['plex_token']
 
             pref.save()
-            return redirect(reverse('user_preferences'))
+            return redirect(reverse('core:user_preferences'))
     return render(request, 'preferences_update_form.html', {'form': form})
-

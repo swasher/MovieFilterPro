@@ -31,6 +31,19 @@ def send_log_to_websocket(log_message):
     )
 
 
+def send_notification(payload: dict):
+    """Sends a structured notification payload to the websocket group."""
+    async_to_sync(get_channel_layer().group_send)(
+        "log_updates",
+        {
+            "type": "send_notification",  # Имя нового метода-обработчика в LogConsumer
+            "payload": payload,
+        },
+    )
+
+
+
+
 def log(message: str, logger_name: LogType = LogType.SCAN):
     """
     Logs a message to a specific log file AND to web-socket.

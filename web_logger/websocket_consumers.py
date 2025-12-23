@@ -23,8 +23,16 @@ class LogConsumer(AsyncWebsocketConsumer):
     async def send_log_update(self, event):
         log_content = event['content']
         await self.send(text_data=json.dumps({
+            'type': 'log',  # Добавляем тип для фронтенда
             'content': log_content,
         }))
+
+    async def send_notification(self, event):
+        """Обрабатывает событие уведомления и отправляет его клиенту."""
+        payload = event['payload']
+        # Просто пересылаем payload, который уже является словарем
+        await self.send(text_data=json.dumps(payload))
+
 
     # def get_log_file_content(self):
     #     """Читает содержимое log_file.log."""

@@ -310,10 +310,9 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     except:
         log(f"CAN'T GET [plot] for {m.original_title} with kinozal_id {m.kinozal_id}", logger_name=LogType.DEBUG)
 
-
     translate_search = (soup.select_one('b:-soup-contains("Перевод:")'))
     if translate_search:
-        m.translate = translate_search.next_sibling.strip()
+        m.translate = translate_search.next_sibling.getText().strip()
 
     poster = soup.find('img', 'p200').attrs['src']
     # используют и внешние линки (тогда в нем есть http), и внутренние относительные линки (тогда надо добавить домен)
