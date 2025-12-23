@@ -1,3 +1,3 @@
-from .weblogger import log, LogType
+from .weblogger import log, LogType, send_notification
 
-__all__ = ['log', 'LogType']
+__all__ = ['log', 'LogType', 'send_notification']
