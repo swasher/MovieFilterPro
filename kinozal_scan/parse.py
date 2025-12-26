@@ -1,21 +1,17 @@
 import re
 import dataclasses
-import requests
 import logging
 import asyncio
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
-from urllib.parse import urlencode, quote_plus
 from requests.exceptions import HTTPError, Timeout, RequestException
 
-from .classes import KinozalMovie
-from .classes import KinozalSearch
-from .kinozal import KinozalClient
-from .kinozal import LinkConstructor
+from moviefilter.classes import KinozalMovie
+from moviefilter.kinozal import KinozalClient
 
 from .util import is_float
-from .models import Country, MovieRSS
-from .models import UserPreferences
+from moviefilter.models import Country, MovieRSS
+from moviefilter.models import UserPreferences
 from .exceptions import DetailsFetchError, ScanCancelled
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
@@ -407,67 +403,3 @@ def movie_audit(movies: list[KinozalMovie], user) -> list[KinozalMovie]:
             result.append(m)
 
     return result
-
-
-def kinozal_search(kinozal_id: int):
-    """
-    Принимает фильм на входе, и ищет на кинозале разновидности этого фильма. Используется для
-    таблички Download где можно выбрать подходящую версию.
-    :param kinozal_domain: текущий рабочий домен кинозала (только домен, типа 'kinozal.tv')
-    :param kinozal_id:
-    :return:
-    """
-    client = KinozalClient()
-    pref = UserPreferences.get()
-
-    m = MovieRSS.objects.get(id=kinozal_id)
-    results = []
-
-    combined_titles = ' / '.join([m.title, m.original_title])
-    if len(combined_titles) < 64:
-        search_string = combined_titles
-    else:
-        search_string = m.title
-
-    try:
-        year = str(int(m.year))
-    except ValueError:
-        year = None
-
-    V_HD = 3  # Рипы HD(1080 и 720)
-    V_4K = 7  # 4K
-
-    for quality in [V_HD, V_4K]:
-
-        if year:
-            link_builder = LinkConstructor(s=search_string, d=year, v=quality)
-        else:
-            link_builder = LinkConstructor(s=search_string, v=quality)
-        # for TERMINATOR, l = "https://kinozal.tv/browse.php?s=%F2%E5%F0%EC%E8%ED%E0%F2%EE%F0&g=0&c=1002&v=7&d=2019&w=0&t=0&f=0"
-
-        response = client.get_html_response(link_builder.search_url())
-        log(f'GRAB URL: {link_builder.search_url()}')
-
-        if response.ok:
-            soup = BeautifulSoup(response.content, "html.parser")
-            movies_elements = soup.find_all('tr', 'bg')
-
-            for element in movies_elements:
-                m = KinozalSearch()
-
-                m.id = element.a['href'].split('=')[1]
-                m.header = element.a.text
-                m.size = element.find_all('td', 's')[1].text
-                m.seed = element.find('td', {'class': 'sl_s'}).text
-                m.peer = element.find('td', {'class': 'sl_p'}).text
-                m.created = element.find_all('td', 's')[2].text
-                m.link = f'https://{pref.kinozal_domain}{element.a['href']}'
-                m.is_4k = True if quality == V_4K else False
-                m.is_sdr = True if 'SDR' in m.header else False
-
-                results.append(m)
-
-        else:
-            raise Exception(f'ERROR: {response.content}')
-
-    return results

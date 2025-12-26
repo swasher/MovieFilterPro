@@ -1,5 +1,4 @@
-from django.shortcuts import render, redirect
-from django.http import HttpResponse
+from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 
 from .models import MovieRSS, Kinorium, UserPreferences
@@ -21,19 +20,3 @@ def rss(request):
                   context={'last_scan': last_scan, 'total_high': total_high, 'total_low': total_low,
                            'total_defer': total_defer, 'total_skip': total_skip,
                            'total_wait_trans': total_wait_trans, 'total_trans_found': total_trans_found})
-
-
-def scan_page(request):
-    return render(request, 'scan_page.html')
-
-
-def tst(request):
-    if request.method == 'POST':
-        print(request.POST)
-    if request.method == 'GET':
-        print(request.GET)
-
-    if request.htmx:
-        return HttpResponse('SOME HTMX DATA')
-    else:
-        return render(request, 'testing.html')

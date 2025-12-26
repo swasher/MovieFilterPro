@@ -13,6 +13,7 @@ urlpatterns = [
     path('', include('vault.urls')),
     path('', include('kinorium.urls')),
     path('', include('web_logger.urls')),
+    path('', include('kinozal_scan.urls')),
 ]
 
 

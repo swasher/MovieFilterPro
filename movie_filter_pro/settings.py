@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     'plex',
     'vault',
     'kinorium',
+    'kinozal_scan',
     'web_logger',
 ]
 if ENABLE_BROWSER_RELOAD:

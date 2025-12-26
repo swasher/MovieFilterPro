@@ -1,13 +1,11 @@
 from django.contrib.auth.models import User
 
-from .models import MovieRSS
-from .models import Kinorium
-from .models import UserPreferences
-from .classes import KinozalMovie
+from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
+
+from moviefilter.models import MovieRSS, Kinorium, UserPreferences
+from moviefilter.classes import KinozalMovie
 from .util import not_match_rating
 from web_logger import log
-
-from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
 
 def exist_in_kinozal(m: KinozalMovie) -> bool:

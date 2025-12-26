@@ -4,8 +4,7 @@ from datetime import date, datetime
 from .runtime import executor, tasks, cancel_events
 from .parse import kinozal_scan
 from .exceptions import DetailsFetchError, ScanCancelled
-from .models import UserPreferences
-
+from moviefilter.models import UserPreferences
 from web_logger import log, LogType, send_notification
 
 
