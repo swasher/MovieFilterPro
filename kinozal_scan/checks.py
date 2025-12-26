@@ -85,7 +85,7 @@ def exist_in_kinorium(m: KinozalMovie) -> tuple[bool, bool, str | None]:
     return NOT_FOUND, False, None
 
 
-def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
+def check_users_filters(user: User, m: KinozalMovie, priority: int, prefs) -> bool:
     """
     Возвращает True, если m удовлетворяет всем фильтрам.
     """
@@ -93,7 +93,6 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int) -> bool:
     def prio(s: bool) -> str:
         return 'Low priority' if s else 'High priority'
 
-    prefs = UserPreferences.get()
     if priority is LOW:
         stop_countries, stop_genres, max_year, min_rating = prefs.get_low_priority_preferences()
     elif priority is HIGH:

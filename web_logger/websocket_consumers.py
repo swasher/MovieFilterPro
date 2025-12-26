@@ -32,28 +32,3 @@ class LogConsumer(AsyncWebsocketConsumer):
         payload = event['payload']
         # Просто пересылаем payload, который уже является словарем
         await self.send(text_data=json.dumps(payload))
-
-
-    # def get_log_file_content(self):
-    #     """Читает содержимое log_file.log."""
-    #     try:
-    #         with open(self.LOG_FILE_PATH, 'r') as f:
-    #             return f.read()
-    #     except FileNotFoundError:
-    #         return ""
-    #
-    # DEPRECATED: Начальный лог отправляется через htmx
-    # async def send_initial_log(self):
-    #     """Отправляет начальный лог в чаннел."""
-    #     initial_log = self.get_log_file_content()
-    #     log_lines = initial_log.strip().split('\n')
-    #     for line in log_lines:
-    #         # await self.channel_layer.send(
-    #         await self.channel_layer.group_send(
-    #             # self.channel_name,
-    #             "log_updates",
-    #             {
-    #                 "type": "send_log_update",
-    #                 "content": line,
-    #             },
-    #         )

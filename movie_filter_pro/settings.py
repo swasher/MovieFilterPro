@@ -24,7 +24,7 @@ ENABLE_DEBUG_TOOLBAR = config('ENABLE_DEBUG_TOOLBAR', cast=bool)
 ENABLE_BROWSER_RELOAD = config('ENABLE_BROWSER_RELOAD', cast=bool)
 ENABLE_SAAS_COMPILER = False
 
-KINOZAL_SCAN_PRINT = True  # Выводить ли логи сканирования kinozal в консоль.
+KINOZAL_SCAN_PRINT = False  # Выводить ли логи сканирования kinozal в консоль.
 
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 

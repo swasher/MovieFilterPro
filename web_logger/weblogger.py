@@ -41,6 +41,17 @@ def send_notification(payload: dict):
     )
 
 
+async def asend_notification(payload: dict):
+    """Асинхронная версия для отправки структурированных уведомлений."""
+    await get_channel_layer().group_send(
+        "log_updates",
+        {
+            "type": "send_notification",
+            "payload": payload,
+        },
+    )
+
+
 def log(message: str, logger_name: LogType = LogType.SCAN):
     """
     Logs a message to a specific log file AND to web-socket.
@@ -63,10 +74,38 @@ def log(message: str, logger_name: LogType = LogType.SCAN):
             scan_logger.info(message, exc_info=False)
         case LogType.ERROR:
             log_level = 'ERROR'
-            logging.getLogger("django").error(f"\n{message}", exc_info=True)  # this line will add error message to django errors
+            logging.getLogger("django").error(f"\n{message}",
+                                              exc_info=True)  # this line will add error message to django errors
         case _:
             raise ValueError(f"Invalid logger_name: {logger_name}. Must be a LogType member.")
 
     # log_level нужно добавлять, чтобы различать scan и debug сообщения на стороне фронта. Там эта часть удаляется.
     log_message = f"{log_level}: {message}"
     send_log_to_websocket(log_message)
+
+
+async def alog(message: str, logger_name: LogType = LogType.SCAN):
+    """Асинхронная версия для отправки логов."""
+    match logger_name:
+        case LogType.DEBUG:
+            log_level = 'DEBUG'
+            debug_logger.debug(message, exc_info=False)
+        case LogType.SCAN:
+            log_level = 'INFO'
+            scan_logger.info(message, exc_info=False)
+        case LogType.ERROR:
+            log_level = 'ERROR'
+            logging.getLogger("django").error(f"\n{message}", exc_info=True)
+        case _:
+            raise ValueError(f"Invalid logger_name: {logger_name}. Must be a LogType member.")
+
+    # log_level нужно добавлять, чтобы различать scan и debug сообщения на стороне фронта. Там эта часть удаляется.
+    log_message = f"{log_level}: {message}"
+
+    await get_channel_layer().group_send(
+        "log_updates",
+        {
+            "type": "send_log_update",
+            "content": log_message,
+        },
+    )

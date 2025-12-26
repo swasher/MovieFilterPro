@@ -1,4 +1,6 @@
-from django.http import HttpResponse
+import json
+
+from django.http import HttpResponse, JsonResponse
 from datetime import datetime, date
 from django.db.models import Q
 from moviefilter.models import MovieRSS
@@ -9,7 +11,7 @@ from moviefilter.models import MovieRSS
 """
 
 
-def delete_movies_since_date(since_date: date):
+def delete_movies_since_date(since_date: date) -> int:
     # Извлекаем значения HIGH и LOW из PRIORITY вручную
     reverse_map = {label: value for value, label in MovieRSS.PRIORITY}
     HIGH = reverse_map['Обычный']
@@ -27,20 +29,58 @@ def delete_movies_since_date(since_date: date):
     movies.delete()
 
     print(f"\n{count} movies deleted.")
-    return_string += f"{count} movies deleted."
 
-    return return_string
+    return count
 
 
 def run_deleting_since_date(request):
-    since_date_str = '2025-01-10'
-    since_date = datetime.strptime(since_date_str, '%Y-%m-%d').date()
+    # since_date_str = '2025-01-10'
+    # since_date = datetime.strptime(since_date_str, '%Y-%m-%d').date()
+
+    try:
+        # 1. Получаем JSON из тела запроса
+        date_str = request.POST.get('date')
+
+        # 2. Извлекаем дату
+        if not date_str:
+            return HttpResponse('<div class="alert alert-danger">Ошибка: Дата не указана</div>')
+
+        # 3. Преобразовываем дату в объект
+        since_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+    except json.JSONDecodeError as e:
+        return HttpResponse(
+            f'<div class="alert alert-danger">'
+            f'<h4><i class="bi bi-bug me-2"></i>Ошибка JSON</h4>'
+            f'<p>Не удалось декодировать тело запроса (JSONDecodeError).</p>'
+            f'<hr>'
+            f'<p class="mb-0"><strong>Текст ошибки:</strong> {e}</p>'
+            f'<p class="mt-2 small text-muted text-break"><strong>Body:</strong> {request.body.decode("utf-8", errors="replace")}</p>'
+            f'</div>'
+        )
+
+    except ValueError:
+        return HttpResponse('<div class="alert alert-danger">Неверный формат даты. Используйте YYYY-MM-DD</div>')
 
     if request.method == 'POST':
         try:
-            result_string = delete_movies_since_date(since_date)  # Вызовите функцию напрямую
-            return HttpResponse(result_string)
+            print('Start deleting movies since date:', since_date)
+            result_int = delete_movies_since_date(since_date)  # Вызовите функцию удаления
+            # 5. Возвращаем результат
+            return HttpResponse(
+                f'<div class="alert alert-success">'
+                f'<h4><i class="bi bi-check-circle me-2"></i>Успешно</h4>'
+                f'<p>Удалены фильмы с <strong>{since_date.strftime("%d.%m.%Y")}</strong> по <strong>{datetime.now().strftime("%d.%m.%Y")}</strong>.</p>'
+                f'<hr>'
+                f'<p class="mb-0">Количество удаленных записей: <strong>{result_int}</strong></p>'
+                f'</div>'
+            )
         except Exception as e:
-            return HttpResponse(f"Ошибка при запуске скрипта: {e}", status=500)
+            return HttpResponse(
+                f'<div class="alert alert-danger">'
+                f'<h4><i class="bi bi-exclamation-triangle me-2"></i>Ошибка выполнения</h4>'
+                f'<p>{e}</p>'
+                f'</div>'
+            )
     else:
         return HttpResponse("Недопустимый метод", status=400)

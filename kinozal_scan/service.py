@@ -5,7 +5,7 @@ from .runtime import executor, tasks, cancel_events
 from .parse import kinozal_scan
 from .exceptions import DetailsFetchError, ScanCancelled
 from moviefilter.models import UserPreferences
-from web_logger import log, LogType, send_notification
+from web_logger import alog, LogType, asend_notification
 
 
 async def start_scan_task(task_id: str, start_page: int, scan_to_date: date, user):
@@ -26,26 +26,26 @@ async def start_scan_task(task_id: str, start_page: int, scan_to_date: date, use
             )
         except ScanCancelled:
             # Если отменили вручную, просто выходим, не отправляя уведомлений
-            log("Scan cancelled by user.", logger_name=LogType.SCAN)
+            await alog("Scan cancelled by user.", logger_name=LogType.SCAN)
         except DetailsFetchError:
             # Эта ошибка уже залогирована на более низком уровне.
             # Здесь мы просто сообщаем пользователю о проблеме.
-            send_notification({
+            await asend_notification({
                 'type': 'scan_complete',
                 'status': 'error',
                 'message': 'Сканирование прервано. Не удалось получить данные со страницы фильма. Возможно, сайт недоступен или IP заблокирован.'
             })
         except Exception as e:
             # Ловим любые другие непредвиденные ошибки
-            log(f'An unexpected error occurred in the scan task: {e}', logger_name=LogType.ERROR)
-            send_notification({
+            await alog(f'An unexpected error occurred in the scan task: {e}', logger_name=LogType.ERROR)
+            await asend_notification({
                 'type': 'scan_complete',
                 'status': 'error',
                 'message': f'Произошла непредвиденная ошибка: {e}'
             })
         else:
             # Логика, которая раньше была в `else` блока try/except во view
-            log(f"Scan complete, new entries: {number_of_new_movies}", logger_name=LogType.SCAN)
+            await alog(f"Scan complete, new entries: {number_of_new_movies}", logger_name=LogType.SCAN)
 
             def db_update():
                 pref = UserPreferences.get()
@@ -59,7 +59,7 @@ async def start_scan_task(task_id: str, start_page: int, scan_to_date: date, use
                 db_update
             )
 
-            send_notification({
+            await asend_notification({
                 'type': 'scan_complete',
                 'status': 'success',
                 'message': f'Added {number_of_new_movies} movies.'

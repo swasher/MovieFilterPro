@@ -27,3 +27,7 @@ The goal is to implement the frontend logic for the asynchronous scanning featur
 4.  **Backend Cancellation Functionality:**
     -   This part is mostly complete on the backend (`service.py`, etc.).
     -   Frontend will trigger this via the "Cancel" button. The result of this operation will be the completion of the task, which should trigger a notification via the WebSocket.
+
+---
+## Project Documentation
+- [WebSocket Logging & Notification System](docs/WEBSOCKET-LOGGING.md)

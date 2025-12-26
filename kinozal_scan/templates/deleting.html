@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0"><i class="bi bi-trash3 me-2"></i>Удаление данных</h3>
+                </div>
+                <div class="card-body">
+                    <!-- Блок выбора даты -->
+                    <div class="mb-4">
+                        <label for="datePicker" class="form-label fw-bold">
+                            <i class="bi bi-calendar-date me-2"></i>Выберите дату:
+                        </label>
+                        <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
+                            <input type="date"
+                                   id="datePicker"
+                                   name="date"
+                                   class="form-control date-input"
+                                   value="{{ today|date:'Y-m-d' }}"
+                                   max="{{ today|date:'Y-m-d' }}">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-danger"
+                                        hx-post="run_deleting_since_date"
+                                        hx-trigger="click"
+                                        hx-target=".result"
+                                        hx-indicator="#spinner1"
+                                        hx-include="#datePicker">
+                                    <i class="bi bi-calendar-x me-2"></i>
+                                    DELETE FROM TODAY TO DATE
+                                </button>
+
+                                <button class="btn btn-outline-danger"
+                                        id="deleteAllBtn"
+                                        hx-post="/delete_all"
+                                        hx-trigger="click"
+                                        hx-target=".result"
+                                        hx-confirm="Вы уверены, что хотите удалить ВСЕ данные? Это действие нельзя отменить."
+                                        hx-indicator="#spinner2">
+                                    <i class="bi bi-trash3 me-2"></i>
+                                    DELETE ALL
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-text mt-2">
+                            Будет удалена вся информация с выбранной даты по сегодняшний день включительно.
+                        </div>
+                    </div>
+
+                    <!-- Индикаторы загрузки -->
+                    <div class="d-flex gap-3 mb-4">
+                        <div class="spinner-border text-primary d-none" id="spinner1" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                        <div class="spinner-border text-danger d-none" id="spinner2" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                    </div>
+
+                    <!-- Область для результатов -->
+                    <div class="mt-4">
+                        <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>Результат:</h5>
+                        <div class="result-area border rounded p-3 bg-light result">
+                            <!-- Сюда будут подгружаться результаты через HTMX -->
+                            <div class="text-muted text-center py-4">
+                                <i class="bi bi-arrow-repeat display-6 mb-3"></i>
+                                <p class="mb-0">Результаты операций появятся здесь</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer bg-light">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-warning mb-0">
+                                <small>
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    <strong>Внимание:</strong> Удаленные данные невозможно восстановить.
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-md-end mt-2 mt-md-0">
+                            <small class="text-muted">
+                                <i class="bi bi-clock-history me-1"></i>
+                                Сегодня: {{ today|date:"d.m.Y" }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+{% endblock %}
+
+{% block css %}
+
+<style>
+    .card {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: none;
+    }
+    .btn-danger {
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+    }
+    .date-input {
+        max-width: 250px;
+    }
+    .result-area {
+        min-height: 100px;
+        transition: all 0.3s ease;
+    }
+    /* Показываем спиннер, когда HTMX добавляет класс htmx-request, перебивая d-none */
+    .htmx-request.d-none {
+        display: inline-block !important;
+    }
+</style>
+
+{% endblock %}

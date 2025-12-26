@@ -12,6 +12,7 @@ from django.conf import settings
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from moviefilter.models import UserPreferences
+from web_logger import log, LogType
 from .runtime import cancel_events, tasks
 from .service import start_scan_task
 
@@ -80,7 +81,8 @@ def scan(request):
 
 @require_POST
 def cancel_scan(request, task_id):
-    print('Scan was canceled by user.')
+    log('Scan cancellation request received.', logger_name=LogType.SCAN)
+
     event = cancel_events.get(task_id)
     if event:
         event.set()

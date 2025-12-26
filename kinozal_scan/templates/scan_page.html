@@ -3,6 +3,8 @@
 {% block body %}
 
     <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center">
+    <div>
 
         <button id="scan-button"
                 class='btn btn-primary'
@@ -20,17 +22,12 @@
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
         </button>
 
+        {# hx-post в этой кнопке задается через js. Смысл в том, что только ПОСЛЕ того, как скан запущен,#}
+        {# асинхронные процесс скана получает id. Этот id передается в js, и подставляется в эту кнопку. #}
         <button id="cancel-button"
                 class="btn btn-danger ms-2  d-none"
                 hx-post=""
                 hx-trigger="click"
-                {% comment %} hx-on="click:
-                        if (window.currentTaskId) {
-                          this.setAttribute(
-                            'hx-post',
-                            `/cancel/${window.currentTaskId}`
-                          );
-                        }"{% endcomment %}
                 hx-swap="none"
         >
             Cancel scan
@@ -45,48 +42,14 @@
             Clear
             <span id="spinner" class="htmx-indicator spinner-border spinner-border-sm" role="status"></span>
         </button>
+    </div>
 
-
-        <script>
-            // ===  ЛОГИКА УПРАВЛЕНИЯ КНОПКАМИ SCAN/CANCEL===
-            const scanButton = document.getElementById('scan-button');
-            const cancelButton = document.getElementById('cancel-button');
-            let currentTaskId = null;
-
-            // Событие ПЕРЕД отправкой запроса на сканирование
-            scanButton.addEventListener('htmx:beforeRequest', function () {
-                // Блокируем кнопку, чтобы избежать двойного клика
-                scanButton.disabled = true;
-            });
-
-            // Событие ПОСЛЕ получения ответа от сервера сканирования
-            scanButton.addEventListener('htmx:afterRequest', function (event) {
-                // Снова делаем кнопку активной
-                scanButton.disabled = false;
-
-                if (event.detail.successful) {
-                    const taskId = event.detail.xhr.getResponseHeader('X-Task-ID');
-                    if (taskId) {
-                        currentTaskId = taskId;
-                        // Устанавливаем URL для кнопки отмены
-                        cancelButton.setAttribute('hx-post', `/cancel/${currentTaskId}`);
-                        // Показываем кнопку отмены
-                        cancelButton.classList.remove('d-none');
-                    }
-                }
-            });
-
-            // Событие ПОСЛЕ успешной отмены
-            cancelButton.addEventListener('htmx:afterOnLoad', function () {
-                // Скрываем кнопку отмены
-                cancelButton.classList.add('d-none');
-                // Очищаем hx-post на всякий случай
-                cancelButton.removeAttribute('hx-post');
-                currentTaskId = null;
-            });
-
-        </script>
-
+        <!-- кнопка/ссылка прижатая вправо -->
+        <a href="{% url 'deleting_page' %}" class="btn btn-outline-secondary">
+            <span class="bi-gear"></span>
+            Remove scan result
+        </a>
+    </div>
 
         <div class="border my-4 p-3 rounded" style="background: lightgray">
             <div class="form-check form-check-inline">
@@ -121,49 +84,107 @@
             </div>
         </div>
 
-
         <div id="log-content"></div>
 
-        <script>
+        <!-- Toast template -->
+        <div data-toast-container class="toast-container position-fixed top-0 end-0 p-3">
+            <div data-toast-template class="toast align-items-center border-0" role="alert" aria-live="assertive"
+                 aria-atomic="true">
+                <div class="d-flex">
+                    <div data-toast-body class="toast-body"></div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                            aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+        <!-- end Toast template -->
+    </div>
 
-            function showToast(message, status = 'success') {
-                const toastContainer = document.querySelector('[data-toast-container]');
-                const toastTemplate = document.querySelector('[data-toast-template]');
-                const newToast = toastTemplate.cloneNode(true);
-                delete newToast.dataset.toastTemplate;
-                const toastBody = newToast.querySelector('[data-toast-body]');
 
-                toastBody.textContent = message;
 
-                if (status === 'success') {
-                    newToast.classList.add('text-bg-success');
-                } else {
-                    newToast.classList.add('text-bg-danger');
+    {# ===  ЛОГИКА УПРАВЛЕНИЯ КНОПКАМИ SCAN/CANCEL === #}
+    <script>
+        const scanButton = document.getElementById('scan-button');
+        const cancelButton = document.getElementById('cancel-button');
+        let currentTaskId = null;
+
+        // Событие ПЕРЕД отправкой запроса на сканирование
+        scanButton.addEventListener('htmx:beforeRequest', function () {
+            // Блокируем кнопку, чтобы избежать двойного клика
+            scanButton.disabled = true;
+        });
+
+        // Событие ПОСЛЕ получения ответа от сервера сканирования
+        scanButton.addEventListener('htmx:afterRequest', function (event) {
+            // Снова делаем кнопку активной
+            scanButton.disabled = false;
+
+            if (event.detail.successful) {
+                const taskId = event.detail.xhr.getResponseHeader('X-Task-ID');
+                if (taskId) {
+                    currentTaskId = taskId;
+                    // Устанавливаем URL для кнопки "Cancel Scan"
+                    cancelButton.setAttribute('hx-post', `/cancel/${currentTaskId}`);
+                    // Явно просим HTMX пере-обработать кнопку, чтобы он "увидел" новый hx-post
+                    htmx.process(cancelButton);
+                    // Показываем кнопку отмены
+                    cancelButton.classList.remove('d-none');
                 }
+            }
+        });
 
-                toastContainer.appendChild(newToast);
-                const toast = new bootstrap.Toast(newToast);
-                toast.show();
+        // Событие ПОСЛЕ успешной отмены
+        cancelButton.addEventListener('htmx:afterOnLoad', function () {
+            // Скрываем кнопку отмены
+            cancelButton.classList.add('d-none');
+            // Очищаем hx-post на всякий случай
+            cancelButton.removeAttribute('hx-post');
+            currentTaskId = null;
+        });
+
+    </script>
+
+    {# === Блок для отображения тостов === #}
+    <script>
+        function showToast(message, status = 'success') {
+            const toastContainer = document.querySelector('[data-toast-container]');
+            const toastTemplate = document.querySelector('[data-toast-template]');
+            const newToast = toastTemplate.cloneNode(true);
+            delete newToast.dataset.toastTemplate;
+            const toastBody = newToast.querySelector('[data-toast-body]');
+
+            toastBody.textContent = message;
+
+            if (status === 'success') {
+                newToast.classList.add('text-bg-success');
+            } else {
+                newToast.classList.add('text-bg-danger');
             }
 
+            toastContainer.appendChild(newToast);
+            const toast = new bootstrap.Toast(newToast);
+            toast.show();
+        }
+    </script>
 
-            const socket = new WebSocket('ws://' + window.location.host + '/ws/log/');
-            const logContent = document.getElementById('log-content');
-            const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
 
-            socket.onmessage = function (event) {
-                const data = JSON.parse(event.data);
+    {# === БЛОК ДЛЯ РАБОТЫ С ВЕБСОКЕТ, ЧЕРЕЗ КОТОРЫЕ ПРИХОДИТ ЖИВОЙ ЛОГ С БЕКЕНДА === #}
+    <script>
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/log/');
+        const logContent = document.getElementById('log-content');
+        const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
 
-                if (data.type === 'scan_complete') {
-                    showToast(data.message, data.status);
-                    // Также скрываем кнопку "Отмена" после завершения
-                    document.getElementById('cancel-button').classList.add('d-none');
-                } else if (data.type === 'log') {
+        socket.onmessage = function (event) {
+            const data = JSON.parse(event.data);
 
-                    const newLogEntry = document.createElement('div');
-                    newLogEntry.innerHTML = data.content;
-                }
+            if (data.type === 'scan_complete') {
+                showToast(data.message, data.status);
+                // Также скрываем кнопку "Отмена" после завершения
+                document.getElementById('cancel-button').classList.add('d-none');
+            } else if (data.type === 'log') {
 
+                const newLogEntry = document.createElement('div');
+                newLogEntry.innerHTML = data.content;
 
                 {% comment %}console.log('Socket message:', newLogEntry);{% endcomment %}
 
@@ -178,29 +199,16 @@
                 }
 
                 logContent.scrollTop = logContent.scrollHeight;
-
             }
+        }
 
-            // initial load
-            htmx.ajax('GET', '{% url "web-logger:get_log" "scan" %}', '#log-content');
-        </script>
-
-
-        <!-- Toast template -->
-        <div data-toast-container class="toast-container position-fixed top-0 end-0 p-3">
-            <div data-toast-template class="toast align-items-center border-0" role="alert" aria-live="assertive"
-                 aria-atomic="true">
-                <div class="d-flex">
-                    <div data-toast-body class="toast-body"></div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
-                            aria-label="Close"></button>
-                </div>
-            </div>
-        </div>
-        <!-- end Toast template -->
+        // initial load
+        htmx.ajax('GET', '{% url "web-logger:get_log" "scan" %}', '#log-content');
+    </script>
 
 
-    </div>
+
+
 
 {% endblock %}
 
