@@ -9,10 +9,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('', views.rss, name='rss'),
-    path('kinorium/', views.kinorium, name='kinorium'),
     path('scan_page/', views.scan_page, name='scan_page'),
     path('tst/', views.tst, name='tst'),
-    # path('order_print/<orderid>', views.order_print, name='order_print'),
 ]
 
 htmx = [
@@ -23,12 +21,8 @@ htmx = [
     path('ignore/<pk>', htmx_views.ignore_movie, name='ignore'),
     path('defer/<pk>', htmx_views.defer, name='defer'),
     path('wait_trains/<pk>', htmx_views.wait_trains, name='wait_trains'),
-    path('kinorium_table_data/', htmx_views.kinorium_table_data, name='kinorium_table_data'),
     path('get_rss_table_data/', htmx_views.rss_table_data, name='get_rss_table_data'),
     path('get_log/<str:log_type>', htmx_views.get_log, name='get_log'),
-
-    path('kinorium_search/<int:kinozal_id>', htmx_views.kinorium_search, name='kinorium_search'),
-
     path('kinozal_available_torrents/<int:kinozal_id>', htmx_views.kinozal_download, name='kinozal_download'),
     path('get_torrent_file/<int:kinozal_id>', htmx_views.get_torrent_file, name='get_torrent_file'),
 
@@ -38,6 +32,3 @@ htmx = [
 ]
 
 urlpatterns += htmx
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

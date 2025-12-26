@@ -105,12 +105,6 @@ def cancel_scan(request, task_id):
     return HttpResponse(status=204)
 
 
-
-def kinorium_table_data(request):
-    movies = Kinorium.objects.all()
-    return render(request, 'partials/kinorium-table.html', {'movies': movies})
-
-
 @login_required()
 def reset_rss(requst):
     # htmx function
@@ -257,29 +251,6 @@ def wait_trains(request, pk):
     except:
         messages.error(request, f"Error with Wait Trans, Movie pk={pk}")
         return HttpResponse(status=500)
-
-
-@require_GET
-def kinorium_search(request, kinozal_id: int):
-    """
-    Просто выполняет поиск.
-    Вырезает ненужные слова, заданные в настройках.
-    """
-    url = 'https://ru.kinorium.com/search/?q='
-    m = MovieRSS.objects.get(id=kinozal_id)
-
-    search_string = ' '.join([m.title, m.original_title, m.year])
-
-    pref = UserPreferences.get()
-    ignored_words_qs = pref.ignore_title
-    ignored_words = map(str.strip, ignored_words_qs.split(','))
-    for w in ignored_words:
-        search_string = search_string.replace(w, '')
-
-    link = url + search_string
-
-    return HttpResponse(link)
-
 
 
 @require_GET

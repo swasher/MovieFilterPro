@@ -11,6 +11,7 @@ urlpatterns = [
     path('', include('core.urls')),
     path('', include('plex.urls')),
     path('', include('vault.urls')),
+    path('', include('kinorium.urls')),
 ]
 
 
@@ -24,8 +25,7 @@ if settings.ENABLE_DEBUG_TOOLBAR:
     ]
 if settings.DEBUG:
     # add serve for Media during development
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)[0],
-    # urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     # add serve for Static during development
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
