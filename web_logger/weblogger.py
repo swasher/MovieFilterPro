@@ -41,8 +41,6 @@ def send_notification(payload: dict):
     )
 
 
-
-
 def log(message: str, logger_name: LogType = LogType.SCAN):
     """
     Logs a message to a specific log file AND to web-socket.

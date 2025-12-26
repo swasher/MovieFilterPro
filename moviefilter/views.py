@@ -1,27 +1,16 @@
 import dataclasses
-import sys
-import logging
-from datetime import datetime
 
 from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.template.defaultfilters import safe
-from django.contrib.auth.models import User
-from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.views.decorators.http import require_POST, require_GET
-from django.core.paginator import Paginator
-
 
 from .models import MovieRSS, Kinorium, UserPreferences
-from .forms import PreferencesForm
 from .parse_csv import parse_file_movie_list, parse_file_votes
 from .forms import UploadCsvForm
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
-
-logger = logging.getLogger('my_logger')
 
 
 @login_required

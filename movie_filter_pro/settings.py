@@ -290,7 +290,7 @@ LOGGING = {
             'class': 'logging.FileHandler',
             'filename': SCAN_LOG,
         },
-        'kinozal_console': {  # use as kinozal_logger = logging.getLogger('kinozal'); kinozal_logger.debug("Сообщение") или любой уровень. Выключается/включается переменной KINOZAL_SCAN_PRINT
+        'kinozal_console': {  # use as: kinozal_logger = logging.getLogger('kinozal'); kinozal_logger.debug("Сообщение") или любой уровень. Выключается/включается переменной KINOZAL_SCAN_PRINT
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
             'filters': ['require_scan_debug'],
@@ -310,11 +310,6 @@ LOGGING = {
     },
 
     'loggers': {
-        # 'my_logger': {
-        #     'handlers': ['full_log', 'short_log', 'error_log'],
-        #     'level': 'DEBUG',
-        #     'propagate': True,
-        # },
         'django': {  # django errors logger
             'handlers': ['console', 'error_log'] if DEBUG else ['error_log'],
             'level': 'ERROR',
