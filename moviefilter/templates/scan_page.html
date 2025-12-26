@@ -47,7 +47,6 @@
         </button>
 
 
-
         <script>
             // ===  ЛОГИКА УПРАВЛЕНИЯ КНОПКАМИ SCAN/CANCEL===
             const scanButton = document.getElementById('scan-button');
@@ -126,14 +125,45 @@
         <div id="log-content"></div>
 
         <script>
+
+            function showToast(message, status = 'success') {
+                const toastContainer = document.querySelector('[data-toast-container]');
+                const toastTemplate = document.querySelector('[data-toast-template]');
+                const newToast = toastTemplate.cloneNode(true);
+                delete newToast.dataset.toastTemplate;
+                const toastBody = newToast.querySelector('[data-toast-body]');
+
+                toastBody.textContent = message;
+
+                if (status === 'success') {
+                    newToast.classList.add('text-bg-success');
+                } else {
+                    newToast.classList.add('text-bg-danger');
+                }
+
+                toastContainer.appendChild(newToast);
+                const toast = new bootstrap.Toast(newToast);
+                toast.show();
+            }
+
+
             const socket = new WebSocket('ws://' + window.location.host + '/ws/log/');
             const logContent = document.getElementById('log-content');
             const radioButtons = document.querySelectorAll('input[name="inlineRadioOptions"]');
 
             socket.onmessage = function (event) {
                 const data = JSON.parse(event.data);
-                const newLogEntry = document.createElement('div');
-                newLogEntry.innerHTML = data.content;
+
+                if (data.type === 'scan_complete') {
+                    showToast(data.message, data.status);
+                    // Также скрываем кнопку "Отмена" после завершения
+                    document.getElementById('cancel-button').classList.add('d-none');
+                } else if (data.type === 'log') {
+
+                    const newLogEntry = document.createElement('div');
+                    newLogEntry.innerHTML = data.content;
+                }
+
 
                 {% comment %}console.log('Socket message:', newLogEntry);{% endcomment %}
 
@@ -148,7 +178,8 @@
                 }
 
                 logContent.scrollTop = logContent.scrollHeight;
-            };
+
+            }
 
             // initial load
             htmx.ajax('GET', '{% url "get_log" "scan" %}', '#log-content');
