@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.urls import reverse
 
-from moviefilter.forms import PreferencesForm
+from .forms import PreferencesForm
 from moviefilter.models import UserPreferences
 
 

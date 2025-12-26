@@ -1,5 +1,5 @@
 from django import forms
-from .models import UserPreferences
+from moviefilter.models import UserPreferences
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Fieldset, Submit, HTML, Field
 

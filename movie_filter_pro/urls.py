@@ -12,6 +12,7 @@ urlpatterns = [
     path('', include('plex.urls')),
     path('', include('vault.urls')),
     path('', include('kinorium.urls')),
+    path('', include('web_logger.urls')),
 ]
 
 
