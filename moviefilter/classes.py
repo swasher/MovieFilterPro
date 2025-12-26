@@ -27,14 +27,6 @@ class KinozalMovie:
 
 
 @dataclass
-class KinoriumMovieDataClass:
-    title: str = None
-    original_title: str = None
-    year: str = None
-    status: int = None
-
-
-@dataclass
 class KinozalSearch:
     id: int = None
     header: str = None

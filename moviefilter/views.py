@@ -1,15 +1,8 @@
-import dataclasses
-
-from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
-from django.template.defaultfilters import safe
 from django.contrib.auth.decorators import login_required
-from django.contrib import messages
 
 from .models import MovieRSS, Kinorium, UserPreferences
-from .parse_csv import parse_file_movie_list, parse_file_votes
-from .forms import UploadCsvForm
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
 

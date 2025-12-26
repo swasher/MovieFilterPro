@@ -8,8 +8,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
 from moviefilter.models import MovieRSS, Kinorium, UserPreferences
-from moviefilter.parse_csv import parse_file_movie_list, parse_file_votes
-from moviefilter.forms import UploadCsvForm
+from .parse_csv import parse_file_movie_list, parse_file_votes
+from .forms import UploadCsvForm
 
 
 @login_required()

@@ -78,12 +78,3 @@ class PreferencesForm(forms.ModelForm):
     #     # Always return a value to use as the new cleaned data, even if
     #     # this method didn't change it.
     #     return zoom
-
-
-class UploadCsvForm(forms.Form):
-
-    class Meta:
-        fields = ['file1', 'file2']
-
-    file_movie_list = forms.FileField()
-    file_votes = forms.FileField()

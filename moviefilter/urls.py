@@ -25,9 +25,7 @@ htmx = [
     path('get_log/<str:log_type>', htmx_views.get_log, name='get_log'),
     path('kinozal_available_torrents/<int:kinozal_id>', htmx_views.kinozal_download, name='kinozal_download'),
     path('get_torrent_file/<int:kinozal_id>', htmx_views.get_torrent_file, name='get_torrent_file'),
-
     path('run_deleting_since_date/', deleting_since_date.run_deleting_since_date, name='run_deleting_since_date'),
-
     path('total_downloads/', htmx_views.total_downloads_for_movie, name='total_downloads_for_movie'),
 ]
 

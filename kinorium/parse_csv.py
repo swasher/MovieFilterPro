@@ -1,9 +1,8 @@
 import csv
-from typing import Type
 from io import StringIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from .util import year_to_int
-from .models import Kinorium
+from moviefilter.models import Kinorium
 from .classes import KinoriumMovieDataClass
 
 
@@ -15,7 +14,6 @@ def upload_to_dictreader(requst_file):
         return dict_reader_obj
     except (UnicodeDecodeError, TypeError):
         return None
-
 
 
 def display(i: int):
