@@ -10,7 +10,7 @@
                 <div class="row justify-content-center">
                     <div class="col-12 col-md-7 col-lg-5"> <!-- Здесь ограничиваем ширину -->
 
-                        <form hx-post="{% url 'vault:search_movies_fullpage' %}"
+                        <form hx-post="{% url 'tmdb:search_movies_fullpage' %}"
                               hx-target="#main-content"
                               hx-push-url="false"
                               class="d-flex w-100">
@@ -22,7 +22,7 @@
                                        class="form-control"
                                        name="query"
                                        placeholder="Поиск фильма..."
-                                       hx-post="{% url 'vault:search_movies_dropdown' %}"
+                                       hx-post="{% url 'tmdb:search_movies_dropdown' %}"
                                        hx-trigger="input changed delay:500ms"
                                        hx-target="#search-results"
                                        hx-push-url="false"
@@ -84,7 +84,7 @@
 
                     {% for spisok in movie_lists.results %}
                         <a class="list-group-item list-group-item-action bg-body-secondary border-1 rounded-2 fw-semibold text-body-secondary"
-                           hx-post="{% url 'vault:list_get_movies' spisok.id %}"
+                           hx-post="{% url 'tmdb:list_get_movies' spisok.id %}"
                            hx-trigger="click"
                            hx-target="#main-content"
                            role="button"

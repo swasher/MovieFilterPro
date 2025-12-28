@@ -35,8 +35,8 @@
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link {% active 'vault' %}"
-                           href="{% url 'vault:vault' %}"><i class="bi-database me-1"></i>Vault</a>
+                        <a class="nav-link {% active 'tmdb' %}"
+                           href="{% url 'tmdb:tmdb' %}"><i class="bi-database me-1"></i>TMDB</a>
                     </li>
 
                     <li class="nav-item">
@@ -66,7 +66,7 @@
                     </div>
 
                     <div class="Header-item">
-                        <a href="{% url 'tmdb:auth' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'tmdb_auth' %}" type="button" >
+                        <a href="{% url 'tmdb-adapter:auth' %}" class="btn btn-sm btn-outline-secondary mx-1 {% active 'tmdb_auth' %}" type="button" >
                             TMDB</a>
                     </div>
 

@@ -81,7 +81,7 @@ INSTALLED_APPS = [
     'firebase_adapter',
     'core',
     'plex',
-    'vault',
+    'tmdb',
     'kinorium',
     'kinozal_scan',
     'web_logger',

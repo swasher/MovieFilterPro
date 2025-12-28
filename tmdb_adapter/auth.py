@@ -57,7 +57,7 @@ def tmdb_start(request):
     request.session["tmdb_request_token"] = request_token
 
     approve_url = TMDB_APPROVE_URL + request_token
-    finish_url = reverse('tmdb:approve')
+    finish_url = reverse('tmdb-adapter:approve')
 
     # return HttpResponse(
     #     f'<a href="{approve_url}" target="_blank">{approve_url}</a>'
@@ -108,7 +108,7 @@ def tmdb_approve(request):
     prefs.save()
 
     # return HttpResponse(access_token)
-    return redirect("tmdb:auth")
+    return redirect("tmdb-adapter:auth")
 
 
 def tmdb_logout(request):
@@ -130,7 +130,7 @@ def tmdb_logout(request):
     prefs.tmdb_v4_authenticated_access_token = None
     prefs.save()
 
-    return redirect('tmdb:auth')
+    return redirect('tmdb-adapter:auth')
 
 
 def reset_tmdb_client():

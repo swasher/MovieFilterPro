@@ -32,7 +32,7 @@
 
         <br>
 
-        <button type="button" class="btn btn-primary " hx-get="{% url 'tmdb:start' %}" hx-target="#result">
+        <button type="button" class="btn btn-primary " hx-get="{% url 'tmdb-adapter:start' %}" hx-target="#result">
             Start auth
         </button>
 
@@ -45,7 +45,7 @@
                     {{ write_token }}
                 </code>
 
-                <a class="btn btn-primary" href="{% url 'tmdb:logout' %}">
+                <a class="btn btn-primary" href="{% url 'tmdb-adapter:logout' %}">
                     Logout from TMDB
                 </a>
 

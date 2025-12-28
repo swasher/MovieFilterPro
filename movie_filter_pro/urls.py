@@ -10,7 +10,7 @@ urlpatterns = [
     path('', include('tmdb_adapter.urls')),
     path('', include('core.urls')),
     path('', include('plex.urls')),
-    path('', include('vault.urls')),
+    path('', include('tmdb.urls')),
     path('', include('kinorium.urls')),
     path('', include('web_logger.urls')),
     path('', include('kinozal_scan.urls')),

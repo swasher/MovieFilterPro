@@ -1,7 +1,7 @@
 from django.urls import path
 from . import auth, views
 
-app_name = 'tmdb'
+app_name = 'tmdb-adapter'
 
 urlpatterns = [
 
@@ -10,8 +10,6 @@ urlpatterns = [
     path("tmdb/auth/create_auth_link/", auth.tmdb_start, name="start"),
     path("tmdb/auth/approve_link/", auth.tmdb_approve, name="approve"),
     path("tmdb/auth/logout/", auth.tmdb_logout, name="logout"),
-
-
 
     # Страницы списков
     # path("tmdb/lists/", views.list_list, name="list_list"),

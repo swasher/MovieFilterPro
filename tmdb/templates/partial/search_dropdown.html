@@ -1,6 +1,6 @@
 {% for movie in movies %}
     <li class="dropdown-item"
-        hx-get="{% url 'vault:movie' movie_id=movie.id %}"
+        hx-get="{% url 'tmdb:movie' movie_id=movie.id %}"
         hx-target="#main-content"
     >
         {{ movie.name }} <code>{{ movie.release_date.year }}</code>
