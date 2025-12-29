@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     'plex',
     'tmdb',
     'kinorium',
+    'vault',
     'kinozal_scan',
     'web_logger',
 ]
@@ -345,3 +346,6 @@ SOURCE_MIRRORS = {
     "kinozal.tv": "kinozal.guru",
     # можно добавить другие источники при необходимости
 }
+
+# TMDB
+TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/"  # Но по феншую эта строка берется из /configuration эндпоинта TMDB API

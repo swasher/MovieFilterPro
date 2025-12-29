@@ -28,6 +28,12 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Button trigger modal -->
+            <button type="button" class="btn btn-danger mt-5" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+                DELETE ACCOUNT
+            </button>
+
         </div>
     </div>
 
@@ -44,6 +50,32 @@
         </div>
     </div>
     <!-- end Toast template -->
+
+    <!-- Delete Account Modal -->
+    <div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-labelledby="deleteAccountModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteAccountModalLabel">Удаление аккаунта</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post" action="{% url 'core:delete_account' %}">
+              {% csrf_token %}
+              <div class="modal-body">
+                <p class="text-danger fw-bold">Это действие необратимо! Все ваши данные будут удалены.</p>
+                <div class="mb-3">
+                    <label for="confirmUsername" class="form-label">Введите ваше имя пользователя (<b>{{ request.user.username }}</b>) для подтверждения:</label>
+                    <input type="text" class="form-control" id="confirmUsername" name="username" required autocomplete="off">
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="submit" class="btn btn-danger">Удалить навсегда</button>
+              </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
     <script>
         document.addEventListener("htmx:confirm", function (e) {

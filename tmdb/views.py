@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
 
@@ -10,6 +11,7 @@ from moviefilter.models import UserPreferences
 from tmdb_adapter.client_singleton import get_tmdb_client, get_tmdb_config
 
 
+@login_required
 def tmdb_section(request):
     pref = UserPreferences.get()
     tmdb_api_key = pref.tmdb_api_key
@@ -115,6 +117,7 @@ def list_delete(request, list_id):
     tmdb = get_tmdb_client()
     ...
 
+
 def list_rename(request, list_id, new_name):
     tmdb = get_tmdb_client()
     new_name = request.GET.get('new_name')
@@ -132,5 +135,3 @@ def list_rename(request, list_id, new_name):
         </form>    
     """
     ...
-
-

@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
+from django.conf import settings
 
 
 class Person(models.Model):
@@ -16,7 +17,8 @@ class Person(models.Model):
     birth_date = models.DateField('Дата рождения', null=True, blank=True)
     death_date = models.DateField('Дата смерти', null=True, blank=True)
     gender = models.CharField('Пол', max_length=1, choices=GENDER_CHOICES, blank=True)
-    photo = models.ImageField('Фото', upload_to='persons/', null=True, blank=True)
+    # photo = models.ImageField('Фото', upload_to='persons/', null=True, blank=True)
+    photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
     country = models.CharField('Страна', max_length=100, blank=True)
 
@@ -27,6 +29,23 @@ class Person(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def photo_url(self):
+        """Генерируем полный URL на лету"""
+        if self.photo:
+            # Базовый URL из настроек (например, для TMDB)
+            base_url = settings.TMDB_IMAGE_BASE_URL  # 'https://image.tmdb.org/t/p/'
+            size = settings.TMDB_IMAGE_SIZE  # 'w500', 'original', etc.
+            return f"{base_url}{size}{self.photo}"
+        return None
+
+    def get_photo_url(self, size='w500'):
+        """Метод для получения URL с конкретным размером"""
+        if self.photo:
+            base_url = settings.TMDB_IMAGE_BASE_URL
+            return f"{base_url}{size}{self.photo}"
+        return None
 
 
 class Genre(models.Model):
@@ -91,7 +110,8 @@ class Movie(models.Model):
     movie_type = models.CharField('Тип', max_length=20, choices=TYPE_CHOICES, default='movie')
     status = models.CharField('Статус', max_length=20, choices=STATUS_CHOICES, default='released')
 
-    poster = models.ImageField('Постер', upload_to='posters/', null=True, blank=True)
+    # poster = models.ImageField('Постер', upload_to='posters/', null=True, blank=True)
+    poster = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     trailer_url = models.URLField('Ссылка на трейлер', blank=True)
 
     genres = models.ManyToManyField(Genre, verbose_name='Жанры', related_name='movies')
@@ -256,7 +276,9 @@ class UserList(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if self.is_system:
+        # Извлекаем флаг принудительного удаления
+        force = kwargs.pop('force', False)
+        if self.is_system and not force:
             raise ValueError("Системные списки нельзя удалять")
         super().delete(*args, **kwargs)
 
@@ -284,6 +306,21 @@ class UserList(models.Model):
             created_lists.append(user_list)
 
         return created_lists
+
+    @classmethod
+    def delete_user_completely(cls, user):
+        """
+        Безопасное удаление пользователя и всех связанных с ним данных.
+        Обходит защиту удаления системных списков.
+        """
+        # 1. Принудительно удаляем системные списки пользователя
+        # Используем итерацию, чтобы вызвать метод delete() с флагом force
+        for user_list in cls.objects.filter(user=user, is_system=True):
+            user_list.delete(force=True)
+
+        # 2. Удаляем пользователя
+        # Все остальные данные (обычные списки, оценки, рецензии) удалятся каскадно
+        user.delete()
 
 
 class UserListMovie(models.Model):
