@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    {% include "vault/_header.html" %}
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h1>Мои списки</h1>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'vault:list_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Создать список
+                </a>
+            </div>
+        </div>
+
+        <!-- Системные списки -->
+        <div class="mb-5">
+            <h3 class="mb-3">Статусы</h3>
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3">
+                {% for list in system_lists %}
+                    <div class="col">
+                        <a href="{% url 'vault:list_detail' list.id %}" class="text-decoration-none">
+                            <div class="card h-100 shadow-sm hover-card">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        {% if list.list_type == 'watched' %}
+                                            <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+                                        {% elif list.list_type == 'will_watch' %}
+                                            <i class="bi bi-bookmark text-primary" style="font-size: 3rem;"></i>
+                                        {% elif list.list_type == 'wont_watch' %}
+                                            <i class="bi bi-x-circle text-secondary" style="font-size: 3rem;"></i>
+                                        {% elif list.list_type == 'favorites' %}
+                                            <i class="bi bi-heart-fill text-danger" style="font-size: 3rem;"></i>
+                                        {% endif %}
+                                    </div>
+                                    <h5 class="card-title">{{ list.name }}</h5>
+                                    <p class="card-text">
+                                        <span class="badge bg-primary">{{ list.list_movies.count }} фильмов</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Пользовательские списки -->
+        <div>
+            <h3 class="mb-3">Пользовательские списки</h3>
+            {% if custom_lists %}
+                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+                    {% for list in custom_lists %}
+                        <div class="col">
+                            <div class="card h-100 shadow-sm hover-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title mb-0">
+                                            <a href="{% url 'vault:list_detail' list.id %}" class="text-decoration-none text-dark">
+                                                {{ list.name }}
+                                            </a>
+                                        </h5>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-link text-secondary" type="button" data-bs-toggle="dropdown">
+                                                <i class="bi bi-three-dots-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#">Редактировать</a></li>
+                                                <li><a class="dropdown-item" href="#">
+                                                    {% if list.is_public %}Сделать приватным{% else %}Сделать публичным{% endif %}
+                                                </a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger" href="#">Удалить</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    {% if list.description %}
+                                        <p class="card-text text-muted small mb-2">{{ list.description|truncatewords:15 }}</p>
+                                    {% endif %}
+
+                                    <p class="card-text">
+                                        <span class="badge bg-primary">{{ list.list_movies.count }} фильмов</span>
+                                        {% if list.is_public %}
+                                            <span class="badge bg-success">Публичный</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Приватный</span>
+                                        {% endif %}
+                                    </p>
+
+                                    <p class="card-text">
+                                        <small class="text-muted">Обновлен: {{ list.updated_at|date:"d.m.Y" }}</small>
+                                    </p>
+
+                                    <!-- Превью фильмов -->
+                                    {% if list.list_movies.all %}
+                                        <div class="d-flex gap-1 mt-2">
+                                            {% for list_movie in list.list_movies.all|slice:":4" %}
+                                                {% if list_movie.movie.poster %}
+                                                    <img src="{{ list_movie.movie.poster.url }}"
+                                                         class="rounded"
+                                                         style="width: 50px; height: 75px; object-fit: cover;"
+                                                         alt="{{ list_movie.movie.title }}">
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    У вас пока нет пользовательских списков.
+                    <a href="{% url 'vault:list_create' %}" class="alert-link">Создайте первый список!</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <style>
+        .hover-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .hover-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        }
+    </style>
+{% endblock %}

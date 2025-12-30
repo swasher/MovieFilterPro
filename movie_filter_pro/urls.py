@@ -9,6 +9,7 @@ urlpatterns = [
     path('', include('moviefilter.urls')),
     path('', include('tmdb_adapter.urls')),
     path('', include('core.urls')),
+    path('', include('vault.urls')),
     path('', include('plex.urls')),
     path('', include('tmdb.urls')),
     path('', include('kinorium.urls')),

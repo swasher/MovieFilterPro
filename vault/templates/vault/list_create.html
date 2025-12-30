@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    {% include "vault/_header.html" %}
+
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'vault:my_lists' %}">Мои списки</a></li>
+                        <li class="breadcrumb-item active">Создать список</li>
+                    </ol>
+                </nav>
+
+                <div class="card shadow">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">Создать новый список</h2>
+
+                        <form method="post" action="{% url 'vault:list_create' %}">
+                            {% csrf_token %}
+
+                            <!-- Название -->
+                            <div class="mb-3">
+                                <label for="listName" class="form-label">Название списка <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="listName" name="name"
+                                       placeholder="Например: Лучшие фильмы 2000-х" required>
+                                <div class="form-text">Придумайте название, которое отражает тему вашего списка</div>
+                            </div>
+
+                            <!-- Описание -->
+                            <div class="mb-3">
+                                <label for="listDescription" class="form-label">Описание</label>
+                                <textarea class="form-control" id="listDescription" name="description" rows="4"
+                                          placeholder="Опишите, какие фильмы войдут в этот список..."></textarea>
+                                <div class="form-text">Необязательное поле, но поможет другим понять суть списка</div>
+                            </div>
+
+                            <!-- Приватность -->
+                            <div class="mb-4">
+                                <label class="form-label">Видимость списка</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="is_public" id="publicList" value="true">
+                                    <label class="form-check-label" for="publicList">
+                                        <strong>Публичный</strong>
+                                        <br>
+                                        <small class="text-muted">Список будет виден всем пользователям</small>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="is_public" id="privateList" value="false" checked>
+                                    <label class="form-check-label" for="privateList">
+                                        <strong>Приватный</strong>
+                                        <br>
+                                        <small class="text-muted">Список будет виден только вам</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Кнопки -->
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle"></i> Создать список
+                                </button>
+                                <a href="{% url 'vault:my_lists' %}" class="btn btn-outline-secondary">
+                                    Отмена
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Подсказки -->
+                <div class="mt-4">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="bi bi-lightbulb text-warning"></i> Советы по созданию списков
+                            </h5>
+                            <ul class="mb-0">
+                                <li>Создавайте тематические списки: по жанрам, годам, режиссерам</li>
+                                <li>Используйте описание для дополнительной информации</li>
+                                <li>Публичные списки могут быть полезны другим пользователям</li>
+                                <li>Вы всегда можете изменить название и описание позже</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

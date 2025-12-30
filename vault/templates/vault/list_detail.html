@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    {% include "vault/_header.html" %}
+
+    <div class="container mt-4">
+        <!-- Заголовок списка -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'vault:my_lists' %}">Мои списки</a></li>
+                        <li class="breadcrumb-item active">{{ user_list.name }}</li>
+                    </ol>
+                </nav>
+
+                <div class="d-flex align-items-center mb-2">
+                    {% if user_list.is_system %}
+                        {% if user_list.list_type == 'watched' %}
+                            <i class="bi bi-check-circle text-success me-2" style="font-size: 2rem;"></i>
+                        {% elif user_list.list_type == 'will_watch' %}
+                            <i class="bi bi-bookmark text-primary me-2" style="font-size: 2rem;"></i>
+                        {% elif user_list.list_type == 'wont_watch' %}
+                            <i class="bi bi-x-circle text-secondary me-2" style="font-size: 2rem;"></i>
+                        {% elif user_list.list_type == 'favorites' %}
+                            <i class="bi bi-heart-fill text-danger me-2" style="font-size: 2rem;"></i>
+                        {% endif %}
+                    {% endif %}
+                    <h1 class="mb-0">{{ user_list.name }}</h1>
+                </div>
+
+                {% if user_list.description %}
+                    <p class="text-muted">{{ user_list.description }}</p>
+                {% endif %}
+
+                <div class="mb-3">
+                    <span class="badge bg-primary">{{ movies.count }} фильмов</span>
+                    {% if user_list.is_public %}
+                        <span class="badge bg-success">Публичный</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Приватный</span>
+                    {% endif %}
+                    {% if user_list.is_system %}
+                        <span class="badge bg-info">Системный</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="col-md-4 text-end">
+                {% if not user_list.is_system %}
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary">
+                            <i class="bi bi-pencil"></i> Редактировать
+                        </button>
+                        <button type="button" class="btn btn-outline-danger">
+                            <i class="bi bi-trash"></i> Удалить
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Сортировка и фильтры -->
+        <div class="mb-3 d-flex justify-content-between align-items-center">
+            <div>
+                <small class="text-muted me-3">Сортировка:</small>
+                <a href="?order=-added_at" class="badge bg-secondary text-decoration-none me-2">По дате добавления ↓</a>
+                <a href="?order=-year" class="badge bg-secondary text-decoration-none me-2">По году ↓</a>
+                <a href="?order=-imdb_rating" class="badge bg-secondary text-decoration-none me-2">По рейтингу ↓</a>
+                <a href="?order=title" class="badge bg-secondary text-decoration-none">По названию</a>
+            </div>
+            <div>
+                <small class="text-muted">Всего: {{ movies.count }}</small>
+            </div>
+        </div>
+
+        <!-- Список фильмов -->
+        {% if movies %}
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4 mb-4">
+                {% for list_movie in list_movies %}
+                    <div class="col">
+                        <div class="card h-100 shadow-sm movie-card">
+                            <div class="position-relative">
+                                <a href="{% url 'vault:movie_detail' list_movie.movie.slug %}" class="text-decoration-none">
+                                    {% if list_movie.movie.poster %}
+                                        <img src="{{ list_movie.movie.poster.url }}" class="card-img-top"
+                                             alt="{{ list_movie.movie.title }}"
+                                             style="height: 300px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
+                                             style="height: 300px;">
+                                            <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                        </div>
+                                    {% endif %}
+                                </a>
+
+                                <!-- Кнопка удаления из списка -->
+                                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2"
+                                        data-action="remove-from-list" data-movie-id="{{ list_movie.movie.id }}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+
+                            <div class="card-body p-2">
+                                <a href="{% url 'vault:movie_detail' list_movie.movie.slug %}" class="text-decoration-none text-dark">
+                                    <h6 class="card-title mb-1" style="font-size: 0.9rem;">{{ list_movie.movie.title }}</h6>
+                                </a>
+                                <p class="card-text mb-1">
+                                    <small class="text-muted">{{ list_movie.movie.year }}</small>
+                                    {% if list_movie.movie.imdb_rating %}
+                                        <span class="badge bg-warning text-dark ms-1">★ {{ list_movie.movie.imdb_rating }}</span>
+                                    {% endif %}
+                                </p>
+
+                                {% if list_movie.note %}
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <i class="bi bi-chat-quote"></i> {{ list_movie.note|truncatewords:10 }}
+                                        </small>
+                                    </p>
+                                {% endif %}
+
+                                <p class="card-text">
+                                    <small class="text-muted">
+                                        Добавлен: {{ list_movie.added_at|date:"d.m.Y" }}
+                                    </small>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <h4 class="alert-heading">Список пуст</h4>
+                <p>В этом списке пока нет фильмов. <a href="{% url 'vault:movie_list' %}" class="alert-link">Найдите фильмы</a> и добавьте их в свой список!</p>
+            </div>
+        {% endif %}
+
+        <!-- Статистика -->
+        {% if movies %}
+            <div class="row mt-5">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Статистика списка</h5>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <strong>Всего фильмов:</strong> {{ movies.count }}
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Средняя продолжительность:</strong>
+                                    {% if avg_duration %}{{ avg_duration|floatformat:0 }} минут{% else %}Н/Д{% endif %}
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Средний рейтинг IMDb:</strong>
+                                    {% if avg_rating %}{{ avg_rating|floatformat:1 }}{% else %}Н/Д{% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Популярные жанры</h5>
+                            {% if top_genres %}
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for genre in top_genres %}
+                                        <a href="{% url 'vault:movie_by_genre' genre.slug %}" class="badge bg-primary text-decoration-none">
+                                            {{ genre.name }} ({{ genre.count }})
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted mb-0">Нет данных</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <style>
+        .movie-card {
+            transition: transform 0.2s;
+        }
+        .movie-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+{% endblock %}

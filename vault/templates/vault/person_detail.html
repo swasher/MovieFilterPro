@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    {% include "vault/_header.html" %}
+
+    <div class="container mt-4">
+        <!-- Основная информация о персоне -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                {% if person.photo %}
+                    <img src="{{ person.photo.url }}" class="img-fluid rounded shadow" alt="{{ person }}">
+                {% else %}
+                    <div class="bg-secondary rounded d-flex align-items-center justify-content-center" style="height: 400px;">
+                        <i class="bi bi-person" style="font-size: 5rem; color: #fff;"></i>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="col-md-9">
+                <h1 class="mb-3">{{ person.first_name }} {{ person.last_name }}</h1>
+
+                <!-- Основная информация -->
+                <div class="mb-4">
+                    {% if person.birth_date %}
+                        <p class="mb-2">
+                            <strong><i class="bi bi-calendar-event"></i> Дата рождения:</strong>
+                            {{ person.birth_date|date:"d.m.Y" }}
+                            {% if not person.death_date %}
+                                ({{ person.birth_date|timesince }} назад)
+                            {% endif %}
+                        </p>
+                    {% endif %}
+
+                    {% if person.death_date %}
+                        <p class="mb-2">
+                            <strong><i class="bi bi-calendar-x"></i> Дата смерти:</strong>
+                            {{ person.death_date|date:"d.m.Y" }}
+                        </p>
+                    {% endif %}
+
+                    {% if person.country %}
+                        <p class="mb-2">
+                            <strong><i class="bi bi-geo-alt"></i> Страна:</strong>
+                            {{ person.country }}
+                        </p>
+                    {% endif %}
+
+                    {% if person.gender %}
+                        <p class="mb-2">
+                            <strong><i class="bi bi-person"></i> Пол:</strong>
+                            {{ person.get_gender_display }}
+                        </p>
+                    {% endif %}
+                </div>
+
+                <!-- Статистика -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h3 class="mb-0">{{ movies_count }}</h3>
+                                <small class="text-muted">Фильмов</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h3 class="mb-0">{{ roles_count }}</h3>
+                                <small class="text-muted">Ролей</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h3 class="mb-0">{{ career_years }}</h3>
+                                <small class="text-muted">Лет карьеры</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Биография -->
+                {% if person.biography %}
+                    <div class="mb-4">
+                        <h4>Биография</h4>
+                        <p class="text-muted">{{ person.biography }}</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Фильмография -->
+        <div class="mb-5">
+            <h3 class="mb-3">Фильмография</h3>
+
+            <!-- Фильтр по роли -->
+            <ul class="nav nav-pills mb-3" id="roleTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="all-tab" data-bs-toggle="pill"
+                            data-bs-target="#all" type="button" role="tab">
+                        Все ({{ movies_count }})
+                    </button>
+                </li>
+                {% if actor_movies %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="actor-tab" data-bs-toggle="pill"
+                                data-bs-target="#actor" type="button" role="tab">
+                            Актер ({{ actor_movies.count }})
+                        </button>
+                    </li>
+                {% endif %}
+                {% if director_movies %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="director-tab" data-bs-toggle="pill"
+                                data-bs-target="#director" type="button" role="tab">
+                            Режиссер ({{ director_movies.count }})
+                        </button>
+                    </li>
+                {% endif %}
+                {% if producer_movies %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="producer-tab" data-bs-toggle="pill"
+                                data-bs-target="#producer" type="button" role="tab">
+                            Продюсер ({{ producer_movies.count }})
+                        </button>
+                    </li>
+                {% endif %}
+            </ul>
+
+            <div class="tab-content" id="roleTabContent">
+                <!-- Все фильмы -->
+                <div class="tab-pane fade show active" id="all" role="tabpanel">
+                    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                        {% for mp in all_movies %}
+                            <div class="col">
+                                <div class="card h-100 shadow-sm movie-card">
+                                    <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
+                                        {% if mp.movie.poster %}
+                                            <img src="{{ mp.movie.poster.url }}" class="card-img-top"
+                                                 alt="{{ mp.movie.title }}"
+                                                 style="height: 300px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
+                                                 style="height: 300px;">
+                                                <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                            </div>
+                                        {% endif %}
+                                    </a>
+
+                                    <div class="card-body p-2">
+                                        <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none text-dark">
+                                            <h6 class="card-title mb-1" style="font-size: 0.9rem;">{{ mp.movie.title }}</h6>
+                                        </a>
+                                        <p class="card-text mb-1">
+                                            <small class="text-muted">{{ mp.movie.year }}</small>
+                                        </p>
+                                        <p class="card-text mb-0">
+                                            <span class="badge bg-secondary">{{ mp.get_role_display }}</span>
+                                        </p>
+                                        {% if mp.character_name %}
+                                            <p class="card-text mb-0">
+                                                <small class="text-muted">{{ mp.character_name }}</small>
+                                            </p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Актер -->
+                {% if actor_movies %}
+                    <div class="tab-pane fade" id="actor" role="tabpanel">
+                        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                            {% for mp in actor_movies %}
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm movie-card">
+                                        <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
+                                            {% if mp.movie.poster %}
+                                                <img src="{{ mp.movie.poster.url }}" class="card-img-top"
+                                                     alt="{{ mp.movie.title }}"
+                                                     style="height: 300px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
+                                                     style="height: 300px;">
+                                                    <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                                </div>
+                                            {% endif %}
+                                        </a>
+
+                                        <div class="card-body p-2">
+                                            <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none text-dark">
+                                                <h6 class="card-title mb-1" style="font-size: 0.9rem;">{{ mp.movie.title }}</h6>
+                                            </a>
+                                            <p class="card-text mb-1">
+                                                <small class="text-muted">{{ mp.movie.year }}</small>
+                                            </p>
+                                            {% if mp.character_name %}
+                                                <p class="card-text mb-0">
+                                                    <small class="text-muted">{{ mp.character_name }}</small>
+                                                </p>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Режиссер -->
+                {% if director_movies %}
+                    <div class="tab-pane fade" id="director" role="tabpanel">
+                        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                            {% for mp in director_movies %}
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm movie-card">
+                                        <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
+                                            {% if mp.movie.poster %}
+                                                <img src="{{ mp.movie.poster.url }}" class="card-img-top"
+                                                     alt="{{ mp.movie.title }}"
+                                                     style="height: 300px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
+                                                     style="height: 300px;">
+                                                    <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                                </div>
+                                            {% endif %}
+                                        </a>
+
+                                        <div class="card-body p-2">
+                                            <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none text-dark">
+                                                <h6 class="card-title mb-1" style="font-size: 0.9rem;">{{ mp.movie.title }}</h6>
+                                            </a>
+                                            <p class="card-text mb-1">
+                                                <small class="text-muted">{{ mp.movie.year }}</small>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Продюсер -->
+                {% if producer_movies %}
+                    <div class="tab-pane fade" id="producer" role="tabpanel">
+                        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                            {% for mp in producer_movies %}
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm movie-card">
+                                        <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
+                                            {% if mp.movie.poster %}
+                                                <img src="{{ mp.movie.poster.url }}" class="card-img-top"
+                                                     alt="{{ mp.movie.title }}"
+                                                     style="height: 300px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
+                                                     style="height: 300px;">
+                                                    <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                                </div>
+                                            {% endif %}
+                                        </a>
+
+                                        <div class="card-body p-2">
+                                            <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none text-dark">
+                                                <h6 class="card-title mb-1" style="font-size: 0.9rem;">{{ mp.movie.title }}</h6>
+                                            </a>
+                                            <p class="card-text mb-1">
+                                                <small class="text-muted">{{ mp.movie.year }}</small>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .movie-card {
+            transition: transform 0.2s;
+        }
+        .movie-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+{% endblock %}

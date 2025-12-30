@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    {% include "vault/_header.html" %}
+
+    <div class="container mt-4">
+        <!-- Основная информация о фильме -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                {% if movie.poster %}
+                    <img src="{{ movie.poster.url }}" class="img-fluid rounded shadow" alt="{{ movie.title }}">
+                {% else %}
+                    <div class="bg-secondary rounded d-flex align-items-center justify-content-center" style="height: 400px;">
+                        <i class="bi bi-film" style="font-size: 5rem; color: #fff;"></i>
+                    </div>
+                {% endif %}
+
+                {% if movie.trailer_url %}
+                    <a href="{{ movie.trailer_url }}" target="_blank" class="btn btn-primary w-100 mt-3">
+                        <i class="bi bi-play-circle"></i> Смотреть трейлер
+                    </a>
+                {% endif %}
+            </div>
+
+            <div class="col-md-9">
+                <h1 class="mb-2">{{ movie.title }}</h1>
+                {% if movie.original_title %}
+                    <p class="text-muted mb-3">{{ movie.original_title }}</p>
+                {% endif %}
+
+                <!-- Рейтинги и базовая информация -->
+                <div class="mb-3">
+                    {% if movie.imdb_rating %}
+                        <span class="badge bg-warning text-dark fs-5 me-2">
+                    <i class="bi bi-star-fill"></i> {{ movie.imdb_rating }}
+                </span>
+                    {% endif %}
+
+                    {% if user_rating %}
+                        <span class="badge bg-success fs-5 me-2">
+                    Ваша оценка: {{ user_rating }}/10
+                </span>
+                    {% endif %}
+
+                    <span class="badge bg-secondary">{{ movie.year }}</span>
+                    <span class="badge bg-secondary">{{ movie.get_movie_type_display }}</span>
+                    {% if movie.duration %}
+                        <span class="badge bg-secondary">{{ movie.duration }} мин</span>
+                    {% endif %}
+                    {% if movie.age_rating %}
+                        <span class="badge bg-danger">{{ movie.age_rating }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Жанры -->
+                <p class="mb-2">
+                    <strong>Жанры:</strong>
+                    {% for genre in movie.genres.all %}
+                        <a href="{% url 'vault:movie_by_genre' genre.slug %}" class="badge bg-primary text-decoration-none">{{ genre.name }}</a>
+                    {% empty %}
+                        <span class="text-muted">Не указаны</span>
+                    {% endfor %}
+                </p>
+
+                <!-- Страны -->
+                <p class="mb-2">
+                    <strong>Страны:</strong>
+                    {% for country in movie.countries.all %}
+                        {{ country.name }}{% if not forloop.last %}, {% endif %}
+                    {% empty %}
+                        <span class="text-muted">Не указаны</span>
+                    {% endfor %}
+                </p>
+
+                <!-- Статус -->
+                <p class="mb-3">
+                    <strong>Статус:</strong>
+                    <span class="badge {% if movie.status == 'released' %}bg-success{% else %}bg-warning{% endif %}">
+                    {{ movie.get_status_display }}
+                </span>
+                </p>
+
+                <!-- Описание -->
+                {% if movie.description %}
+                    <div class="mb-4">
+                        <h5>О фильме</h5>
+                        <p class="text-muted">{{ movie.description }}</p>
+                    </div>
+                {% endif %}
+
+                <!-- Действия пользователя -->
+                {% if user.is_authenticated %}
+                    <div class="card bg-light mb-4">
+                        <div class="card-body">
+                            <h6 class="card-title mb-3">Ваши действия</h6>
+
+                            <!-- Кнопки статусов -->
+                            <div class="btn-group mb-3" role="group">
+                                <button type="button" class="btn {% if movie_status.in_will_watch %}btn-primary{% else %}btn-outline-primary{% endif %}"
+                                        data-action="toggle-status" data-list-type="will_watch">
+                                    <i class="bi bi-bookmark{% if movie_status.in_will_watch %}-fill{% endif %}"></i>
+                                    Буду смотреть
+                                </button>
+                                <button type="button" class="btn {% if movie_status.in_favorites %}btn-danger{% else %}btn-outline-danger{% endif %}"
+                                        data-action="toggle-status" data-list-type="favorites">
+                                    <i class="bi bi-heart{% if movie_status.in_favorites %}-fill{% endif %}"></i>
+                                    Избранное
+                                </button>
+                                <button type="button" class="btn {% if movie_status.in_watched %}btn-success{% else %}btn-outline-success{% endif %}"
+                                        data-action="toggle-status" data-list-type="watched">
+                                    <i class="bi bi-check-circle{% if movie_status.in_watched %}-fill{% endif %}"></i>
+                                    Просмотрено
+                                </button>
+                                <button type="button" class="btn {% if movie_status.in_wont_watch %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                                        data-action="toggle-status" data-list-type="wont_watch">
+                                    <i class="bi bi-x-circle{% if movie_status.in_wont_watch %}-fill{% endif %}"></i>
+                                    Не буду смотреть
+                                </button>
+                            </div>
+
+                            <!-- Оценка -->
+                            <div>
+                                <label class="form-label">Ваша оценка:</label>
+                                <div class="btn-group" role="group">
+                                    {% for i in "12345678910" %}
+                                        <button type="button" class="btn btn-sm {% if user_rating == forloop.counter %}btn-warning{% else %}btn-outline-warning{% endif %}"
+                                                data-action="rate" data-rating="{{ forloop.counter }}">
+                                            {{ forloop.counter }}
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                                {% if user_rating %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-action="remove-rating">
+                                        <i class="bi bi-x"></i> Удалить оценку
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <a href="{% url 'login' %}">Войдите</a>, чтобы добавить фильм в список и поставить оценку
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Актерский состав и съемочная группа -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="mb-3">Съемочная группа</h3>
+
+                <!-- Режиссеры -->
+                {% comment %}{% with directors=movie.movie_persons.filter.role='director' %}{% endcomment %}
+                {% with directors=movie.get_directors %}
+                    {% if directors %}
+                        <div class="mb-3">
+                            <h5>Режиссеры</h5>
+                            <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-3">
+                                {% for mp in directors %}
+                                    <div class="col">
+                                        <a href="{% url 'vault:person_detail' mp.person.id %}" class="text-decoration-none">
+                                            <div class="text-center">
+                                                {% if mp.person.photo %}
+                                                    <img src="{{ mp.person.photo.url }}" class="rounded-circle mb-2"
+                                                         style="width: 80px; height: 80px; object-fit: cover;" alt="{{ mp.person }}">
+                                                {% else %}
+                                                    <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center mb-2"
+                                                         style="width: 80px; height: 80px;">
+                                                        <i class="bi bi-person" style="font-size: 2rem; color: #fff;"></i>
+                                                    </div>
+                                                {% endif %}
+                                                <p class="mb-0 small fw-bold text-dark">{{ mp.person }}</p>
+                                            </div>
+                                        </a>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Актеры -->
+                {% comment %}{% with actors=movie.movie_persons.filter.role='actor' %}{% endcomment %}
+                {% with actors=movie.get_actors %}
+                    {% if actors %}
+                        <div class="mb-3">
+                            <h5>В ролях</h5>
+                            <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-3">
+                                {% for mp in actors|slice:":12" %}
+                                    <div class="col">
+                                        <a href="{% url 'vault:person_detail' mp.person.id %}" class="text-decoration-none">
+                                            <div class="text-center">
+                                                {% if mp.person.photo %}
+                                                    <img src="{{ mp.person.photo.url }}" class="rounded-circle mb-2"
+                                                         style="width: 80px; height: 80px; object-fit: cover;" alt="{{ mp.person }}">
+                                                {% else %}
+                                                    <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center mb-2"
+                                                         style="width: 80px; height: 80px;">
+                                                        <i class="bi bi-person" style="font-size: 2rem; color: #fff;"></i>
+                                                    </div>
+                                                {% endif %}
+                                                <p class="mb-0 small fw-bold text-dark">{{ mp.person }}</p>
+                                                {% if mp.character_name %}
+                                                    <p class="mb-0 small text-muted">{{ mp.character_name }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </a>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+
+        <!-- Отзывы -->
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-3">Отзывы</h3>
+
+                {% if user.is_authenticated %}
+                    <a href="#" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#reviewModal">
+                        <i class="bi bi-pencil"></i> Написать отзыв
+                    </a>
+                {% endif %}
+
+                {% for review in reviews %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title mb-0">{{ review.title }}</h5>
+                                <span class="badge {% if review.review_type == 'positive' %}bg-success{% elif review.review_type == 'negative' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ review.get_review_type_display }}
+                        </span>
+                            </div>
+                            <p class="card-text text-muted small mb-2">
+                                <strong>{{ review.user.username }}</strong> • {{ review.created_at|date:"d.m.Y" }}
+                            </p>
+                            <p class="card-text">{{ review.text|truncatewords:50 }}</p>
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-hand-thumbs-up"></i> {{ review.likes_count }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="text-muted">Пока нет отзывов. Будьте первым!</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для отзыва -->
+    <div class="modal fade" id="reviewModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Написать отзыв</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="post" action="#">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="reviewTitle" class="form-label">Заголовок</label>
+                            <input type="text" class="form-control" id="reviewTitle" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reviewType" class="form-label">Тип отзыва</label>
+                            <select class="form-select" id="reviewType" name="review_type" required>
+                                <option value="positive">Положительный</option>
+                                <option value="neutral">Нейтральный</option>
+                                <option value="negative">Отрицательный</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reviewText" class="form-label">Текст отзыва</label>
+                            <textarea class="form-control" id="reviewText" name="text" rows="5" required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Опубликовать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

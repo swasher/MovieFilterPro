@@ -1,0 +1,49 @@
+{% load static %}
+
+<div class="bg-light border-bottom mb-4">
+    <div class="container">
+        <div class="d-flex align-items-center py-3">
+            <!-- Logo and Navigation -->
+            <div class="me-auto d-flex align-items-center">
+                <a href="{% url 'vault:movie_list' %}" class="text-decoration-none text-dark me-4">
+                    <h4 class="mb-0">
+                        <i class="bi bi-film"></i> Vault
+                    </h4>
+                </a>
+
+                <nav class="nav">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'movie_list' %}active fw-bold{% endif %}"
+                       href="{% url 'vault:movie_list' %}">
+                        <i class="bi bi-collection-play"></i> Фильмы
+                    </a>
+
+                    {% if user.is_authenticated %}
+                        <a class="nav-link {% if request.resolver_match.url_name == 'my_lists' or request.resolver_match.url_name == 'list_detail' %}active fw-bold{% endif %}"
+                           href="{% url 'vault:my_lists' %}">
+                            <i class="bi bi-list-ul"></i> Мои списки
+                        </a>
+                    {% endif %}
+                </nav>
+            </div>
+
+            <!-- Search Form -->
+            <form class="d-flex" method="get" action="{% url 'vault:search' %}">
+                <input class="form-control form-control-sm me-2"
+                       type="search"
+                       name="q"
+                       placeholder="Поиск фильмов..."
+                       value="{{ request.GET.q }}"
+                       style="width: 300px;">
+                <button class="btn btn-primary btn-sm" type="submit">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .nav-link.active {
+        color: #0d6efd !important;
+    }
+</style>

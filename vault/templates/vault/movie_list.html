@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block body %}
+    {% include "vault/_header.html" %}
+
+    <div class="container mt-4">
+        <!-- Заголовок и фильтры -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h1 class="mb-3">Фильмы</h1>
+            </div>
+            <div class="col-md-4">
+                <form method="get" action="{% url 'vault:search' %}" class="d-flex">
+                    <input class="form-control me-2" type="search" name="q" placeholder="Поиск фильмов..." value="{{ request.GET.q }}">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Фильтры по жанрам -->
+        <div class="mb-4">
+            <div class="btn-group flex-wrap" role="group">
+                <a href="{% url 'vault:movie_list' %}" class="btn btn-sm {% if not selected_genre %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    Все
+                </a>
+                {% for genre in genres %}
+                    <a href="{% url 'vault:movie_by_genre' genre.slug %}"
+                       class="btn btn-sm {% if selected_genre.id == genre.id %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        {{ genre.name }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Сортировка -->
+        <div class="mb-3">
+            <small class="text-muted me-3">Сортировка:</small>
+            <a href="?order=-year" class="badge bg-secondary text-decoration-none me-2">По году ↓</a>
+            <a href="?order=year" class="badge bg-secondary text-decoration-none me-2">По году ↑</a>
+            <a href="?order=-imdb_rating" class="badge bg-secondary text-decoration-none me-2">По рейтингу ↓</a>
+            <a href="?order=title" class="badge bg-secondary text-decoration-none">По названию</a>
+        </div>
+
+        <!-- Список фильмов -->
+        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+            {% for movie in movies %}
+                <div class="col">
+                    <div class="card h-100 shadow-sm movie-card">
+                        <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none">
+                            {% if movie.poster %}
+                                <img src="{{ movie.poster.url }}" class="card-img-top" alt="{{ movie.title }}" style="height: 300px; object-fit: cover;">
+                            {% else %}
+                                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 300px;">
+                                    <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                </div>
+                            {% endif %}
+                        </a>
+
+                        <div class="card-body p-2">
+                            <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none text-dark">
+                                <h6 class="card-title mb-1" style="font-size: 0.9rem;">{{ movie.title }}</h6>
+                            </a>
+                            <p class="card-text mb-1">
+                                <small class="text-muted">{{ movie.year }}</small>
+                                {% if movie.imdb_rating %}
+                                    <span class="badge bg-warning text-dark ms-1">★ {{ movie.imdb_rating }}</span>
+                                {% endif %}
+                            </p>
+                            <p class="card-text mb-0">
+                                <small class="text-muted">
+                                    {% for genre in movie.genres.all|slice:":2" %}
+                                        {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </small>
+                            </p>
+                        </div>
+
+                        <!-- Быстрые действия -->
+                        {% if user.is_authenticated %}
+                            <div class="card-footer bg-transparent border-0 p-2 pt-0">
+                                <div class="btn-group btn-group-sm w-100" role="group">
+                                    <button type="button" class="btn btn-outline-secondary" title="Буду смотреть">
+                                        <i class="bi bi-bookmark"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" title="Избранное">
+                                        <i class="bi bi-heart"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success" title="Просмотрено">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        Фильмы не найдены.
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Пагинация -->
+        {% if movies.has_other_pages %}
+            <nav aria-label="Навигация по страницам" class="mt-5">
+                <ul class="pagination justify-content-center">
+                    {% if movies.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1">Первая</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ movies.previous_page_number }}">Предыдущая</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in movies.paginator.page_range %}
+                        {% if movies.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > movies.number|add:'-3' and num < movies.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if movies.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ movies.next_page_number }}">Следующая</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ movies.paginator.num_pages }}">Последняя</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    </div>
+
+    <style>
+        .movie-card {
+            transition: transform 0.2s;
+        }
+        .movie-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+{% endblock %}

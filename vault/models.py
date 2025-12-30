@@ -1,8 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.utils.text import slugify
+from slugify import slugify
 from django.conf import settings
+from core.models import Country
 
 
 class Person(models.Model):
@@ -21,6 +22,7 @@ class Person(models.Model):
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
     country = models.CharField('Страна', max_length=100, blank=True)
+    #country = models.ForeignKey(Country, on_delete=models.RESTRICT)
 
     class Meta:
         verbose_name = 'Персона'
@@ -67,18 +69,18 @@ class Genre(models.Model):
         return self.name
 
 
-class Country(models.Model):
-    """Модель стран производства"""
-    name = models.CharField('Название', max_length=100, unique=True)
-    code = models.CharField('Код', max_length=2, unique=True, blank=True)
-
-    class Meta:
-        verbose_name = 'Страна'
-        verbose_name_plural = 'Страны'
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
+# class Country(models.Model):
+#     """Модель стран производства"""
+#     name = models.CharField('Название', max_length=100, unique=True)
+#     code = models.CharField('Код', max_length=2, unique=True, blank=True)
+#
+#     class Meta:
+#         verbose_name = 'Страна'
+#         verbose_name_plural = 'Страны'
+#         ordering = ['name']
+#
+#     def __str__(self):
+#         return self.name
 
 
 class Movie(models.Model):
@@ -100,10 +102,14 @@ class Movie(models.Model):
     ]
 
     title = models.CharField('Название', max_length=255)
-    original_title = models.CharField('Оригинальное название', max_length=255, blank=True)
+    original_title = models.CharField('Оригинальное название', max_length=255, blank=True, null=True)
     slug = models.SlugField('URL', unique=True, blank=True)
     description = models.TextField('Описание', blank=True)
+
     year = models.PositiveIntegerField('Год выпуска', null=True, blank=True)
+    is_ongoing = models.BooleanField('Выходит сейчас', default=False)
+    year_end = models.PositiveIntegerField('Год окончания', null=True, blank=True)
+
     duration = models.PositiveIntegerField('Длительность (мин)', null=True, blank=True)
     release_date = models.DateField('Дата выхода', null=True, blank=True)
 
@@ -127,6 +133,10 @@ class Movie(models.Model):
     created_at = models.DateTimeField('Создано', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлено', auto_now=True)
 
+    # Для сериалов:
+    seasons_count = models.PositiveIntegerField('Количество сезонов', null=True, blank=True)
+    episodes_count = models.PositiveIntegerField('Количество эпизодов', null=True, blank=True)
+
     class Meta:
         verbose_name = 'Фильм'
         verbose_name_plural = 'Фильмы'
@@ -136,13 +146,27 @@ class Movie(models.Model):
             models.Index(fields=['status']),
         ]
 
+    def __str__(self):
+        return f"{self.title} ({self.year})" if self.year else self.title
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
 
-    def __str__(self):
-        return f"{self.title} ({self.year})" if self.year else self.title
+    def get_year_display(self):
+        if self.movie_type != 'series':
+            return str(self.year) if self.year else 'Неизвестно'
+
+        if not self.year:
+            return 'Неизвестно'
+
+        if self.is_ongoing:
+            return f"{self.year}–..."
+        elif self.year_end:
+            return f"{self.year}–{self.year_end}"
+        else:
+            return str(self.year)
 
     def get_average_rating(self):
         """Средний рейтинг от пользователей"""
@@ -150,6 +174,40 @@ class Movie(models.Model):
         if ratings:
             return sum(r.rating for r in ratings) / len(ratings)
         return None
+
+    def get_directors(self):
+        return self.movie_persons.filter(role='director')
+
+    def get_actors(self):
+        return self.movie_persons.filter(role='actor')
+
+
+class Season(models.Model):
+    """Сезон сериала"""
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='seasons')
+    season_number = models.PositiveIntegerField('Номер сезона')
+    title = models.CharField('Название', max_length=255, blank=True)
+    description = models.TextField('Описание', blank=True)
+    release_date = models.DateField('Дата выхода', null=True, blank=True)
+    poster = models.ImageField('Постер', upload_to='seasons/', null=True, blank=True)
+
+    class Meta:
+        ordering = ['season_number']
+        unique_together = ['movie', 'season_number']
+
+
+class Episode(models.Model):
+    """Эпизод сезона"""
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name='episodes')
+    episode_number = models.PositiveIntegerField('Номер эпизода')
+    title = models.CharField('Название', max_length=255)
+    description = models.TextField('Описание', blank=True)
+    duration = models.PositiveIntegerField('Длительность (мин)', null=True, blank=True)
+    release_date = models.DateField('Дата выхода', null=True, blank=True)
+
+    class Meta:
+        ordering = ['episode_number']
+        unique_together = ['season', 'episode_number']
 
 
 class MoviePerson(models.Model):
@@ -210,6 +268,22 @@ class Review(models.Model):
 
     def likes_count(self):
         return self.likes.count()
+
+
+class FavoritePerson(models.Model):
+    """Избранные персоны (актеры, режиссеры) пользователя"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorite_persons')
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='favorited_by')
+    created_at = models.DateTimeField('Добавлено', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Избранная персона'
+        verbose_name_plural = 'Избранные персоны'
+        unique_together = ['user', 'person']
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.person}"
 
 
 class Rating(models.Model):
@@ -328,7 +402,7 @@ class UserListMovie(models.Model):
     user_list = models.ForeignKey(UserList, on_delete=models.CASCADE, related_name='list_movies')
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='in_lists')
     added_at = models.DateTimeField('Добавлен', auto_now_add=True)
-    note = models.TextField('Заметка', blank=True)
+    # DEPRECATED note = models.TextField('Заметка', blank=True)
 
     class Meta:
         verbose_name = 'Фильм в списке'
@@ -362,3 +436,22 @@ class Comment(models.Model):
 
     def likes_count(self):
         return self.likes.count()
+
+
+class MovieNote(models.Model):
+    """Личные заметки пользователя к фильмам (скрыты от других)"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='movie_notes')
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='user_notes')
+    text = models.TextField('Текст заметки')
+
+    created_at = models.DateTimeField('Создана', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлена', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Личная заметка'
+        verbose_name_plural = 'Личные заметки'
+        unique_together = ['user', 'movie']  # Одна заметка на один фильм от пользователя
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Заметка {self.user.username} к {self.movie}"
