@@ -97,7 +97,26 @@ class Command(BaseCommand):
         for _, row in df_movies.iterrows():
             backup_id = row['backup_id']
             title = row['Title']
-            year = int(row['Year']) if pd.notna(row['Year']) else None
+
+            # Обработка года и диапазона (например, "2022-2024")
+            raw_year = str(row['Year']).strip() if pd.notna(row['Year']) else ''
+            year = None
+            year_end = None
+
+            if '-' in raw_year:
+                try:
+                    start_part, end_part = raw_year.split('-')
+                    year = int(start_part.strip())
+                    if end_part.strip().isdigit():
+                        year_end = int(end_part.strip())
+                except ValueError:
+                    pass
+            elif raw_year:
+                try:
+                    year = int(float(raw_year))
+                except ValueError:
+                    pass
+
             if pd.isna(title):
                 continue
             
@@ -108,6 +127,7 @@ class Command(BaseCommand):
                     'original_title': row.get('Original Title', ''),
                     'description': row.get('Note', ''),
                     'duration': int(row['Runtime']) if pd.notna(row['Runtime']) else None,
+                    'year_end': year_end,
                 }
             )
             if created:
@@ -177,10 +197,31 @@ class Command(BaseCommand):
         if df_comments is not None:
             for _, row in df_comments.iterrows():
                 title = row.get('Title')
-                year = int(row['Year']) if pd.notna(row['Year']) else None
+                raw_year = str(row['Year']).strip() if pd.notna(row['Year']) else ''
+                year = None
+                year_end = None
+
+                if '-' in raw_year:
+                    try:
+                        start_part, end_part = raw_year.split('-')
+                        year = int(start_part.strip())
+                        if end_part.strip().isdigit():
+                            year_end = int(end_part.strip())
+                    except ValueError:
+                        pass
+                elif raw_year:
+                    try:
+                        year = int(float(raw_year))
+                    except ValueError:
+                        pass
+
                 movie = movie_title_year_cache.get((title, year))
                 if not movie:
                     continue
+
+                if year_end and not movie.year_end:
+                    movie.year_end = year_end
+                    movie.save()
 
                 if 'Comment' in row and pd.notna(row['Comment']):
                     Comment.objects.get_or_create(user=user, movie=movie, text=row['Comment'])
@@ -198,10 +239,32 @@ class Command(BaseCommand):
         if df_notes is not None:
             for _, row in df_notes.iterrows():
                 title = row.get('Title')
-                year = int(row['Year']) if pd.notna(row['Year']) else None
+
+                raw_year = str(row['Year']).strip() if pd.notna(row['Year']) else ''
+                year = None
+                year_end = None
+
+                if '-' in raw_year:
+                    try:
+                        start_part, end_part = raw_year.split('-')
+                        year = int(start_part.strip())
+                        if end_part.strip().isdigit():
+                            year_end = int(end_part.strip())
+                    except ValueError:
+                        pass
+                elif raw_year:
+                    try:
+                        year = int(float(raw_year))
+                    except ValueError:
+                        pass
+
                 movie = movie_title_year_cache.get((title, year))
                 if not movie:
                     continue
+
+                if year_end and not movie.year_end:
+                    movie.year_end = year_end
+                    movie.save()
 
                 if 'Note' in row and pd.notna(row['Note']):
                     MovieNote.objects.get_or_create(user=user, movie=movie, defaults={'text': row['Note']})
