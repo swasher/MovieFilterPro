@@ -19,6 +19,7 @@ class MovieRssAdmin(admin.ModelAdmin):
     search_fields = ['title', 'original_title']
 
 
+
 admin.site.register(Kinorium, KinoriumMovieAdmin)
 admin.site.register(Country, CountryAdmin)
 admin.site.register(MovieRSS, MovieRssAdmin)

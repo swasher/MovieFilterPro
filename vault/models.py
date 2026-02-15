@@ -13,24 +13,26 @@ class Person(models.Model):
         ('F', 'Женский'),
     ]
 
-    first_name = models.CharField('Имя', max_length=100)
-    last_name = models.CharField('Фамилия', max_length=100)
+    tmdb_id = models.CharField(max_length=10, unique=True)
+    imdb_id = models.CharField(max_length=10, unique=True)
+    name = models.CharField('Имя-Фимилия (RU)', max_length=100)
+    original_name = models.CharField('Имя-Фимилия (EN)', max_length=100)
     birth_date = models.DateField('Дата рождения', null=True, blank=True)
     death_date = models.DateField('Дата смерти', null=True, blank=True)
     gender = models.CharField('Пол', max_length=1, choices=GENDER_CHOICES, blank=True)
     # photo = models.ImageField('Фото', upload_to='persons/', null=True, blank=True)
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
-    country = models.CharField('Страна', max_length=100, blank=True)
-    #country = models.ForeignKey(Country, on_delete=models.RESTRICT)
+    # country = models.CharField('Страна', max_length=100, blank=True)
+    country = models.ForeignKey(Country, on_delete=models.RESTRICT)
 
     class Meta:
         verbose_name = 'Персона'
         verbose_name_plural = 'Персоны'
-        ordering = ['last_name', 'first_name']
+        ordering = ['name']
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.name}"
 
     @property
     def photo_url(self):
@@ -69,37 +71,26 @@ class Genre(models.Model):
         return self.name
 
 
-# class Country(models.Model):
-#     """Модель стран производства"""
-#     name = models.CharField('Название', max_length=100, unique=True)
-#     code = models.CharField('Код', max_length=2, unique=True, blank=True)
-#
-#     class Meta:
-#         verbose_name = 'Страна'
-#         verbose_name_plural = 'Страны'
-#         ordering = ['name']
-#
-#     def __str__(self):
-#         return self.name
-
 
 class Movie(models.Model):
     """Основная модель фильма"""
-    STATUS_CHOICES = [
-        ('announced', 'Анонсирован'),
-        ('production', 'В производстве'),
-        ('post_production', 'Пост-продакшн'),
-        ('released', 'Вышел'),
-        ('cancelled', 'Отменен'),
-    ]
+    class Status(models.TextChoices):
+        ANNOUNCED = 'announced', 'Анонсирован'
+        PRODUCTION = 'production', 'В производстве'
+        POST_PRODUCTION = 'post_production', 'Пост-продакшн'
+        RELEASED = 'released', 'Вышел'
+        CANCELLED = 'cancelled', 'Отменен'
 
-    TYPE_CHOICES = [
-        ('movie', 'Фильм'),
-        ('series', 'Сериал'),
-        ('cartoon', 'Мультфильм'),
-        ('anime', 'Аниме'),
-        ('show', 'Шоу'),
-    ]
+    class MovieType(models.TextChoices):
+        MOVIE = 'movie', 'Фильм'
+        SERIES = 'series', 'Сериал'
+        CARTOON = 'cartoon', 'Мультфильм'
+        ANIME = 'anime', 'Аниме'
+        SHOW = 'show', 'Шоу'
+
+    class Source(models.TextChoices):
+        KINORIUM = 'kinorium', 'Kinorium'
+        TMBD = 'tmdb', 'TMDB'
 
     title = models.CharField('Название', max_length=255)
     original_title = models.CharField('Оригинальное название', max_length=255, blank=True, null=True)
@@ -113,11 +104,11 @@ class Movie(models.Model):
     duration = models.PositiveIntegerField('Длительность (мин)', null=True, blank=True)
     release_date = models.DateField('Дата выхода', null=True, blank=True)
 
-    movie_type = models.CharField('Тип', max_length=20, choices=TYPE_CHOICES, default='movie')
-    status = models.CharField('Статус', max_length=20, choices=STATUS_CHOICES, default='released')
+    movie_type = models.CharField('Тип', max_length=20, choices=MovieType, default=MovieType.MOVIE)
+    status = models.CharField('Статус', max_length=20, choices=Status, default=Status.RELEASED)
 
     # poster = models.ImageField('Постер', upload_to='posters/', null=True, blank=True)
-    poster = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
+    poster = models.CharField('Путь к постеру', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     trailer_url = models.URLField('Ссылка на трейлер', blank=True)
 
     genres = models.ManyToManyField(Genre, verbose_name='Жанры', related_name='movies')
@@ -132,6 +123,7 @@ class Movie(models.Model):
 
     created_at = models.DateTimeField('Создано', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлено', auto_now=True)
+    source = models.CharField('Источник', max_length=20, choices=Source, null=True)
 
     # Для сериалов:
     seasons_count = models.PositiveIntegerField('Количество сезонов', null=True, blank=True)
@@ -189,7 +181,9 @@ class Season(models.Model):
     title = models.CharField('Название', max_length=255, blank=True)
     description = models.TextField('Описание', blank=True)
     release_date = models.DateField('Дата выхода', null=True, blank=True)
-    poster = models.ImageField('Постер', upload_to='seasons/', null=True, blank=True)
+    # poster = models.ImageField('Постер', upload_to='seasons/', null=True, blank=True)
+    poster = models.CharField('Путь к постеру', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
+
 
     class Meta:
         ordering = ['season_number']
