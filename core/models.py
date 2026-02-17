@@ -10,6 +10,7 @@ class Country(models.Model):
         verbose_name = 'Страна'
         verbose_name_plural = 'Страны'
         ordering = ['name']
+        app_label = 'core'
 
     def __str__(self):
         return self.name

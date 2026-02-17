@@ -1,30 +1,35 @@
 from django.core.management.base import BaseCommand
-from vault.models import Genre, Country, Movie, Person, MoviePerson
+from django.db import transaction
+
+from vault import models as v
 
 
 class Command(BaseCommand):
-    help = 'Удаляет ВСЕ данные из таблиц каталога (Movie, Person, Genre, Country, MoviePerson)'
+    help = 'Удаляет ВСЕ данные только из моделей приложения vault (без затрагивания других приложений).'
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING('ВНИМАНИЕ: Выполняется полная очистка таблиц каталога!'))
+        self.stdout.write(self.style.WARNING('ВНИМАНИЕ: полная очистка данных приложения vault!'))
 
-        # Удаляем данные. Порядок важен для логирования, хотя Django CASCADE обработает зависимости.
-        # Мы удаляем только данные из моделей, задействованных в populate_movies.py
+        # Порядок важен: сначала зависимые сущности, затем корневые.
+        to_purge = [
+            v.UserListMovie,
+            v.MoviePerson,
+            v.Comment,
+            v.MovieNote,
+            v.Rating,
+            v.Review,
+            v.FavoritePerson,
+            v.Episode,
+            v.Season,
+            v.Movie,
+            v.Person,
+            v.Genre,
+            v.UserList,
+        ]
 
-        # 1. Связи персон с фильмами
-        count_mp, _ = MoviePerson.objects.all().delete()
-        self.stdout.write(f'  ✓ Удалено связей (MoviePerson): {count_mp}')
+        with transaction.atomic():
+            for model in to_purge:
+                deleted, _ = model.objects.all().delete()
+                self.stdout.write(f'  ✓ {model.__name__}: удалено {deleted}')
 
-        # 2. Фильмы
-        count_m, _ = Movie.objects.all().delete()
-        self.stdout.write(f'  ✓ Удалено фильмов (Movie): {count_m}')
-
-        # 3. Персоны
-        count_p, _ = Person.objects.all().delete()
-        self.stdout.write(f'  ✓ Удалено персон (Person): {count_p}')
-
-        # 4. Жанры
-        count_g, _ = Genre.objects.all().delete()
-        self.stdout.write(f'  ✓ Удалено жанров (Genre): {count_g}')
-
-        self.stdout.write(self.style.SUCCESS('\n✅ База данных успешно очищена от тестовых данных каталога!'))
+        self.stdout.write(self.style.SUCCESS('\n✅ Данные vault очищены. Таблицы других приложений не тронуты.'))

@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '__first__'),
+        ('core', '0001_initial'),
         ('vault', '0005_remove_userlistmovie_note_favoriteperson_movienote'),
     ]
 

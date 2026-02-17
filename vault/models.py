@@ -3,7 +3,8 @@ from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from slugify import slugify
 from django.conf import settings
-from core.models import Country
+
+import core
 
 
 class Person(models.Model):
@@ -24,7 +25,7 @@ class Person(models.Model):
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
     # country = models.CharField('Страна', max_length=100, blank=True)
-    country = models.ForeignKey(Country, on_delete=models.RESTRICT)
+    country = models.ForeignKey('core.Country', on_delete=models.RESTRICT)
 
     class Meta:
         verbose_name = 'Персона'
@@ -112,7 +113,7 @@ class Movie(models.Model):
     trailer_url = models.URLField('Ссылка на трейлер', blank=True)
 
     genres = models.ManyToManyField(Genre, verbose_name='Жанры', related_name='movies')
-    countries = models.ManyToManyField(Country, verbose_name='Страны', related_name='movies')
+    countries = models.ManyToManyField('core.Country', verbose_name='Страны', related_name='movies')
 
     age_rating = models.CharField('Возрастной рейтинг', max_length=10, blank=True)
     budget = models.DecimalField('Бюджет', max_digits=12, decimal_places=2, null=True, blank=True)
