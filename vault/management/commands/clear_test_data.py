@@ -10,21 +10,28 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.WARNING('ВНИМАНИЕ: полная очистка данных приложения vault!'))
 
-        # Порядок важен: сначала зависимые сущности, затем корневые.
+        # Порядок важен для соблюдения ограничений внешних ключей.
+        # Сначала удаляем модели, которые ссылаются на другие (многие-ко-многим, пользовательский контент),
+        # затем уже основные сущности.
         to_purge = [
-            v.UserListMovie,
-            v.MoviePerson,
+            # Пользовательский контент и связи
             v.Comment,
             v.MovieNote,
             v.Rating,
             v.Review,
             v.FavoritePerson,
+            v.UserListMovie,
+            v.MoviePerson,
+
+            # Иерархия сериалов
             v.Episode,
             v.Season,
+
+            # Основные модели (после удаления зависимостей)
+            v.UserList,
             v.Movie,
             v.Person,
             v.Genre,
-            v.UserList,
         ]
 
         with transaction.atomic():
