@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     Movie, Person, Genre, MoviePerson,
-    UserList, UserListMovie, Rating, Review, Comment
+    UserList, UserListMovie, UserMovie
 )
 from core.models import Country
 
@@ -130,18 +130,18 @@ class MoviePersonAdmin(admin.ModelAdmin):
 
 @admin.register(UserList)
 class UserListAdmin(admin.ModelAdmin):
-    list_display = ['name', 'user', 'list_type', 'is_system', 'is_public', 'movies_count', 'updated_at']
-    list_filter = ['list_type', 'is_system', 'is_public', 'created_at']
+    list_display = ['name', 'user', 'is_public', 'movies_count', 'updated_at']
+    list_filter = ['is_public', 'created_at']
     search_fields = ['name', 'user__username', 'description']
-    readonly_fields = ['is_system', 'created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at']
     date_hierarchy = 'created_at'
 
     fieldsets = (
         ('Основная информация', {
-            'fields': ('user', 'name', 'description', 'list_type')
+            'fields': ('user', 'name', 'description')
         }),
         ('Настройки', {
-            'fields': ('is_public', 'is_system', 'order')
+            'fields': ('is_public',)
         }),
         ('Даты', {
             'fields': ('created_at', 'updated_at'),
@@ -154,85 +154,22 @@ class UserListAdmin(admin.ModelAdmin):
 
     movies_count.short_description = 'Фильмов'
 
-    def has_delete_permission(self, request, obj=None):
-        # Запретить удаление системных списков
-        if obj and obj.is_system:
-            return False
-        return super().has_delete_permission(request, obj)
-
 
 @admin.register(UserListMovie)
 class UserListMovieAdmin(admin.ModelAdmin):
     list_display = ['user_list', 'movie', 'added_at']
-    list_filter = ['added_at', 'user_list__list_type']
-    search_fields = ['movie__title', 'user_list__name', 'note']
+    list_filter = ['added_at']
+    search_fields = ['movie__title', 'user_list__name']
     autocomplete_fields = ['movie', 'user_list']
     date_hierarchy = 'added_at'
 
 
-@admin.register(Rating)
-class RatingAdmin(admin.ModelAdmin):
-    list_display = ['user', 'movie', 'rating', 'created_at']
-    list_filter = ['rating', 'created_at']
+@admin.register(UserMovie)
+class UserMovieAdmin(admin.ModelAdmin):
+    list_display = ['user', 'movie', 'watch_status', 'is_favorite', 'rating', 'watched_at', 'updated_at']
+    list_filter = ['watch_status', 'is_favorite', 'rating', 'watched_at', 'updated_at']
     search_fields = ['user__username', 'movie__title']
-    date_hierarchy = 'created_at'
-
-    def has_add_permission(self, request):
-        # Рейтинги создаются через интерфейс
-        return False
-
-
-@admin.register(Review)
-class ReviewAdmin(admin.ModelAdmin):
-    list_display = ['title', 'user', 'movie', 'review_type', 'likes_display', 'created_at']
-    list_filter = ['review_type', 'created_at']
-    search_fields = ['title', 'text', 'user__username', 'movie__title']
-    readonly_fields = ['created_at', 'updated_at', 'likes_display']
-    date_hierarchy = 'created_at'
-
-    fieldsets = (
-        ('Основная информация', {
-            'fields': ('user', 'movie', 'title', 'text', 'review_type')
-        }),
-        ('Статистика', {
-            'fields': ('likes_display', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def likes_display(self, obj):
-        return obj.likes.count()
-
-    likes_display.short_description = 'Лайков'
-
-
-@admin.register(Comment)
-class CommentAdmin(admin.ModelAdmin):
-    list_display = ['user', 'movie', 'text_preview', 'parent', 'likes_display', 'created_at']
-    list_filter = ['created_at']
-    search_fields = ['text', 'user__username', 'movie__title']
-    readonly_fields = ['created_at', 'updated_at', 'likes_display']
-    date_hierarchy = 'created_at'
-
-    fieldsets = (
-        ('Основная информация', {
-            'fields': ('user', 'movie', 'parent', 'text')
-        }),
-        ('Статистика', {
-            'fields': ('likes_display', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def text_preview(self, obj):
-        return obj.text[:50] + '...' if len(obj.text) > 50 else obj.text
-
-    text_preview.short_description = 'Текст'
-
-    def likes_display(self, obj):
-        return obj.likes.count()
-
-    likes_display.short_description = 'Лайков'
+    date_hierarchy = 'updated_at'
 
 
 # Настройка заголовков админки

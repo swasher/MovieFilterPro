@@ -6,29 +6,33 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import transaction
 from slugify import slugify
 
 from core.models import Country
 from vault.models import (
-    Comment,
     FavoritePerson,
     Genre,
     Movie,
-    MovieNote,
     MoviePerson,
     Person,
-    Rating,
     UserList,
     UserListMovie,
+    UserMovie,
 )
 
 
-STATUS_TO_LIST_TYPE = {
-    'Буду смотреть': 'will_watch',
-    'Просмотрен': 'watched',
-    'Не буду смотреть': 'wont_watch',
+STATUS_TO_WATCH_STATUS = {
+    'Буду смотреть': UserMovie.WatchStatus.PLAN,
+    'Просмотрен': UserMovie.WatchStatus.WATCHED,
+    'Не буду смотреть': UserMovie.WatchStatus.SKIP,
+}
+
+SYSTEM_LIST_TITLES = {
+    'Просмотрено',
+    'Буду смотреть',
+    'Не буду смотреть',
 }
 
 TYPE_TO_MOVIE_TYPE = {
@@ -38,6 +42,8 @@ TYPE_TO_MOVIE_TYPE = {
     'Аниме': Movie.MovieType.ANIME,
     'ТВ шоу': Movie.MovieType.SHOW,
 }
+
+TRASH_GENRE_RE = re.compile(r'^\d{4}-[eе]$')
 
 
 def parse_decimal(value: str):
@@ -189,13 +195,76 @@ class Command(BaseCommand):
             'source': Movie.Source.KINORIUM,
         }
 
+    def _is_valid_genre(self, value: str) -> bool:
+        genre = (value or '').strip()
+        if not genre:
+            return False
+        return TRASH_GENRE_RE.fullmatch(genre) is None
+
+    def _append_movie_note(self, user, movie: Movie, text: str):
+        value = (text or '').strip()
+        if not value:
+            return
+        user_movie = self._get_or_create_user_movie(user, movie)
+        existing = (user_movie.note or '').strip()
+        if not existing:
+            user_movie.note = value
+            user_movie.save(update_fields=['note', 'updated_at'])
+            return
+        if value in existing:
+            return
+        user_movie.note = f"{existing}\n\n{value}"
+        user_movie.save(update_fields=['note', 'updated_at'])
+
+    def _movie_lookup_keys(self, title: str, original_title: str, year: int | None):
+        title_key = (title or '').strip()
+        original_key = (original_title or '').strip()
+        return (title_key, original_key, year), (title_key, year)
+
+    def _find_movie(self, row: dict, movie_by_full_key: dict, movie_by_title_year: dict):
+        title = row.get('Title') or ''
+        original_title = row.get('Original Title') or ''
+        year = parse_int(row.get('Year'))
+        full_key, fallback_key = self._movie_lookup_keys(title, original_title, year)
+        movie = movie_by_full_key.get(full_key)
+        if movie:
+            return movie
+        return movie_by_title_year.get(fallback_key)
+
+    def _get_or_create_user_movie(self, user, movie):
+        user_movie, _ = UserMovie.objects.get_or_create(user=user, movie=movie)
+        return user_movie
+
+    def _set_watch_status(self, user, movie, watch_status):
+        user_movie = self._get_or_create_user_movie(user, movie)
+        if user_movie.watch_status != watch_status:
+            user_movie.watch_status = watch_status
+            user_movie.save(update_fields=['watch_status', 'updated_at'])
+
+    def _set_favorite(self, user, movie):
+        user_movie = self._get_or_create_user_movie(user, movie)
+        if not user_movie.is_favorite:
+            user_movie.is_favorite = True
+            user_movie.save(update_fields=['is_favorite', 'updated_at'])
+
+    def _add_to_custom_list(self, user, movie, list_title: str):
+        user_list, _ = UserList.objects.get_or_create(user=user, name=list_title)
+        UserListMovie.objects.get_or_create(user_list=user_list, movie=movie)
+
+    def _set_rating(self, user, movie, rating, watched_at=None):
+        user_movie = self._get_or_create_user_movie(user, movie)
+        user_movie.rating = rating
+        user_movie.watch_status = UserMovie.WatchStatus.WATCHED
+        if watched_at is not None:
+            user_movie.watched_at = watched_at
+        user_movie.save(update_fields=['rating', 'watch_status', 'watched_at', 'updated_at'])
+
     @transaction.atomic
     def handle(self, *args, **kwargs):
         self.stdout.write(self.style.SUCCESS("Starting Kinorium CSV data import..."))
 
         user = self._ensure_user()
         self.stdout.write(self.style.SUCCESS(f"Importing data for user '{user.username}' (id={user.id})"))
-        UserList.create_system_lists(user)
 
         csv_dir = Path(settings.BASE_DIR) / 'vault' / 'current_csv'
         movies_csv = csv_dir / 'backup_76444_movie_list.csv'
@@ -207,6 +276,7 @@ class Command(BaseCommand):
         person_cache = {}
         country_cache = {}
         unknown_country = self._ensure_unknown_country()
+        movie_by_full_key = {}
         movie_by_title_year = {}
 
         # 1. Favorite persons
@@ -238,12 +308,14 @@ class Command(BaseCommand):
                 movie.slug = movie_defaults['slug']
                 movie.save(update_fields=['slug'])
 
-            movie_by_title_year[(title, year)] = movie
+            full_key, fallback_key = self._movie_lookup_keys(title, movie_defaults['original_title'], year)
+            movie_by_full_key[full_key] = movie
+            movie_by_title_year[fallback_key] = movie
 
             # genres
             for genre_name in (row.get('Genres') or '').split(','):
                 name = genre_name.strip()
-                if not name:
+                if not self._is_valid_genre(name):
                     continue
                 genre, _ = Genre.objects.get_or_create(name=name)
                 movie.genres.add(genre)
@@ -281,19 +353,19 @@ class Command(BaseCommand):
 
             # statuses / favorites
             status_str = (row.get('Status') or '').strip()
-            if status_str in STATUS_TO_LIST_TYPE:
-                list_type = STATUS_TO_LIST_TYPE[status_str]
-                user_list = UserList.objects.get(user=user, list_type=list_type)
-                UserListMovie.objects.get_or_create(user_list=user_list, movie=movie)
+            if status_str in STATUS_TO_WATCH_STATUS:
+                self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
 
             list_title_str = (row.get('ListTitle') or '').strip()
             if list_title_str == 'Любимые фильмы':
-                fav_list = UserList.objects.get(user=user, list_type='favorites')
-                UserListMovie.objects.get_or_create(user_list=fav_list, movie=movie)
+                self._set_favorite(user, movie)
+            elif list_title_str and list_title_str not in SYSTEM_LIST_TITLES:
+                self._add_to_custom_list(user, movie, list_title_str)
 
             my_rating = parse_int(row.get('My rating'))
             if my_rating:
-                Rating.objects.update_or_create(user=user, movie=movie, defaults={'rating': my_rating})
+                watched_at = parse_date(row.get('Date'))
+                self._set_rating(user, movie, my_rating, watched_at=watched_at)
 
         # 3. Votes (ratings)
         self.stdout.write("\n--- Ratings ---")
@@ -301,40 +373,32 @@ class Command(BaseCommand):
             rating_val = parse_int(row.get('My rating'))
             if rating_val is None:
                 continue
-            title = row.get('Title') or ''
-            year = parse_int(row.get('Year'))
-            movie = movie_by_title_year.get((title, year))
+            movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
             if not movie:
                 continue
-            Rating.objects.update_or_create(user=user, movie=movie, defaults={'rating': rating_val})
+            self._set_rating(user, movie, rating_val)
 
-        # 4. Comments + statuses
-        self.stdout.write("\n--- Comments ---")
+        # 4. Comments -> user_movie.note + statuses
+        self.stdout.write("\n--- Comments to notes ---")
         for row in self._iter_csv(comments_csv):
-            title = row.get('Title') or ''
-            year = parse_int(row.get('Year'))
-            movie = movie_by_title_year.get((title, year))
+            movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
             if not movie:
                 continue
             comment_text = row.get('Comment')
             if comment_text:
-                Comment.objects.get_or_create(user=user, movie=movie, defaults={'text': comment_text})
+                self._append_movie_note(user, movie, comment_text)
             status_str = (row.get('Status') or '').strip()
-            if status_str in STATUS_TO_LIST_TYPE:
-                list_type = STATUS_TO_LIST_TYPE[status_str]
-                user_list = UserList.objects.get(user=user, list_type=list_type)
-                UserListMovie.objects.get_or_create(user_list=user_list, movie=movie)
+            if status_str in STATUS_TO_WATCH_STATUS:
+                self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
 
-        # 5. Notes
-        self.stdout.write("\n--- Notes ---")
+        # 5. Notes -> user_movie.note
+        self.stdout.write("\n--- Notes to user_movie.note ---")
         for row in self._iter_csv(notes_csv):
-            title = row.get('Title') or ''
-            year = parse_int(row.get('Year'))
-            movie = movie_by_title_year.get((title, year))
+            movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
             if not movie:
                 continue
             note_text = row.get('Note')
             if note_text:
-                MovieNote.objects.get_or_create(user=user, movie=movie, defaults={'text': note_text})
+                self._append_movie_note(user, movie, note_text)
 
         self.stdout.write(self.style.SUCCESS("\nImport completed successfully."))

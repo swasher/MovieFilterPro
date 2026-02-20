@@ -1,13 +1,10 @@
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
-from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.shortcuts import render
 from django.contrib.auth import login
-
-from vault.models import UserList
 
 def user_logout(request):
     """
@@ -48,9 +45,6 @@ def register_user(request):
                 password=password1
             )
 
-            # Ваша кастомная логика
-            UserList.create_system_lists(user)
-
             # Автоматический вход после регистрации (опционально)
             login(request, user)
 
@@ -75,8 +69,7 @@ def delete_account(request):
             return redirect('core:user_preferences')
 
         try:
-            # Полное удаление пользователя и всех связанных данных (включая системные списки)
-            UserList.delete_user_completely(request.user)
+            request.user.delete()
             logout(request)
             messages.success(request, 'Ваш аккаунт был успешно удален.')
             return redirect('core:login')

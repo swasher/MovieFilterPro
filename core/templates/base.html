@@ -76,10 +76,9 @@
 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
 
 {% if is_dev %}
-{#<div class="alert center-aligned alert-success" role="alert">#}
-<div class="alert center-aligned alert-success sticky-top py-2 " style="z-index: 1050;" role="alert">
+{% comment %}<div class="alert center-aligned alert-success sticky-top py-2 " style="z-index: 1050;" role="alert">
     <strong>DEVELOPER ENVIRONMENT</strong>
-</div>
+</div>{% endcomment %}
 {% endif %}
 
 {% include "header.html" %}

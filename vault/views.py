@@ -1,18 +1,26 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import get_object_or_404
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse_lazy, reverse
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.db.models import Q, Avg, Count
+from django.http import Http404
 from django.contrib import messages
-from django.core.paginator import Paginator
 
 from .models import (
     Movie, Person, Genre, UserList, UserListMovie,
-    Rating, Review, MoviePerson
+    UserMovie, MoviePerson
 )
 from .services.movie_status_service import MovieStatusService
+
+
+SYSTEM_LIST_CONFIG = {
+    'watched': {'name': 'Просмотрено'},
+    'will_watch': {'name': 'Буду смотреть'},
+    'wont_watch': {'name': 'Не буду смотреть'},
+    'favorites': {'name': 'Избранное'},
+}
 
 
 class MovieListView(ListView):
@@ -21,9 +29,15 @@ class MovieListView(ListView):
     template_name = 'vault/movie_list.html'
     context_object_name = 'movies'
     paginate_by = 20
+    STATUS_TO_WATCH_STATUS = {
+        'watched': UserMovie.WatchStatus.WATCHED,
+        'will_watch': UserMovie.WatchStatus.PLAN,
+        'wont_watch': UserMovie.WatchStatus.SKIP,
+    }
 
     def get_queryset(self):
         queryset = Movie.objects.filter(status='released').prefetch_related('genres', 'countries')
+        queryset = self._apply_status_filter(queryset)
 
         # Сортировка
         order = self.request.GET.get('order', '-year')
@@ -31,10 +45,31 @@ class MovieListView(ListView):
 
         return queryset
 
+    def _apply_status_filter(self, queryset):
+        if not self.request.user.is_authenticated:
+            return queryset
+
+        selected_status = self.request.GET.get('status')
+        if selected_status == 'favorites':
+            return queryset.filter(
+                user_movies__user=self.request.user,
+                user_movies__is_favorite=True,
+            ).distinct()
+        if selected_status in self.STATUS_TO_WATCH_STATUS:
+            return queryset.filter(
+                user_movies__user=self.request.user,
+                user_movies__watch_status=self.STATUS_TO_WATCH_STATUS[selected_status],
+            ).distinct()
+        return queryset
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['genres'] = Genre.objects.all()
         context['selected_genre'] = None
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user) if self.request.user.is_authenticated else []
+        context['active_list_pk'] = None
+        context['sidebar_status_mode'] = 'filter'
         return context
 
 
@@ -44,6 +79,7 @@ class MovieByGenreView(ListView):
     template_name = 'vault/movie_list.html'
     context_object_name = 'movies'
     paginate_by = 20
+    STATUS_TO_WATCH_STATUS = MovieListView.STATUS_TO_WATCH_STATUS
 
     def get_queryset(self):
         self.genre = get_object_or_404(Genre, slug=self.kwargs['slug'])
@@ -51,16 +87,38 @@ class MovieByGenreView(ListView):
             genres=self.genre,
             status='released'
         ).prefetch_related('genres', 'countries')
+        queryset = self._apply_status_filter(queryset)
 
         order = self.request.GET.get('order', '-year')
         queryset = queryset.order_by(order)
 
         return queryset
 
+    def _apply_status_filter(self, queryset):
+        if not self.request.user.is_authenticated:
+            return queryset
+
+        selected_status = self.request.GET.get('status')
+        if selected_status == 'favorites':
+            return queryset.filter(
+                user_movies__user=self.request.user,
+                user_movies__is_favorite=True,
+            ).distinct()
+        if selected_status in self.STATUS_TO_WATCH_STATUS:
+            return queryset.filter(
+                user_movies__user=self.request.user,
+                user_movies__watch_status=self.STATUS_TO_WATCH_STATUS[selected_status],
+            ).distinct()
+        return queryset
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['genres'] = Genre.objects.all()
         context['selected_genre'] = self.genre
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user) if self.request.user.is_authenticated else []
+        context['active_list_pk'] = None
+        context['sidebar_status_mode'] = 'filter'
         return context
 
 
@@ -80,6 +138,7 @@ class MovieDetailView(DetailView):
                 self.request.user, movie
             )
             context['user_rating'] = context['movie_status']['rating']
+            context['user_note'] = context['movie_status']['note']
         else:
             context['movie_status'] = {
                 'in_watched': False,
@@ -87,11 +146,10 @@ class MovieDetailView(DetailView):
                 'in_wont_watch': False,
                 'in_favorites': False,
                 'rating': None,
+                'note': '',
             }
             context['user_rating'] = None
-
-        # Отзывы
-        context['reviews'] = movie.reviews.select_related('user').prefetch_related('likes')[:5]
+            context['user_note'] = ''
 
         return context
 
@@ -102,6 +160,7 @@ class SearchView(ListView):
     template_name = 'vault/movie_list.html'
     context_object_name = 'movies'
     paginate_by = 20
+    STATUS_TO_WATCH_STATUS = MovieListView.STATUS_TO_WATCH_STATUS
 
     def get_queryset(self):
         query = self.request.GET.get('q', '')
@@ -115,12 +174,35 @@ class SearchView(ListView):
         else:
             queryset = Movie.objects.none()
 
+        queryset = self._apply_status_filter(queryset)
+        return queryset
+
+    def _apply_status_filter(self, queryset):
+        if not self.request.user.is_authenticated:
+            return queryset
+
+        selected_status = self.request.GET.get('status')
+        if selected_status == 'favorites':
+            return queryset.filter(
+                user_movies__user=self.request.user,
+                user_movies__is_favorite=True,
+            ).distinct()
+        if selected_status in self.STATUS_TO_WATCH_STATUS:
+            return queryset.filter(
+                user_movies__user=self.request.user,
+                user_movies__watch_status=self.STATUS_TO_WATCH_STATUS[selected_status],
+            ).distinct()
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['genres'] = Genre.objects.all()
+        context['selected_genre'] = None
         context['search_query'] = self.request.GET.get('q', '')
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user) if self.request.user.is_authenticated else []
+        context['active_list_pk'] = None
+        context['sidebar_status_mode'] = 'filter'
         return context
 
 
@@ -167,17 +249,37 @@ class MyListsView(LoginRequiredMixin, ListView):
     context_object_name = 'user_lists'
 
     def get_queryset(self):
-        return UserList.objects.filter(
-            user=self.request.user
-        ).prefetch_related('list_movies').order_by('order', '-updated_at')
+        return UserList.objects.filter(user=self.request.user).prefetch_related('list_movies')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
-        # Разделяем системные и пользовательские списки
-        all_lists = self.get_queryset()
-        context['system_lists'] = all_lists.filter(is_system=True)
-        context['custom_lists'] = all_lists.filter(is_system=False)
+        counts = MovieStatusService.get_system_lists_counts(self.request.user)
+        context['system_lists'] = [
+            {
+                'slug': 'watched',
+                'name': SYSTEM_LIST_CONFIG['watched']['name'],
+                'count': counts['watched'],
+            },
+            {
+                'slug': 'will_watch',
+                'name': SYSTEM_LIST_CONFIG['will_watch']['name'],
+                'count': counts['will_watch'],
+            },
+            {
+                'slug': 'wont_watch',
+                'name': SYSTEM_LIST_CONFIG['wont_watch']['name'],
+                'count': counts['wont_watch'],
+            },
+            {
+                'slug': 'favorites',
+                'name': SYSTEM_LIST_CONFIG['favorites']['name'],
+                'count': counts['favorites'],
+            },
+        ]
+        context['custom_lists'] = self.get_queryset()
+        context['selected_status'] = ''
+        context['active_list_pk'] = None
+        context['sidebar_status_mode'] = 'system'
 
         return context
 
@@ -189,7 +291,6 @@ class ListDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'user_list'
 
     def get_queryset(self):
-        # Пользователь может видеть только свои списки (или публичные - добавить позже)
         return UserList.objects.filter(user=self.request.user)
 
     def get_context_data(self, **kwargs):
@@ -226,7 +327,70 @@ class ListDetailView(LoginRequiredMixin, DetailView):
         context['top_genres'] = Genre.objects.filter(
             movies__in=movies
         ).annotate(count=Count('movies')).order_by('-count')[:5]
+        context['is_system_list'] = False
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user)
+        context['selected_status'] = ''
+        context['active_list_pk'] = user_list.pk
+        context['sidebar_status_mode'] = 'system'
 
+        return context
+
+
+class SystemListDetailView(LoginRequiredMixin, ListView):
+    """Детальная страница системного списка (статус/избранное)"""
+    model = UserMovie
+    template_name = 'vault/list_detail.html'
+    context_object_name = 'list_movies'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.system_list = kwargs['system_list']
+        if self.system_list not in SYSTEM_LIST_CONFIG:
+            raise Http404("Системный список не найден")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = UserMovie.objects.filter(user=self.request.user).select_related('movie').prefetch_related('movie__genres')
+
+        if self.system_list == 'favorites':
+            queryset = queryset.filter(is_favorite=True)
+        else:
+            watch_status = MovieStatusService.LIST_TYPE_TO_WATCH_STATUS[self.system_list]
+            queryset = queryset.filter(watch_status=watch_status)
+
+        order = self.request.GET.get('order', '-added_at')
+        if order == '-added_at':
+            queryset = queryset.order_by('-created_at')
+        elif order == '-year':
+            queryset = queryset.order_by('-movie__year')
+        elif order == '-imdb_rating':
+            queryset = queryset.order_by('-movie__imdb_rating')
+        elif order == 'title':
+            queryset = queryset.order_by('movie__title')
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        list_movies = context['list_movies']
+        movies = Movie.objects.filter(id__in=list_movies.values_list('movie_id', flat=True))
+        context['movies'] = movies
+        context['avg_duration'] = movies.aggregate(Avg('duration'))['duration__avg']
+        context['avg_rating'] = movies.aggregate(Avg('imdb_rating'))['imdb_rating__avg']
+        context['top_genres'] = Genre.objects.filter(
+            movies__in=movies
+        ).annotate(count=Count('movies')).order_by('-count')[:5]
+        context['user_list'] = {
+            'name': SYSTEM_LIST_CONFIG[self.system_list]['name'],
+            'description': '',
+            'is_public': False,
+            'is_system': True,
+            'list_type': self.system_list,
+        }
+        context['is_system_list'] = True
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user)
+        context['selected_status'] = self.system_list
+        context['active_list_pk'] = None
+        context['sidebar_status_mode'] = 'system'
         return context
 
 
@@ -236,10 +400,16 @@ class ListCreateView(LoginRequiredMixin, CreateView):
     template_name = 'vault/list_create.html'
     fields = ['name', 'description', 'is_public']
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user)
+        context['selected_status'] = ''
+        context['active_list_pk'] = None
+        context['sidebar_status_mode'] = 'system'
+        return context
+
     def form_valid(self, form):
         form.instance.user = self.request.user
-        form.instance.list_type = 'custom'
-        form.instance.is_system = False
         messages.success(self.request, 'Список успешно создан!')
         return super().form_valid(form)
 
@@ -254,8 +424,15 @@ class ListUpdateView(LoginRequiredMixin, UpdateView):
     fields = ['name', 'description', 'is_public']
 
     def get_queryset(self):
-        # Только свои списки и не системные
-        return UserList.objects.filter(user=self.request.user, is_system=False)
+        return UserList.objects.filter(user=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['custom_lists'] = UserList.objects.filter(user=self.request.user)
+        context['selected_status'] = ''
+        context['active_list_pk'] = self.object.pk
+        context['sidebar_status_mode'] = 'system'
+        return context
 
     def form_valid(self, form):
         messages.success(self.request, 'Список успешно обновлен!')
@@ -271,28 +448,11 @@ class ListDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy('vault:my_lists')
 
     def get_queryset(self):
-        # Только свои списки и не системные
-        return UserList.objects.filter(user=self.request.user, is_system=False)
+        return UserList.objects.filter(user=self.request.user)
 
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Список успешно удален!')
         return super().delete(request, *args, **kwargs)
-
-
-class CreateReviewView(LoginRequiredMixin, CreateView):
-    """Создание отзыва"""
-    model = Review
-    fields = ['title', 'text', 'review_type']
-
-    def form_valid(self, form):
-        movie = get_object_or_404(Movie, slug=self.kwargs['slug'])
-        form.instance.user = self.request.user
-        form.instance.movie = movie
-        messages.success(self.request, 'Отзыв успешно опубликован!')
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return reverse('vault:movie_detail', kwargs={'slug': self.kwargs['slug']})
 
 
 # ============== HTMX Views ==============
@@ -428,16 +588,13 @@ def add_to_list(request):
     if request.method == 'POST':
         movie_id = request.POST.get('movie_id')
         list_id = request.POST.get('list_id')
-        note = request.POST.get('note', '')
-
         movie = get_object_or_404(Movie, id=movie_id)
         user_list = get_object_or_404(UserList, id=list_id, user=request.user)
 
         try:
             UserListMovie.objects.get_or_create(
                 user_list=user_list,
-                movie=movie,
-                defaults={'note': note}
+                movie=movie
             )
             return HttpResponse('<div class="alert alert-success">Фильм добавлен в список!</div>')
         except Exception as e:
@@ -475,7 +632,7 @@ def toggle_list_privacy(request):
     """Переключить приватность списка (HTMX)"""
     if request.method == 'POST':
         list_id = request.POST.get('list_id')
-        user_list = get_object_or_404(UserList, id=list_id, user=request.user, is_system=False)
+        user_list = get_object_or_404(UserList, id=list_id, user=request.user)
 
         try:
             user_list.is_public = not user_list.is_public
@@ -490,30 +647,3 @@ def toggle_list_privacy(request):
 
     return HttpResponse(status=405)
 
-
-@login_required
-def like_review(request, pk):
-    """Лайкнуть отзыв (HTMX)"""
-    if request.method == 'POST':
-        review = get_object_or_404(Review, pk=pk)
-
-        if request.user in review.likes.all():
-            review.likes.remove(request.user)
-            liked = False
-        else:
-            review.likes.add(request.user)
-            liked = True
-
-        btn_class = 'btn-primary' if liked else 'btn-outline-secondary'
-
-        html = f'''
-        <button class="btn btn-sm {btn_class}" 
-                hx-post="{reverse('vault:htmx_like_review', kwargs={'pk': pk})}"
-                hx-swap="outerHTML">
-            <i class="bi bi-hand-thumbs-up"></i> {review.likes_count()}
-        </button>
-        '''
-
-        return HttpResponse(html)
-
-    return HttpResponse(status=405)

@@ -80,6 +80,8 @@ class Movie(models.Model):
         PRODUCTION = 'production', 'В производстве'
         POST_PRODUCTION = 'post_production', 'Пост-продакшн'
         RELEASED = 'released', 'Вышел'
+        COMPLETED = 'completed', 'Завершен'
+        HIATUS = 'hiatus', 'Пауза'
         CANCELLED = 'cancelled', 'Отменен'
 
     class MovieType(models.TextChoices):
@@ -91,7 +93,7 @@ class Movie(models.Model):
 
     class Source(models.TextChoices):
         KINORIUM = 'kinorium', 'Kinorium'
-        TMBD = 'tmdb', 'TMDB'
+        TMDB = 'tmdb', 'TMDB'
 
     title = models.CharField('Название', max_length=255)
     original_title = models.CharField('Оригинальное название', max_length=255, blank=True, null=True)
@@ -124,7 +126,12 @@ class Movie(models.Model):
 
     created_at = models.DateTimeField('Создано', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлено', auto_now=True)
-    source = models.CharField('Источник', max_length=20, choices=Source, null=True)
+    source = models.CharField(
+        'Источник',
+        max_length=20,
+        choices=Source,
+        default=Source.KINORIUM,
+    )
 
     # Для сериалов:
     seasons_count = models.PositiveIntegerField('Количество сезонов', null=True, blank=True)
@@ -163,7 +170,7 @@ class Movie(models.Model):
 
     def get_average_rating(self):
         """Средний рейтинг от пользователей"""
-        ratings = self.ratings.all()
+        ratings = self.user_movies.exclude(rating__isnull=True)
         if ratings:
             return sum(r.rating for r in ratings) / len(ratings)
         return None
@@ -181,6 +188,13 @@ class Season(models.Model):
     season_number = models.PositiveIntegerField('Номер сезона')
     title = models.CharField('Название', max_length=255, blank=True)
     description = models.TextField('Описание', blank=True)
+    note = models.TextField('Заметка', blank=True)
+    source = models.CharField(
+        'Источник',
+        max_length=20,
+        choices=Movie.Source,
+        default=Movie.Source.KINORIUM,
+    )
     release_date = models.DateField('Дата выхода', null=True, blank=True)
     # poster = models.ImageField('Постер', upload_to='seasons/', null=True, blank=True)
     poster = models.CharField('Путь к постеру', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
@@ -233,38 +247,6 @@ class MoviePerson(models.Model):
         return f"{self.person} - {self.get_role_display()} в {self.movie}"
 
 
-class Review(models.Model):
-    """Отзывы пользователей"""
-    REVIEW_TYPE_CHOICES = [
-        ('positive', 'Положительный'),
-        ('negative', 'Отрицательный'),
-        ('neutral', 'Нейтральный'),
-    ]
-
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='reviews')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
-    title = models.CharField('Заголовок', max_length=255)
-    text = models.TextField('Текст отзыва')
-    review_type = models.CharField('Тип', max_length=10, choices=REVIEW_TYPE_CHOICES)
-
-    created_at = models.DateTimeField('Создан', auto_now_add=True)
-    updated_at = models.DateTimeField('Обновлен', auto_now=True)
-
-    likes = models.ManyToManyField(User, related_name='liked_reviews', blank=True)
-
-    class Meta:
-        verbose_name = 'Рецензия'
-        verbose_name_plural = 'Рецензии'
-        ordering = ['-created_at']
-        unique_together = ['movie', 'user']
-
-    def __str__(self):
-        return f"Рецензия {self.user.username} на {self.movie}"
-
-    def likes_count(self):
-        return self.likes.count()
-
-
 class FavoritePerson(models.Model):
     """Избранные персоны (актеры, режиссеры) пользователя"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorite_persons')
@@ -281,45 +263,54 @@ class FavoritePerson(models.Model):
         return f"{self.user.username} -> {self.person}"
 
 
-class Rating(models.Model):
-    """Оценки фильмов пользователями"""
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='ratings')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ratings')
+class UserMovie(models.Model):
+    """Пользовательский статус фильма: статус просмотра, избранное и оценка"""
+
+    class WatchStatus(models.IntegerChoices):
+        WATCHED = 1, 'Просмотрено'
+        PLAN = 2, 'Буду смотреть'
+        SKIP = 3, 'Не буду смотреть'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_movies')
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='user_movies')
+    watch_status = models.PositiveSmallIntegerField(
+        'Статус просмотра',
+        choices=WatchStatus,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    is_favorite = models.BooleanField('Избранное', default=False)
     rating = models.PositiveSmallIntegerField(
         'Оценка',
-        validators=[MinValueValidator(1), MaxValueValidator(10)]
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        null=True,
+        blank=True,
     )
-    created_at = models.DateTimeField('Создана', auto_now_add=True)
-    updated_at = models.DateTimeField('Обновлена', auto_now=True)
+    watched_at = models.DateField('Дата просмотра', null=True, blank=True, db_index=True)
+    note = models.TextField('Заметка', blank=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлено', auto_now=True)
 
     class Meta:
-        verbose_name = 'Оценка'
-        verbose_name_plural = 'Оценки'
-        unique_together = ['movie', 'user']
+        verbose_name = 'Статус пользователя по фильму'
+        verbose_name_plural = 'Статусы пользователей по фильмам'
+        unique_together = ['user', 'movie']
+        indexes = [
+            models.Index(fields=['user', 'watch_status']),
+            models.Index(fields=['user', 'is_favorite']),
+        ]
 
     def __str__(self):
-        return f"{self.user.username}: {self.rating}/10 для {self.movie}"
+        return f"{self.user.username} -> {self.movie}"
 
 
 class UserList(models.Model):
     """Пользовательские списки фильмов"""
-    LIST_TYPE_CHOICES = [
-        ('watched', 'Просмотрено'),
-        ('will_watch', 'Буду смотреть'),
-        ('wont_watch', 'Не буду смотреть'),
-        ('favorites', 'Избранное'),
-        ('custom', 'Пользовательский'),
-    ]
-
-    SYSTEM_LIST_TYPES = ['watched', 'will_watch', 'wont_watch', 'favorites']
-
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='movie_lists')
     name = models.CharField('Название', max_length=255)
     description = models.TextField('Описание', blank=True)
-    list_type = models.CharField('Тип списка', max_length=20, choices=LIST_TYPE_CHOICES)
     is_public = models.BooleanField('Публичный', default=False)
-    is_system = models.BooleanField('Системный список', default=False)
-    order = models.PositiveIntegerField('Порядок', default=0)
 
     created_at = models.DateTimeField('Создан', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлен', auto_now=True)
@@ -327,69 +318,10 @@ class UserList(models.Model):
     class Meta:
         verbose_name = 'Список фильмов'
         verbose_name_plural = 'Списки фильмов'
-        ordering = ['order', '-updated_at']
-        unique_together = [['user', 'list_type']]
-        indexes = [
-            models.Index(fields=['user', 'is_system']),
-        ]
+        ordering = ['-updated_at']
 
     def __str__(self):
         return f"{self.name} ({self.user.username})"
-
-    def save(self, *args, **kwargs):
-        # Системные списки нельзя изменить на обычные и наоборот
-        if self.pk:
-            old_instance = UserList.objects.get(pk=self.pk)
-            if old_instance.is_system != self.is_system:
-                raise ValueError("Нельзя изменить тип списка (системный/пользовательский)")
-        super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        # Извлекаем флаг принудительного удаления
-        force = kwargs.pop('force', False)
-        if self.is_system and not force:
-            raise ValueError("Системные списки нельзя удалять")
-        super().delete(*args, **kwargs)
-
-    @classmethod
-    def create_system_lists(cls, user):
-        """Создает системные списки для нового пользователя"""
-        system_lists = [
-            {'list_type': 'watched', 'name': 'Просмотрено', 'order': 1},
-            {'list_type': 'will_watch', 'name': 'Буду смотреть', 'order': 2},
-            {'list_type': 'wont_watch', 'name': 'Не буду смотреть', 'order': 3},
-            {'list_type': 'favorites', 'name': 'Избранное', 'order': 4},
-        ]
-
-        created_lists = []
-        for list_data in system_lists:
-            user_list, created = cls.objects.get_or_create(
-                user=user,
-                list_type=list_data['list_type'],
-                defaults={
-                    'name': list_data['name'],
-                    'is_system': True,
-                    'order': list_data['order'],
-                }
-            )
-            created_lists.append(user_list)
-
-        return created_lists
-
-    @classmethod
-    def delete_user_completely(cls, user):
-        """
-        Безопасное удаление пользователя и всех связанных с ним данных.
-        Обходит защиту удаления системных списков.
-        """
-        # 1. Принудительно удаляем системные списки пользователя
-        # Используем итерацию, чтобы вызвать метод delete() с флагом force
-        for user_list in cls.objects.filter(user=user, is_system=True):
-            user_list.delete(force=True)
-
-        # 2. Удаляем пользователя
-        # Все остальные данные (обычные списки, оценки, рецензии) удалятся каскадно
-        user.delete()
 
 
 class UserListMovie(models.Model):
@@ -407,46 +339,3 @@ class UserListMovie(models.Model):
 
     def __str__(self):
         return f"{self.movie} в {self.user_list}"
-
-
-class Comment(models.Model):
-    """Комментарии к фильмам"""
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
-    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
-    text = models.TextField('Текст комментария')
-
-    created_at = models.DateTimeField('Создан', auto_now_add=True)
-    updated_at = models.DateTimeField('Обновлен', auto_now=True)
-
-    likes = models.ManyToManyField(User, related_name='liked_comments', blank=True)
-
-    class Meta:
-        verbose_name = 'Комментарий'
-        verbose_name_plural = 'Комментарии'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"Комментарий {self.user.username} к {self.movie}"
-
-    def likes_count(self):
-        return self.likes.count()
-
-
-class MovieNote(models.Model):
-    """Личные заметки пользователя к фильмам (скрыты от других)"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='movie_notes')
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='user_notes')
-    text = models.TextField('Текст заметки')
-
-    created_at = models.DateTimeField('Создана', auto_now_add=True)
-    updated_at = models.DateTimeField('Обновлена', auto_now=True)
-
-    class Meta:
-        verbose_name = 'Личная заметка'
-        verbose_name_plural = 'Личные заметки'
-        unique_together = ['user', 'movie']  # Одна заметка на один фильм от пользователя
-        ordering = ['-updated_at']
-
-    def __str__(self):
-        return f"Заметка {self.user.username} к {self.movie}"

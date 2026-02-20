@@ -18,6 +18,7 @@ urlpatterns = [
 
     # Пользовательские списки
     path('my-lists/', views.MyListsView.as_view(), name='my_lists'),
+    path('list/system/<str:system_list>/', views.SystemListDetailView.as_view(), name='system_list_detail'),
     path('list/<int:pk>/', views.ListDetailView.as_view(), name='list_detail'),
     path('list/create/', views.ListCreateView.as_view(), name='list_create'),
     path('list/<int:pk>/edit/', views.ListUpdateView.as_view(), name='list_edit'),
@@ -30,8 +31,4 @@ urlpatterns = [
     path('htmx/add-to-list/', views.add_to_list, name='htmx_add_to_list'),
     path('htmx/remove-from-list/', views.remove_from_list, name='htmx_remove_from_list'),
     path('htmx/toggle-list-privacy/', views.toggle_list_privacy, name='htmx_toggle_list_privacy'),
-
-    # Отзывы
-    path('movie/<slug:slug>/review/', views.CreateReviewView.as_view(), name='create_review'),
-    path('htmx/like-review/<int:pk>/', views.like_review, name='htmx_like_review'),
 ]
