@@ -1,12 +1,7 @@
-{% extends "base.html" %}
+{% extends "vault/base.html" %}
 {% load static %}
 
-{% block body %}
-    <div class="vault-layout">
-        {% include "vault/_sidebar.html" %}
-
-        <main class="vault-content">
-            <div class="container-fluid py-4 px-4">
+{% block vault_content %}
                 <div class="row mb-4">
                     <div class="col-md-8">
                         <h1>Мои списки</h1>
@@ -104,7 +99,7 @@
                                                         {% if list_movie.movie.poster %}
                                                             <img src="{{ list_movie.movie.poster.url }}"
                                                                  class="rounded"
-                                                                 style="width: 50px; height: 75px; object-fit: cover;"
+                                                                 style="aspect-ratio: 2 / 3; width: 50px; object-fit: cover;"
                                                                  alt="{{ list_movie.movie.title }}">
                                                         {% endif %}
                                                     {% endfor %}
@@ -122,46 +117,16 @@
                         </div>
                     {% endif %}
                 </div>
-            </div>
-        </main>
-    </div>
+{% endblock %}
 
+{% block vault_css %}
     <style>
-        .vault-layout {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 0;
-            min-height: 100vh;
-        }
-        .vault-sidebar {
-            position: sticky;
-            top: 0.75rem;
-            align-self: start;
-            max-height: calc(100vh - 1.5rem);
-            overflow-y: auto;
-            z-index: 1020;
-        }
-        .vault-content {
-            min-width: 0;
-        }
         .hover-card {
             transition: transform 0.2s, box-shadow 0.2s;
         }
         .hover-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
-        }
-        @media (max-width: 991px) {
-            .vault-layout {
-                display: block;
-            }
-            .vault-sidebar {
-                position: static;
-                max-height: none;
-            }
-            .vault-content {
-                min-width: auto;
-            }
         }
     </style>
 {% endblock %}

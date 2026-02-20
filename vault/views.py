@@ -354,7 +354,7 @@ class SystemListDetailView(LoginRequiredMixin, ListView):
         if self.system_list == 'favorites':
             queryset = queryset.filter(is_favorite=True)
         else:
-            watch_status = MovieStatusService.LIST_TYPE_TO_WATCH_STATUS[self.system_list]
+            watch_status = MovieStatusService.STATUS_KEY_TO_WATCH_STATUS[self.system_list]
             queryset = queryset.filter(watch_status=watch_status)
 
         order = self.request.GET.get('order', '-added_at')
@@ -384,7 +384,7 @@ class SystemListDetailView(LoginRequiredMixin, ListView):
             'description': '',
             'is_public': False,
             'is_system': True,
-            'list_type': self.system_list,
+            'status_key': self.system_list,
         }
         context['is_system_list'] = True
         context['custom_lists'] = UserList.objects.filter(user=self.request.user)
@@ -462,23 +462,23 @@ def toggle_movie_status(request):
     """Переключить статус фильма (HTMX)"""
     if request.method == 'POST':
         movie_id = request.POST.get('movie_id')
-        list_type = request.POST.get('list_type')
+        status_key = request.POST.get('status_key') or request.POST.get('list_type')
 
         movie = get_object_or_404(Movie, id=movie_id)
 
         try:
-            is_added = MovieStatusService.toggle_list(
-                request.user, movie, list_type
+            is_added = MovieStatusService.toggle_status(
+                request.user, movie, status_key
             )
 
             # Возвращаем обновленную кнопку
-            button_class = 'btn-primary' if list_type == 'will_watch' else \
-                'btn-danger' if list_type == 'favorites' else \
-                    'btn-success' if list_type == 'watched' else 'btn-secondary'
+            button_class = 'btn-primary' if status_key == 'will_watch' else \
+                'btn-danger' if status_key == 'favorites' else \
+                    'btn-success' if status_key == 'watched' else 'btn-secondary'
 
-            icon_name = 'bookmark' if list_type == 'will_watch' else \
-                'heart' if list_type == 'favorites' else \
-                    'check-circle' if list_type == 'watched' else 'x-circle'
+            icon_name = 'bookmark' if status_key == 'will_watch' else \
+                'heart' if status_key == 'favorites' else \
+                    'check-circle' if status_key == 'watched' else 'x-circle'
 
             if is_added:
                 icon_name += '-fill'
@@ -486,14 +486,14 @@ def toggle_movie_status(request):
             else:
                 btn_class = button_class.replace('btn-', 'btn-outline-')
 
-            label = 'Буду смотреть' if list_type == 'will_watch' else \
-                'Избранное' if list_type == 'favorites' else \
-                    'Просмотрено' if list_type == 'watched' else 'Не буду смотреть'
+            label = 'Буду смотреть' if status_key == 'will_watch' else \
+                'Избранное' if status_key == 'favorites' else \
+                    'Просмотрено' if status_key == 'watched' else 'Не буду смотреть'
 
             html = f'''
             <button type="button" class="btn {btn_class}" 
                     hx-post="{reverse('vault:htmx_toggle_status')}"
-                    hx-vals='{{"movie_id": "{movie_id}", "list_type": "{list_type}"}}'
+                    hx-vals='{{"movie_id": "{movie_id}", "status_key": "{status_key}"}}'
                     hx-swap="outerHTML">
                 <i class="bi bi-{icon_name}"></i>
                 {label}

@@ -1,0 +1,12 @@
+.venv/
+.idea/
+.git/
+__pycache__/
+node_modules/
+collectstatic/
+logs/
+media/
+dist/
+build/
+*.sqlite3
+!db.sqlite3

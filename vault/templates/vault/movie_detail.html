@@ -1,17 +1,14 @@
-{% extends "base.html" %}
+{% extends "vault/base.html" %}
 {% load static %}
 
-{% block body %}
-    {% include "vault/_header.html" %}
-
-    <div class="container mt-4">
+{% block vault_content %}
         <!-- Основная информация о фильме -->
         <div class="row mb-4">
             <div class="col-md-3">
                 {% if movie.poster %}
-                    <img src="{{ movie.poster.url }}" class="img-fluid rounded shadow" alt="{{ movie.title }}">
+                    <img src="{{ movie.poster.url }}" class="img-fluid rounded shadow vault-poster" alt="{{ movie.title }}">
                 {% else %}
-                    <div class="bg-secondary rounded d-flex align-items-center justify-content-center" style="height: 400px;">
+                    <div class="bg-secondary rounded vault-poster-placeholder">
                         <i class="bi bi-film" style="font-size: 5rem; color: #fff;"></i>
                     </div>
                 {% endif %}
@@ -98,22 +95,22 @@
                             <!-- Кнопки статусов -->
                             <div class="btn-group mb-3" role="group">
                                 <button type="button" class="btn {% if movie_status.in_will_watch %}btn-primary{% else %}btn-outline-primary{% endif %}"
-                                        data-action="toggle-status" data-list-type="will_watch">
+                                        data-action="toggle-status" data-status-key="will_watch">
                                     <i class="bi bi-bookmark{% if movie_status.in_will_watch %}-fill{% endif %}"></i>
                                     Буду смотреть
                                 </button>
                                 <button type="button" class="btn {% if movie_status.in_favorites %}btn-danger{% else %}btn-outline-danger{% endif %}"
-                                        data-action="toggle-status" data-list-type="favorites">
+                                        data-action="toggle-status" data-status-key="favorites">
                                     <i class="bi bi-heart{% if movie_status.in_favorites %}-fill{% endif %}"></i>
                                     Избранное
                                 </button>
                                 <button type="button" class="btn {% if movie_status.in_watched %}btn-success{% else %}btn-outline-success{% endif %}"
-                                        data-action="toggle-status" data-list-type="watched">
+                                        data-action="toggle-status" data-status-key="watched">
                                     <i class="bi bi-check-circle{% if movie_status.in_watched %}-fill{% endif %}"></i>
                                     Просмотрено
                                 </button>
                                 <button type="button" class="btn {% if movie_status.in_wont_watch %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
-                                        data-action="toggle-status" data-list-type="wont_watch">
+                                        data-action="toggle-status" data-status-key="wont_watch">
                                     <i class="bi bi-x-circle{% if movie_status.in_wont_watch %}-fill{% endif %}"></i>
                                     Не буду смотреть
                                 </button>
@@ -228,5 +225,4 @@
                 </div>
             </div>
         {% endif %}
-    </div>
 {% endblock %}

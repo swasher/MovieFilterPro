@@ -1,18 +1,18 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from ..models import Movie, UserList, UserMovie
+from ..models import UserList, UserMovie
 
 
 class MovieStatusService:
     """Сервис для управления статусом просмотра, избранным и оценкой фильма."""
 
-    LIST_TYPE_TO_WATCH_STATUS = {
+    STATUS_KEY_TO_WATCH_STATUS = {
         'watched': UserMovie.WatchStatus.WATCHED,
         'will_watch': UserMovie.WatchStatus.PLAN,
         'wont_watch': UserMovie.WatchStatus.SKIP,
     }
-    WATCH_STATUS_TO_LIST_TYPE = {value: key for key, value in LIST_TYPE_TO_WATCH_STATUS.items()}
+    WATCH_STATUS_TO_STATUS_KEY = {value: key for key, value in STATUS_KEY_TO_WATCH_STATUS.items()}
 
     @classmethod
     def _get_or_create_user_movie(cls, user, movie):
@@ -48,41 +48,41 @@ class MovieStatusService:
 
     @classmethod
     @transaction.atomic
-    def add_to_list(cls, user, movie, list_type):
-        """Добавить фильм в системный список-статус (теперь через флаги UserMovie)."""
+    def set_status(cls, user, movie, status_key):
+        """Включить системный статус (watch_status или favorites)."""
         user_movie = cls._get_or_create_user_movie(user, movie)
 
-        if list_type in cls.LIST_TYPE_TO_WATCH_STATUS:
-            user_movie.watch_status = cls.LIST_TYPE_TO_WATCH_STATUS[list_type]
+        if status_key in cls.STATUS_KEY_TO_WATCH_STATUS:
+            user_movie.watch_status = cls.STATUS_KEY_TO_WATCH_STATUS[status_key]
             user_movie.save(update_fields=['watch_status', 'updated_at'])
             return user_movie
 
-        if list_type == 'favorites':
+        if status_key == 'favorites':
             user_movie.is_favorite = True
             user_movie.save(update_fields=['is_favorite', 'updated_at'])
             return user_movie
 
-        raise ValidationError(f"Неизвестный тип списка: {list_type}")
+        raise ValidationError(f"Неизвестный статус: {status_key}")
 
     @classmethod
     @transaction.atomic
-    def remove_from_list(cls, user, movie, list_type):
-        """Удалить фильм из системного списка-статуса (через флаги UserMovie)."""
+    def unset_status(cls, user, movie, status_key):
+        """Выключить системный статус (watch_status или favorites)."""
         user_movie = UserMovie.objects.filter(user=user, movie=movie).first()
         if not user_movie:
             return False
 
         changed = False
-        if list_type in cls.LIST_TYPE_TO_WATCH_STATUS:
-            if user_movie.watch_status == cls.LIST_TYPE_TO_WATCH_STATUS[list_type]:
+        if status_key in cls.STATUS_KEY_TO_WATCH_STATUS:
+            if user_movie.watch_status == cls.STATUS_KEY_TO_WATCH_STATUS[status_key]:
                 user_movie.watch_status = None
                 changed = True
-        elif list_type == 'favorites':
+        elif status_key == 'favorites':
             if user_movie.is_favorite:
                 user_movie.is_favorite = False
                 changed = True
         else:
-            raise ValidationError(f"Неизвестный тип списка: {list_type}")
+            raise ValidationError(f"Неизвестный статус: {status_key}")
 
         if changed:
             user_movie.save(update_fields=['watch_status', 'is_favorite', 'updated_at'])
@@ -92,29 +92,29 @@ class MovieStatusService:
 
     @classmethod
     @transaction.atomic
-    def toggle_list(cls, user, movie, list_type):
+    def toggle_status(cls, user, movie, status_key):
         """
-        Переключить статус фильма в списке (добавить/удалить)
+        Переключить системный статус фильма (добавить/удалить)
         Возвращает: True если добавлен, False если удален
         """
         user_movie = UserMovie.objects.filter(user=user, movie=movie).first()
 
-        if list_type in cls.LIST_TYPE_TO_WATCH_STATUS:
-            target = cls.LIST_TYPE_TO_WATCH_STATUS[list_type]
+        if status_key in cls.STATUS_KEY_TO_WATCH_STATUS:
+            target = cls.STATUS_KEY_TO_WATCH_STATUS[status_key]
             if user_movie and user_movie.watch_status == target:
-                cls.remove_from_list(user, movie, list_type)
+                cls.unset_status(user, movie, status_key)
                 return False
-            cls.add_to_list(user, movie, list_type)
+            cls.set_status(user, movie, status_key)
             return True
 
-        if list_type == 'favorites':
+        if status_key == 'favorites':
             if user_movie and user_movie.is_favorite:
-                cls.remove_from_list(user, movie, list_type)
+                cls.unset_status(user, movie, status_key)
                 return False
-            cls.add_to_list(user, movie, list_type)
+            cls.set_status(user, movie, status_key)
             return True
 
-        raise ValidationError(f"Неизвестный тип списка: {list_type}")
+        raise ValidationError(f"Неизвестный статус: {status_key}")
 
     @classmethod
     @transaction.atomic
@@ -128,9 +128,9 @@ class MovieStatusService:
 
         user_movie = cls._get_or_create_user_movie(user, movie)
         user_movie.rating = rating_value
-        user_movie.rated_at = timezone.localdate()
+        user_movie.watched_at = timezone.localdate()
         user_movie.watch_status = UserMovie.WatchStatus.WATCHED
-        user_movie.save(update_fields=['rating', 'rated_at', 'watch_status', 'updated_at'])
+        user_movie.save(update_fields=['rating', 'watched_at', 'watch_status', 'updated_at'])
         return user_movie
 
     @classmethod
@@ -145,36 +145,10 @@ class MovieStatusService:
             return False
 
         user_movie.rating = None
-        user_movie.rated_at = None
-        user_movie.save(update_fields=['rating', 'rated_at', 'updated_at'])
+        user_movie.watched_at = None
+        user_movie.save(update_fields=['rating', 'watched_at', 'updated_at'])
         cls._cleanup_user_movie(user_movie)
         return True
-
-    @classmethod
-    @transaction.atomic
-    def toggle_favorites(cls, user, movie):
-        """Добавить/удалить из избранного (независимый статус)"""
-        return cls.toggle_list(user, movie, 'favorites')
-
-    @classmethod
-    def get_list_movies(cls, user, list_type, order_by='-added_at'):
-        """Получить фильмы из системного списка-статуса по list_type."""
-        if order_by == '-added_at':
-            order_by = '-user_movies__created_at'
-
-        if list_type in cls.LIST_TYPE_TO_WATCH_STATUS:
-            return Movie.objects.filter(
-                user_movies__user=user,
-                user_movies__watch_status=cls.LIST_TYPE_TO_WATCH_STATUS[list_type],
-            ).order_by(order_by)
-
-        if list_type == 'favorites':
-            return Movie.objects.filter(
-                user_movies__user=user,
-                user_movies__is_favorite=True,
-            ).order_by(order_by)
-
-        return Movie.objects.none()
 
     @classmethod
     def get_system_lists_counts(cls, user):

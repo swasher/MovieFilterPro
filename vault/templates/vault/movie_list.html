@@ -1,12 +1,7 @@
-{% extends "base.html" %}
+{% extends "vault/base.html" %}
 {% load static %}
 
-{% block body %}
-    <div class="vault-layout">
-        {% include "vault/_sidebar.html" %}
-
-        <main class="vault-content">
-            <div class="container-fluid py-4 px-4">
+{% block vault_content %}
                 <h1 class="mb-3">Фильмы</h1>
 
                 <!-- Фильтры по жанрам -->
@@ -40,9 +35,9 @@
                             <div class="card h-100 shadow-sm movie-card">
                                 <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none">
                                     {% if movie.poster %}
-                                        <img src="{{ movie.poster.url }}" class="card-img-top" alt="{{ movie.title }}" style="height: 300px; object-fit: cover;">
+                                        <img src="{{ movie.poster.url }}" class="card-img-top vault-poster" alt="{{ movie.title }}">
                                     {% else %}
-                                        <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 300px;">
+                                        <div class="card-img-top bg-secondary vault-poster-placeholder">
                                             <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
                                         </div>
                                     {% endif %}
@@ -130,45 +125,4 @@
                         </ul>
                     </nav>
                 {% endif %}
-            </div>
-        </main>
-    </div>
-
-    <style>
-        .vault-layout {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 0;
-            min-height: 100vh;
-        }
-        .vault-sidebar {
-            position: sticky;
-            top: 0.75rem;
-            align-self: start;
-            max-height: calc(100vh - 1.5rem);
-            overflow-y: auto;
-            z-index: 1020;
-        }
-        .vault-content {
-            min-width: 0;
-        }
-        .movie-card {
-            transition: transform 0.2s;
-        }
-        .movie-card:hover {
-            transform: translateY(-5px);
-        }
-        @media (max-width: 991px) {
-            .vault-layout {
-                display: block;
-            }
-            .vault-sidebar {
-                position: static;
-                max-height: none;
-            }
-            .vault-content {
-                min-width: auto;
-            }
-        }
-    </style>
 {% endblock %}

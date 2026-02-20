@@ -1,12 +1,7 @@
-{% extends "base.html" %}
+{% extends "vault/base.html" %}
 {% load static %}
 
-{% block body %}
-    <div class="vault-layout">
-        {% include "vault/_sidebar.html" %}
-
-        <main class="vault-content">
-            <div class="container-fluid py-4 px-4">
+{% block vault_content %}
         <!-- Заголовок списка -->
         <div class="row mb-4">
             <div class="col-md-8">
@@ -19,13 +14,13 @@
 
                 <div class="d-flex align-items-center mb-2">
                     {% if user_list.is_system %}
-                        {% if user_list.list_type == 'watched' %}
+                        {% if user_list.status_key == 'watched' %}
                             <i class="bi bi-check-circle text-success me-2" style="font-size: 2rem;"></i>
-                        {% elif user_list.list_type == 'will_watch' %}
+                        {% elif user_list.status_key == 'will_watch' %}
                             <i class="bi bi-bookmark text-primary me-2" style="font-size: 2rem;"></i>
-                        {% elif user_list.list_type == 'wont_watch' %}
+                        {% elif user_list.status_key == 'wont_watch' %}
                             <i class="bi bi-x-circle text-secondary me-2" style="font-size: 2rem;"></i>
-                        {% elif user_list.list_type == 'favorites' %}
+                        {% elif user_list.status_key == 'favorites' %}
                             <i class="bi bi-heart-fill text-danger me-2" style="font-size: 2rem;"></i>
                         {% endif %}
                     {% endif %}
@@ -87,12 +82,11 @@
                             <div class="position-relative">
                                 <a href="{% url 'vault:movie_detail' list_movie.movie.slug %}" class="text-decoration-none">
                                 {% if list_movie.movie.poster %}
-                                    <img src="{{ list_movie.movie.poster.url }}" class="card-img-top"
+                                    <img src="{{ list_movie.movie.poster.url }}" class="card-img-top vault-poster"
                                          alt="{{ list_movie.movie.title }}"
-                                         style="height: 300px; object-fit: cover;">
+                                    >
                                 {% else %}
-                                    <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
-                                         style="height: 300px;">
+                                    <div class="card-img-top bg-secondary vault-poster-placeholder">
                                         <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
                                     </div>
                                 {% endif %}
@@ -121,9 +115,9 @@
                                 <p class="card-text">
                                     <small class="text-muted">
                                         {% if user_list.is_system %}
-                                            Добавлен: {{ list_movie.created_at|date:"d.m.Y" }}
+                                            {{ list_movie.created_at|date:"d.m.Y" }}
                                         {% else %}
-                                            Добавлен: {{ list_movie.added_at|date:"d.m.Y" }}
+                                            {{ list_movie.added_at|date:"d.m.Y" }}
                                         {% endif %}
                                     </small>
                                 </p>
@@ -183,45 +177,4 @@
                 </div>
             </div>
         {% endif %}
-            </div>
-        </main>
-    </div>
-
-    <style>
-        .vault-layout {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 0;
-            min-height: 100vh;
-        }
-        .vault-sidebar {
-            position: sticky;
-            top: 0.75rem;
-            align-self: start;
-            max-height: calc(100vh - 1.5rem);
-            overflow-y: auto;
-            z-index: 1020;
-        }
-        .vault-content {
-            min-width: 0;
-        }
-        .movie-card {
-            transition: transform 0.2s;
-        }
-        .movie-card:hover {
-            transform: translateY(-5px);
-        }
-        @media (max-width: 991px) {
-            .vault-layout {
-                display: block;
-            }
-            .vault-sidebar {
-                position: static;
-                max-height: none;
-            }
-            .vault-content {
-                min-width: auto;
-            }
-        }
-    </style>
 {% endblock %}
