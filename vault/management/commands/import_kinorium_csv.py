@@ -1,7 +1,7 @@
 import csv
 import re
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.conf import settings
@@ -58,6 +58,30 @@ def parse_decimal(value: str):
         return None
 
 
+def normalize_decimal_for_field(
+    value: Decimal | None,
+    field,
+    min_value: Decimal | None = None,
+    max_value: Decimal | None = None,
+):
+    if value is None:
+        return None
+    quant = Decimal('1').scaleb(-field.decimal_places)
+    try:
+        value = value.quantize(quant)
+    except (InvalidOperation, ValueError):
+        return None
+
+    max_abs = (Decimal(10) ** (field.max_digits - field.decimal_places)) - quant
+    if abs(value) > max_abs:
+        return None
+    if min_value is not None and value < min_value:
+        return None
+    if max_value is not None and value > max_value:
+        return None
+    return value
+
+
 def parse_int(value: str):
     if value is None:
         return None
@@ -92,6 +116,9 @@ def unique_slug(base_slug: str):
 
 class Command(BaseCommand):
     help = 'Импортирует выгрузку Kinorium из папки vault/current_csv в пустые таблицы Vault.'
+
+    MIN_IMDB_RATING = Decimal('0.0')
+    MAX_IMDB_RATING = Decimal('10.0')
 
     def _iter_csv(self, path: Path):
         if not path.exists():
@@ -155,8 +182,13 @@ class Command(BaseCommand):
         return person
 
     def _movie_from_row(self, row):
-        title = row.get('Title') or ''
-        original_title = row.get('Original Title') or ''
+        title = (row.get('Title') or '').strip()
+        original_title = (row.get('Original Title') or '').strip()
+        if not title:
+            title = original_title
+        if not title:
+            return None
+
         raw_year = (row.get('Year') or '').strip()
         year = None
         year_end = None
@@ -172,8 +204,27 @@ class Command(BaseCommand):
         duration = parse_int(row.get('Runtime'))
         release_date = parse_date(row.get('World premier date') or row.get('Digital premier date'))
 
-        base_slug = slugify(title) if title else None
+        slug_source = title
+        base_slug = slugify(slug_source) if slug_source else None
         slug = unique_slug(base_slug) if base_slug else None
+
+        budget = normalize_decimal_for_field(
+            parse_decimal(row.get('Budget')),
+            Movie._meta.get_field('budget'),
+        )
+        box_office = normalize_decimal_for_field(
+            parse_decimal(row.get('Box world') or row.get('Box USA') or row.get('Box RU')),
+            Movie._meta.get_field('box_office'),
+        )
+        imdb_rating = normalize_decimal_for_field(
+            parse_decimal(row.get('IMDb rating')),
+            Movie._meta.get_field('imdb_rating'),
+            min_value=self.MIN_IMDB_RATING,
+            max_value=self.MAX_IMDB_RATING,
+        )
+        imdb_votes = parse_int(row.get('IMDb cnt'))
+        if imdb_votes is not None and imdb_votes < 0:
+            imdb_votes = None
 
         return {
             'title': title,
@@ -188,10 +239,10 @@ class Command(BaseCommand):
             'description': row.get('Note') or '',
             'poster': None,
             'age_rating': (row.get('Age limit') or '').strip(),
-            'budget': parse_decimal(row.get('Budget')),
-            'box_office': parse_decimal(row.get('Box world') or row.get('Box USA') or row.get('Box RU')),
-            'imdb_rating': parse_decimal(row.get('IMDb rating')),
-            'imdb_votes': parse_int(row.get('IMDb cnt')),
+            'budget': budget,
+            'box_office': box_office,
+            'imdb_rating': imdb_rating,
+            'imdb_votes': imdb_votes,
             'source': Movie.Source.KINORIUM,
         }
 
@@ -252,6 +303,8 @@ class Command(BaseCommand):
         UserListMovie.objects.get_or_create(user_list=user_list, movie=movie)
 
     def _set_rating(self, user, movie, rating, watched_at=None):
+        if rating is None or rating < 1 or rating > 10:
+            return
         user_movie = self._get_or_create_user_movie(user, movie)
         user_movie.rating = rating
         user_movie.watch_status = UserMovie.WatchStatus.WATCHED
@@ -294,8 +347,12 @@ class Command(BaseCommand):
 
         # 2. Movies
         self.stdout.write("\n--- Movies ---")
+        skipped_movies_without_title = 0
         for row in self._iter_csv(movies_csv):
             movie_defaults = self._movie_from_row(row)
+            if movie_defaults is None:
+                skipped_movies_without_title += 1
+                continue
             title = movie_defaults['title']
             year = movie_defaults['year']
 
@@ -304,7 +361,7 @@ class Command(BaseCommand):
                 year=year,
                 defaults=movie_defaults,
             )
-            if created and movie_defaults.get('slug') and not movie.slug:
+            if movie_defaults.get('slug') and not movie.slug:
                 movie.slug = movie_defaults['slug']
                 movie.save(update_fields=['slug'])
 
@@ -366,6 +423,13 @@ class Command(BaseCommand):
             if my_rating:
                 watched_at = parse_date(row.get('Date'))
                 self._set_rating(user, movie, my_rating, watched_at=watched_at)
+
+        if skipped_movies_without_title:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Skipped movies without Title and Original Title: {skipped_movies_without_title}"
+                )
+            )
 
         # 3. Votes (ratings)
         self.stdout.write("\n--- Ratings ---")
