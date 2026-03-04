@@ -95,22 +95,34 @@
                             <!-- Кнопки статусов -->
                             <div class="btn-group mb-3" role="group">
                                 <button type="button" class="btn {% if movie_status.in_will_watch %}btn-primary{% else %}btn-outline-primary{% endif %}"
-                                        data-action="toggle-status" data-status-key="will_watch">
+                                        data-action="toggle-status" data-status-key="will_watch"
+                                        hx-post="{% url 'vault:htmx_toggle_status' %}"
+                                        hx-vals='{"movie_id": "{{ movie.id }}", "status_key": "will_watch"}'
+                                        hx-swap="outerHTML">
                                     <i class="bi bi-bookmark{% if movie_status.in_will_watch %}-fill{% endif %}"></i>
                                     Буду смотреть
                                 </button>
                                 <button type="button" class="btn {% if movie_status.in_favorites %}btn-danger{% else %}btn-outline-danger{% endif %}"
-                                        data-action="toggle-status" data-status-key="favorites">
+                                        data-action="toggle-status" data-status-key="favorites"
+                                        hx-post="{% url 'vault:htmx_toggle_status' %}"
+                                        hx-vals='{"movie_id": "{{ movie.id }}", "status_key": "favorites"}'
+                                        hx-swap="outerHTML">
                                     <i class="bi bi-heart{% if movie_status.in_favorites %}-fill{% endif %}"></i>
                                     Избранное
                                 </button>
                                 <button type="button" class="btn {% if movie_status.in_watched %}btn-success{% else %}btn-outline-success{% endif %}"
-                                        data-action="toggle-status" data-status-key="watched">
+                                        data-action="toggle-status" data-status-key="watched"
+                                        hx-post="{% url 'vault:htmx_toggle_status' %}"
+                                        hx-vals='{"movie_id": "{{ movie.id }}", "status_key": "watched"}'
+                                        hx-swap="outerHTML">
                                     <i class="bi bi-check-circle{% if movie_status.in_watched %}-fill{% endif %}"></i>
                                     Просмотрено
                                 </button>
                                 <button type="button" class="btn {% if movie_status.in_wont_watch %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
-                                        data-action="toggle-status" data-status-key="wont_watch">
+                                        data-action="toggle-status" data-status-key="wont_watch"
+                                        hx-post="{% url 'vault:htmx_toggle_status' %}"
+                                        hx-vals='{"movie_id": "{{ movie.id }}", "status_key": "wont_watch"}'
+                                        hx-swap="outerHTML">
                                     <i class="bi bi-x-circle{% if movie_status.in_wont_watch %}-fill{% endif %}"></i>
                                     Не буду смотреть
                                 </button>
@@ -119,19 +131,29 @@
                             <!-- Оценка -->
                             <div>
                                 <label class="form-label">Ваша оценка:</label>
-                                <div class="btn-group" role="group">
-                                    {% for i in "12345678910" %}
-                                        <button type="button" class="btn btn-sm {% if user_rating == forloop.counter %}btn-warning{% else %}btn-outline-warning{% endif %}"
-                                                data-action="rate" data-rating="{{ forloop.counter }}">
-                                            {{ forloop.counter }}
+                                <div id="movie-rating-controls">
+                                    <div class="btn-group" role="group">
+                                    {% for i in rating_values %}
+                                        <button type="button" class="btn btn-sm {% if user_rating == i %}btn-warning{% else %}btn-outline-warning{% endif %}"
+                                                data-action="rate" data-rating="{{ i }}"
+                                                hx-post="{% url 'vault:htmx_rate_movie' %}"
+                                                hx-vals='{"movie_id": "{{ movie.id }}", "rating": "{{ i }}"}'
+                                                hx-target="#movie-rating-controls"
+                                                hx-swap="innerHTML">
+                                            {{ i }}
                                         </button>
                                     {% endfor %}
-                                </div>
-                                {% if user_rating %}
-                                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-action="remove-rating">
+                                    </div>
+                                    {% if user_rating %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-action="remove-rating"
+                                            hx-post="{% url 'vault:htmx_remove_rating' %}"
+                                            hx-vals='{"movie_id": "{{ movie.id }}"}'
+                                            hx-target="#movie-rating-controls"
+                                            hx-swap="innerHTML">
                                         <i class="bi bi-x"></i> Удалить оценку
                                     </button>
-                                {% endif %}
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>

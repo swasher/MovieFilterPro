@@ -23,6 +23,35 @@ SYSTEM_LIST_CONFIG = {
 }
 
 
+def _render_rating_controls(movie_id: int, rating_value: int | None = None) -> str:
+    html = '<div class="btn-group" role="group">'
+    for i in range(1, 11):
+        btn_class = 'btn-warning' if i == rating_value else 'btn-outline-warning'
+        html += f'''
+        <button type="button" class="btn btn-sm {btn_class}" 
+                hx-post="{reverse('vault:htmx_rate_movie')}"
+                hx-vals='{{"movie_id": "{movie_id}", "rating": "{i}"}}'
+                hx-target="#movie-rating-controls"
+                hx-swap="innerHTML">
+            {i}
+        </button>
+        '''
+    html += '</div>'
+
+    if rating_value is not None:
+        html += f'''
+        <button type="button" class="btn btn-sm btn-outline-danger ms-2" 
+                hx-post="{reverse('vault:htmx_remove_rating')}"
+                hx-vals='{{"movie_id": "{movie_id}"}}'
+                hx-target="#movie-rating-controls"
+                hx-swap="innerHTML">
+            <i class="bi bi-x"></i> Удалить оценку
+        </button>
+        '''
+
+    return html
+
+
 class MovieListView(ListView):
     """Список всех фильмов"""
     model = Movie
@@ -150,6 +179,8 @@ class MovieDetailView(DetailView):
             }
             context['user_rating'] = None
             context['user_note'] = ''
+
+        context['rating_values'] = range(1, 11)
 
         return context
 
@@ -494,6 +525,8 @@ def toggle_movie_status(request):
             <button type="button" class="btn {btn_class}" 
                     hx-post="{reverse('vault:htmx_toggle_status')}"
                     hx-vals='{{"movie_id": "{movie_id}", "status_key": "{status_key}"}}'
+                    data-action="toggle-status"
+                    data-status-key="{status_key}"
                     hx-swap="outerHTML">
                 <i class="bi bi-{icon_name}"></i>
                 {label}
@@ -512,37 +545,15 @@ def rate_movie(request):
     """Поставить оценку фильму (HTMX)"""
     if request.method == 'POST':
         movie_id = request.POST.get('movie_id')
-        rating_value = int(request.POST.get('rating'))
-
-        movie = get_object_or_404(Movie, id=movie_id)
+        rating_raw = request.POST.get('rating')
+        if not rating_raw:
+            return HttpResponse('<div class="alert alert-danger">Не передана оценка</div>', status=400)
 
         try:
+            rating_value = int(rating_raw)
+            movie = get_object_or_404(Movie, id=movie_id)
             MovieStatusService.rate_movie(request.user, movie, rating_value)
-
-            # Возвращаем обновленные кнопки оценок
-            html = '<div class="btn-group" role="group">'
-            for i in range(1, 11):
-                btn_class = 'btn-warning' if i == rating_value else 'btn-outline-warning'
-                html += f'''
-                <button type="button" class="btn btn-sm {btn_class}" 
-                        hx-post="{reverse('vault:htmx_rate_movie')}"
-                        hx-vals='{{"movie_id": "{movie_id}", "rating": "{i}"}}'
-                        hx-swap="outerHTML"
-                        hx-target="closest .btn-group">
-                    {i}
-                </button>
-                '''
-            html += '</div>'
-            html += f'''
-            <button type="button" class="btn btn-sm btn-outline-danger ms-2" 
-                    hx-post="{reverse('vault:htmx_remove_rating')}"
-                    hx-vals='{{"movie_id": "{movie_id}"}}'
-                    hx-target="closest div">
-                <i class="bi bi-x"></i> Удалить оценку
-            </button>
-            '''
-
-            return HttpResponse(html)
+            return HttpResponse(_render_rating_controls(movie.id, rating_value))
         except Exception as e:
             return HttpResponse(f'<div class="alert alert-danger">Ошибка: {str(e)}</div>', status=400)
 
@@ -558,24 +569,7 @@ def remove_rating(request):
 
         try:
             MovieStatusService.remove_rating(request.user, movie)
-
-            # Возвращаем кнопки без выбранной оценки
-            html = '<div>'
-            html += '<label class="form-label">Ваша оценка:</label>'
-            html += '<div class="btn-group" role="group">'
-            for i in range(1, 11):
-                html += f'''
-                <button type="button" class="btn btn-sm btn-outline-warning" 
-                        hx-post="{reverse('vault:htmx_rate_movie')}"
-                        hx-vals='{{"movie_id": "{movie_id}", "rating": "{i}"}}'
-                        hx-swap="outerHTML"
-                        hx-target="closest div">
-                    {i}
-                </button>
-                '''
-            html += '</div></div>'
-
-            return HttpResponse(html)
+            return HttpResponse(_render_rating_controls(movie.id))
         except Exception as e:
             return HttpResponse(f'<div class="alert alert-danger">Ошибка: {str(e)}</div>', status=400)
 

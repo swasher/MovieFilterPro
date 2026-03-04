@@ -75,9 +75,9 @@
 
         <!-- Список фильмов -->
         {% if movies %}
-            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4 mb-4">
+            <div class="vault-movie-grid mb-4">
                 {% for list_movie in list_movies %}
-                    <div class="col">
+                    <div class="vault-movie-grid-item">
                         <div class="card h-100 shadow-sm movie-card">
                             <div class="position-relative">
                                 <a href="{% url 'vault:movie_detail' list_movie.movie.slug %}" class="text-decoration-none">

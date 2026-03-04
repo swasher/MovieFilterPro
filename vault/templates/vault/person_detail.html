@@ -130,9 +130,9 @@
             <div class="tab-content" id="roleTabContent">
                 <!-- Все фильмы -->
                 <div class="tab-pane fade show active" id="all" role="tabpanel">
-                    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                    <div class="vault-movie-grid">
                         {% for mp in all_movies %}
-                            <div class="col">
+                            <div class="vault-movie-grid-item">
                                 <div class="card h-100 shadow-sm movie-card">
                                     <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
                                         {% if mp.movie.poster %}
@@ -170,9 +170,9 @@
                 <!-- Актер -->
                 {% if actor_movies %}
                     <div class="tab-pane fade" id="actor" role="tabpanel">
-                        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                        <div class="vault-movie-grid">
                             {% for mp in actor_movies %}
-                                <div class="col">
+                                <div class="vault-movie-grid-item">
                                     <div class="card h-100 shadow-sm movie-card">
                                         <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
                                             {% if mp.movie.poster %}
@@ -208,9 +208,9 @@
                 <!-- Режиссер -->
                 {% if director_movies %}
                     <div class="tab-pane fade" id="director" role="tabpanel">
-                        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                        <div class="vault-movie-grid">
                             {% for mp in director_movies %}
-                                <div class="col">
+                                <div class="vault-movie-grid-item">
                                     <div class="card h-100 shadow-sm movie-card">
                                         <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
                                             {% if mp.movie.poster %}
@@ -241,9 +241,9 @@
                 <!-- Продюсер -->
                 {% if producer_movies %}
                     <div class="tab-pane fade" id="producer" role="tabpanel">
-                        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                        <div class="vault-movie-grid">
                             {% for mp in producer_movies %}
-                                <div class="col">
+                                <div class="vault-movie-grid-item">
                                     <div class="card h-100 shadow-sm movie-card">
                                         <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
                                             {% if mp.movie.poster %}

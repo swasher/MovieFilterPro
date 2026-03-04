@@ -29,9 +29,9 @@
                 </div>
 
                 <!-- Список фильмов -->
-                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                <div class="vault-movie-grid">
                     {% for movie in movies %}
-                        <div class="col">
+                        <div class="vault-movie-grid-item">
                             <div class="card h-100 shadow-sm movie-card">
                                 <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none">
                                     {% if movie.poster %}
@@ -81,7 +81,7 @@
                             </div>
                         </div>
                     {% empty %}
-                        <div class="col-12">
+                        <div class="vault-grid-full">
                             <div class="alert alert-info">
                                 Фильмы не найдены.
                             </div>
