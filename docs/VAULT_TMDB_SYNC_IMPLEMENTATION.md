@@ -6,11 +6,11 @@
 - [x] Проверить, что `Movie.source` и `Movie.movie_type` не ломаются после миграции
 
 ## Phase 2: Matching Engine
-- [ ] Реализовать нормализацию названий
-- [ ] Реализовать поиск кандидатов через `movie_search` и `tv_search`
-- [ ] Реализовать scoring кандидатов
-- [ ] Реализовать режимы результата: `auto_match`, `needs_user_choice`, `not_found`
-- [ ] Добавить формирование top-N релевантных кандидатов для модалки
+- [x] Реализовать нормализацию названий
+- [x] Реализовать поиск кандидатов через `movie_search` и `tv_search`
+- [x] Реализовать scoring кандидатов
+- [x] Реализовать режимы результата: `auto_match`, `needs_user_choice`, `not_found`
+- [x] Добавить формирование top-N релевантных кандидатов для модалки
 
 ## Phase 3: TMDB Sync Service
 - [ ] Создать `vault/services/tmdb_movie_sync_service.py`
