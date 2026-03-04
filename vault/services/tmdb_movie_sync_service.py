@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+import logging
 from typing import Literal
 
 from django.db import transaction
@@ -18,6 +19,7 @@ from vault.services.tmdb_movie_matching_service import (
 
 SyncStatus = Literal["ok", "needs_user_choice", "error"]
 MediaType = Literal["movie", "tv"]
+logger = logging.getLogger("vault.tmdb_sync")
 
 
 @dataclass(slots=True, frozen=True)
@@ -41,93 +43,117 @@ class TMDBMovieSyncService:
         force_rematch: bool = False,
         selected_candidate: TMDBCandidate | None = None,
     ) -> TMDBSyncResult:
-        tmdb = get_tmdb_client()
+        cls._log_start(movie)
+        try:
+            tmdb = get_tmdb_client()
 
-        candidate = selected_candidate
-        if candidate is None:
-            if movie.tmdb_id and movie.tmdb_media_type and not force_rematch:
-                candidate = TMDBCandidate(
-                    tmdb_id=movie.tmdb_id,
-                    media_type=movie.tmdb_media_type,
-                    title=movie.title or "",
-                    original_title=movie.original_title or "",
-                    year=movie.year,
-                    score=0,
-                    score_reasons=("stored_tmdb_id",),
-                    poster_path=movie.poster,
-                    popularity=None,
-                    vote_average=None,
-                )
+            selection_reason = "manual" if selected_candidate is not None else "auto"
+            candidate = selected_candidate
+            if candidate is None:
+                if movie.tmdb_id and movie.tmdb_media_type and not force_rematch:
+                    selection_reason = "stored"
+                    candidate = TMDBCandidate(
+                        tmdb_id=movie.tmdb_id,
+                        media_type=movie.tmdb_media_type,
+                        title=movie.title or "",
+                        original_title=movie.original_title or "",
+                        year=movie.year,
+                        score=0,
+                        score_reasons=("stored_tmdb_id",),
+                        poster_path=movie.poster,
+                        popularity=None,
+                        vote_average=None,
+                    )
+                else:
+                    match_result = TMDBMovieMatchingService.match_movie(movie)
+                    cls._log_match_found(match_result)
+                    if match_result.status == "needs_user_choice":
+                        cls._log_done("needs_user_choice", match_result.message)
+                        return TMDBSyncResult(
+                            status="needs_user_choice",
+                            message=match_result.message,
+                            candidates=match_result.candidates,
+                        )
+                    if match_result.status == "not_found" or match_result.selected_candidate is None:
+                        msg = match_result.message or "Не удалось подобрать TMDB фильм"
+                        cls._log_done("error", msg)
+                        return TMDBSyncResult(
+                            status="error",
+                            message=msg,
+                        )
+                    selection_reason = "auto"
+                    candidate = match_result.selected_candidate
             else:
-                match_result = TMDBMovieMatchingService.match_movie(movie)
-                if match_result.status == "needs_user_choice":
-                    return TMDBSyncResult(
-                        status="needs_user_choice",
-                        message=match_result.message,
-                        candidates=match_result.candidates,
-                    )
-                if match_result.status == "not_found" or match_result.selected_candidate is None:
-                    return TMDBSyncResult(
-                        status="error",
-                        message=match_result.message or "Не удалось подобрать TMDB фильм",
-                    )
-                candidate = match_result.selected_candidate
+                cls._log_match_found(None)
 
-        details, media_type = cls._load_details(tmdb, candidate)
-        if details is None or media_type is None:
+            cls._log_match_selected(candidate, selection_reason)
+            details, media_type = cls._load_details(tmdb, candidate)
+            if details is None or media_type is None:
+                msg = "Не удалось загрузить детали фильма из TMDB"
+                cls._log_done("error", msg)
+                return TMDBSyncResult(
+                    status="error",
+                    message=msg,
+                )
+
+            updated_fields: list[str] = []
+            set_field = cls._field_setter(movie, updated_fields)
+
+            # Идентификация источника TMDB
+            set_field("tmdb_id", candidate.tmdb_id)
+            set_field("tmdb_media_type", media_type)
+            set_field("tmdb_last_synced_at", timezone.now())
+            set_field("source", Movie.Source.TMDB)
+
+            # Общие поля
+            if media_type == "movie":
+                cls._apply_movie_payload(movie, details, set_field)
+            else:
+                cls._apply_tv_payload(movie, details, set_field)
+
+            status_value = cls._map_tmdb_status(media_type, getattr(details, "status", None))
+            if status_value:
+                set_field("status", status_value)
+
+            trailer_url = cls._extract_youtube_trailer_url(getattr(details, "videos", None))
+            if trailer_url:
+                set_field("trailer_url", trailer_url)
+
+            if updated_fields:
+                movie.save(update_fields=updated_fields)
+
+            relations_updated: list[str] = []
+            if cls._sync_genres(movie, getattr(details, "genres", None)):
+                relations_updated.append("genres")
+            if cls._sync_countries(
+                movie,
+                countries=getattr(details, "countries", None),
+                origin_countries=getattr(details, "origin_countries", None),
+            ):
+                relations_updated.append("countries")
+            if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
+                relations_updated.append("movie_persons")
+            orphan_deleted_count = cls._cleanup_orphan_persons()
+            if orphan_deleted_count:
+                relations_updated.append("orphan_person_cleanup")
+
+            all_updates = tuple(updated_fields + relations_updated)
+            cast_count = len(list(getattr(details, "cast", None) or []))
+            crew_count = len(list(getattr(details, "crew", None) or []))
+            cls._log_sync_apply(all_updates, cast_count, crew_count)
+            cls._log_orphan_cleanup(orphan_deleted_count)
+            cls._log_done("ok", "sync completed")
+
             return TMDBSyncResult(
-                status="error",
-                message="Не удалось загрузить детали фильма из TMDB",
+                status="ok",
+                message="Данные фильма обновлены из TMDB",
+                updated_fields=all_updates,
+                orphan_persons_deleted=orphan_deleted_count,
+                selected_candidate=candidate,
             )
-
-        updated_fields: list[str] = []
-        set_field = cls._field_setter(movie, updated_fields)
-
-        # Идентификация источника TMDB
-        set_field("tmdb_id", candidate.tmdb_id)
-        set_field("tmdb_media_type", media_type)
-        set_field("tmdb_last_synced_at", timezone.now())
-        set_field("source", Movie.Source.TMDB)
-
-        # Общие поля
-        if media_type == "movie":
-            cls._apply_movie_payload(movie, details, set_field)
-        else:
-            cls._apply_tv_payload(movie, details, set_field)
-
-        status_value = cls._map_tmdb_status(media_type, getattr(details, "status", None))
-        if status_value:
-            set_field("status", status_value)
-
-        trailer_url = cls._extract_youtube_trailer_url(getattr(details, "videos", None))
-        if trailer_url:
-            set_field("trailer_url", trailer_url)
-
-        if updated_fields:
-            movie.save(update_fields=updated_fields)
-
-        relations_updated: list[str] = []
-        if cls._sync_genres(movie, getattr(details, "genres", None)):
-            relations_updated.append("genres")
-        if cls._sync_countries(
-            movie,
-            countries=getattr(details, "countries", None),
-            origin_countries=getattr(details, "origin_countries", None),
-        ):
-            relations_updated.append("countries")
-        if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
-            relations_updated.append("movie_persons")
-        orphan_deleted_count = cls._cleanup_orphan_persons()
-        if orphan_deleted_count:
-            relations_updated.append("orphan_person_cleanup")
-
-        return TMDBSyncResult(
-            status="ok",
-            message="Данные фильма обновлены из TMDB",
-            updated_fields=tuple(updated_fields + relations_updated),
-            orphan_persons_deleted=orphan_deleted_count,
-            selected_candidate=candidate,
-        )
+        except Exception as exc:
+            cls._log_done("error", f"exception: {cls._log_text(str(exc), 180)}")
+            raise
 
     @classmethod
     def _load_details(cls, tmdb, candidate: TMDBCandidate):
@@ -703,3 +729,56 @@ class TMDBMovieSyncService:
         if amount > max_supported:
             return None
         return amount.quantize(Decimal("0.01"))
+
+    @classmethod
+    def _log_start(cls, movie: Movie) -> None:
+        logger.info(
+            'SYNC_START | movie_id=%s | title="%s" | orig="%s" | year=%s',
+            movie.id,
+            cls._log_text(movie.title, 90),
+            cls._log_text(movie.original_title, 90),
+            movie.year or "",
+        )
+
+    @classmethod
+    def _log_match_found(cls, match_result) -> None:
+        if match_result is None:
+            logger.info('MATCH_FOUND | candidates=- | top=[]')
+            return
+        candidates = match_result.candidates or ()
+        top = ",".join([f"{c.tmdb_id}:{c.score}" for c in candidates[:5]])
+        logger.info("MATCH_FOUND | candidates=%s | top=[%s]", len(candidates), top)
+
+    @classmethod
+    def _log_match_selected(cls, candidate: TMDBCandidate, reason: str) -> None:
+        logger.info(
+            "MATCH_SELECTED | tmdb_id=%s | media=%s | reason=%s",
+            candidate.tmdb_id,
+            candidate.media_type,
+            reason,
+        )
+
+    @classmethod
+    def _log_sync_apply(cls, updated_fields: tuple[str, ...], cast_count: int, crew_count: int) -> None:
+        updated_text = ",".join(updated_fields) if updated_fields else "-"
+        logger.info(
+            "SYNC_APPLY | updated=%s | cast=%s | crew=%s",
+            updated_text,
+            cast_count,
+            crew_count,
+        )
+
+    @classmethod
+    def _log_orphan_cleanup(cls, deleted_count: int) -> None:
+        logger.info("ORPHAN_CLEANUP | deleted=%s", deleted_count)
+
+    @classmethod
+    def _log_done(cls, status: str, msg: str) -> None:
+        logger.info('SYNC_DONE | status=%s | msg="%s"', status, cls._log_text(msg, 220))
+
+    @staticmethod
+    def _log_text(value, limit: int = 120) -> str:
+        text = str(value or "").replace("\n", " ").replace("\r", " ").replace('"', "'").strip()
+        if len(text) > limit:
+            return text[: limit - 1] + "…"
+        return text
