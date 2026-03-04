@@ -1,9 +1,9 @@
 # VAULT TMDB Sync Implementation
 
 ## Phase 1: Data Model
-- [ ] Добавить в `vault.Movie` поля: `tmdb_id`, `tmdb_media_type`, `tmdb_last_synced_at`
-- [ ] Создать и применить миграцию
-- [ ] Проверить, что `Movie.source` и `Movie.movie_type` не ломаются после миграции
+- [x] Добавить в `vault.Movie` поля: `tmdb_id`, `tmdb_media_type`, `tmdb_last_synced_at`
+- [x] Создать и применить миграцию
+- [x] Проверить, что `Movie.source` и `Movie.movie_type` не ломаются после миграции
 
 ## Phase 2: Matching Engine
 - [ ] Реализовать нормализацию названий
@@ -62,4 +62,3 @@
 - [ ] Прогнать sync на фильме без результата
 - [ ] Проверить кнопки sync в деталке и карточках списков
 - [ ] Проверить компактность логов в `logs/debug.log`
-

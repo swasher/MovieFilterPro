@@ -95,6 +95,10 @@ class Movie(models.Model):
         KINORIUM = 'kinorium', 'Kinorium'
         TMDB = 'tmdb', 'TMDB'
 
+    class TMDBMediaType(models.TextChoices):
+        MOVIE = 'movie', 'Movie'
+        TV = 'tv', 'TV'
+
     title = models.CharField('Название', max_length=255)
     original_title = models.CharField('Оригинальное название', max_length=255, blank=True, null=True)
     slug = models.SlugField('URL', unique=True, blank=True)
@@ -132,6 +136,15 @@ class Movie(models.Model):
         choices=Source,
         default=Source.KINORIUM,
     )
+    tmdb_id = models.PositiveIntegerField('TMDB ID', null=True, blank=True, db_index=True)
+    tmdb_media_type = models.CharField(
+        'TMDB тип',
+        max_length=10,
+        choices=TMDBMediaType,
+        null=True,
+        blank=True,
+    )
+    tmdb_last_synced_at = models.DateTimeField('Последняя синхронизация TMDB', null=True, blank=True)
 
     # Для сериалов:
     seasons_count = models.PositiveIntegerField('Количество сезонов', null=True, blank=True)
