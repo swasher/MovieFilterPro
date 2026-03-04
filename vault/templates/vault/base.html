@@ -51,6 +51,12 @@
         .movie-card:hover {
             transform: translateY(-5px);
         }
+        .vault-sync-btn {
+            opacity: 0.92;
+        }
+        .movie-card:hover .vault-sync-btn {
+            opacity: 1;
+        }
         @media (max-width: 991px) {
             .vault-layout {
                 display: block;
@@ -73,6 +79,7 @@
         {% include "vault/_sidebar.html" %}
         <main class="vault-content">
             <div class="container-fluid py-4 px-4">
+                <div id="tmdb-sync-result-global" class="mb-3"></div>
                 {% block vault_content %}{% endblock %}
             </div>
         </main>

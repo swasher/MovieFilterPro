@@ -38,11 +38,11 @@
 - [x] Добавить обработку success/error response блоков
 
 ## Phase 7: UI
-- [ ] Добавить кнопку `Fetch TMDB data` в `movie_detail.html`
-- [ ] Добавить модальное окно выбора кандидата в `movie_detail.html`
-- [ ] Добавить компактную кнопку sync в `movie_list.html`
-- [ ] Добавить компактную кнопку sync в `list_detail.html`
-- [ ] Добавить визуальную индикацию статуса sync (успех/ошибка)
+- [x] Добавить кнопку `Fetch TMDB data` в `movie_detail.html`
+- [x] Добавить модальное окно выбора кандидата в `movie_detail.html`
+- [x] Добавить компактную кнопку sync в `movie_list.html`
+- [x] Добавить компактную кнопку sync в `list_detail.html`
+- [x] Добавить визуальную индикацию статуса sync (успех/ошибка)
 
 ## Phase 8: Logging
 - [ ] Добавить компактные log-события: `SYNC_START`, `MATCH_FOUND`, `MATCH_SELECTED`, `SYNC_APPLY`, `ORPHAN_CLEANUP`, `SYNC_DONE`

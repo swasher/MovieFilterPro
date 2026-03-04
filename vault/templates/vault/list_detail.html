@@ -92,6 +92,18 @@
                                 {% endif %}
                                 </a>
 
+                                {% if user.is_authenticated %}
+                                    <button type="button"
+                                            class="btn btn-sm btn-light border position-absolute top-0 start-0 m-2 vault-sync-btn"
+                                            title="Fetch TMDB data"
+                                            hx-post="{% url 'vault:htmx_fetch_tmdb_data' %}"
+                                            hx-vals='{"movie_id": "{{ list_movie.movie.id }}"}'
+                                            hx-target="#tmdb-sync-result-global"
+                                            hx-swap="innerHTML">
+                                        <i class="bi bi-cloud-arrow-down"></i>
+                                    </button>
+                                {% endif %}
+
                                 <!-- Кнопка удаления из списка -->
                                 {% if not user_list.is_system %}
                                     <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2"
@@ -109,6 +121,9 @@
                                     <small class="text-muted">{{ list_movie.movie.year }}</small>
                                     {% if list_movie.movie.imdb_rating %}
                                         <span class="badge bg-warning text-dark ms-1">★ {{ list_movie.movie.imdb_rating }}</span>
+                                    {% endif %}
+                                    {% if list_movie.movie.tmdb_id %}
+                                        <span class="badge bg-info text-dark ms-1">TMDB</span>
                                     {% endif %}
                                 </p>
 

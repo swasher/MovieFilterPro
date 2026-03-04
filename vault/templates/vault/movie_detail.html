@@ -25,6 +25,16 @@
                 {% if movie.original_title %}
                     <p class="text-muted mb-3">{{ movie.original_title }}</p>
                 {% endif %}
+                <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+                    {% if movie.tmdb_id %}
+                        <span class="badge bg-info text-dark">TMDB synced #{{ movie.tmdb_id }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">TMDB not linked</span>
+                    {% endif %}
+                    <span class="badge {% if movie.source == 'tmdb' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                        source: {{ movie.get_source_display }}
+                    </span>
+                </div>
 
                 <!-- Рейтинги и базовая информация -->
                 <div class="mb-3">
@@ -77,6 +87,33 @@
                     {{ movie.get_status_display }}
                 </span>
                 </p>
+
+                <!-- Синхронизация TMDB -->
+                {% if user.is_authenticated %}
+                    <div class="card border-info mb-3">
+                        <div class="card-body py-2">
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-info"
+                                        hx-post="{% url 'vault:htmx_fetch_tmdb_data' %}"
+                                        hx-vals='{"movie_id": "{{ movie.id }}"}'
+                                        hx-target="#tmdb-sync-result"
+                                        hx-swap="innerHTML">
+                                    <i class="bi bi-cloud-arrow-down"></i> Fetch TMDB data
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        hx-post="{% url 'vault:htmx_fetch_tmdb_data' %}"
+                                        hx-vals='{"movie_id": "{{ movie.id }}", "force_rematch": "1"}'
+                                        hx-target="#tmdb-sync-result"
+                                        hx-swap="innerHTML">
+                                    <i class="bi bi-arrow-repeat"></i> Force rematch
+                                </button>
+                            </div>
+                            <div id="tmdb-sync-result" class="mb-0"></div>
+                        </div>
+                    </div>
+                {% endif %}
 
                 <!-- Описание -->
                 {% if movie.description %}

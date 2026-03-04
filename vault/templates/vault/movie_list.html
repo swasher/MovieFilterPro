@@ -33,15 +33,28 @@
                     {% for movie in movies %}
                         <div class="vault-movie-grid-item">
                             <div class="card h-100 shadow-sm movie-card">
-                                <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none">
-                                    {% if movie.poster %}
-                                        <img src="{{ movie.poster.url }}" class="card-img-top vault-poster" alt="{{ movie.title }}">
-                                    {% else %}
-                                        <div class="card-img-top bg-secondary vault-poster-placeholder">
-                                            <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
-                                        </div>
+                                <div class="position-relative">
+                                    <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none">
+                                        {% if movie.poster %}
+                                            <img src="{{ movie.poster.url }}" class="card-img-top vault-poster" alt="{{ movie.title }}">
+                                        {% else %}
+                                            <div class="card-img-top bg-secondary vault-poster-placeholder">
+                                                <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>
+                                            </div>
+                                        {% endif %}
+                                    </a>
+                                    {% if user.is_authenticated %}
+                                        <button type="button"
+                                                class="btn btn-sm btn-light border position-absolute top-0 end-0 m-2 vault-sync-btn"
+                                                title="Fetch TMDB data"
+                                                hx-post="{% url 'vault:htmx_fetch_tmdb_data' %}"
+                                                hx-vals='{"movie_id": "{{ movie.id }}"}'
+                                                hx-target="#tmdb-sync-result-global"
+                                                hx-swap="innerHTML">
+                                            <i class="bi bi-cloud-arrow-down"></i>
+                                        </button>
                                     {% endif %}
-                                </a>
+                                </div>
 
                                 <div class="card-body p-2">
                                     <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none text-dark">
@@ -51,6 +64,9 @@
                                         <small class="text-muted">{{ movie.year }}</small>
                                         {% if movie.imdb_rating %}
                                             <span class="badge bg-warning text-dark ms-1">★ {{ movie.imdb_rating }}</span>
+                                        {% endif %}
+                                        {% if movie.tmdb_id %}
+                                            <span class="badge bg-info text-dark ms-1">TMDB</span>
                                         {% endif %}
                                     </p>
                                     <p class="card-text mb-0">
