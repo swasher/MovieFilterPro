@@ -31,4 +31,6 @@ urlpatterns = [
     path('htmx/add-to-list/', views.add_to_list, name='htmx_add_to_list'),
     path('htmx/remove-from-list/', views.remove_from_list, name='htmx_remove_from_list'),
     path('htmx/toggle-list-privacy/', views.toggle_list_privacy, name='htmx_toggle_list_privacy'),
+    path('htmx/fetch-tmdb/', views.fetch_tmdb_data, name='htmx_fetch_tmdb_data'),
+    path('htmx/fetch-tmdb-confirm/', views.fetch_tmdb_data_confirm, name='htmx_fetch_tmdb_confirm'),
 ]

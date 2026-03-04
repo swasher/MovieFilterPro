@@ -32,10 +32,10 @@
 - [x] Добавить счетчик удаленных orphan-персон в результат sync
 
 ## Phase 6: HTMX Endpoints
-- [ ] Добавить `htmx/fetch-tmdb/` (старт синка)
-- [ ] Добавить `htmx/fetch-tmdb-confirm/` (подтверждение выбора из модалки)
-- [ ] Добавить обработку `needs_user_choice` и возврат HTML модалки
-- [ ] Добавить обработку success/error response блоков
+- [x] Добавить `htmx/fetch-tmdb/` (старт синка)
+- [x] Добавить `htmx/fetch-tmdb-confirm/` (подтверждение выбора из модалки)
+- [x] Добавить обработку `needs_user_choice` и возврат HTML модалки
+- [x] Добавить обработку success/error response блоков
 
 ## Phase 7: UI
 - [ ] Добавить кнопку `Fetch TMDB data` в `movie_detail.html`

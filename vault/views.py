@@ -7,12 +7,15 @@ from django.http import HttpResponse
 from django.db.models import Q, Avg, Count
 from django.http import Http404
 from django.contrib import messages
+from django.utils.html import escape
 
 from .models import (
     Movie, Person, Genre, UserList, UserListMovie,
     UserMovie, MoviePerson
 )
 from .services.movie_status_service import MovieStatusService
+from .services.tmdb_movie_matching_service import TMDBCandidate
+from .services.tmdb_movie_sync_service import TMDBMovieSyncService
 
 
 SYSTEM_LIST_CONFIG = {
@@ -50,6 +53,114 @@ def _render_rating_controls(movie_id: int, rating_value: int | None = None) -> s
         '''
 
     return html
+
+
+def _to_bool(value: str | None) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _to_int(value: str | None) -> int | None:
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _render_tmdb_sync_result_html(result, movie_id: int) -> str:
+    if result.status == "ok":
+        updated_fields = ", ".join(result.updated_fields) if result.updated_fields else "нет изменений"
+        orphan_deleted = result.orphan_persons_deleted
+        orphan_info = (
+            f'<div class="small text-muted mt-1">Удалено orphan-персон: {orphan_deleted}</div>'
+            if orphan_deleted
+            else ''
+        )
+        return f'''
+        <div class="alert alert-success mb-2">
+            <strong>TMDB sync completed.</strong>
+            <div class="small mt-1">Обновлено: {escape(updated_fields)}</div>
+            {orphan_info}
+        </div>
+        '''
+
+    if result.status == "needs_user_choice":
+        return _render_tmdb_candidates_modal(candidates=result.candidates, movie_id=movie_id, message=result.message)
+
+    return f'''
+    <div class="alert alert-danger mb-2">
+        <strong>TMDB sync failed.</strong>
+        <div class="small mt-1">{escape(result.message or "Неизвестная ошибка")}</div>
+    </div>
+    '''
+
+
+def _render_tmdb_candidates_modal(candidates, movie_id: int, message: str = "") -> str:
+    modal_id = f"tmdbCandidateModal{movie_id}"
+    intro = escape(message or "Найдено несколько похожих фильмов. Выберите нужный вариант.")
+
+    rows = []
+    for candidate in candidates:
+        reasons = ", ".join(candidate.score_reasons) if candidate.score_reasons else "-"
+        title = escape(candidate.title or "Без названия")
+        original_title = escape(candidate.original_title or "")
+        year = candidate.year if candidate.year else "?"
+        media = "movie" if candidate.media_type == "movie" else "tv"
+
+        rows.append(
+            f'''
+            <div class="border rounded p-2 mb-2">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <div><strong>{title}</strong> <span class="badge bg-secondary ms-1">{media}</span></div>
+                        <div class="small text-muted">{original_title}</div>
+                        <div class="small">Год: {year} | Score: {candidate.score}</div>
+                        <div class="small text-muted">Причины: {escape(reasons)}</div>
+                    </div>
+                    <button type="button"
+                            class="btn btn-sm btn-primary"
+                            hx-post="{reverse('vault:htmx_fetch_tmdb_confirm')}"
+                            hx-vals='{{"movie_id": "{movie_id}", "tmdb_id": "{candidate.tmdb_id}", "media_type": "{candidate.media_type}"}}'
+                            hx-target="#tmdb-sync-result"
+                            hx-swap="innerHTML"
+                            data-bs-dismiss="modal">
+                        Выбрать
+                    </button>
+                </div>
+            </div>
+            '''
+        )
+
+    rows_html = "".join(rows) if rows else '<div class="text-muted">Кандидаты не найдены.</div>'
+
+    return f'''
+    <div class="alert alert-warning mb-2">{intro}</div>
+    <div class="modal fade" id="{modal_id}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Выбор фильма на TMDB</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {rows_html}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+      (function() {{
+        var modalEl = document.getElementById('{modal_id}');
+        if (!modalEl || typeof bootstrap === 'undefined') return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+      }})();
+    </script>
+    '''
 
 
 class MovieListView(ListView):
@@ -487,6 +598,70 @@ class ListDeleteView(LoginRequiredMixin, DeleteView):
 
 
 # ============== HTMX Views ==============
+
+@login_required
+def fetch_tmdb_data(request):
+    """Синхронизация данных фильма из TMDB (HTMX)."""
+    if request.method != 'POST':
+        return HttpResponse(status=405)
+
+    movie_id = _to_int(request.POST.get('movie_id'))
+    if not movie_id:
+        return HttpResponse('<div class="alert alert-danger">Не передан movie_id</div>', status=400)
+
+    force_rematch = _to_bool(request.POST.get('force_rematch'))
+    movie = get_object_or_404(Movie, id=movie_id)
+
+    try:
+        result = TMDBMovieSyncService.sync_movie(movie=movie, force_rematch=force_rematch)
+        return HttpResponse(_render_tmdb_sync_result_html(result=result, movie_id=movie.id))
+    except Exception as e:
+        return HttpResponse(
+            f'<div class="alert alert-danger">Ошибка TMDB sync: {escape(str(e))}</div>',
+            status=400,
+        )
+
+
+@login_required
+def fetch_tmdb_data_confirm(request):
+    """Подтверждение выбора кандидата TMDB из модального окна (HTMX)."""
+    if request.method != 'POST':
+        return HttpResponse(status=405)
+
+    movie_id = _to_int(request.POST.get('movie_id'))
+    tmdb_id = _to_int(request.POST.get('tmdb_id'))
+    media_type = (request.POST.get('media_type') or '').strip().lower()
+
+    if not movie_id or not tmdb_id or media_type not in {'movie', 'tv'}:
+        return HttpResponse('<div class="alert alert-danger">Некорректные данные выбора TMDB</div>', status=400)
+
+    movie = get_object_or_404(Movie, id=movie_id)
+    candidate = TMDBCandidate(
+        tmdb_id=tmdb_id,
+        media_type=media_type,
+        title='',
+        original_title='',
+        year=None,
+        score=0,
+        score_reasons=('manual_choice',),
+        poster_path=None,
+        popularity=None,
+        vote_average=None,
+    )
+
+    try:
+        result = TMDBMovieSyncService.sync_movie(
+            movie=movie,
+            force_rematch=True,
+            selected_candidate=candidate,
+        )
+        return HttpResponse(_render_tmdb_sync_result_html(result=result, movie_id=movie.id))
+    except Exception as e:
+        return HttpResponse(
+            f'<div class="alert alert-danger">Ошибка подтверждения TMDB: {escape(str(e))}</div>',
+            status=400,
+        )
+
 
 @login_required
 def toggle_movie_status(request):
