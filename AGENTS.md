@@ -20,3 +20,6 @@
 ## Search Tools
 - Use `fd` for fast file and directory discovery when it is a better fit than `rg --files`.
 - Use `ast-grep` for syntax-aware search/refactoring when regex-based matching is fragile.
+
+## Communication with user
+- Using russian language
