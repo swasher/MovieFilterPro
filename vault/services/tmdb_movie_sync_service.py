@@ -25,6 +25,7 @@ class TMDBSyncResult:
     status: SyncStatus
     message: str
     updated_fields: tuple[str, ...] = field(default_factory=tuple)
+    orphan_persons_deleted: int = 0
     selected_candidate: TMDBCandidate | None = None
     candidates: tuple[TMDBCandidate, ...] = field(default_factory=tuple)
 
@@ -116,11 +117,15 @@ class TMDBMovieSyncService:
             relations_updated.append("countries")
         if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
             relations_updated.append("movie_persons")
+        orphan_deleted_count = cls._cleanup_orphan_persons()
+        if orphan_deleted_count:
+            relations_updated.append("orphan_person_cleanup")
 
         return TMDBSyncResult(
             status="ok",
             message="Данные фильма обновлены из TMDB",
             updated_fields=tuple(updated_fields + relations_updated),
+            orphan_persons_deleted=orphan_deleted_count,
             selected_candidate=candidate,
         )
 
@@ -324,6 +329,21 @@ class TMDBMovieSyncService:
             movie.movie_persons.values_list("person_id", "role", "character_name")
         )
         return before_keys != after_keys
+
+    @classmethod
+    def _cleanup_orphan_persons(cls) -> int:
+        """
+        Удаляет персон без связей в MoviePerson.
+        Персоны из FavoritePerson защищены от удаления.
+        """
+        orphan_qs = Person.objects.filter(
+            person_movies__isnull=True,
+            favorited_by__isnull=True,
+        ).distinct()
+        count = orphan_qs.count()
+        if count:
+            orphan_qs.delete()
+        return count
 
     @classmethod
     def _upsert_person_from_credit(
