@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from core.models import Country as CoreCountry
 from tmdb_adapter.client_singleton import get_tmdb_client
-from vault.models import Genre, Movie
+from vault.models import Genre, Movie, MoviePerson, Person
 from vault.services.tmdb_movie_matching_service import (
     TMDBCandidate,
     TMDBMovieMatchingService,
@@ -114,6 +114,8 @@ class TMDBMovieSyncService:
             origin_countries=getattr(details, "origin_countries", None),
         ):
             relations_updated.append("countries")
+        if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
+            relations_updated.append("movie_persons")
 
         return TMDBSyncResult(
             status="ok",
@@ -246,6 +248,315 @@ class TMDBMovieSyncService:
         movie.countries.set(country_objects)
         country_ids_after = set(movie.countries.values_list("id", flat=True))
         return country_ids_before != country_ids_after
+
+    @classmethod
+    def _sync_movie_persons(cls, movie: Movie, details, tmdb) -> bool:
+        cast_items = list(getattr(details, "cast", None) or [])
+        crew_items = list(getattr(details, "crew", None) or [])
+
+        before_keys = set(
+            movie.movie_persons.values_list("person_id", "role", "character_name")
+        )
+
+        movie.movie_persons.all().delete()
+
+        unknown_country = cls._get_unknown_country()
+        person_cache: dict[int, Person] = {}
+        person_details_cache: dict[int, object | None] = {}
+        seen_relations: set[tuple[int, str, str]] = set()
+
+        for credit in cast_items:
+            person = cls._upsert_person_from_credit(
+                tmdb=tmdb,
+                credit=credit,
+                unknown_country=unknown_country,
+                person_cache=person_cache,
+                person_details_cache=person_details_cache,
+            )
+            if not person:
+                continue
+
+            character_name = cls._clean_text(getattr(credit, "character", None), 255, "")
+            relation_key = (person.id, "actor", character_name)
+            if relation_key in seen_relations:
+                continue
+
+            seen_relations.add(relation_key)
+            order = cls._safe_int(getattr(credit, "order", None)) or 0
+            MoviePerson.objects.create(
+                movie=movie,
+                person=person,
+                role="actor",
+                character_name=character_name,
+                order=order,
+            )
+
+        for credit in crew_items:
+            role = cls._map_crew_role(getattr(credit, "job", None))
+            if not role:
+                continue
+
+            person = cls._upsert_person_from_credit(
+                tmdb=tmdb,
+                credit=credit,
+                unknown_country=unknown_country,
+                person_cache=person_cache,
+                person_details_cache=person_details_cache,
+            )
+            if not person:
+                continue
+
+            relation_key = (person.id, role, "")
+            if relation_key in seen_relations:
+                continue
+
+            seen_relations.add(relation_key)
+            order = cls._safe_int(getattr(credit, "order", None)) or 0
+            MoviePerson.objects.create(
+                movie=movie,
+                person=person,
+                role=role,
+                character_name="",
+                order=order,
+            )
+
+        after_keys = set(
+            movie.movie_persons.values_list("person_id", "role", "character_name")
+        )
+        return before_keys != after_keys
+
+    @classmethod
+    def _upsert_person_from_credit(
+        cls,
+        tmdb,
+        credit,
+        unknown_country: CoreCountry,
+        person_cache: dict[int, Person],
+        person_details_cache: dict[int, object | None],
+    ) -> Person | None:
+        person_id = cls._safe_int(getattr(credit, "person_id", None))
+        if not person_id:
+            return None
+
+        if person_id in person_cache:
+            return person_cache[person_id]
+
+        details = cls._load_person_details(tmdb, person_id, person_details_cache)
+        tmdb_id = cls._normalize_tmdb_person_id(person_id)
+        if not tmdb_id:
+            return None
+
+        imdb_id = cls._normalize_imdb_id(getattr(details, "imdb_id", None))
+        if not imdb_id:
+            imdb_id = cls._fallback_imdb_id(tmdb_id)
+
+        person = Person.objects.filter(tmdb_id=tmdb_id).first()
+        if person is None:
+            person = Person.objects.filter(imdb_id=imdb_id).first()
+
+        name = cls._clean_text(
+            cls._first_non_empty(getattr(details, "name", None), getattr(credit, "name", None)),
+            100,
+            "Unknown",
+        )
+        original_name = cls._clean_text(
+            cls._first_non_empty(getattr(credit, "original_name", None), getattr(details, "name", None), name),
+            100,
+            name,
+        )
+        photo = cls._first_non_empty(getattr(details, "profile_path", None), getattr(credit, "profile_path", None))
+        gender = cls._map_person_gender(
+            cls._safe_int(cls._first_non_empty(getattr(details, "gender", None), getattr(credit, "gender", None)))
+        )
+        birth_date = getattr(details, "birthday", None)
+        death_date = getattr(details, "deathday", None)
+        biography = getattr(details, "biography", None) if details is not None else None
+
+        if person is None:
+            imdb_id = cls._ensure_unique_imdb_id(imdb_id)
+            person = Person.objects.create(
+                tmdb_id=tmdb_id,
+                imdb_id=imdb_id,
+                name=name,
+                original_name=original_name,
+                birth_date=birth_date,
+                death_date=death_date,
+                gender=gender,
+                photo=photo,
+                biography=biography or "",
+                country=unknown_country,
+            )
+            person_cache[person_id] = person
+            return person
+
+        update_fields: list[str] = []
+        if person.tmdb_id != tmdb_id:
+            if not Person.objects.filter(tmdb_id=tmdb_id).exclude(pk=person.pk).exists():
+                person.tmdb_id = tmdb_id
+                update_fields.append("tmdb_id")
+
+        if person.imdb_id != imdb_id:
+            if not Person.objects.filter(imdb_id=imdb_id).exclude(pk=person.pk).exists():
+                person.imdb_id = imdb_id
+                update_fields.append("imdb_id")
+
+        if person.name != name:
+            person.name = name
+            update_fields.append("name")
+
+        if person.original_name != original_name:
+            person.original_name = original_name
+            update_fields.append("original_name")
+
+        if person.birth_date != birth_date:
+            person.birth_date = birth_date
+            update_fields.append("birth_date")
+
+        if person.death_date != death_date:
+            person.death_date = death_date
+            update_fields.append("death_date")
+
+        if person.gender != gender:
+            person.gender = gender
+            update_fields.append("gender")
+
+        if person.photo != photo:
+            person.photo = photo
+            update_fields.append("photo")
+
+        if biography is not None and person.biography != biography:
+            person.biography = biography
+            update_fields.append("biography")
+
+        if not person.country_id:
+            person.country = unknown_country
+            update_fields.append("country")
+
+        if update_fields:
+            person.save(update_fields=update_fields)
+
+        person_cache[person_id] = person
+        return person
+
+    @classmethod
+    def _load_person_details(cls, tmdb, person_id: int, cache: dict[int, object | None]):
+        if person_id in cache:
+            return cache[person_id]
+
+        try:
+            details = tmdb.person(person_id)
+        except Exception:
+            details = None
+
+        cache[person_id] = details
+        return details
+
+    @classmethod
+    def _map_crew_role(cls, job: str | None) -> str | None:
+        normalized = (job or "").strip().lower()
+        if not normalized:
+            return None
+
+        if normalized == "director":
+            return "director"
+        if normalized in {"producer", "executive producer"}:
+            return "producer"
+        if normalized in {"writer", "screenplay", "story"}:
+            return "writer"
+        if normalized == "original music composer":
+            return "composer"
+        if normalized == "director of photography":
+            return "operator"
+        if normalized == "editor":
+            return "editor"
+        return None
+
+    @classmethod
+    def _normalize_tmdb_person_id(cls, person_id: int | str | None) -> str | None:
+        value = cls._safe_int(person_id)
+        if not value:
+            return None
+
+        text = str(value)
+        if len(text) <= 10:
+            return text
+
+        # Ограничение модели Person.tmdb_id(max_length=10).
+        encoded = cls._to_base36(value)
+        return cls._clean_text(f"t{encoded}", 10, "")
+
+    @classmethod
+    def _normalize_imdb_id(cls, imdb_id: str | None) -> str | None:
+        value = (imdb_id or "").strip()
+        if not value:
+            return None
+        return cls._clean_text(value, 10, "")
+
+    @classmethod
+    def _fallback_imdb_id(cls, tmdb_id: str) -> str:
+        numeric = cls._safe_int(tmdb_id)
+        if numeric is None:
+            base = cls._clean_text(tmdb_id, 8, "00000000")
+            return f"tm{base}"[:10]
+        return f"tm{cls._to_base36(numeric)}"[:10]
+
+    @classmethod
+    def _ensure_unique_imdb_id(cls, imdb_id: str) -> str:
+        if not Person.objects.filter(imdb_id=imdb_id).exists():
+            return imdb_id
+
+        prefix = imdb_id[:8]
+        for idx in range(1, 100):
+            candidate = f"{prefix}{idx:02d}"[:10]
+            if not Person.objects.filter(imdb_id=candidate).exists():
+                return candidate
+        return imdb_id
+
+    @classmethod
+    def _get_unknown_country(cls) -> CoreCountry:
+        by_name = CoreCountry.objects.filter(name="Unknown").first()
+        if by_name:
+            return by_name
+
+        by_code = CoreCountry.objects.filter(code="XX").first()
+        if by_code:
+            return by_code
+
+        return CoreCountry.objects.create(name="Unknown", code="XX")
+
+    @staticmethod
+    def _map_person_gender(gender: int | None) -> str:
+        if gender == 2:
+            return "M"
+        if gender == 1:
+            return "F"
+        return ""
+
+    @staticmethod
+    def _clean_text(value, max_len: int, default: str = "") -> str:
+        text = (value or "").strip()
+        if not text:
+            return default
+        return text[:max_len]
+
+    @staticmethod
+    def _first_non_empty(*values):
+        for value in values:
+            if value not in (None, ""):
+                return value
+        return None
+
+    @staticmethod
+    def _to_base36(value: int) -> str:
+        alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+        if value == 0:
+            return "0"
+        digits: list[str] = []
+        number = value
+        while number:
+            number, rem = divmod(number, 36)
+            digits.append(alphabet[rem])
+        return "".join(reversed(digits))
 
     @classmethod
     def _get_or_create_core_country(cls, item) -> CoreCountry | None:

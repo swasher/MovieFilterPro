@@ -21,10 +21,10 @@
 - [x] Реализовать обновление `poster` (ссылка/путь TMDB)
 
 ## Phase 4: Cast and Persons
-- [ ] Реализовать пересборку `MoviePerson` из cast/crew
-- [ ] Реализовать upsert для `Person` по `tmdb_id/imdb_id`
-- [ ] Реализовать обновление `Person.photo` из `profile_path`
-- [ ] Реализовать удаление старых связей `MoviePerson` перед пересборкой
+- [x] Реализовать пересборку `MoviePerson` из cast/crew
+- [x] Реализовать upsert для `Person` по `tmdb_id/imdb_id`
+- [x] Реализовать обновление `Person.photo` из `profile_path`
+- [x] Реализовать удаление старых связей `MoviePerson` перед пересборкой
 
 ## Phase 5: Orphan Cleanup
 - [ ] Реализовать очистку orphan-персон после sync
