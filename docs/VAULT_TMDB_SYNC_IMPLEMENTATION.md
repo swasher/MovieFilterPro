@@ -13,12 +13,12 @@
 - [x] Добавить формирование top-N релевантных кандидатов для модалки
 
 ## Phase 3: TMDB Sync Service
-- [ ] Создать `vault/services/tmdb_movie_sync_service.py`
-- [ ] Реализовать загрузку деталей по `tmdb_id + media_type`
-- [ ] Реализовать обновление полей `Movie` (включая `source=tmdb`)
-- [ ] Реализовать обновление `genres`
-- [ ] Реализовать обновление `countries` через `core.Country`
-- [ ] Реализовать обновление `poster` (ссылка/путь TMDB)
+- [x] Создать `vault/services/tmdb_movie_sync_service.py`
+- [x] Реализовать загрузку деталей по `tmdb_id + media_type`
+- [x] Реализовать обновление полей `Movie` (включая `source=tmdb`)
+- [x] Реализовать обновление `genres`
+- [x] Реализовать обновление `countries` через `core.Country`
+- [x] Реализовать обновление `poster` (ссылка/путь TMDB)
 
 ## Phase 4: Cast and Persons
 - [ ] Реализовать пересборку `MoviePerson` из cast/crew
