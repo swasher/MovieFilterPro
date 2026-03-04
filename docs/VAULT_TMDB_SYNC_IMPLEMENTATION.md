@@ -50,11 +50,11 @@
 - [x] Убедиться, что причина ошибки всегда видна в одной строке
 
 ## Phase 9: Tests
-- [ ] Добавить тесты нормализации и scoring
-- [ ] Добавить тест ambiguous-case (возврат кандидатов)
-- [ ] Добавить тест обновления `Movie`/`Genre`/`core.Country`/`MoviePerson`/`Person.photo`
-- [ ] Добавить тест сохранности `UserMovie`
-- [ ] Добавить тест очистки orphan-персон
+- [x] Добавить тесты нормализации и scoring
+- [x] Добавить тест ambiguous-case (возврат кандидатов)
+- [x] Добавить тест обновления `Movie`/`Genre`/`core.Country`/`MoviePerson`/`Person.photo`
+- [x] Добавить тест сохранности `UserMovie`
+- [x] Добавить тест очистки orphan-персон
 
 ## Phase 10: Manual Verification
 - [ ] Прогнать sync на фильме с точным матчем
