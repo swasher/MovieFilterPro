@@ -22,6 +22,8 @@
 ### Search Discipline
 - Use `rg`/`rg --files` for codebase search so `.rgignore` is respected.
 - Do not run repository-wide recursive listing commands like `Get-ChildItem -Recurse` from the repo root unless the user explicitly asks for it.
+- Use `fd` (program to find entries in your filesystem)
+- Use `sg` (ast grep - Search and Rewrite code at large scale using AST pattern.)
 
 ### Search Tools
 - Use `fd` for fast file and directory discovery when it is a better fit than `rg --files`.
@@ -113,3 +115,19 @@
 - Учитывать singleton-настройки через `UserPreferences.get()`.
 - Для изменений в Vault-статусах идти через `MovieStatusService`, а не дублировать логику во views.
 - Для задач импорта в Vault предполагать чистые таблицы (согласно соглашениям выше).
+
+## Шапки для сервисного слоя
+
+Используй такие шапки, чтобы отделить Application от Domain логики:
+
+```
+# ------------------------------------ #
+#          APPLICATION LAYER           #
+# ------------------------------------ #
+```
+
+```
+# ------------------------------------ #
+#            DOMAIN LAYER              #
+# ------------------------------------ #
+```
