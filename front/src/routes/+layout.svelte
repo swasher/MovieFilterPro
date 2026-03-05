@@ -1,9 +1,16 @@
 <script lang="ts">
-	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
+  import AppShell from "$lib/components/AppShell.svelte";
+  import { headerLinks, sidebarItems } from "$lib/template-data";
+  import "./layout.css";
+  import favicon from "$lib/assets/favicon.svg";
 
-	let { children } = $props();
+  let { children } = $props();
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
-{@render children()}
+<svelte:head>
+  <link rel="icon" href={favicon} />
+</svelte:head>
+
+<AppShell {headerLinks} {sidebarItems} appName="MovieFilter Pro">
+  {@render children?.()}
+</AppShell>

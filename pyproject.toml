@@ -16,6 +16,7 @@ dependencies = [
     "django-compressor>=4.5.1",
     "django-crispy-forms>=2.3",
     "django-htmx>=1.21.0",
+    "django-ninja>=1.5.3",
     "django-widget-tweaks>=1.5.0",
     "firebase-admin>=7.1.0",
     "git-filter-repo>=2.47.0",
