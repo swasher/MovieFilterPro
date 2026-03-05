@@ -3,10 +3,12 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
 from vault import views as vault_views
+from vault.api import api as vault_api
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/vault/', vault_api.urls),
     # Legacy unprefixed Vault routes kept for compatibility (old links/bookmarks).
     path('movies/', vault_views.MovieListView.as_view()),
     path('movies/<slug:slug>/', vault_views.MovieDetailView.as_view()),

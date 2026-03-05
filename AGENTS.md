@@ -69,6 +69,7 @@
 - Сервис статусов/рейтингов: `vault/services/movie_status_service.py`.
 - Основные страницы: `vault/views.py`, `vault/templates/vault/*`.
 - Роутинг: `vault/urls.py` и также legacy-роуты без префикса в `movie_filter_pro/urls.py`.
+- Новый API-слой для фронта Svelte: `django-ninja` (`vault/api.py`, префикс `/api/vault/`).
 
 ### 4) Импорт данных в Vault
 - Команда: `uv run python manage.py import_kinorium_csv`.

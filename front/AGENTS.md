@@ -18,3 +18,4 @@
 ## Технический стек
 - SvelteKit + Svelte 5 (runes only).
 - `shadcn-svelte` как обязательная UI-база.
+- Backend API для нового фронта: `django-ninja`.
