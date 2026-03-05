@@ -96,8 +96,8 @@
                                             {% if list.list_movies.all %}
                                                 <div class="d-flex gap-1 mt-2">
                                                     {% for list_movie in list.list_movies.all|slice:":4" %}
-                                                        {% if list_movie.movie.poster %}
-                                                            <img src="{{ list_movie.movie.poster.url }}"
+                                                        {% if list_movie.movie.poster_url %}
+                                                            <img src="{{ list_movie.movie.poster_url }}"
                                                                  class="rounded"
                                                                  style="aspect-ratio: 2 / 3; width: 50px; object-fit: cover;"
                                                                  alt="{{ list_movie.movie.title }}">

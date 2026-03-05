@@ -9,6 +9,8 @@ from django.http import Http404
 from django.contrib import messages
 from django.utils.html import escape
 
+from tmdbapis.exceptions import Authentication, Unauthorized
+
 from .models import (
     Movie, Person, Genre, UserList, UserListMovie,
     UserMovie, MoviePerson
@@ -160,6 +162,26 @@ def _render_tmdb_candidates_modal(candidates, movie_id: int, message: str = "") 
         modal.show();
       }})();
     </script>
+    '''
+
+
+def _render_tmdb_exception_html(exc: Exception) -> str:
+    if isinstance(exc, Unauthorized):
+        details = "Проверь TMDB API key в настройках приложения."
+        message = "TMDB API key не настроен или недействителен."
+    elif isinstance(exc, Authentication):
+        details = "Проверь TMDB токены и авторизацию в TMDB."
+        message = "TMDB authentication error."
+    else:
+        details = ""
+        message = f"Ошибка TMDB sync: {str(exc)}"
+
+    details_html = f'<div class="small mt-1">{escape(details)}</div>' if details else ''
+    return f'''
+    <div class="alert alert-danger mb-2">
+        <strong>{escape(message)}</strong>
+        {details_html}
+    </div>
     '''
 
 
@@ -616,10 +638,7 @@ def fetch_tmdb_data(request):
         result = TMDBMovieSyncService.sync_movie(movie=movie, force_rematch=force_rematch)
         return HttpResponse(_render_tmdb_sync_result_html(result=result, movie_id=movie.id))
     except Exception as e:
-        return HttpResponse(
-            f'<div class="alert alert-danger">Ошибка TMDB sync: {escape(str(e))}</div>',
-            status=400,
-        )
+        return HttpResponse(_render_tmdb_exception_html(e))
 
 
 @login_required
@@ -657,10 +676,7 @@ def fetch_tmdb_data_confirm(request):
         )
         return HttpResponse(_render_tmdb_sync_result_html(result=result, movie_id=movie.id))
     except Exception as e:
-        return HttpResponse(
-            f'<div class="alert alert-danger">Ошибка подтверждения TMDB: {escape(str(e))}</div>',
-            status=400,
-        )
+        return HttpResponse(_render_tmdb_exception_html(e))
 
 
 @login_required

@@ -732,49 +732,45 @@ class TMDBMovieSyncService:
 
     @classmethod
     def _log_start(cls, movie: Movie) -> None:
-        logger.info(
-            'SYNC_START | movie_id=%s | title="%s" | orig="%s" | year=%s',
-            movie.id,
-            cls._log_text(movie.title, 90),
-            cls._log_text(movie.original_title, 90),
-            movie.year or "",
+        cls._emit_log(
+            f'SYNC_START | movie_id={movie.id} | title="{cls._log_text(movie.title, 90)}" '
+            f'| orig="{cls._log_text(movie.original_title, 90)}" | year={movie.year or ""}'
         )
 
     @classmethod
     def _log_match_found(cls, match_result) -> None:
         if match_result is None:
-            logger.info('MATCH_FOUND | candidates=- | top=[]')
+            cls._emit_log("MATCH_FOUND | candidates=- | top=[]")
             return
         candidates = match_result.candidates or ()
         top = ",".join([f"{c.tmdb_id}:{c.score}" for c in candidates[:5]])
-        logger.info("MATCH_FOUND | candidates=%s | top=[%s]", len(candidates), top)
+        cls._emit_log(f"MATCH_FOUND | candidates={len(candidates)} | top=[{top}]")
 
     @classmethod
     def _log_match_selected(cls, candidate: TMDBCandidate, reason: str) -> None:
-        logger.info(
-            "MATCH_SELECTED | tmdb_id=%s | media=%s | reason=%s",
-            candidate.tmdb_id,
-            candidate.media_type,
-            reason,
+        cls._emit_log(
+            f"MATCH_SELECTED | tmdb_id={candidate.tmdb_id} | media={candidate.media_type} | reason={reason}"
         )
 
     @classmethod
     def _log_sync_apply(cls, updated_fields: tuple[str, ...], cast_count: int, crew_count: int) -> None:
         updated_text = ",".join(updated_fields) if updated_fields else "-"
-        logger.info(
-            "SYNC_APPLY | updated=%s | cast=%s | crew=%s",
-            updated_text,
-            cast_count,
-            crew_count,
+        cls._emit_log(
+            f"SYNC_APPLY | updated={updated_text} | cast={cast_count} | crew={crew_count}"
         )
 
     @classmethod
     def _log_orphan_cleanup(cls, deleted_count: int) -> None:
-        logger.info("ORPHAN_CLEANUP | deleted=%s", deleted_count)
+        cls._emit_log(f"ORPHAN_CLEANUP | deleted={deleted_count}")
 
     @classmethod
     def _log_done(cls, status: str, msg: str) -> None:
-        logger.info('SYNC_DONE | status=%s | msg="%s"', status, cls._log_text(msg, 220))
+        cls._emit_log(f'SYNC_DONE | status={status} | msg="{cls._log_text(msg, 220)}"')
+
+    @classmethod
+    def _emit_log(cls, line: str) -> None:
+        logger.info(line)
+        print(line, flush=True)
 
     @staticmethod
     def _log_text(value, limit: int = 120) -> str:

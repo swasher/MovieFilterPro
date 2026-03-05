@@ -35,8 +35,8 @@
                             <div class="card h-100 shadow-sm movie-card">
                                 <div class="position-relative">
                                     <a href="{% url 'vault:movie_detail' movie.slug %}" class="text-decoration-none">
-                                        {% if movie.poster %}
-                                            <img src="{{ movie.poster.url }}" class="card-img-top vault-poster" alt="{{ movie.title }}">
+                                        {% if movie.poster_url %}
+                                            <img src="{{ movie.poster_url }}" class="card-img-top vault-poster" alt="{{ movie.title }}">
                                         {% else %}
                                             <div class="card-img-top bg-secondary vault-poster-placeholder">
                                                 <i class="bi bi-film" style="font-size: 3rem; color: #fff;"></i>

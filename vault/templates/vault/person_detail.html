@@ -5,8 +5,8 @@
         <!-- Основная информация о персоне -->
         <div class="row mb-4">
             <div class="col-md-3">
-                {% if person.photo %}
-                    <img src="{{ person.photo.url }}" class="img-fluid rounded shadow" alt="{{ person }}">
+                {% if person.photo_url %}
+                    <img src="{{ person.photo_url }}" class="img-fluid rounded shadow" alt="{{ person }}">
                 {% else %}
                     <div class="bg-secondary rounded vault-poster-placeholder">
                         <i class="bi bi-person" style="font-size: 5rem; color: #fff;"></i>
@@ -135,8 +135,8 @@
                             <div class="vault-movie-grid-item">
                                 <div class="card h-100 shadow-sm movie-card">
                                     <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
-                                        {% if mp.movie.poster %}
-                                            <img src="{{ mp.movie.poster.url }}" class="card-img-top vault-poster"
+                                        {% if mp.movie.poster_url %}
+                                            <img src="{{ mp.movie.poster_url }}" class="card-img-top vault-poster"
                                                  alt="{{ mp.movie.title }}">
                                         {% else %}
                                             <div class="card-img-top bg-secondary vault-poster-placeholder">
@@ -175,8 +175,8 @@
                                 <div class="vault-movie-grid-item">
                                     <div class="card h-100 shadow-sm movie-card">
                                         <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
-                                            {% if mp.movie.poster %}
-                                                <img src="{{ mp.movie.poster.url }}" class="card-img-top vault-poster"
+                                            {% if mp.movie.poster_url %}
+                                                <img src="{{ mp.movie.poster_url }}" class="card-img-top vault-poster"
                                                      alt="{{ mp.movie.title }}">
                                             {% else %}
                                                 <div class="card-img-top bg-secondary vault-poster-placeholder">
@@ -213,8 +213,8 @@
                                 <div class="vault-movie-grid-item">
                                     <div class="card h-100 shadow-sm movie-card">
                                         <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
-                                            {% if mp.movie.poster %}
-                                                <img src="{{ mp.movie.poster.url }}" class="card-img-top vault-poster"
+                                            {% if mp.movie.poster_url %}
+                                                <img src="{{ mp.movie.poster_url }}" class="card-img-top vault-poster"
                                                      alt="{{ mp.movie.title }}">
                                             {% else %}
                                                 <div class="card-img-top bg-secondary vault-poster-placeholder">
@@ -246,8 +246,8 @@
                                 <div class="vault-movie-grid-item">
                                     <div class="card h-100 shadow-sm movie-card">
                                         <a href="{% url 'vault:movie_detail' mp.movie.slug %}" class="text-decoration-none">
-                                            {% if mp.movie.poster %}
-                                                <img src="{{ mp.movie.poster.url }}" class="card-img-top vault-poster"
+                                            {% if mp.movie.poster_url %}
+                                                <img src="{{ mp.movie.poster_url }}" class="card-img-top vault-poster"
                                                      alt="{{ mp.movie.title }}">
                                             {% else %}
                                                 <div class="card-img-top bg-secondary vault-poster-placeholder">

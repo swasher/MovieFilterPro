@@ -30,6 +30,9 @@
 ### Communication with user
 - Using russian language.
 
+### Scope Safety
+- Редактировать системные файлы или файлы, не относящиеся к текущему Django app, только по прямому запросу пользователя.
+
 ## Быстрый локальный старт
 - Установка зависимостей: `uv sync`
 - Проверка проекта: `uv run python manage.py check`

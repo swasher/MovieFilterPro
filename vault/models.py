@@ -7,6 +7,25 @@ from django.conf import settings
 import core
 
 
+def _build_tmdb_image_url(raw_path: str | None, size: str) -> str | None:
+    if not raw_path:
+        return None
+    value = str(raw_path).strip()
+    if not value:
+        return None
+
+    if value.startswith('http://') or value.startswith('https://'):
+        return value
+
+    base_url = getattr(settings, 'TMDB_IMAGE_BASE_URL', 'https://image.tmdb.org/t/p/')
+    if not base_url.endswith('/'):
+        base_url += '/'
+
+    normalized_size = str(size or 'w500').strip('/') or 'w500'
+    normalized_path = value if value.startswith('/') else f'/{value}'
+    return f'{base_url}{normalized_size}{normalized_path}'
+
+
 class Person(models.Model):
     """Модель для актеров, режиссеров и других людей"""
     GENDER_CHOICES = [
@@ -38,19 +57,12 @@ class Person(models.Model):
     @property
     def photo_url(self):
         """Генерируем полный URL на лету"""
-        if self.photo:
-            # Базовый URL из настроек (например, для TMDB)
-            base_url = settings.TMDB_IMAGE_BASE_URL  # 'https://image.tmdb.org/t/p/'
-            size = settings.TMDB_IMAGE_SIZE  # 'w500', 'original', etc.
-            return f"{base_url}{size}{self.photo}"
-        return None
+        default_size = getattr(settings, 'TMDB_IMAGE_SIZE', 'w500')
+        return _build_tmdb_image_url(self.photo, default_size)
 
     def get_photo_url(self, size='w500'):
         """Метод для получения URL с конкретным размером"""
-        if self.photo:
-            base_url = settings.TMDB_IMAGE_BASE_URL
-            return f"{base_url}{size}{self.photo}"
-        return None
+        return _build_tmdb_image_url(self.photo, size)
 
 
 class Genre(models.Model):
@@ -65,7 +77,13 @@ class Genre(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.name)
+            base_slug = slugify(self.name) or 'genre'
+            slug = base_slug
+            counter = 2
+            while Genre.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f'{base_slug}-{counter}'
+                counter += 1
+            self.slug = slug
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -187,6 +205,14 @@ class Movie(models.Model):
         if ratings:
             return sum(r.rating for r in ratings) / len(ratings)
         return None
+
+    @property
+    def poster_url(self):
+        default_size = getattr(settings, 'TMDB_IMAGE_SIZE', 'w500')
+        return _build_tmdb_image_url(self.poster, default_size)
+
+    def get_poster_url(self, size='w500'):
+        return _build_tmdb_image_url(self.poster, size)
 
     def get_directors(self):
         return self.movie_persons.filter(role='director')

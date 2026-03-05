@@ -5,8 +5,8 @@
         <!-- Основная информация о фильме -->
         <div class="row mb-4">
             <div class="col-md-3">
-                {% if movie.poster %}
-                    <img src="{{ movie.poster.url }}" class="img-fluid rounded shadow vault-poster" alt="{{ movie.title }}">
+                {% if movie.poster_url %}
+                    <img src="{{ movie.poster_url }}" class="img-fluid rounded shadow vault-poster" alt="{{ movie.title }}">
                 {% else %}
                     <div class="bg-secondary rounded vault-poster-placeholder">
                         <i class="bi bi-film" style="font-size: 5rem; color: #fff;"></i>
@@ -100,6 +100,7 @@
                                         hx-target="#tmdb-sync-result"
                                         hx-swap="innerHTML">
                                     <i class="bi bi-cloud-arrow-down"></i> Fetch TMDB data
+                                    <span class="htmx-indicator spinner-border spinner-border-sm ms-1" role="status"></span>
                                 </button>
                                 <button type="button"
                                         class="btn btn-sm btn-outline-secondary"
@@ -108,6 +109,7 @@
                                         hx-target="#tmdb-sync-result"
                                         hx-swap="innerHTML">
                                     <i class="bi bi-arrow-repeat"></i> Force rematch
+                                    <span class="htmx-indicator spinner-border spinner-border-sm ms-1" role="status"></span>
                                 </button>
                             </div>
                             <div id="tmdb-sync-result" class="mb-0"></div>
@@ -218,8 +220,8 @@
                                     <div class="col">
                                         <a href="{% url 'vault:person_detail' mp.person.id %}" class="text-decoration-none">
                                             <div class="text-center">
-                                                {% if mp.person.photo %}
-                                                    <img src="{{ mp.person.photo.url }}" class="rounded-circle mb-2"
+                                                {% if mp.person.photo_url %}
+                                                    <img src="{{ mp.person.photo_url }}" class="rounded-circle mb-2"
                                                          style="width: 80px; height: 80px; object-fit: cover;" alt="{{ mp.person }}">
                                                 {% else %}
                                                     <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center mb-2"
@@ -248,8 +250,8 @@
                                     <div class="col">
                                         <a href="{% url 'vault:person_detail' mp.person.id %}" class="text-decoration-none">
                                             <div class="text-center">
-                                                {% if mp.person.photo %}
-                                                    <img src="{{ mp.person.photo.url }}" class="rounded-circle mb-2"
+                                                {% if mp.person.photo_url %}
+                                                    <img src="{{ mp.person.photo_url }}" class="rounded-circle mb-2"
                                                          style="width: 80px; height: 80px; object-fit: cover;" alt="{{ mp.person }}">
                                                 {% else %}
                                                     <div class="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center mb-2"
