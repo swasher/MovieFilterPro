@@ -16,6 +16,8 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
   const genre = (url.searchParams.get("genre") ?? "").trim();
   const status = (url.searchParams.get("status") ?? "").trim();
   const list = (url.searchParams.get("list") ?? "").trim();
+  const q = (url.searchParams.get("q") ?? "").trim();
+  const order = (url.searchParams.get("order") ?? "-year").trim();
   try {
     const params = new URLSearchParams({ limit: "30" });
     const selectedGenre = genre;
@@ -28,6 +30,12 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
     if (list) {
       params.set("list", list);
     }
+    if (q) {
+      params.set("q", q);
+    }
+    if (order && order !== "-year") {
+      params.set("order", order);
+    }
 
     const response = await fetch(`${API_BASE_URL}/api/vault/movies?${params.toString()}`);
     if (!response.ok) {
@@ -36,7 +44,9 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
         apiError: `API error: ${response.status}`,
         activeGenre: selectedGenre,
         activeStatus: status,
-        activeList: list
+        activeList: list,
+        activeQuery: q,
+        activeOrder: order
       };
     }
 
@@ -46,7 +56,9 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
       apiError: "",
       activeGenre: selectedGenre,
       activeStatus: status,
-      activeList: list
+      activeList: list,
+      activeQuery: q,
+      activeOrder: order
     };
   } catch (error) {
     return {
@@ -54,7 +66,9 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
       apiError: error instanceof Error ? error.message : "Unknown API error",
       activeGenre: genre,
       activeStatus: status,
-      activeList: list
+      activeList: list,
+      activeQuery: q,
+      activeOrder: order
     };
   }
 };

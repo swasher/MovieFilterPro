@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppShell from "$lib/components/AppShell.svelte";
   import { headerLinks } from "$lib/template-data";
+  import { Toaster } from "$lib/components/ui/sonner";
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
 
@@ -11,6 +12,7 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
+<Toaster />
 <AppShell {headerLinks} sidebarItems={data.sidebarItems} appName="MovieFilter Pro">
   {@render children?.()}
 </AppShell>

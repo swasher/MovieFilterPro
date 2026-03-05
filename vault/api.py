@@ -1,9 +1,11 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import User
-from django.db.models import Count
+from django.db.models import Count, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from vault.models import Genre, Movie, UserList, UserMovie
+from vault.models import Genre, Movie, MoviePerson, Person, UserList, UserListMovie, UserMovie
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
 
@@ -25,9 +27,52 @@ class MovieDetailOut(Schema):
     slug: str
     description: str
     movie_type: str
+    movie_type_display: str
     status: str
+    status_display: str
     imdb_rating: float | None = None
     poster_url: str | None = None
+    duration: int | None = None
+    age_rating: str | None = None
+    trailer_url: str | None = None
+    tmdb_id: int | None = None
+    tmdb_linked: bool
+    source: str
+    source_display: str
+    genres: list["NamedItemOut"]
+    countries: list["NamedItemOut"]
+    user_state: "UserStateOut"
+    custom_lists: list["MovieUserListOut"]
+    directors: list["PersonCreditOut"]
+    actors: list["PersonCreditOut"]
+
+
+class NamedItemOut(Schema):
+    name: str
+    slug: str | None = None
+
+
+class PersonCreditOut(Schema):
+    id: int
+    name: str
+    photo_url: str | None = None
+    character_name: str | None = None
+
+
+class UserStateOut(Schema):
+    in_watched: bool
+    in_will_watch: bool
+    in_wont_watch: bool
+    in_favorites: bool
+    rating: int | None = None
+    note: str = ""
+
+
+class MovieUserListOut(Schema):
+    id: int
+    name: str
+    is_public: bool
+    is_in_list: bool
 
 
 class SidebarItemOut(Schema):
@@ -55,6 +100,66 @@ class TMDBSyncOut(Schema):
     orphan_persons_deleted: int = 0
 
 
+class ToggleStatusIn(Schema):
+    status_key: str
+
+
+class ToggleStatusOut(Schema):
+    status_key: str
+    is_active: bool
+    user_state: UserStateOut
+
+
+class RateMovieIn(Schema):
+    rating: int | None = None
+
+
+class RateMovieOut(Schema):
+    rating: int | None = None
+    user_state: UserStateOut
+
+
+class ToggleMovieListIn(Schema):
+    list_id: int
+
+
+class ToggleMovieListOut(Schema):
+    list_id: int
+    is_in_list: bool
+    custom_lists: list[MovieUserListOut]
+
+
+class PersonMovieOut(Schema):
+    id: int
+    title: str
+    slug: str
+    year: int | None = None
+    poster_url: str | None = None
+    role: str
+    role_display: str
+    character_name: str | None = None
+
+
+class PersonDetailOut(Schema):
+    id: int
+    name: str
+    original_name: str
+    photo_url: str | None = None
+    biography: str
+    birth_date: str | None = None
+    death_date: str | None = None
+    country: str | None = None
+    gender: str | None = None
+    gender_display: str | None = None
+    movies_count: int
+    roles_count: int
+    career_years: int
+    filmography: list[PersonMovieOut]
+    actor_count: int
+    director_count: int
+    producer_count: int
+
+
 api = NinjaAPI(title="Vault API", version="1.0")
 
 
@@ -65,6 +170,55 @@ def _resolve_api_user(request):
     return User.objects.order_by("id").first()
 
 
+def _build_user_state(user, movie) -> UserStateOut:
+    if user is None:
+        return UserStateOut(
+            in_watched=False,
+            in_will_watch=False,
+            in_wont_watch=False,
+            in_favorites=False,
+            rating=None,
+            note="",
+        )
+
+    state = MovieStatusService.get_movie_status(user, movie)
+    return UserStateOut(
+        in_watched=state["in_watched"],
+        in_will_watch=state["in_will_watch"],
+        in_wont_watch=state["in_wont_watch"],
+        in_favorites=state["in_favorites"],
+        rating=state["rating"],
+        note=state["note"],
+    )
+
+
+def _decimal_to_float(value: Decimal | None) -> float | None:
+    return float(value) if value is not None else None
+
+
+def _date_to_iso(value) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _build_movie_user_lists(user, movie) -> list[MovieUserListOut]:
+    if user is None:
+        return []
+
+    user_lists = list(UserList.objects.filter(user=user).order_by("-updated_at"))
+    movie_list_ids = set(
+        UserListMovie.objects.filter(movie=movie, user_list__user=user).values_list("user_list_id", flat=True)
+    )
+    return [
+        MovieUserListOut(
+            id=user_list.id,
+            name=user_list.name,
+            is_public=user_list.is_public,
+            is_in_list=user_list.id in movie_list_ids,
+        )
+        for user_list in user_lists
+    ]
+
+
 @api.get("/movies", response=list[MovieOut])
 def list_movies(
     request,
@@ -72,14 +226,21 @@ def list_movies(
     genre: str | None = None,
     status: str | None = None,
     list: int | None = None,
+    q: str | None = None,
+    order: str = "-year",
 ):
     user = _resolve_api_user(request)
-    qs = (
-        Movie.objects.filter(status=Movie.Status.RELEASED)
-        .order_by("-year", "title")
-    )
+    qs = Movie.objects.filter(status=Movie.Status.RELEASED)
     if genre:
         qs = qs.filter(genres__slug=genre)
+    if q:
+        query = q.strip()
+        if query:
+            qs = qs.filter(
+                Q(title__icontains=query)
+                | Q(original_title__icontains=query)
+                | Q(description__icontains=query)
+            )
     if user and status:
         if status == "favorites":
             qs = qs.filter(user_movies__user=user, user_movies__is_favorite=True)
@@ -92,7 +253,37 @@ def list_movies(
     if user and list:
         qs = qs.filter(in_lists__user_list_id=list, in_lists__user_list__user=user)
 
-    qs = qs.distinct()[:limit]
+    allowed_orders = {
+        "-year": ("-year", "title"),
+        "year": ("year", "title"),
+        "-imdb_rating": ("-imdb_rating", "title"),
+        "imdb_rating": ("imdb_rating", "title"),
+        "title": ("title",),
+        "-title": ("-title",),
+    }
+    if order in {"-added_at", "added_at"}:
+        if user and list:
+            ordering = (
+                ("-in_lists__added_at", "-year", "title")
+                if order == "-added_at"
+                else ("in_lists__added_at", "-year", "title")
+            )
+        elif user and status:
+            ordering = (
+                ("-user_movies__created_at", "-year", "title")
+                if order == "-added_at"
+                else ("user_movies__created_at", "-year", "title")
+            )
+        else:
+            ordering = (
+                ("-created_at", "-year", "title")
+                if order == "-added_at"
+                else ("created_at", "-year", "title")
+            )
+    else:
+        ordering = allowed_orders.get(order, allowed_orders["-year"])
+
+    qs = qs.order_by(*ordering).distinct()[:limit]
     return [
         MovieOut(
             id=movie.id,
@@ -111,7 +302,7 @@ def movie_detail(request, slug: str):
     movie = Movie.objects.filter(slug=slug).first()
     if movie is None:
         raise HttpError(404, "Movie not found")
-    imdb_rating = float(movie.imdb_rating) if movie.imdb_rating is not None else None
+    user = _resolve_api_user(request)
 
     return MovieDetailOut(
         id=movie.id,
@@ -121,9 +312,45 @@ def movie_detail(request, slug: str):
         slug=movie.slug,
         description=movie.description or "",
         movie_type=movie.movie_type,
+        movie_type_display=movie.get_movie_type_display(),
         status=movie.status,
-        imdb_rating=imdb_rating,
+        status_display=movie.get_status_display(),
+        imdb_rating=_decimal_to_float(movie.imdb_rating),
         poster_url=movie.poster_url,
+        duration=movie.duration,
+        age_rating=movie.age_rating or None,
+        trailer_url=movie.trailer_url or None,
+        tmdb_id=movie.tmdb_id,
+        tmdb_linked=bool(movie.tmdb_id),
+        source=movie.source,
+        source_display=movie.get_source_display(),
+        genres=[
+            NamedItemOut(name=genre.name, slug=genre.slug)
+            for genre in movie.genres.all().order_by("name")
+        ],
+        countries=[
+            NamedItemOut(name=country.name)
+            for country in movie.countries.all().order_by("name")
+        ],
+        user_state=_build_user_state(user, movie),
+        custom_lists=_build_movie_user_lists(user, movie),
+        directors=[
+            PersonCreditOut(
+                id=item.person.id,
+                name=item.person.name,
+                photo_url=item.person.photo_url,
+            )
+            for item in movie.get_directors().select_related("person")
+        ],
+        actors=[
+            PersonCreditOut(
+                id=item.person.id,
+                name=item.person.name,
+                photo_url=item.person.photo_url,
+                character_name=item.character_name or None,
+            )
+            for item in movie.get_actors().select_related("person")[:12]
+        ],
     )
 
 
@@ -146,6 +373,130 @@ def movie_fetch_tmdb(request, slug: str, payload: TMDBSyncIn):
         message=result.message,
         updated_fields=list(result.updated_fields),
         orphan_persons_deleted=result.orphan_persons_deleted,
+    )
+
+
+@api.post("/movies/{slug}/toggle-status", response=ToggleStatusOut)
+def movie_toggle_status(request, slug: str, payload: ToggleStatusIn):
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    user = _resolve_api_user(request)
+    if user is None:
+        raise HttpError(400, "User not found")
+
+    try:
+        is_active = MovieStatusService.toggle_status(user, movie, payload.status_key)
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    return ToggleStatusOut(
+        status_key=payload.status_key,
+        is_active=is_active,
+        user_state=_build_user_state(user, movie),
+    )
+
+
+@api.post("/movies/{slug}/toggle-list", response=ToggleMovieListOut)
+def movie_toggle_list(request, slug: str, payload: ToggleMovieListIn):
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    user = _resolve_api_user(request)
+    if user is None:
+        raise HttpError(400, "User not found")
+
+    user_list = UserList.objects.filter(id=payload.list_id, user=user).first()
+    if user_list is None:
+        raise HttpError(404, "List not found")
+
+    relation = UserListMovie.objects.filter(user_list=user_list, movie=movie).first()
+    if relation:
+        relation.delete()
+        is_in_list = False
+    else:
+        UserListMovie.objects.create(user_list=user_list, movie=movie)
+        is_in_list = True
+
+    return ToggleMovieListOut(
+        list_id=user_list.id,
+        is_in_list=is_in_list,
+        custom_lists=_build_movie_user_lists(user, movie),
+    )
+
+
+@api.post("/movies/{slug}/rate", response=RateMovieOut)
+def movie_rate(request, slug: str, payload: RateMovieIn):
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    user = _resolve_api_user(request)
+    if user is None:
+        raise HttpError(400, "User not found")
+
+    try:
+        if payload.rating is None:
+            MovieStatusService.remove_rating(user, movie)
+        else:
+            MovieStatusService.rate_movie(user, movie, payload.rating)
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    state = _build_user_state(user, movie)
+    return RateMovieOut(
+        rating=state.rating,
+        user_state=state,
+    )
+
+
+@api.get("/persons/{person_id}", response=PersonDetailOut)
+def person_detail(request, person_id: int):
+    person = Person.objects.filter(id=person_id).first()
+    if person is None:
+        raise HttpError(404, "Person not found")
+
+    filmography_qs = (
+        MoviePerson.objects.filter(person=person)
+        .select_related("movie")
+        .order_by("-movie__year", "order", "id")
+    )
+    filmography = [
+        PersonMovieOut(
+            id=item.movie.id,
+            title=item.movie.title,
+            slug=item.movie.slug,
+            year=item.movie.year,
+            poster_url=item.movie.poster_url,
+            role=item.role,
+            role_display=item.get_role_display(),
+            character_name=item.character_name or None,
+        )
+        for item in filmography_qs
+    ]
+
+    years = [item.movie.year for item in filmography_qs if item.movie.year is not None]
+
+    return PersonDetailOut(
+        id=person.id,
+        name=person.name,
+        original_name=person.original_name,
+        photo_url=person.photo_url,
+        biography=person.biography or "",
+        birth_date=_date_to_iso(person.birth_date),
+        death_date=_date_to_iso(person.death_date),
+        country=person.country.name if person.country_id else None,
+        gender=person.gender or None,
+        gender_display=person.get_gender_display() if person.gender else None,
+        movies_count=len(filmography),
+        roles_count=filmography_qs.values("role").distinct().count(),
+        career_years=(max(years) - min(years)) if years else 0,
+        filmography=filmography,
+        actor_count=filmography_qs.filter(role="actor").count(),
+        director_count=filmography_qs.filter(role="director").count(),
+        producer_count=filmography_qs.filter(role="producer").count(),
     )
 
 

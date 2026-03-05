@@ -22,12 +22,14 @@
 ### Search Discipline
 - Use `rg`/`rg --files` for codebase search so `.rgignore` is respected.
 - Do not run repository-wide recursive listing commands like `Get-ChildItem -Recurse` from the repo root unless the user explicitly asks for it.
-- Use `fd` (program to find entries in your filesystem)
-- Use `sg` (ast grep - Search and Rewrite code at large scale using AST pattern.)
+- Use `fd` (program to find entries in your filesystem).
+- Use `sg` (ast-grep, syntax-aware search and rewrite using AST patterns).
+- Use `bat` for reading concrete files when syntax highlighting and line-oriented viewing are helpful.
 
 ### Search Tools
 - Use `fd` for fast file and directory discovery when it is a better fit than `rg --files`.
 - Use `ast-grep` for syntax-aware search/refactoring when regex-based matching is fragile.
+- Use `bat` to read specific files after search; prefer it over plain `type`/`Get-Content` when available.
 
 ### Communication with user
 - Using russian language.
