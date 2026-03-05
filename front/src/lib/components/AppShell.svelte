@@ -58,7 +58,7 @@
 
     <Sidebar.Content>
       <Sidebar.Group>
-        <Sidebar.GroupLabel>Разделы</Sidebar.GroupLabel>
+        <Sidebar.GroupLabel>Списки</Sidebar.GroupLabel>
         <Sidebar.GroupContent>
           <Sidebar.Menu>
             {#each sidebarItems as item (item.id)}
@@ -67,7 +67,9 @@
                   {#snippet child({ props })}
                     <a {...props} href={item.href}>
                       <span>{item.title}</span>
-                      {#if item.children?.length}
+                      {#if typeof item.count === "number"}
+                        <Badge variant="secondary" class="ml-auto">{item.count}</Badge>
+                      {:else if item.children?.length}
                         <Badge variant="secondary" class="ml-auto">{item.children.length}</Badge>
                       {/if}
                     </a>
@@ -82,6 +84,9 @@
                           {#snippet child({ props })}
                             <a {...props} href={subItem.href}>
                               <span>{subItem.title}</span>
+                              {#if typeof subItem.count === "number"}
+                                <Badge variant="outline" class="ml-auto">{subItem.count}</Badge>
+                              {/if}
                             </a>
                           {/snippet}
                         </Sidebar.MenuSubButton>

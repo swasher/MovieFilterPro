@@ -1,9 +1,28 @@
 <script lang="ts">
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
-  import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
 
   let { data } = $props();
+  let hoveredMovie = $state<{
+    title: string;
+    original_title: string | null;
+    year: number | null;
+  } | null>(null);
+  let tooltipX = $state(0);
+  let tooltipY = $state(0);
+
+  const onMovieEnter = (movie: { title: string; original_title: string | null; year: number | null }) => {
+    hoveredMovie = movie;
+  };
+
+  const onMovieMove = (event: MouseEvent) => {
+    tooltipX = event.clientX + 12;
+    tooltipY = event.clientY + 16;
+  };
+
+  const onMovieLeave = () => {
+    hoveredMovie = null;
+  };
 </script>
 
 <div class="mx-auto w-full max-w-6xl p-6">
@@ -12,6 +31,15 @@
     <p class="text-muted-foreground text-sm">
       Первое соединение Svelte фронта с Django backend через django-ninja.
     </p>
+    {#if data.activeGenre}
+      <p class="text-muted-foreground text-sm">Фильтр по жанру: <strong>{data.activeGenre}</strong></p>
+    {/if}
+    {#if data.activeStatus}
+      <p class="text-muted-foreground text-sm">Фильтр по статусу: <strong>{data.activeStatus}</strong></p>
+    {/if}
+    {#if data.activeList}
+      <p class="text-muted-foreground text-sm">Фильтр по списку: <strong>{data.activeList}</strong></p>
+    {/if}
   </div>
 
   {#if data.apiError}
@@ -22,25 +50,50 @@
       </CardHeader>
     </Card>
   {:else}
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div class="flex flex-wrap gap-4">
       {#each data.movies as movie (movie.id)}
-        <Card>
-          <CardHeader>
-            <CardTitle class="flex items-center justify-between gap-2">
-              <span class="truncate">{movie.title}</span>
-              <Badge variant="secondary">{movie.year ?? "?"}</Badge>
-            </CardTitle>
-            <CardDescription class="truncate">
-              {movie.original_title || "No original title"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent class="flex items-center justify-between gap-2">
-            <p class="text-muted-foreground text-sm">slug: {movie.slug}</p>
-            <Button size="sm" variant="outline">Open</Button>
-          </CardContent>
-        </Card>
+        <a
+          href={`/movies/${movie.slug}`}
+          data-sveltekit-preload-data="hover"
+          class="block"
+          onmouseenter={() => onMovieEnter(movie)}
+          onmousemove={onMovieMove}
+          onmouseleave={onMovieLeave}
+        >
+          <Card class="relative h-[270px] w-[180px] overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
+            <CardContent class="h-full !p-0">
+              <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 text-[10px] px-1.5 py-0.5">
+                {movie.year ?? "?"}
+              </Badge>
+
+              {#if movie.poster_url}
+                <img
+                  src={movie.poster_url}
+                  alt={movie.title}
+                  class="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              {:else}
+                <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs">
+                  no poster
+                </div>
+              {/if}
+            </CardContent>
+          </Card>
+        </a>
       {/each}
     </div>
+
+    {#if hoveredMovie}
+      <div
+        class="bg-foreground text-background pointer-events-none fixed z-50 max-w-xs rounded-md px-3 py-2 text-xs shadow-lg"
+        style={`left:${tooltipX}px; top:${tooltipY}px;`}
+      >
+        <p>{hoveredMovie.title}</p>
+        <p>{hoveredMovie.original_title || "—"}</p>
+        <p>{hoveredMovie.year ?? "—"}</p>
+      </div>
+    {/if}
 
     {#if data.movies.length === 0}
       <Card>

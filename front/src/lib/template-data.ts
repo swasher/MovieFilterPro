@@ -7,6 +7,7 @@ export type SidebarItem = {
   id: string;
   title: string;
   href: string;
+  count?: number;
   children?: SidebarItem[];
 };
 
@@ -14,14 +15,22 @@ export const headerLinks: HeaderLink[] = [
   { label: "Vault", href: "/" }
 ];
 
-export const sidebarItems: SidebarItem[] = [
+export const defaultSidebarItems: SidebarItem[] = [
   {
-    id: "vault",
-    title: "Vault",
-    href: "/",
+    id: "system",
+    title: "Системные",
+    href: "#",
     children: [
-      { id: "movies", title: "Movies", href: "/?section=movies" },
-      { id: "lists", title: "Lists", href: "/?section=lists" }
+      { id: "watched", title: "Просмотрено", href: "/?status=watched", count: 0 },
+      { id: "will_watch", title: "Буду смотреть", href: "/?status=will_watch", count: 0 },
+      { id: "wont_watch", title: "Не буду смотреть", href: "/?status=wont_watch", count: 0 },
+      { id: "favorites", title: "Избранное", href: "/?status=favorites", count: 0 }
     ]
+  },
+  {
+    id: "custom",
+    title: "Мои списки",
+    href: "#",
+    children: []
   }
 ];
