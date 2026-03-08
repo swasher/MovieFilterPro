@@ -35,69 +35,69 @@
 
 ### Phase 1. Kinozal Read-Only MVP
 
-- [ ] Поднять backend API для чтения списка фильмов `MovieRSS`.
-- [ ] Определить API-контракт для infinite pagination.
-- [ ] Сделать страницу `/kinozal` в новом UI вместо заглушки.
-- [ ] Вывести read-only infinite table без действий, фильтров и сортировки.
-- [ ] Показать базовые поля фильма:
-  - [ ] poster
-  - [ ] title
-  - [ ] original title
-  - [ ] year
-  - [ ] ratings
-  - [ ] plot
-  - [ ] translate
-- [ ] Добавить loading / empty / error states.
+- [x] Поднять backend API для чтения списка фильмов `MovieRSS`.
+- [x] Определить API-контракт для infinite pagination.
+- [x] Сделать страницу `/kinozal` в новом UI вместо заглушки.
+- [x] Вывести read-only infinite table без действий, фильтров и сортировки.
+- [x] Показать базовые поля фильма:
+  - [x] poster
+  - [x] title
+  - [x] original title
+  - [x] year
+  - [x] ratings
+  - [x] plot
+  - [x] translate
+- [x] Добавить loading / empty / error states.
 
 ### Phase 2. Page Summary And Table Parity
 
-- [ ] Перенести верхние summary-метрики со страницы Django:
-  - [ ] last scan
-  - [ ] total
-  - [ ] high
-  - [ ] low
-  - [ ] defer
-  - [ ] skip
-  - [ ] wait trans
-  - [ ] trans found
-- [ ] Довести визуальную структуру таблицы ближе к Django-версии.
-- [ ] Добавить lazy loading для постеров.
+- [x] Перенести верхние summary-метрики со страницы Django:
+  - [x] last scan
+  - [x] total
+  - [x] high
+  - [x] low
+  - [x] defer
+  - [x] skip
+  - [x] wait trans
+  - [x] trans found
+- [x] Довести визуальную структуру таблицы ближе к Django-версии.
+- [x] Добавить lazy loading для постеров.
 
 ### Phase 3. Query State And Filtering
 
-- [ ] Добавить фильтр по priority.
-- [ ] Добавить text search.
-- [ ] Добавить reverse / sort controls.
-- [ ] Синхронизировать состояние страницы с query string.
-- [ ] Убедиться, что infinite loading корректно работает вместе с фильтрами.
+- [x] Добавить фильтр по priority.
+- [x] Добавить text search.
+- [x] Добавить reverse / sort controls.
+- [x] Синхронизировать состояние страницы с query string.
+- [x] Убедиться, что infinite loading корректно работает вместе с фильтрами.
 
 ### Phase 4. Row Actions
 
-- [ ] Перенести действия по строке:
-  - [ ] `Open`
-  - [ ] `Download`
-  - [ ] `Defer`
-  - [ ] `Wait trans`
-  - [ ] `Hide`
-- [ ] Добавить optimistic UI для удаления/обновления строк.
-- [ ] Добавить toast-уведомления.
+- [x] Перенести действия по строке:
+  - [x] `Open`
+  - [x] `Download`
+  - [x] `Defer`
+  - [x] `Wait trans`
+  - [x] `Hide`
+- [x] Добавить optimistic UI для удаления/обновления строк.
+- [x] Добавить toast-уведомления.
 
 ### Phase 5. Download Flow
 
-- [ ] Перенести модалку выбора доступных раздач.
-- [ ] Поднять API для поиска вариантов на Kinozal.
-- [ ] Поднять API для скачивания torrent-файла.
-- [ ] Обработать ошибки:
-  - [ ] неверный ответ kinozal
-  - [ ] лимит скачиваний
-  - [ ] проблемы hotfolder
-  - [ ] проблемы с настройками пользователя
+- [x] Перенести модалку выбора доступных раздач.
+- [x] Поднять API для поиска вариантов на Kinozal.
+- [x] Поднять API для скачивания torrent-файла.
+- [x] Обработать ошибки:
+  - [x] неверный ответ kinozal
+  - [x] лимит скачиваний
+  - [x] проблемы hotfolder
+  - [x] проблемы с настройками пользователя
 
 ### Phase 6. Polish And Stabilization
 
 - [ ] Проверить mobile behavior.
 - [ ] Проверить сохранение scroll/infinite state при навигации.
-- [ ] Добавить backend-тесты на новые API.
+- [x] Добавить backend-тесты на новые API.
 - [ ] Добавить smoke-проверки frontend-сценария.
 - [ ] Пройтись по UX-мелочам после первого реального использования.
 
@@ -124,4 +124,4 @@
 
 ## Ближайший следующий шаг
 
-- Реализовать `Phase 1`: первый read-only API и первую infinite-таблицу на `/kinozal`.
+- Реализовать `Phase 6`: mobile behavior, scroll state, тесты и финальную полировку UX.

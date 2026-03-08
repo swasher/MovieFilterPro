@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from bs4 import BeautifulSoup
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
@@ -13,6 +11,7 @@ from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_
 from web_logger import log, LogType
 from .models import MovieRSS
 from .models import UserPreferences
+from .hotfolder import resolve_torrents_hotfolder_path
 from .image_caching import get_cached_image_url
 from .image_caching import remove_cached_image
 from .kinozal import LinkConstructor
@@ -159,7 +158,8 @@ def get_torrent_file(request, kinozal_id: int):
     client = KinozalClient()
     pref = UserPreferences.get()
 
-    destination = pref.torrents_hotfolder
+    destination = pref.torrents_hotfolder or ""
+    resolved_destination = resolve_torrents_hotfolder_path(destination)
 
     out_of_torrent_number_message = 'Вам недоступен торрент-файл для скачивания'
 
@@ -184,17 +184,18 @@ def get_torrent_file(request, kinozal_id: int):
 
     try:
         filename = r.headers['content-disposition'].split('=')[1].strip('"')
-        full_path = Path(destination) / filename
+        resolved_destination.mkdir(parents=True, exist_ok=True)
+        full_path = resolved_destination / filename
         with open(full_path, 'wb') as file:
             file.write(r.content)
 
+        messages.success(request, f"Torrent saved to {full_path}")
         return HttpResponse(good_sign)
-    except (FileNotFoundError, KeyError):
-        messages.error(request, f"Unknown error, can't get torrent")
-        return HttpResponse(bad_sign)
     except (FileNotFoundError, OSError) as e:
-        # Ловим конкретные ошибки файловой системы
-        messages.error(request, f"File system error: {str(e)}")
+        messages.error(
+            request,
+            f"File system error. Configured hotfolder: {destination}. Resolved path: {resolved_destination}. {str(e)}",
+        )
         return HttpResponse(bad_sign)
     except KeyError:
         messages.error(request, "Unknown error, can't get torrent filename")

@@ -23,6 +23,13 @@ class PreferencesForm(forms.ModelForm):
 
         self.fields["tmdb_v4_authenticated_access_token"].disabled = True
         self.fields["tmdb_v4_authenticated_access_token"].label = "Authenticated Write Access Token"
+        self.fields["torrents_hotfolder"].help_text = (
+            "На проде в Docker обычно используется /torrents_hotfolder. "
+            "Локально указывай явный путь, например \\\\qnap\\TorrentsHotFolder или C:\\torrents_hotfolder."
+        )
+        self.fields["torrents_hotfolder"].widget.attrs["placeholder"] = (
+            r"/torrents_hotfolder or \\qnap\TorrentsHotFolder"
+        )
 
         self.helper.layout = Layout(
             HTML("""<h3>Last scan</h3><hr>"""),
