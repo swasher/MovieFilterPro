@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import Count, Q
 from ninja import NinjaAPI, Schema
@@ -7,6 +8,7 @@ from ninja.errors import HttpError
 
 from vault.models import Genre, Movie, MoviePerson, Person, UserList, UserListMovie, UserMovie
 from vault.services.movie_status_service import MovieStatusService
+from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
 
 
@@ -98,6 +100,20 @@ class TMDBSyncOut(Schema):
     message: str
     updated_fields: list[str] = []
     orphan_persons_deleted: int = 0
+    candidates: list["TMDBCandidateOut"] = []
+
+
+class TMDBCandidateOut(Schema):
+    tmdb_id: int
+    media_type: str
+    title: str
+    original_title: str
+    year: int | None = None
+    score: int
+    score_reasons: list[str] = []
+    poster_url: str | None = None
+    popularity: float | None = None
+    vote_average: float | None = None
 
 
 class ToggleStatusIn(Schema):
@@ -127,6 +143,11 @@ class ToggleMovieListOut(Schema):
     list_id: int
     is_in_list: bool
     custom_lists: list[MovieUserListOut]
+
+
+class TMDBCandidateConfirmIn(Schema):
+    tmdb_id: int
+    media_type: str
 
 
 class PersonMovieOut(Schema):
@@ -200,6 +221,23 @@ def _date_to_iso(value) -> str | None:
     return value.isoformat() if value else None
 
 
+def _tmdb_image_url(raw_path: str | None, size: str = "w342") -> str | None:
+    if not raw_path:
+        return None
+    value = str(raw_path).strip()
+    if not value:
+        return None
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+
+    base_url = getattr(settings, "TMDB_IMAGE_BASE_URL", "https://image.tmdb.org/t/p/")
+    if not base_url.endswith("/"):
+        base_url += "/"
+    normalized_size = str(size).strip("/") or "w342"
+    normalized_path = value if value.startswith("/") else f"/{value}"
+    return f"{base_url}{normalized_size}{normalized_path}"
+
+
 def _build_movie_user_lists(user, movie) -> list[MovieUserListOut]:
     if user is None:
         return []
@@ -217,6 +255,30 @@ def _build_movie_user_lists(user, movie) -> list[MovieUserListOut]:
         )
         for user_list in user_lists
     ]
+
+
+def _build_tmdb_sync_out(result) -> TMDBSyncOut:
+    return TMDBSyncOut(
+        status=result.status,
+        message=result.message,
+        updated_fields=list(result.updated_fields),
+        orphan_persons_deleted=result.orphan_persons_deleted,
+        candidates=[
+            TMDBCandidateOut(
+                tmdb_id=item.tmdb_id,
+                media_type=item.media_type,
+                title=item.title,
+                original_title=item.original_title,
+                year=item.year,
+                score=item.score,
+                score_reasons=list(item.score_reasons),
+                poster_url=_tmdb_image_url(item.poster_path),
+                popularity=item.popularity,
+                vote_average=item.vote_average,
+            )
+            for item in result.candidates
+        ],
+    )
 
 
 @api.get("/movies", response=list[MovieOut])
@@ -368,12 +430,42 @@ def movie_fetch_tmdb(request, slug: str, payload: TMDBSyncIn):
     except Exception as exc:
         raise HttpError(400, str(exc))
 
-    return TMDBSyncOut(
-        status=result.status,
-        message=result.message,
-        updated_fields=list(result.updated_fields),
-        orphan_persons_deleted=result.orphan_persons_deleted,
+    return _build_tmdb_sync_out(result)
+
+
+@api.post("/movies/{slug}/fetch-tmdb-confirm", response=TMDBSyncOut)
+def movie_fetch_tmdb_confirm(request, slug: str, payload: TMDBCandidateConfirmIn):
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    media_type = (payload.media_type or "").strip().lower()
+    if media_type not in {"movie", "tv"}:
+        raise HttpError(400, "Invalid media_type")
+
+    candidate = TMDBCandidate(
+        tmdb_id=payload.tmdb_id,
+        media_type=media_type,
+        title="",
+        original_title="",
+        year=None,
+        score=0,
+        score_reasons=("manual_choice",),
+        poster_path=None,
+        popularity=None,
+        vote_average=None,
     )
+
+    try:
+        result = TMDBMovieSyncService.sync_movie(
+            movie=movie,
+            force_rematch=True,
+            selected_candidate=candidate,
+        )
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    return _build_tmdb_sync_out(result)
 
 
 @api.post("/movies/{slug}/toggle-status", response=ToggleStatusOut)

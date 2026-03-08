@@ -8,6 +8,7 @@
   import * as Avatar from "$lib/components/ui/avatar";
   import * as StarRating from "$lib/components/ui/star-rating";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import * as Dialog from "$lib/components/ui/dialog";
   import {
     ArrowLeft,
     Bookmark,
@@ -25,6 +26,24 @@
   const movie = $derived(data.movie);
 
   let isSyncing = $state(false);
+  let isConfirmingCandidate = $state(false);
+  let candidateDialogOpen = $state(false);
+  let candidateDialogMode = $state<"needs_confirmation" | "needs_user_choice">("needs_user_choice");
+  let tmdbCandidates = $state<
+    Array<{
+      tmdb_id: number;
+      media_type: string;
+      title: string;
+      original_title: string;
+      year: number | null;
+      score: number;
+      score_reasons: string[];
+      poster_url: string | null;
+      popularity: number | null;
+      vote_average: number | null;
+    }>
+  >([]);
+  let selectedCandidateId = $state<number | null>(null);
   let customLists = $state<
     Array<{
       id: number;
@@ -75,9 +94,21 @@
       });
 
       const payload = (await response.json()) as {
-        status?: "ok" | "error" | "needs_user_choice";
+        status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
         message?: string;
         updated_fields?: string[];
+        candidates?: Array<{
+          tmdb_id: number;
+          media_type: string;
+          title: string;
+          original_title: string;
+          year: number | null;
+          score: number;
+          score_reasons: string[];
+          poster_url: string | null;
+          popularity: number | null;
+          vote_average: number | null;
+        }>;
       };
 
       if (!response.ok) {
@@ -87,8 +118,12 @@
 
       if (payload.status === "ok") {
         toast.success(payload.message ?? "TMDB sync done.");
-      } else if (payload.status === "needs_user_choice") {
-        toast.warning(payload.message ?? "TMDB needs manual choice.");
+      } else if (payload.status === "needs_confirmation" || payload.status === "needs_user_choice") {
+        tmdbCandidates = payload.candidates ?? [];
+        selectedCandidateId = tmdbCandidates[0]?.tmdb_id ?? null;
+        candidateDialogMode = payload.status;
+        candidateDialogOpen = true;
+        toast.warning(payload.message ?? "TMDB requires manual confirmation.");
       } else {
         toast.error(payload.message ?? "TMDB sync failed.");
       }
@@ -100,6 +135,61 @@
       toast.error(error instanceof Error ? error.message : "Unknown TMDB sync error");
     } finally {
       isSyncing = false;
+    }
+  };
+
+  const confirmTmdbCandidate = async () => {
+    const candidate = tmdbCandidates.find((item) => item.tmdb_id === selectedCandidateId);
+    if (!candidate) {
+      toast.error("Выбери кандидата.");
+      return;
+    }
+
+    isConfirmingCandidate = true;
+
+    try {
+      const response = await fetch(`/api/vault/movies/${movie.slug}/fetch-tmdb-confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tmdb_id: candidate.tmdb_id,
+          media_type: candidate.media_type
+        })
+      });
+
+      const payload = (await response.json()) as {
+        status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
+        message?: string;
+        candidates?: typeof tmdbCandidates;
+      };
+
+      if (!response.ok) {
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+
+      if (payload.status === "ok") {
+        candidateDialogOpen = false;
+        tmdbCandidates = [];
+        selectedCandidateId = null;
+        toast.success(payload.message ?? "TMDB sync done.");
+        await invalidateAll();
+        return;
+      }
+
+      if (payload.status === "needs_confirmation" || payload.status === "needs_user_choice") {
+        tmdbCandidates = payload.candidates ?? [];
+        selectedCandidateId = tmdbCandidates[0]?.tmdb_id ?? null;
+        candidateDialogMode = payload.status;
+        toast.warning(payload.message ?? "Нужно подтвердить кандидата.");
+        return;
+      }
+
+      toast.error(payload.message ?? "TMDB sync failed.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unknown TMDB confirm error");
+    } finally {
+      isConfirmingCandidate = false;
     }
   };
 
@@ -478,3 +568,86 @@
     </div>
   </div>
 </div>
+
+<Dialog.Root bind:open={candidateDialogOpen}>
+  <Dialog.Content class="sm:max-w-3xl">
+    <Dialog.Header>
+      <Dialog.Title>
+        {candidateDialogMode === "needs_confirmation" ? "Подтверждение TMDB-совпадения" : "Выбор фильма на TMDB"}
+      </Dialog.Title>
+      <Dialog.Description>
+        {#if candidateDialogMode === "needs_confirmation"}
+          Найден один неуверенный кандидат. Проверь его и подтверди выбор вручную.
+        {:else}
+          Найдено несколько кандидатов. Выбери нужный вариант и подтверди.
+        {/if}
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <div class="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+      {#each tmdbCandidates as candidate (candidate.tmdb_id)}
+        <button
+          type="button"
+          class={`w-full rounded-xl border p-3 text-left transition ${
+            selectedCandidateId === candidate.tmdb_id
+              ? "border-primary bg-accent/40"
+              : "border-border/70 bg-card hover:bg-accent/20"
+          }`}
+          onclick={() => {
+            selectedCandidateId = candidate.tmdb_id;
+          }}
+        >
+          <div class="flex gap-3">
+            <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
+              {#if candidate.poster_url}
+                <img
+                  src={candidate.poster_url}
+                  alt={candidate.title}
+                  class="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              {:else}
+                <span class="text-muted-foreground text-[10px]">no poster</span>
+              {/if}
+            </div>
+
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="space-y-1">
+                <p class="truncate text-sm font-semibold">{candidate.title}</p>
+                {#if candidate.original_title}
+                  <p class="text-muted-foreground truncate text-xs">{candidate.original_title}</p>
+                {/if}
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <Badge variant="secondary">{candidate.media_type}</Badge>
+                <Badge variant="outline">{candidate.year ?? "—"}</Badge>
+                <Badge variant="outline">score {candidate.score}</Badge>
+                {#if candidate.vote_average}
+                  <Badge variant="outline">TMDB {candidate.vote_average.toFixed(1)}</Badge>
+                {/if}
+              </div>
+
+              {#if candidate.score_reasons.length}
+                <p class="text-muted-foreground line-clamp-2 text-xs">
+                  {candidate.score_reasons.join(", ")}
+                </p>
+              {/if}
+            </div>
+          </div>
+        </button>
+      {/each}
+    </div>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => {
+        candidateDialogOpen = false;
+      }}>
+        Отмена
+      </Button>
+      <Button onclick={confirmTmdbCandidate} disabled={isConfirmingCandidate || selectedCandidateId === null}>
+        {isConfirmingCandidate ? "Сохраняю..." : "Выбрать"}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

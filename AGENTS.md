@@ -6,6 +6,22 @@
 
 ## Project Agreements
 
+### Architecture Transition
+- Проект находится в процессе перехода на новую архитектуру.
+- Django остается backend-слоем и источником данных.
+- Новый frontend постепенно переносится на Svelte и живет в `front/`.
+- Перенос делается инкрементально, без разрушения и без принудительного удаления старого Django UI.
+- Legacy Django templates/views продолжают работать параллельно, пока новые сценарии не перенесены полностью.
+- Новый frontend общается с backend через `django-ninja` API.
+
+### Frontend Stack Rules
+- Новый frontend: `Svelte 5` с runes only.
+- Использовать только runes-синтаксис (`$state`, `$derived`, `$effect`, `$props`, snippets и т.д.).
+- Не использовать устаревший синтаксис Svelte 3/4.
+- UI-слой: только `shadcn-svelte`.
+- Если нужный `shadcn-svelte` компонент отсутствует, сначала попросить пользователя установить его, а не городить кастомную замену.
+- Папка нового frontend: `front/`.
+
 ### Vault Data Import
 - Assume Vault tables are empty before import.
 - No data transfer between legacy Vault schemas is required.
@@ -72,6 +88,7 @@
 - Основные страницы: `vault/views.py`, `vault/templates/vault/*`.
 - Роутинг: `vault/urls.py` и также legacy-роуты без префикса в `movie_filter_pro/urls.py`.
 - Новый API-слой для фронта Svelte: `django-ninja` (`vault/api.py`, префикс `/api/vault/`).
+- `vault` сейчас является основным app для поэтапного переноса в новый Svelte frontend.
 
 ### 4) Импорт данных в Vault
 - Команда: `uv run python manage.py import_kinorium_csv`.
@@ -118,6 +135,20 @@
 - Учитывать singleton-настройки через `UserPreferences.get()`.
 - Для изменений в Vault-статусах идти через `MovieStatusService`, а не дублировать логику во views.
 - Для задач импорта в Vault предполагать чистые таблицы (согласно соглашениям выше).
+
+## Текущее состояние миграции Frontend
+- Новый frontend уже поднят в `front/` и подключен к Django backend.
+- Основной паттерн интеграции: `front` -> SvelteKit proxy routes -> `django-ninja` endpoints в `vault/api.py`.
+- Для локального single-user сценария глобальный `SSR` в `front` отключен, приложение ведет себя как SPA.
+- Перенос `vault` находится в продвинутой стадии: базовый список фильмов, sidebar-фильтры, поиск, сортировка, детальная страница фильма, страница персоны, статусы, рейтинг, пользовательские списки на странице фильма и TMDB sync уже работают в новом frontend.
+- TMDB flow в новом frontend уже поддерживает:
+  - `ok`
+  - `needs_confirmation` (один неуверенный кандидат)
+  - `needs_user_choice` (несколько кандидатов)
+- При переносе новых сценариев для `vault`:
+  - не менять модели без явной необходимости;
+  - не ломать существующий Django UI;
+  - по возможности сохранять сервисный слой и добавлять новые API/view-слои поверх него.
 
 ## Шапки для сервисного слоя
 

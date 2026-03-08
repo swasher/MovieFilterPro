@@ -10,7 +10,7 @@ from tmdb_adapter.client_singleton import get_tmdb_client
 from vault.models import Movie
 
 
-MatchStatus = Literal["auto_match", "needs_user_choice", "not_found"]
+MatchStatus = Literal["auto_match", "needs_confirmation", "needs_user_choice", "not_found"]
 MediaType = Literal["movie", "tv"]
 
 
@@ -121,6 +121,14 @@ class TMDBMovieMatchingService:
                 selected_candidate=best,
                 candidates=tuple(relevant[:top_n]),
                 message="Найден уверенный матч TMDB",
+            )
+
+        if len(relevant) == 1:
+            return TMDBMatchingResult(
+                status="needs_confirmation",
+                selected_candidate=None,
+                candidates=(best,),
+                message="Найден один неуверенный матч TMDB. Подтверди выбор вручную.",
             )
 
         return TMDBMatchingResult(

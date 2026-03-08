@@ -17,7 +17,7 @@ from vault.services.tmdb_movie_matching_service import (
 )
 
 
-SyncStatus = Literal["ok", "needs_user_choice", "error"]
+SyncStatus = Literal["ok", "needs_confirmation", "needs_user_choice", "error"]
 MediaType = Literal["movie", "tv"]
 logger = logging.getLogger("vault.tmdb_sync")
 
@@ -67,10 +67,10 @@ class TMDBMovieSyncService:
                 else:
                     match_result = TMDBMovieMatchingService.match_movie(movie)
                     cls._log_match_found(match_result)
-                    if match_result.status == "needs_user_choice":
-                        cls._log_done("needs_user_choice", match_result.message)
+                    if match_result.status in {"needs_confirmation", "needs_user_choice"}:
+                        cls._log_done(match_result.status, match_result.message)
                         return TMDBSyncResult(
-                            status="needs_user_choice",
+                            status=match_result.status,
                             message=match_result.message,
                             candidates=match_result.candidates,
                         )
