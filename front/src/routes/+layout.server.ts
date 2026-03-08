@@ -1,6 +1,6 @@
-import { env } from "$env/dynamic/private";
 import type { LayoutServerLoad } from "./$types";
 import { defaultSidebarItems, type SidebarItem } from "$lib/template-data";
+import { applyDjangoCookies, djangoFetch } from "$lib/server/django";
 
 type ApiSidebarItem = {
   id: string;
@@ -16,13 +16,32 @@ type ApiSidebarGroup = {
   children: ApiSidebarItem[];
 };
 
-const API_BASE_URL = env.API_BASE_URL ?? "http://127.0.0.1:8000";
+type AuthSession = {
+  is_authenticated: boolean;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+  } | null;
+};
 
-export const load: LayoutServerLoad = async ({ fetch }) => {
+export const load: LayoutServerLoad = async (event) => {
+  let auth: AuthSession = {
+    is_authenticated: false,
+    user: null
+  };
+
   try {
-    const response = await fetch(`${API_BASE_URL}/api/vault/sidebar`);
+    const sessionResponse = await djangoFetch(event, "/api/auth/session/");
+    applyDjangoCookies(sessionResponse, event.cookies);
+    if (sessionResponse.ok) {
+      auth = (await sessionResponse.json()) as AuthSession;
+    }
+
+    const response = await djangoFetch(event, "/api/vault/sidebar");
     if (!response.ok) {
       return {
+        auth,
         sidebarItems: defaultSidebarItems satisfies SidebarItem[]
       };
     }
@@ -40,9 +59,10 @@ export const load: LayoutServerLoad = async ({ fetch }) => {
       }))
     }));
 
-    return { sidebarItems };
+    return { auth, sidebarItems };
   } catch {
     return {
+      auth,
       sidebarItems: defaultSidebarItems satisfies SidebarItem[]
     };
   }

@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.db.models import Count, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
@@ -188,7 +187,14 @@ def _resolve_api_user(request):
     user = getattr(request, "user", None)
     if user is not None and user.is_authenticated:
         return user
-    return User.objects.order_by("id").first()
+    return None
+
+
+def _require_api_user(request):
+    user = _resolve_api_user(request)
+    if user is None:
+        raise HttpError(401, "Authentication required")
+    return user
 
 
 def _build_user_state(user, movie) -> UserStateOut:
@@ -474,9 +480,7 @@ def movie_toggle_status(request, slug: str, payload: ToggleStatusIn):
     if movie is None:
         raise HttpError(404, "Movie not found")
 
-    user = _resolve_api_user(request)
-    if user is None:
-        raise HttpError(400, "User not found")
+    user = _require_api_user(request)
 
     try:
         is_active = MovieStatusService.toggle_status(user, movie, payload.status_key)
@@ -496,9 +500,7 @@ def movie_toggle_list(request, slug: str, payload: ToggleMovieListIn):
     if movie is None:
         raise HttpError(404, "Movie not found")
 
-    user = _resolve_api_user(request)
-    if user is None:
-        raise HttpError(400, "User not found")
+    user = _require_api_user(request)
 
     user_list = UserList.objects.filter(id=payload.list_id, user=user).first()
     if user_list is None:
@@ -525,9 +527,7 @@ def movie_rate(request, slug: str, payload: RateMovieIn):
     if movie is None:
         raise HttpError(404, "Movie not found")
 
-    user = _resolve_api_user(request)
-    if user is None:
-        raise HttpError(400, "User not found")
+    user = _require_api_user(request)
 
     try:
         if payload.rating is None:

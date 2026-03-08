@@ -1,5 +1,5 @@
 import type { PageServerLoad } from "./$types";
-import { env } from "$env/dynamic/private";
+import { djangoFetch } from "$lib/server/django";
 
 type ApiMovie = {
   id: number;
@@ -10,9 +10,8 @@ type ApiMovie = {
   poster_url: string | null;
 };
 
-const API_BASE_URL = env.API_BASE_URL ?? "http://127.0.0.1:8000";
-
-export const load: PageServerLoad = async ({ fetch, url }) => {
+export const load: PageServerLoad = async (event) => {
+  const { url } = event;
   const genre = (url.searchParams.get("genre") ?? "").trim();
   const status = (url.searchParams.get("status") ?? "").trim();
   const list = (url.searchParams.get("list") ?? "").trim();
@@ -37,7 +36,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
       params.set("order", order);
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/vault/movies?${params.toString()}`);
+    const response = await djangoFetch(event, `/api/vault/movies?${params.toString()}`);
     if (!response.ok) {
       return {
         movies: [] as ApiMovie[],

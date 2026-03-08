@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { invalidateAll } from "$app/navigation";
+  import { toast } from "svelte-sonner";
   import type { Snippet } from "svelte";
   import type { HeaderLink, SidebarItem } from "$lib/template-data";
   import { Button } from "$lib/components/ui/button";
@@ -12,13 +14,22 @@
     children?: Snippet;
     headerLinks: HeaderLink[];
     sidebarItems: SidebarItem[];
+    auth: {
+      is_authenticated: boolean;
+      user: {
+        id: number;
+        username: string;
+        email: string;
+      } | null;
+    };
     appName?: string;
   };
 
-  let { children, headerLinks, sidebarItems, appName = "MovieFilter Pro" }: Props = $props();
+  let { children, headerLinks, sidebarItems, auth, appName = "MovieFilter Pro" }: Props = $props();
 
   let searchTerm = $state("");
   let darkMode = $state(false);
+  let isLoggingOut = $state(false);
 
   const isActive = (href: string): boolean => {
     if (typeof window === "undefined") return false;
@@ -40,6 +51,28 @@
     darkMode = stored ? stored === "dark" : prefersDark;
     document.documentElement.classList.toggle("dark", darkMode);
   });
+
+  const logout = async () => {
+    isLoggingOut = true;
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST"
+      });
+      const payload = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+
+      await invalidateAll();
+      toast.success(payload.message ?? "Выход выполнен.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ошибка выхода");
+    } finally {
+      isLoggingOut = false;
+    }
+  };
 </script>
 
 <Sidebar.Provider>
@@ -145,10 +178,23 @@
             {/if}
           </Button>
 
-          <Button variant="outline" size="sm">
-            <User class="size-4" />
-            Login
-          </Button>
+          {#if auth.is_authenticated && auth.user}
+            <div class="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled>
+                <User class="size-4" />
+                {auth.user.username}
+              </Button>
+              <Button variant="outline" size="sm" onclick={logout} disabled={isLoggingOut}>
+                <User class="size-4" />
+                {isLoggingOut ? "..." : "Выйти"}
+              </Button>
+            </div>
+          {:else}
+            <Button href="/login" variant="outline" size="sm">
+              <User class="size-4" />
+              Войти
+            </Button>
+          {/if}
         </div>
       </div>
       <Separator />

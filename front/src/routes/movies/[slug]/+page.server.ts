@@ -1,6 +1,6 @@
-import { env } from "$env/dynamic/private";
 import { error } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
+import { djangoFetch } from "$lib/server/django";
 
 type ApiMovieDetail = {
   id: number;
@@ -52,10 +52,8 @@ type ApiMovieDetail = {
   }>;
 };
 
-const API_BASE_URL = env.API_BASE_URL ?? "http://127.0.0.1:8000";
-
-export const load: PageServerLoad = async ({ fetch, params }) => {
-  const response = await fetch(`${API_BASE_URL}/api/vault/movies/${params.slug}`);
+export const load: PageServerLoad = async (event) => {
+  const response = await djangoFetch(event, `/api/vault/movies/${event.params.slug}`);
   if (response.status === 404) {
     throw error(404, "Movie not found");
   }

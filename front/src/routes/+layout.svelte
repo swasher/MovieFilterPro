@@ -13,6 +13,6 @@
 </svelte:head>
 
 <Toaster />
-<AppShell {headerLinks} sidebarItems={data.sidebarItems} appName="MovieFilter Pro">
+<AppShell {headerLinks} sidebarItems={data.sidebarItems} auth={data.auth} appName="MovieFilter Pro">
   {@render children?.()}
 </AppShell>

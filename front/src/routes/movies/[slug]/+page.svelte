@@ -83,6 +83,16 @@
     await goto("/");
   };
 
+  const handleUnauthorized = async (status: number, message?: string) => {
+    if (status !== 401) {
+      return false;
+    }
+
+    toast.error(message ?? "Нужно войти в систему.");
+    await goto("/login");
+    return true;
+  };
+
   const runTmdbSync = async (forceRematch: boolean) => {
     isSyncing = true;
 
@@ -112,6 +122,9 @@
       };
 
       if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) {
+          return;
+        }
         toast.error(payload.message ?? `HTTP ${response.status}`);
         return;
       }
@@ -206,6 +219,9 @@
     };
 
     if (!response.ok) {
+      if (await handleUnauthorized(response.status, payload.message)) {
+        return;
+      }
       toast.error(payload.message ?? `HTTP ${response.status}`);
       return;
     }
@@ -228,6 +244,9 @@
     };
 
     if (!response.ok) {
+      if (await handleUnauthorized(response.status, payload.message)) {
+        return;
+      }
       toast.error(payload.message ?? `HTTP ${response.status}`);
       return;
     }
@@ -258,6 +277,9 @@
     pendingListIds = pendingListIds.filter((id) => id !== listId);
 
     if (!response.ok) {
+      if (await handleUnauthorized(response.status, payload.message)) {
+        return;
+      }
       toast.error(payload.message ?? `HTTP ${response.status}`);
       return;
     }

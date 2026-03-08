@@ -1,13 +1,12 @@
-import { env } from "$env/dynamic/private";
 import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
+import { djangoFetch } from "$lib/server/django";
 
-const API_BASE_URL = env.API_BASE_URL ?? "http://127.0.0.1:8000";
-
-export const POST: RequestHandler = async ({ params, request, fetch }) => {
+export const POST: RequestHandler = async (event) => {
+  const { params, request } = event;
   const payload = await request.json();
 
-  const response = await fetch(`${API_BASE_URL}/api/vault/movies/${params.slug}/fetch-tmdb-confirm`, {
+  const response = await djangoFetch(event, `/api/vault/movies/${params.slug}/fetch-tmdb-confirm`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"

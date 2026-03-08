@@ -140,6 +140,12 @@
 - Новый frontend уже поднят в `front/` и подключен к Django backend.
 - Основной паттерн интеграции: `front` -> SvelteKit proxy routes -> `django-ninja` endpoints в `vault/api.py`.
 - Для локального single-user сценария глобальный `SSR` в `front` отключен, приложение ведет себя как SPA.
+- Аутентификация для нового Svelte frontend остается на стандартной Django session auth (`django.contrib.auth`).
+- Svelte используется только как UI-слой для login/logout/session state, без отдельной JWT/token-based схемы.
+- В новом frontend и API-слоях использовать реальный `request.user`, а не fallback-пользователя.
+- Не подставлять `User.objects.first()` или аналогичные single-user fallback-механизмы в API.
+- Если endpoint требует пользователя, он должен возвращать `401`, а не молча работать от имени "дефолтного" пользователя.
+- Для текущего self-hosted/single-user сценария предпочитать простую Django session auth реализацию вместо усложненной auth-архитектуры.
 - Перенос `vault` находится в продвинутой стадии: базовый список фильмов, sidebar-фильтры, поиск, сортировка, детальная страница фильма, страница персоны, статусы, рейтинг, пользовательские списки на странице фильма и TMDB sync уже работают в новом frontend.
 - TMDB flow в новом frontend уже поддерживает:
   - `ok`
