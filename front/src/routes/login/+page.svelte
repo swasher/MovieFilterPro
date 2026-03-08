@@ -64,8 +64,14 @@
         event.preventDefault();
         void submit();
       }}>
-        <Input bind:value={username} placeholder="Username" autocomplete="username" />
-        <Input bind:value={password} type="password" placeholder="Password" autocomplete="current-password" />
+        <Input bind:value={username} name="username" placeholder="Username" autocomplete="username" />
+        <Input
+          bind:value={password}
+          name="password"
+          type="password"
+          placeholder="Password"
+          autocomplete="current-password"
+        />
         <Button class="w-full" type="submit" disabled={isSubmitting || !username.trim() || !password}>
           {isSubmitting ? "Входим..." : "Войти"}
         </Button>

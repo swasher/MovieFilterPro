@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
@@ -11,6 +12,7 @@ def _build_session_payload(request):
         return {
             "is_authenticated": False,
             "user": None,
+            "site_version": settings.VERSION,
         }
 
     return {
@@ -20,6 +22,7 @@ def _build_session_payload(request):
             "username": user.username,
             "email": user.email,
         },
+        "site_version": settings.VERSION,
     }
 
 
