@@ -87,6 +87,22 @@ class KinozalApiTests(TestCase):
         self.assertEqual(payload["items"][0]["title"], "Beta")
         self.assertEqual(payload["items"][0]["priority_key"], "LOW")
 
+    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
+    def test_movies_endpoint_sorts_oldest_scan_first_by_default(self, _cached_image_mock):
+        response = self.client.get("/api/kinozal/movies", {"priority": "ALL"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual([item["title"] for item in payload["items"]], ["Gamma", "Beta", "Alpha"])
+
+    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
+    def test_movies_endpoint_sorts_newest_scan_first_when_reversed(self, _cached_image_mock):
+        response = self.client.get("/api/kinozal/movies", {"priority": "ALL", "reverse": "true"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual([item["title"] for item in payload["items"]], ["Alpha", "Beta", "Gamma"])
+
     def test_summary_endpoint_returns_counters(self):
         response = self.client.get("/api/kinozal/summary")
 

@@ -1,0 +1,224 @@
+@reference "../layout.css";
+
+@layer components {
+  .kz-page {
+    @apply flex w-full flex-col gap-4 px-4 py-4;
+  }
+
+  .kz-inline-alert {
+    @apply flex items-center gap-3 rounded-xl border px-4 py-3 text-sm;
+  }
+
+  .kz-inline-alert--warning {
+    @apply border-amber-500/30 bg-amber-500/5 text-muted-foreground;
+  }
+
+  .kz-toolbar {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .kz-toolbar-main {
+    @apply flex w-full flex-col gap-2;
+  }
+
+  .kz-toolbar-left {
+    @apply min-w-0;
+  }
+
+  .kz-toolbar-right {
+    @apply flex min-w-0 flex-1 flex-wrap items-center gap-2;
+  }
+
+  .kz-toolbar-search {
+    @apply relative min-w-[260px] flex-1;
+  }
+
+  .kz-toggle-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .kz-toolbar-button {
+    @apply h-10 min-w-[190px] justify-between;
+  }
+
+  .kz-toolbar-icon-button {
+    @apply h-10 w-10 px-0 text-muted-foreground;
+  }
+
+  .kz-summary-strip {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .kz-summary-item {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-border/55 bg-background/70 px-2.5 py-1.5 text-sm leading-none;
+  }
+
+  .kz-summary-item--success {
+    @apply border-emerald-500/18 bg-emerald-500/5;
+  }
+
+  .kz-summary-item--primary {
+    @apply border-sky-500/18 bg-sky-500/5;
+  }
+
+  .kz-summary-item--muted {
+    @apply bg-muted/35 text-muted-foreground;
+  }
+
+  .kz-summary-item--danger-muted {
+    @apply border-rose-500/14 bg-rose-500/4 text-muted-foreground;
+  }
+
+  .kz-summary-label {
+    @apply text-[12px] text-muted-foreground;
+  }
+
+  .kz-summary-value {
+    @apply text-[12px] font-semibold text-foreground;
+  }
+
+  .kz-table-card {
+    @apply overflow-hidden border-border/70;
+  }
+
+  .kz-table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .kz-table {
+    @apply w-full min-w-[1600px] table-fixed border-collapse;
+  }
+
+  .kz-th {
+    @apply px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+  }
+
+  .kz-row {
+    @apply border-t align-top bg-background transition-colors;
+  }
+
+  .kz-row--partial {
+    @apply bg-amber-500/5;
+  }
+
+  .kz-cell {
+    @apply px-5 py-4;
+  }
+
+  .kz-poster {
+    @apply h-52 w-36 rounded-lg;
+  }
+
+  .kz-title-block {
+    @apply space-y-3;
+  }
+
+  .kz-title-stack {
+    @apply space-y-1.5;
+  }
+
+  .kz-title {
+    @apply text-[17px] font-semibold leading-6 tracking-tight text-foreground;
+  }
+
+  .kz-subtitle {
+    @apply text-sm leading-5 text-muted-foreground;
+  }
+
+  .kz-pill-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .kz-status-pill {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none;
+  }
+
+  .kz-status-pill--warning {
+    @apply border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300;
+  }
+
+  .kz-meta-line {
+    @apply text-[11px] uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .kz-facts {
+    @apply space-y-2;
+  }
+
+  .kz-fact {
+    @apply grid grid-cols-[3.75rem_minmax(0,1fr)] items-baseline gap-x-3 border-b border-border/40 pb-2 last:border-b-0 last:pb-0;
+  }
+
+  .kz-fact-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .kz-fact-value {
+    @apply text-sm font-medium leading-5 text-foreground;
+  }
+
+  .kz-meta-stack {
+    @apply space-y-3;
+  }
+
+  .kz-meta-group {
+    @apply space-y-1;
+  }
+
+  .kz-meta-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .kz-meta-value {
+    @apply text-sm leading-6 text-foreground/90;
+  }
+
+  .kz-plot {
+    @apply text-sm leading-6 text-foreground/90;
+  }
+
+  .kz-translate {
+    @apply text-sm leading-6 text-foreground/90;
+  }
+
+  .kz-actions {
+    @apply flex flex-col gap-2;
+  }
+
+  .kz-action-button {
+    @apply h-9 justify-start;
+  }
+}
+
+@media (min-width: 640px) {
+  @layer components {
+  }
+}
+
+@media (min-width: 768px) {
+  @layer components {
+    .kz-page {
+      @apply px-6 py-6;
+    }
+  }
+}
+
+@media (min-width: 1280px) {
+  @layer components {
+    .kz-page {
+      @apply px-8;
+    }
+
+    .kz-toolbar-main {
+      @apply flex-row items-center justify-between;
+    }
+
+    .kz-toolbar-right {
+      @apply justify-end;
+    }
+
+    .kz-toolbar-search {
+      max-width: 420px;
+    }
+  }
+}

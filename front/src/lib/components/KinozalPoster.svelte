@@ -1,14 +1,17 @@
 <script lang="ts">
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import { cn } from "$lib/utils";
 
   let {
     src,
     alt,
+    containerClass = "",
     imageClass = "",
     fallbackLabel = "no poster"
   }: {
     src: string | null;
     alt: string;
+    containerClass?: string;
     imageClass?: string;
     fallbackLabel?: string;
   } = $props();
@@ -53,7 +56,13 @@
   });
 </script>
 
-<div bind:this={container} class="relative h-36 w-24 overflow-hidden rounded-md border border-border/60 bg-muted/40 shadow-sm">
+<div
+  bind:this={container}
+  class={cn(
+    "relative h-36 w-24 overflow-hidden rounded-md border border-border/60 bg-muted/40 shadow-sm",
+    containerClass
+  )}
+>
   {#if !src}
     <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[11px] uppercase tracking-[0.18em]">
       {fallbackLabel}

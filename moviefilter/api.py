@@ -35,7 +35,7 @@ PRIORITY_KEY_MAP = {
 PRIORITY_DB_MAP = {value: key for key, value in PRIORITY_KEY_MAP.items()}
 
 ALLOWED_SORTS = {
-    "date_added": ("-date_added", "-id"),
+    "date_added": ("date_added", "id"),
     "title": ("title", "id"),
     "year": ("-year", "-id"),
     "imdb_rating": ("-imdb_rating", "-id"),
@@ -43,7 +43,7 @@ ALLOWED_SORTS = {
 }
 
 ALLOWED_REVERSED_SORTS = {
-    "date_added": ("date_added", "id"),
+    "date_added": ("-date_added", "-id"),
     "title": ("-title", "-id"),
     "year": ("year", "id"),
     "imdb_rating": ("imdb_rating", "id"),

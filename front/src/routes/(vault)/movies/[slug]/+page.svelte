@@ -1,10 +1,10 @@
 <script lang="ts">
   import { goto, invalidateAll } from "$app/navigation";
+  import "../../vault-detail.css";
   import { toast } from "svelte-sonner";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
-  import { Separator } from "$lib/components/ui/separator";
   import * as Avatar from "$lib/components/ui/avatar";
   import * as StarRating from "$lib/components/ui/star-rating";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -296,24 +296,26 @@
       .join("")
       .slice(0, 2)
       .toUpperCase();
+
+  const compactText = (items: Array<{ name: string }>) => items.map((item) => item.name).join(", ") || "Not set";
 </script>
 
-<div class="mx-auto w-full max-w-6xl p-6">
-  <div class="mb-5">
+<div class="vd-page">
+  <div class="vd-back">
     <Button variant="ghost" size="sm" onclick={goBack}>
       <ArrowLeft class="size-4" />
       Back
     </Button>
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-    <div class="space-y-4">
-      <Card class="overflow-hidden rounded-xl !gap-0 !py-0">
+  <div class="vd-layout vd-layout--movie">
+    <div class="vd-sidebar">
+      <Card class="vd-poster-card !gap-0 !py-0">
         <CardContent class="!p-0">
           {#if movie.poster_url}
-            <img src={movie.poster_url} alt={movie.title} class="aspect-[2/3] w-full object-cover" />
+            <img src={movie.poster_url} alt={movie.title} class="vd-poster" />
           {:else}
-            <div class="bg-muted text-muted-foreground flex aspect-[2/3] items-center justify-center text-sm">
+            <div class="vd-poster-fallback">
               no poster
             </div>
           {/if}
@@ -327,7 +329,7 @@
         </Button>
       {/if}
 
-      <div class="space-y-3">
+      <div class="vd-sidebar-stack">
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
@@ -360,105 +362,83 @@
           </DropdownMenu.Content>
         </DropdownMenu.Root>
 
-        <div class="space-y-2">
-          <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">В списках</p>
+        <div class="vd-section">
+          <p class="vd-section-title">В списках</p>
           {#if customLists.some((item) => item.is_in_list)}
-            <div class="flex flex-col items-start gap-2">
+            <div class="vd-list-column">
               {#each customLists.filter((item) => item.is_in_list) as item (item.id)}
-                <Badge variant="secondary" class="w-full justify-start rounded-md px-3 py-1.5">
+                <div class="vd-list-chip">
                   {item.name}
-                </Badge>
+                </div>
               {/each}
             </div>
           {:else}
-            <p class="text-muted-foreground text-sm">Фильм пока не добавлен в пользовательские списки.</p>
+            <p class="vd-sidebar-note">Фильм пока не добавлен в пользовательские списки.</p>
           {/if}
         </div>
       </div>
     </div>
 
-    <div class="space-y-6">
-      <Card class="rounded-2xl border-border/70 bg-card/80 shadow-sm">
-        <CardHeader class="space-y-4">
-          <div class="space-y-1">
-            <CardTitle class="text-3xl leading-tight">{movie.title}</CardTitle>
+    <div class="space-y-5">
+      <Card class="vd-card">
+        <CardHeader class="vd-hero">
+          <div class="vd-title-block">
+            <p class="vd-overline">Movie</p>
+            <CardTitle class="vd-title">{movie.title}</CardTitle>
             {#if movie.original_title}
-              <CardDescription class="text-base">{movie.original_title}</CardDescription>
+              <CardDescription class="vd-subtitle">{movie.original_title}</CardDescription>
             {/if}
           </div>
 
-          <div class="flex flex-wrap gap-2">
-            <Badge variant={movie.tmdb_linked ? "default" : "secondary"}>
-              {movie.tmdb_linked ? `TMDB linked #${movie.tmdb_id}` : "TMDB not linked"}
-            </Badge>
-            <Badge variant="outline">source: {movie.source_display}</Badge>
-            {#if movie.imdb_rating}
-              <Badge variant="secondary">{movie.imdb_rating} rating</Badge>
-            {/if}
+          <div class="vd-facts-row">
             {#if movie.year}
-              <Badge variant="outline">{movie.year} year</Badge>
+              <span class="vd-fact-inline">{movie.year}</span>
             {/if}
-            <Badge variant="outline">{movie.movie_type_display}</Badge>
+            <span class="vd-fact-inline">{movie.movie_type_display}</span>
             {#if movie.duration}
-              <Badge variant="outline">
+              <span class="vd-fact-inline inline-flex items-center gap-1.5">
                 <Clock3 class="size-3.5" />
                 {movie.duration} min
-              </Badge>
+              </span>
             {/if}
             {#if movie.age_rating}
-              <Badge variant="outline">
+              <span class="vd-fact-inline inline-flex items-center gap-1.5">
                 <Shield class="size-3.5" />
                 {movie.age_rating}
-              </Badge>
+              </span>
+            {/if}
+            {#if movie.imdb_rating}
+              <span class="vd-fact-inline">IMDb {movie.imdb_rating}</span>
             {/if}
           </div>
 
-          <div class="space-y-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-muted-foreground text-sm">Genres:</span>
-              {#if movie.genres.length}
-                {#each movie.genres as genre (genre.slug ?? genre.name)}
-                  <Badge variant="secondary">{genre.name}</Badge>
-                {/each}
-              {:else}
-                <span class="text-muted-foreground text-sm">Not set</span>
-              {/if}
-            </div>
+          <div class="vd-facts-grid">
+            <dl class="vd-facts-list">
+              <div class="vd-fact">
+                <dt class="vd-fact-label">Genres</dt>
+                <dd class="vd-fact-value">{compactText(movie.genres)}</dd>
+              </div>
+              <div class="vd-fact">
+                <dt class="vd-fact-label">Countries</dt>
+                <dd class="vd-fact-value">{compactText(movie.countries)}</dd>
+              </div>
+            </dl>
 
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-muted-foreground text-sm">Countries:</span>
-              {#if movie.countries.length}
-                {#each movie.countries as country (country.name)}
-                  <Badge variant="outline">{country.name}</Badge>
-                {/each}
-              {:else}
-                <span class="text-muted-foreground text-sm">Not set</span>
-              {/if}
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-muted-foreground text-sm">Status:</span>
-              <Badge variant="outline">{movie.status_display}</Badge>
+            <div class="vd-section">
+              <p class="vd-section-title">Статус</p>
+              <div class="vd-status-row">
+                <span class="vd-status-pill vd-status-pill--primary">{movie.status_display}</span>
+              </div>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent class="space-y-5">
-          <div class="flex flex-wrap gap-2">
-            <Button onclick={() => runTmdbSync(false)} disabled={isSyncing}>
-              {isSyncing ? "Sync..." : "Fetch"}
-            </Button>
-            <Button variant="outline" onclick={() => runTmdbSync(true)} disabled={isSyncing}>
-              <RefreshCw class="size-4" />
-              Force data
-            </Button>
-          </div>
-
-          <Separator />
-
-          <div class="space-y-3">
-            <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">User actions</p>
-            <div class="flex flex-wrap gap-2">
+        <CardContent class="vd-card-content">
+          <div class="vd-section">
+            <div class="vd-section-header">
+              <p class="vd-section-title">User actions</p>
+            </div>
+            <div class="vd-primary-actions">
               {#each statusButtons as item (item.key)}
                 {@const Icon = item.icon}
                 <Button
@@ -470,7 +450,7 @@
                       ? "default"
                       : "outline"
                   }
-                  size="sm"
+                  class="vd-segment"
                   onclick={() => toggleStatus(item.key)}
                 >
                   <Icon class="size-4" />
@@ -480,10 +460,9 @@
             </div>
           </div>
 
-          <div class="space-y-3">
-            <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">Rating</p>
-
-            <div class="flex flex-wrap items-center gap-3">
+          <div class="vd-section">
+            <p class="vd-section-title">Моя оценка</p>
+            <div class="vd-rating-row">
               <StarRating.Root
                 value={userState.rating ?? 0}
                 max={10}
@@ -497,12 +476,7 @@
                 {/snippet}
               </StarRating.Root>
 
-              <Badge
-                variant="secondary"
-                class="bg-orange-400 px-3 py-1 text-base font-semibold text-black"
-              >
-                {userState.rating ?? 0}
-              </Badge>
+              <div class="vd-rating-value">{userState.rating ?? 0}/10</div>
 
               {#if userState.rating}
                 <Button variant="ghost" size="sm" onclick={() => setRating(null)}>Clear</Button>
@@ -511,77 +485,101 @@
           </div>
 
           {#if movie.description}
-            <div class="space-y-2">
-              <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">About</p>
-              <p class="text-sm leading-6">{movie.description}</p>
+            <div class="vd-section">
+              <p class="vd-section-title">About</p>
+              <p class="vd-copy">{movie.description}</p>
             </div>
           {/if}
 
           {#if userState.note}
-            <div class="space-y-2">
-              <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">Note</p>
-              <p class="text-sm leading-6 whitespace-pre-wrap">{userState.note}</p>
+            <div class="vd-section">
+              <p class="vd-section-title">Note</p>
+              <p class="vd-copy whitespace-pre-wrap">{userState.note}</p>
             </div>
           {/if}
         </CardContent>
       </Card>
 
-      <Card class="rounded-2xl border-border/70 bg-card/80 shadow-sm">
+      <Card class="vd-card">
+        <CardHeader>
+          <CardTitle class="text-xl">Служебное</CardTitle>
+        </CardHeader>
+        <CardContent class="vd-card-content">
+          <div class="vd-service-box">
+            <div class="vd-status-row">
+              <span class={`vd-status-pill ${movie.tmdb_linked ? "vd-status-pill--success" : "vd-status-pill--secondary"}`}>
+                {movie.tmdb_linked ? `TMDB linked #${movie.tmdb_id}` : "TMDB not linked"}
+              </span>
+              <span class="vd-status-pill vd-status-pill--secondary">source: {movie.source_display}</span>
+            </div>
+          </div>
+
+          <div class="vd-service-actions">
+            <Button onclick={() => runTmdbSync(false)} disabled={isSyncing}>
+              {isSyncing ? "Sync..." : "Fetch"}
+            </Button>
+            <Button variant="outline" onclick={() => runTmdbSync(true)} disabled={isSyncing}>
+              <RefreshCw class="size-4" />
+              Force data
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="vd-card">
         <CardHeader>
           <CardTitle class="text-xl">Съемочная группа</CardTitle>
         </CardHeader>
-        <CardContent class="space-y-6">
-          <div class="space-y-3">
-            <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">Режиссеры</p>
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent class="vd-card-content">
+          <div class="vd-section">
+            <p class="vd-section-title">Режиссеры</p>
+            <div class="vd-related-grid">
               {#if movie.directors.length}
                 {#each movie.directors as person (person.id)}
                   <a href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
-                    <div class="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 transition hover:shadow-sm">
-                      <Avatar.Root class="size-14">
+                    <div class="vd-related-card">
+                      <Avatar.Root class="vd-related-avatar">
                         {#if person.photo_url}
                           <Avatar.Image src={person.photo_url} alt={person.name} class="object-cover" />
                         {/if}
                         <Avatar.Fallback>{initials(person.name)}</Avatar.Fallback>
                       </Avatar.Root>
-                      <div class="min-w-0">
-                        <p class="truncate text-sm font-medium">{person.name}</p>
+                      <div class="vd-related-copy">
+                        <p class="vd-related-title">{person.name}</p>
                       </div>
                     </div>
                   </a>
                 {/each}
               {:else}
-                <p class="text-muted-foreground text-sm">Нет данных</p>
+                <p class="vd-empty">Нет данных</p>
               {/if}
             </div>
           </div>
 
-          <Separator />
-
-          <div class="space-y-3">
-            <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">В ролях</p>
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="vd-section">
+            <p class="vd-section-title">В ролях</p>
+            <div class="vd-related-grid">
               {#if movie.actors.length}
                 {#each movie.actors as person (person.id)}
                   <a href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
-                    <div class="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 transition hover:shadow-sm">
-                      <Avatar.Root class="size-14">
+                    <div class="vd-related-card">
+                      <Avatar.Root class="vd-related-avatar">
                         {#if person.photo_url}
                           <Avatar.Image src={person.photo_url} alt={person.name} class="object-cover" />
                         {/if}
                         <Avatar.Fallback>{initials(person.name)}</Avatar.Fallback>
                       </Avatar.Root>
-                      <div class="min-w-0">
-                        <p class="truncate text-sm font-medium">{person.name}</p>
+                      <div class="vd-related-copy">
+                        <p class="vd-related-title">{person.name}</p>
                         {#if person.character_name}
-                          <p class="text-muted-foreground truncate text-xs">{person.character_name}</p>
+                          <p class="vd-related-subtitle">{person.character_name}</p>
                         {/if}
                       </div>
                     </div>
                   </a>
                 {/each}
               {:else}
-                <p class="text-muted-foreground text-sm">Нет данных</p>
+                <p class="vd-empty">Нет данных</p>
               {/if}
             </div>
           </div>

@@ -1,5 +1,5 @@
 export const KINOZAL_PAGE_SIZE = 20;
-export const DEFAULT_PRIORITY_FILTER = "ALL";
+export const DEFAULT_PRIORITY_FILTER = "HIGH";
 export const DEFAULT_SORT_KEY = "date_added";
 export const DEFAULT_REVERSE = false;
 
@@ -126,7 +126,6 @@ export const KINOZAL_PRIORITY_OPTIONS: Array<{
   value: KinozalPriorityFilter;
   label: string;
 }> = [
-  { value: "ALL", label: "All" },
   { value: "HIGH", label: "High" },
   { value: "LOW", label: "Low" },
   { value: "DEFER", label: "Defer" },
@@ -142,6 +141,6 @@ export const KINOZAL_SORT_OPTIONS: Array<{
   { value: "date_added", label: "По дате скана" },
   { value: "title", label: "По названию" },
   { value: "year", label: "По году" },
-  { value: "imdb_rating", label: "По IMDB" },
-  { value: "kinopoisk_rating", label: "По KP" }
+  { value: "imdb_rating", label: "Рейтинг IMDB" },
+  { value: "kinopoisk_rating", label: "Рейтинг KP" }
 ];

@@ -1,9 +1,8 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import "../../vault-detail.css";
   import { Button } from "$lib/components/ui/button";
-  import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
-  import { Separator } from "$lib/components/ui/separator";
   import * as Avatar from "$lib/components/ui/avatar";
   import { ArrowLeft } from "@lucide/svelte";
 
@@ -28,21 +27,21 @@
       .toUpperCase();
 </script>
 
-<div class="mx-auto w-full max-w-6xl p-6">
-  <div class="mb-5">
+<div class="vd-page">
+  <div class="vd-back">
     <Button variant="ghost" size="sm" onclick={goBack}>
       <ArrowLeft class="size-4" />
       Back
     </Button>
   </div>
 
-  <div class="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-    <Card class="overflow-hidden rounded-2xl !gap-0 !py-0">
+  <div class="vd-layout vd-layout--person">
+    <Card class="vd-poster-card !gap-0 !py-0">
       <CardContent class="!p-0">
         {#if person.photo_url}
-          <img src={person.photo_url} alt={person.name} class="aspect-[3/4] w-full object-cover" />
+          <img src={person.photo_url} alt={person.name} class="vd-photo" />
         {:else}
-          <div class="bg-muted flex aspect-[3/4] items-center justify-center">
+          <div class="vd-photo-fallback">
             <Avatar.Root class="size-28">
               <Avatar.Fallback class="text-2xl">{initials(person.name)}</Avatar.Fallback>
             </Avatar.Root>
@@ -51,85 +50,106 @@
       </CardContent>
     </Card>
 
-    <div class="space-y-6">
-      <Card class="rounded-2xl border-border/70 bg-card/80 shadow-sm">
-        <CardHeader class="space-y-4">
-          <div class="space-y-1">
-            <CardTitle class="text-3xl leading-tight">{person.name}</CardTitle>
+    <div class="space-y-5">
+      <Card class="vd-card">
+        <CardHeader class="vd-hero">
+          <div class="vd-title-block">
+            <p class="vd-overline">Person</p>
+            <CardTitle class="vd-title">{person.name}</CardTitle>
             {#if person.original_name && person.original_name !== person.name}
-              <CardDescription class="text-base">{person.original_name}</CardDescription>
+              <CardDescription class="vd-subtitle">{person.original_name}</CardDescription>
             {/if}
           </div>
 
-          <div class="flex flex-wrap gap-2">
-            <Badge variant="outline">{person.movies_count} films</Badge>
-            <Badge variant="outline">{person.roles_count} roles</Badge>
-            <Badge variant="outline">{person.career_years} career years</Badge>
-            {#if person.country}
-              <Badge variant="secondary">{person.country}</Badge>
-            {/if}
-            {#if person.gender_display}
-              <Badge variant="secondary">{person.gender_display}</Badge>
-            {/if}
+          <div class="vd-facts-row">
+            <span class="vd-fact-inline">{person.movies_count} films</span>
+            <span class="vd-fact-inline">{person.roles_count} roles</span>
+            <span class="vd-fact-inline">{person.career_years} career years</span>
           </div>
 
-          <div class="flex flex-wrap gap-2">
-            {#if person.birth_date}
-              <Badge variant="outline">born {person.birth_date}</Badge>
-            {/if}
-            {#if person.death_date}
-              <Badge variant="outline">died {person.death_date}</Badge>
-            {/if}
-            {#if person.actor_count}
-              <Badge variant="secondary">actor {person.actor_count}</Badge>
-            {/if}
-            {#if person.director_count}
-              <Badge variant="secondary">director {person.director_count}</Badge>
-            {/if}
-            {#if person.producer_count}
-              <Badge variant="secondary">producer {person.producer_count}</Badge>
-            {/if}
+          <div class="vd-facts-grid">
+            <dl class="vd-facts-list">
+              {#if person.country}
+                <div class="vd-fact">
+                  <dt class="vd-fact-label">Country</dt>
+                  <dd class="vd-fact-value">{person.country}</dd>
+                </div>
+              {/if}
+              {#if person.gender_display}
+                <div class="vd-fact">
+                  <dt class="vd-fact-label">Gender</dt>
+                  <dd class="vd-fact-value">{person.gender_display}</dd>
+                </div>
+              {/if}
+              {#if person.birth_date}
+                <div class="vd-fact">
+                  <dt class="vd-fact-label">Born</dt>
+                  <dd class="vd-fact-value">{person.birth_date}</dd>
+                </div>
+              {/if}
+              {#if person.death_date}
+                <div class="vd-fact">
+                  <dt class="vd-fact-label">Died</dt>
+                  <dd class="vd-fact-value">{person.death_date}</dd>
+                </div>
+              {/if}
+            </dl>
+
+            <div class="vd-section">
+              <p class="vd-section-title">Основные роли</p>
+              <div class="vd-tag-stack">
+                {#if person.actor_count}
+                  <span class="vd-chip">actor {person.actor_count}</span>
+                {/if}
+                {#if person.director_count}
+                  <span class="vd-chip">director {person.director_count}</span>
+                {/if}
+                {#if person.producer_count}
+                  <span class="vd-chip">producer {person.producer_count}</span>
+                {/if}
+              </div>
+            </div>
           </div>
         </CardHeader>
 
         {#if person.biography}
-          <CardContent>
-            <div class="space-y-2">
-              <p class="text-muted-foreground text-xs uppercase tracking-[0.18em]">Biography</p>
-              <p class="text-sm leading-6">{person.biography}</p>
+          <CardContent class="vd-card-content">
+            <div class="vd-section">
+              <p class="vd-section-title">Biography</p>
+              <p class="vd-copy">{person.biography}</p>
             </div>
           </CardContent>
         {/if}
       </Card>
 
-      <Card class="rounded-2xl border-border/70 bg-card/80 shadow-sm">
+      <Card class="vd-card">
         <CardHeader>
           <CardTitle class="text-xl">Filmography</CardTitle>
         </CardHeader>
-        <CardContent class="space-y-4">
+        <CardContent class="vd-card-content">
           {#if person.filmography.length}
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div class="vd-filmography-grid">
               {#each person.filmography as item (`${item.id}-${item.role}-${item.character_name ?? ""}`)}
                 <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
-                  <div class="overflow-hidden rounded-xl border border-border/60 bg-muted/20 transition hover:shadow-md">
+                  <div class="vd-filmography-card">
                     {#if item.poster_url}
-                      <img src={item.poster_url} alt={item.title} class="aspect-[2/3] w-full object-cover" />
+                      <img src={item.poster_url} alt={item.title} class="vd-poster" />
                     {:else}
-                      <div class="bg-muted text-muted-foreground flex aspect-[2/3] items-center justify-center text-xs">
+                      <div class="vd-poster-fallback">
                         no poster
                       </div>
                     {/if}
 
-                    <div class="space-y-2 p-3">
-                      <p class="truncate text-sm font-medium">{item.title}</p>
-                      <div class="flex flex-wrap gap-2">
+                    <div class="vd-filmography-copy">
+                      <p class="vd-related-title">{item.title}</p>
+                      <div class="vd-facts-row vd-facts-row--muted">
                         {#if item.year}
-                          <Badge variant="outline">{item.year}</Badge>
+                          <span class="vd-fact-inline">{item.year}</span>
                         {/if}
-                        <Badge variant="secondary">{item.role_display}</Badge>
+                        <span class="vd-fact-inline">{item.role_display}</span>
                       </div>
                       {#if item.character_name}
-                        <p class="text-muted-foreground truncate text-xs">{item.character_name}</p>
+                        <p class="vd-related-subtitle">{item.character_name}</p>
                       {/if}
                     </div>
                   </div>
@@ -137,7 +157,7 @@
               {/each}
             </div>
           {:else}
-            <p class="text-muted-foreground text-sm">No filmography yet.</p>
+            <p class="vd-empty">No filmography yet.</p>
           {/if}
         </CardContent>
       </Card>

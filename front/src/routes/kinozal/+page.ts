@@ -45,7 +45,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
     const activeReverse = reverseParam === "true";
 
     const movieParams = new URLSearchParams({ limit: String(KINOZAL_PAGE_SIZE) });
-    if (activePriority !== DEFAULT_PRIORITY_FILTER) {
+    if (activePriority !== "ALL") {
       movieParams.set("priority", activePriority);
     }
     if (q) {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { onDestroy, onMount, tick } from "svelte";
+  import "./kinozal.css";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
@@ -9,6 +10,7 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { Input } from "$lib/components/ui/input";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import { Toggle } from "$lib/components/ui/toggle";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import {
     DEFAULT_PRIORITY_FILTER,
@@ -91,6 +93,11 @@
   const formatScanDate = (value: string) => {
     const [year = "", month = "", day = ""] = value.split("-");
     return year && month && day ? `${day}.${month}.${year}` : value;
+  };
+  const compactList = (items: string[], limit: number) => items.filter(Boolean).slice(0, limit);
+  const compactTextList = (items: string[], limit: number) => {
+    const result = compactList(items, limit).join(", ");
+    return result || "—";
   };
 
   const getSnapshotKey = () => `${window.location.pathname}${window.location.search}`;
@@ -220,7 +227,9 @@
     const sort = next.sort ?? activeSort;
     const reverse = next.reverse ?? activeReverse;
 
-    if (priority && priority !== DEFAULT_PRIORITY_FILTER) {
+    if (priority === "ALL") {
+      params.set("priority", priority);
+    } else if (priority && priority !== DEFAULT_PRIORITY_FILTER) {
       params.set("priority", priority);
     } else {
       params.delete("priority");
@@ -266,7 +275,7 @@
     if (cursor) {
       params.set("cursor", cursor);
     }
-    if (filters.priority !== DEFAULT_PRIORITY_FILTER) {
+    if (filters.priority !== "ALL") {
       params.set("priority", filters.priority);
     }
     if (filters.q.trim()) {
@@ -619,152 +628,65 @@
 
   const totalLoaded = $derived(movies.length);
   const filteredTotal = $derived(filteredTotalCount);
-  const summaryCards = $derived([
-    { label: "Last scan", value: summary.last_scan ? formatScanDate(summary.last_scan) : "—", tone: "success" },
-    { label: "Total", value: String(summary.total), tone: "success" },
-    { label: "High", value: String(summary.high), tone: "default" },
-    { label: "Low", value: String(summary.low), tone: "default" },
-    { label: "Defer", value: String(summary.defer), tone: "default" },
-    { label: "Skip", value: String(summary.skip), tone: "muted" },
-    { label: "Wait trans", value: String(summary.wait_trans), tone: "muted" },
-    { label: "Trans found", value: String(summary.trans_found), tone: "success" }
-  ]);
-
-  const badgeToneClass = (tone: string) => {
-    if (tone === "success") {
-      return "border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300";
-    }
-    if (tone === "muted") {
-      return "border-border bg-muted text-muted-foreground";
-    }
-    return "border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300";
-  };
-
-  const compactList = (items: string[], limit: number) => items.filter(Boolean).slice(0, limit);
   const activeSortLabel = $derived(
     KINOZAL_SORT_OPTIONS.find((item) => item.value === activeSort)?.label ?? "Сортировка"
   );
+  const activePriorityLabel = $derived(
+    KINOZAL_PRIORITY_OPTIONS.find((item) => item.value === activePriority)?.label ?? activePriority
+  );
+  const summaryCards = $derived([
+    { label: "Последний скан", value: summary.last_scan ? formatScanDate(summary.last_scan) : "—", tone: "success" },
+    { label: "High", value: String(summary.high), tone: "primary" },
+    { label: "Defer / Low", value: `${summary.defer} / ${summary.low}`, tone: "muted" },
+    { label: "Skip", value: String(summary.skip), tone: "danger-muted" },
+    { label: "Жду дубляж / найдено", value: `${summary.wait_trans} / ${summary.trans_found}`, tone: "muted" }
+  ]);
+
+  const summaryToneClass = (tone: string) => {
+    if (tone === "success") {
+      return "kz-summary-item--success";
+    }
+    if (tone === "muted") {
+      return "kz-summary-item--muted";
+    }
+    if (tone === "primary") {
+      return "kz-summary-item--primary";
+    }
+    if (tone === "danger-muted") {
+      return "kz-summary-item--danger-muted";
+    }
+    return "";
+  };
+
   const hasActiveFilters = $derived(
     activePriority !== DEFAULT_PRIORITY_FILTER || searchQuery.trim() !== "" || activeSort !== DEFAULT_SORT_KEY || activeReverse !== DEFAULT_REVERSE
   );
 </script>
 
-<div class="mx-auto flex w-full max-w-[1500px] flex-col gap-6 p-4 md:p-6">
-  <Card class="border-border/70 bg-gradient-to-br from-background via-background to-muted/30">
-    <CardHeader class="gap-4 md:flex-row md:items-center md:justify-between">
-      <div class="space-y-2">
-        <div class="flex flex-wrap items-center gap-2">
-          <CardTitle class="text-2xl">Kinozal</CardTitle>
-          <Badge variant="secondary">Phase 5</Badge>
-          <Badge variant="outline">Download flow</Badge>
-        </div>
-        <CardDescription class="max-w-3xl text-sm leading-relaxed">
-          Экран `MovieRSS` на новом API с query state, row actions и download flow с обработкой ошибок и inline retry.
-        </CardDescription>
-      </div>
-
-        <div class="flex flex-wrap items-center gap-2 text-sm">
-          <Badge variant="outline" class="px-3 py-1">
-            <Film class="mr-1 size-3.5" />
-            Загружено: {totalLoaded}
-          </Badge>
-          <Badge variant="outline" class="px-3 py-1">
-            Найдено: {filteredTotal}
-          </Badge>
-          <a
-            href="http://127.0.0.1:8000/"
-            target="_blank"
-          rel="noreferrer"
-          class="text-sm font-medium underline underline-offset-4"
-        >
-          Открыть текущий Django UI
-        </a>
-      </div>
-    </CardHeader>
-  </Card>
-
+<div class="kz-page">
   {#if !initialError}
-    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="kz-summary-strip">
       {#each summaryCards as item (item.label)}
-        <Card class="border-border/70">
-          <CardContent class="flex items-center justify-between gap-3 py-4">
-            <div class="space-y-1">
-              <p class="text-muted-foreground text-[11px] uppercase tracking-[0.18em]">{item.label}</p>
-              <p class="text-lg font-semibold">{item.value}</p>
-            </div>
-            <span class={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${badgeToneClass(item.tone)}`}>
-              {item.label}
-            </span>
-          </CardContent>
-        </Card>
+        <div class={`kz-summary-item ${summaryToneClass(item.tone)}`}>
+          <span class="kz-summary-label">{item.label}:</span>
+          <span class="kz-summary-value">{item.value}</span>
+        </div>
       {/each}
     </div>
   {/if}
 
   {#if summaryError && !initialError}
-    <Card class="border-amber-500/30">
-      <CardContent class="flex items-center gap-3 py-4 text-sm text-muted-foreground">
-        <Clapperboard class="size-4 text-amber-600 dark:text-amber-300" />
-        <span>Summary-метрики загрузить не удалось: {summaryError}</span>
-      </CardContent>
-    </Card>
+    <div class="kz-inline-alert kz-inline-alert--warning">
+      <Clapperboard class="size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+      <span>Summary-метрики загрузить не удалось: {summaryError}</span>
+    </div>
   {/if}
 
   {#if !initialError}
-    <Card class="border-border/70">
-      <CardContent class="flex flex-col gap-4 py-4">
-        <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div class="flex flex-1 items-center gap-2">
-            <div class="relative flex-1">
-              <Search class="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-              <Input
-                bind:value={searchQuery}
-                type="search"
-                placeholder="Поиск по title / original title / year..."
-                class="h-11 pl-9 pr-10"
-                oninput={onSearchInput}
-              />
-              {#if searchQuery.trim()}
-                <button
-                  type="button"
-                  class="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2"
-                  onclick={clearSearch}
-                  aria-label="Clear search"
-                >
-                  <X class="size-4" />
-                </button>
-              {/if}
-            </div>
-
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                {#snippet child({ props })}
-                  <Button {...props} variant="outline" class="h-11 min-w-[190px] justify-between">
-                    {activeSortLabel}
-                    <ArrowDownUp class="size-4" />
-                  </Button>
-                {/snippet}
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content class="w-56" align="end">
-                <DropdownMenu.RadioGroup value={activeSort} onValueChange={onSortChange}>
-                  {#each KINOZAL_SORT_OPTIONS as option (option.value)}
-                    <DropdownMenu.RadioItem value={option.value}>
-                      {option.label}
-                    </DropdownMenu.RadioItem>
-                  {/each}
-                </DropdownMenu.RadioGroup>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-
-            <Button variant="outline" class="h-11 min-w-[120px]" onclick={onReverseToggle}>
-              <ArrowDownUp class="mr-2 size-4" />
-              {activeReverse ? "Reverse on" : "Reverse off"}
-            </Button>
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div class="overflow-x-auto">
+    <div class="kz-toolbar">
+      <div class="kz-toolbar-main">
+        <div class="kz-toolbar-left">
+          <div class="kz-toggle-wrap">
             <ToggleGroup.Root
               type="single"
               value={activePriority}
@@ -779,38 +701,79 @@
               {/each}
             </ToggleGroup.Root>
           </div>
+        </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-sm">
-            {#if activePriority !== DEFAULT_PRIORITY_FILTER}
-              <Badge variant="secondary">Priority: {activePriority}</Badge>
-            {/if}
-            {#if data.activeQuery}
-              <Badge variant="secondary">Query: {data.activeQuery}</Badge>
-            {/if}
-            {#if activeSort !== DEFAULT_SORT_KEY}
-              <Badge variant="secondary">Sort: {activeSortLabel}</Badge>
-            {/if}
-            {#if activeReverse}
-              <Badge variant="secondary">Reverse</Badge>
-            {/if}
-            {#if hasActiveFilters}
-              <Button
-                variant="ghost"
-                class="h-8 px-2 text-muted-foreground"
-                onclick={() => navigateWithParams({
-                  priority: DEFAULT_PRIORITY_FILTER,
-                  q: "",
-                  sort: DEFAULT_SORT_KEY,
-                  reverse: DEFAULT_REVERSE
-                })}
+        <div class="kz-toolbar-right">
+          <div class="kz-toolbar-search">
+            <Search class="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+            <Input
+              bind:value={searchQuery}
+              type="search"
+              placeholder="Поиск по title / original title / year..."
+              class="h-10 min-w-[260px] pl-10 pr-10"
+              oninput={onSearchInput}
+            />
+            {#if searchQuery.trim()}
+              <button
+                type="button"
+                class="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2"
+                onclick={clearSearch}
+                aria-label="Clear search"
               >
-                Сбросить
-              </Button>
+                <X class="size-4" />
+              </button>
             {/if}
           </div>
+
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              {#snippet child({ props })}
+                <Button {...props} variant="outline" class="kz-toolbar-button">
+                  {activeSortLabel}
+                  <ArrowDownUp class="size-4" />
+                </Button>
+              {/snippet}
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content class="w-56" align="end">
+              <DropdownMenu.RadioGroup value={activeSort} onValueChange={onSortChange}>
+                {#each KINOZAL_SORT_OPTIONS as option (option.value)}
+                  <DropdownMenu.RadioItem value={option.value}>
+                    {option.label}
+                  </DropdownMenu.RadioItem>
+                {/each}
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+
+          <Toggle
+            pressed={activeReverse}
+            variant="outline"
+            size="default"
+            class="kz-toolbar-icon-button"
+            aria-label="Toggle reverse order"
+            onclick={onReverseToggle}
+          >
+            <ArrowDownUp class="size-4" />
+          </Toggle>
+
+          {#if hasActiveFilters}
+            <Button
+              variant="ghost"
+              class="kz-toolbar-icon-button"
+              onclick={() => navigateWithParams({
+                priority: DEFAULT_PRIORITY_FILTER,
+                q: "",
+                sort: DEFAULT_SORT_KEY,
+                reverse: DEFAULT_REVERSE
+              })}
+              aria-label="Reset filters"
+            >
+              <X class="size-4" />
+            </Button>
+          {/if}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   {/if}
 
   {#if initialError}
@@ -837,137 +800,121 @@
       </CardHeader>
     </Card>
   {:else}
-    <Card class="overflow-hidden border-border/70">
+    <Card class="kz-table-card">
       <CardContent class="p-0">
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[1380px] table-fixed border-collapse">
-            <thead class="bg-muted/50">
-              <tr class="text-left">
-                <th class="w-[120px] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Poster</th>
-                <th class="w-[320px] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Title</th>
-                <th class="w-[170px] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Some data</th>
-                <th class="w-[320px] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Common</th>
-                <th class="px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Plot</th>
-                <th class="w-[220px] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Translate</th>
-                <th class="w-[170px] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Actions</th>
+        <div class="kz-table-wrap">
+          <table class="kz-table">
+            <colgroup>
+              <col class="w-[156px]" />
+              <col class="w-[280px]" />
+              <col class="w-[190px]" />
+              <col class="w-[300px]" />
+              <col />
+              <col class="w-[220px]" />
+              <col class="w-[170px]" />
+            </colgroup>
+            <thead class="bg-muted/35">
+              <tr>
+                <th class="kz-th">Poster</th>
+                <th class="kz-th">Title</th>
+                <th class="kz-th">Facts</th>
+                <th class="kz-th">People & meta</th>
+                <th class="kz-th">Plot</th>
+                <th class="kz-th">Translate</th>
+                <th class="kz-th">Actions</th>
               </tr>
             </thead>
             <tbody>
               {#each movies as movie (movie.id)}
-                <tr class={`border-t align-top ${movie.kinorium_partial_match ? "bg-amber-500/6" : "bg-background"}`}>
-                  <td class="px-4 py-4">
-                    <KinozalPoster src={movie.poster_url} alt={`Poster of ${movie.title}`} />
+                <tr class={`kz-row ${movie.kinorium_partial_match ? "kz-row--partial" : ""}`}>
+                  <td class="kz-cell">
+                    <KinozalPoster
+                      src={movie.poster_url}
+                      alt={`Poster of ${movie.title}`}
+                      containerClass="kz-poster"
+                    />
                   </td>
-                  <td class="px-4 py-4">
-                    <div class="space-y-3">
-                      <div class="space-y-1.5">
-                        <p class="text-base font-semibold leading-tight">{movie.title}</p>
-                        <p class="text-muted-foreground text-sm leading-snug">
-                          {movie.original_title || "—"}
-                        </p>
+                  <td class="kz-cell">
+                    <div class="kz-title-block">
+                      <div class="kz-title-stack">
+                        <p class="kz-title">{movie.title}</p>
+                        <p class="kz-subtitle">{movie.original_title || "—"}</p>
                       </div>
 
-                      <div class="flex flex-wrap gap-2">
-                        <span class={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${priorityToneMap[movie.priority_key] ?? "bg-muted text-muted-foreground border border-border"}`}>
+                      <div class="kz-pill-row">
+                        <span class={`kz-status-pill ${priorityToneMap[movie.priority_key] ?? "border border-border bg-muted text-muted-foreground"}`}>
                           {movie.priority_label}
                         </span>
                         {#if movie.kinorium_partial_match}
-                          <span class="inline-flex rounded-full border border-amber-500/20 bg-amber-500/12 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                          <span class="kz-status-pill kz-status-pill--warning">
                             Partial match
                           </span>
                         {/if}
                       </div>
 
-                      <div class="text-muted-foreground flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em]">
-                        <span>ID {movie.kinozal_id}</span>
+                      <p class="kz-meta-line">ID {movie.kinozal_id}</p>
+                    </div>
+                  </td>
+                  <td class="kz-cell">
+                    <dl class="kz-facts">
+                      <div class="kz-fact">
+                        <dt class="kz-fact-label">Year</dt>
+                        <dd class="kz-fact-value">{movie.year}</dd>
+                      </div>
+                      <div class="kz-fact">
+                        <dt class="kz-fact-label">IMDB</dt>
+                        <dd class="kz-fact-value">{formatRating(movie.imdb_rating)}</dd>
+                      </div>
+                      <div class="kz-fact">
+                        <dt class="kz-fact-label">KP</dt>
+                        <dd class="kz-fact-value">{formatRating(movie.kinopoisk_rating)}</dd>
+                      </div>
+                      <div class="kz-fact">
+                        <dt class="kz-fact-label">Scan</dt>
+                        <dd class="kz-fact-value">{formatScanDate(movie.date_added)}</dd>
+                      </div>
+                    </dl>
+                  </td>
+                  <td class="kz-cell">
+                    <div class="kz-meta-stack">
+                      <div class="kz-meta-group">
+                        <p class="kz-meta-label">Genres</p>
+                        <p class="kz-meta-value">{compactTextList(movie.genres, 8)}</p>
+                      </div>
+
+                      <div class="kz-meta-group">
+                        <p class="kz-meta-label">Countries</p>
+                        <p class="kz-meta-value">{compactTextList(movie.countries, 6)}</p>
+                      </div>
+
+                      <div class="kz-meta-group">
+                        <p class="kz-meta-label">Director</p>
+                        <p class="kz-meta-value">{compactTextList(movie.directors, 4)}</p>
+                      </div>
+
+                      <div class="kz-meta-group">
+                        <p class="kz-meta-label">Actors</p>
+                        <p class="kz-meta-value">{compactTextList(movie.actors, 6)}</p>
                       </div>
                     </div>
                   </td>
-                  <td class="px-4 py-4">
-                    <div class="space-y-2 text-sm">
-                      <div class="rounded-lg border border-border/70 px-3 py-2">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">Year</p>
-                        <p class="font-semibold">{movie.year}</p>
-                      </div>
-                      <div class="rounded-lg border border-border/70 px-3 py-2">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">IMDB</p>
-                        <p class="text-sm font-semibold">{formatRating(movie.imdb_rating)}</p>
-                      </div>
-                      <div class="rounded-lg border border-border/70 px-3 py-2">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">KP</p>
-                        <p class="text-sm font-semibold">{formatRating(movie.kinopoisk_rating)}</p>
-                      </div>
-                      <div class="rounded-lg border border-border/70 px-3 py-2">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">Scan</p>
-                        <p class="text-sm font-semibold">{formatScanDate(movie.date_added)}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="px-4 py-4">
-                    <div class="space-y-3 text-sm">
-                      <div class="space-y-1.5">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">Genres</p>
-                        <div class="flex flex-wrap gap-1.5">
-                          {#each compactList(movie.genres, 8) as genre (genre)}
-                            <span class="rounded-full border border-border/70 bg-muted/60 px-2 py-1 text-[11px] leading-none">
-                              {genre}
-                            </span>
-                          {/each}
-                        </div>
-                      </div>
-
-                      <div class="space-y-1.5">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">Countries</p>
-                        <div class="flex flex-wrap gap-1.5">
-                          {#each compactList(movie.countries, 6) as country (country)}
-                            <span class="rounded-full border border-border/70 bg-muted/60 px-2 py-1 text-[11px] leading-none">
-                              {country}
-                            </span>
-                          {/each}
-                        </div>
-                      </div>
-
-                      <div class="space-y-1.5">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">Director</p>
-                        <div class="flex flex-wrap gap-1.5">
-                          {#each compactList(movie.directors, 4) as director (director)}
-                            <span class="rounded-full border border-border/70 bg-muted/60 px-2 py-1 text-[11px] leading-none">
-                              {director}
-                            </span>
-                          {/each}
-                        </div>
-                      </div>
-
-                      <div class="space-y-1.5">
-                        <p class="text-muted-foreground text-[11px] uppercase tracking-[0.16em]">Actors</p>
-                        <div class="flex flex-wrap gap-1.5">
-                          {#each compactList(movie.actors, 6) as actor (actor)}
-                            <span class="rounded-full border border-border/70 bg-muted/60 px-2 py-1 text-[11px] leading-none">
-                              {actor}
-                            </span>
-                          {/each}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="px-4 py-4">
-                    <p class="text-sm leading-6 text-foreground/90 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:8] overflow-hidden">
+                  <td class="kz-cell">
+                    <p class="kz-plot [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:10] overflow-hidden">
                       {movie.plot || "—"}
                     </p>
                   </td>
-                  <td class="px-4 py-4">
-                    <p class="text-sm leading-6 text-foreground/90">
-                      {movie.translate || "—"}
-                    </p>
+                  <td class="kz-cell">
+                    <p class="kz-translate">{movie.translate || "—"}</p>
                   </td>
-                  <td class="px-4 py-4">
-                    <div class="flex flex-col gap-2">
+                  <td class="kz-cell">
+                    <div class="kz-actions">
                       <Button
                         href={movie.open_url ?? undefined}
                         target="_blank"
                         rel="noreferrer"
                         variant="outline"
                         size="sm"
+                        class="kz-action-button"
                         disabled={!movie.open_url}
                       >
                         <ExternalLink class="mr-2 size-4" />
@@ -977,6 +924,7 @@
                       <Button
                         variant="secondary"
                         size="sm"
+                        class="kz-action-button"
                         onclick={() => openDownloadDialog(movie)}
                         disabled={loadingDownloadMovieId === movie.id}
                       >
@@ -987,6 +935,7 @@
                       <Button
                         variant="outline"
                         size="sm"
+                        class="kz-action-button"
                         onclick={() => performMovieAction(movie, "defer", "DEFER")}
                         disabled={isActionPending(movie.id, "defer")}
                       >
@@ -997,6 +946,7 @@
                       <Button
                         variant="outline"
                         size="sm"
+                        class="kz-action-button"
                         onclick={() => performMovieAction(movie, "wait-trans", "WAIT_TRANS")}
                         disabled={isActionPending(movie.id, "wait-trans")}
                       >
@@ -1007,6 +957,7 @@
                       <Button
                         variant="destructive"
                         size="sm"
+                        class="kz-action-button"
                         onclick={() => performMovieAction(movie, "hide", "SKIP")}
                         disabled={isActionPending(movie.id, "hide")}
                       >
