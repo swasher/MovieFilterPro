@@ -5,7 +5,7 @@
   let {
     src,
     alt,
-    containerClass = "",
+    containerClass = "h-36 w-24",
     imageClass = "",
     fallbackLabel = "no poster"
   }: {
@@ -19,11 +19,13 @@
   let container = $state<HTMLDivElement | null>(null);
   let shouldLoad = $state(false);
   let isLoaded = $state(false);
+  let hasError = $state(false);
 
   $effect(() => {
     src;
     shouldLoad = false;
     isLoaded = false;
+    hasError = false;
   });
 
   $effect(() => {
@@ -59,11 +61,11 @@
 <div
   bind:this={container}
   class={cn(
-    "relative h-36 w-24 overflow-hidden rounded-md border border-border/60 bg-muted/40 shadow-sm",
+    "relative overflow-hidden rounded-md border border-border/60 bg-muted/40 shadow-sm",
     containerClass
   )}
 >
-  {#if !src}
+  {#if !src || hasError}
     <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[11px] uppercase tracking-[0.18em]">
       {fallbackLabel}
     </div>
@@ -83,6 +85,7 @@
         }}
         onerror={() => {
           isLoaded = true;
+          hasError = true;
         }}
         class={`h-full w-full object-cover transition-opacity duration-300 ${isLoaded ? "opacity-100" : "opacity-0"} ${imageClass}`}
       />

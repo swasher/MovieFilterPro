@@ -13,6 +13,39 @@ downloading_images = {}
 # Создаем блокировку (mutex) для обеспечения потокобезопасного доступа к downloading_images
 downloading_images_lock = threading.Lock()
 VALID_PRIORITY = [settings.HIGH, settings.LOW, settings.DEFER]
+PLACEHOLDER_IMAGE_PATH = "img/poster-placeholder.svg"
+MISSING_MARKER_SUFFIX = ".missing"
+
+
+def get_placeholder_image_url() -> str:
+    return f"{settings.STATIC_URL.rstrip('/')}/{PLACEHOLDER_IMAGE_PATH}"
+
+
+def _build_cached_paths(image_url: str, movie_pk: int) -> tuple[str, Path, Path]:
+    parsed_url = urlparse(image_url)
+    base_name = Path(parsed_url.path).name
+    if not base_name:
+        base_name = hashlib.sha256(image_url.encode()).hexdigest() + ".jpg"
+
+    file_name_hash = hashlib.sha256(image_url.encode()).hexdigest()
+    file_extension = os.path.splitext(base_name)[1]
+    cached_filename = f"{movie_pk}_{file_name_hash}{file_extension}"
+    cached_filepath = settings.CACHE_ROOT / cached_filename
+    missing_marker_path = cached_filepath.with_name(cached_filepath.name + MISSING_MARKER_SUFFIX)
+    return cached_filename, cached_filepath, missing_marker_path
+
+
+def _mark_image_as_missing(marker_path: Path) -> None:
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.touch(exist_ok=True)
+
+
+def _clear_missing_marker(marker_path: Path) -> None:
+    try:
+        marker_path.unlink(missing_ok=True)
+    except TypeError:
+        if marker_path.exists():
+            marker_path.unlink()
 
 
 def resolve_mirror_url(image_url: str) -> str:
@@ -39,6 +72,7 @@ def remove_cached_image(movie_pk):
         for filename in os.listdir(cached_dir):
             if filename.startswith(f"{movie_pk}_"):
                 cached_filepath = cached_dir / filename
+                marker_filepath = cached_dir / f"{filename}{MISSING_MARKER_SUFFIX}"
                 try:
                     os.remove(cached_filepath)
                     log(f"Removed cached image: {cached_filepath}", LogType.DEBUG)
@@ -46,6 +80,11 @@ def remove_cached_image(movie_pk):
                     log(f"Cached image not found (already removed?): {cached_filepath}", LogType.DEBUG)
                 except Exception as e:
                     log(f"Error removing cached image: {e}", LogType.ERROR)
+                try:
+                    marker_filepath.unlink(missing_ok=True)
+                except TypeError:
+                    if marker_filepath.exists():
+                        marker_filepath.unlink()
                 finally:
                     # В любом случае - удаляем из downloading_images
                     with downloading_images_lock:
@@ -101,21 +140,14 @@ def download_and_cache_image(image_url, movie_pk, priority):
     log(f"Start downloading: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
 
     try:
-        # Генерируем имя файла на основе ОРИГИНАЛЬНОГО URL
-        parsed_url = urlparse(original_image_url)
-        base_name = Path(parsed_url.path).name
-        if not base_name:
-            base_name = hashlib.sha256(original_image_url.encode()).hexdigest() + ".jpg"  # fallback for base name
-
-        file_name_hash = hashlib.sha256(original_image_url.encode()).hexdigest()
-        file_extension = os.path.splitext(base_name)[1]
-        cached_filename = f"{movie_pk}_{file_name_hash}{file_extension}"  # Используем PK фильма
-
-        cached_filepath = settings.CACHE_ROOT / cached_filename
+        cached_filename, cached_filepath, missing_marker_path = _build_cached_paths(original_image_url, movie_pk)
 
         # Check if the image is already cached
         if cached_filepath.exists():
             log(f"Already cached: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
+            return
+        if missing_marker_path.exists():
+            log(f"Poster already marked as missing: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
             return
 
         response = requests.get(resolved_image_url, stream=True, timeout=5)  # added timeout
@@ -123,6 +155,7 @@ def download_and_cache_image(image_url, movie_pk, priority):
 
         # Create the directory if it doesn't exist
         cached_filepath.parent.mkdir(parents=True, exist_ok=True)
+        _clear_missing_marker(missing_marker_path)
 
         with open(cached_filepath, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
@@ -130,6 +163,16 @@ def download_and_cache_image(image_url, movie_pk, priority):
 
         log(f"Downloaded and cached: {resolved_image_url}, movie_pk: {movie_pk}", LogType.DEBUG)
 
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
+        if status_code in {404, 410}:
+            _mark_image_as_missing(missing_marker_path)
+            log(
+                f"Poster not found, using placeholder instead: {resolved_image_url}, movie_pk: {movie_pk}",
+                LogType.DEBUG,
+            )
+        else:
+            log(f"Error downloading image: {e}", LogType.ERROR)
     except requests.exceptions.RequestException as e:
         log(f"Error downloading image: {e}", LogType.ERROR)
     finally:
@@ -151,29 +194,19 @@ def get_cached_image_url(image_url, movie_pk, priority):
         return image_url  # Изображение не нужно кешировать, возвращаем оригинальный URL
 
     if not image_url:
-        return None  # Обработка пустого image_url
+        return get_placeholder_image_url()
 
-    # Генерируем имя файла на основе ОРИГИНАЛЬНОГО URL
-    parsed_url = urlparse(image_url)
-    base_name = Path(parsed_url.path).name
-    if not base_name:
-        base_name = hashlib.sha256(image_url.encode()).hexdigest() + ".jpg"  # fallback for base name
-
-        # TODO Чисто теоретически, изображения могут быть не только в jpg, а в png, к примеру.
-
-    file_name_hash = hashlib.sha256(image_url.encode()).hexdigest()
-    file_extension = os.path.splitext(base_name)[1]
-    cached_filename = f"{movie_pk}_{file_name_hash}{file_extension}"  # Используем PK фильма
-
-    cached_filepath = settings.CACHE_ROOT / cached_filename
+    cached_filename, cached_filepath, missing_marker_path = _build_cached_paths(image_url, movie_pk)
 
     # Проверяем, есть ли уже изображение в кэше
     if cached_filepath.exists():
         print(f'CACHE: return cached url {settings.CACHE_URL + cached_filename}')
         return settings.CACHE_URL + cached_filename
+    if missing_marker_path.exists():
+        return get_placeholder_image_url()
 
     # Изображения нет в кэше, запускаем скачивание в фоне (используем оригинальный URL)
-    threading.Thread(target=download_and_cache_image, args=(image_url, movie_pk, priority)).start()
+    threading.Thread(target=download_and_cache_image, args=(image_url, movie_pk, priority), daemon=True).start()
 
     # Резолвим URL в зеркало для отображения пользователю
     resolved_url = resolve_mirror_url(image_url)

@@ -2,9 +2,10 @@
   import { goto } from "$app/navigation";
   import { onDestroy, onMount, tick } from "svelte";
   import "./kinozal.css";
-  import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
+  import BootstrapBadge4kFill from "$lib/components/BootstrapBadge4kFill.svelte";
+  import BootstrapBadgeSdFill from "$lib/components/BootstrapBadgeSdFill.svelte";
   import KinozalPoster from "$lib/components/KinozalPoster.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -67,6 +68,7 @@
   let activeReverse = $state(DEFAULT_REVERSE);
   let filteredTotalCount = $state(0);
   let pendingActions = $state<Record<string, boolean>>({});
+  let leavingRows = $state<Record<number, boolean>>({});
   let downloadDialogOpen = $state(false);
   let selectedMovie = $state<KinozalMovie | null>(null);
   let downloadOptions = $state<KinozalDownloadOption[]>([]);
@@ -94,6 +96,7 @@
     const [year = "", month = "", day = ""] = value.split("-");
     return year && month && day ? `${day}.${month}.${year}` : value;
   };
+  const formatCreatedDate = (value: string) => value.split(" ")[0] || value;
   const compactList = (items: string[], limit: number) => items.filter(Boolean).slice(0, limit);
   const compactTextList = (items: string[], limit: number) => {
     const result = compactList(items, limit).join(", ");
@@ -354,11 +357,18 @@
 
   const actionKey = (movieId: number, action: string) => `${movieId}:${action}`;
   const isActionPending = (movieId: number, action: string) => Boolean(pendingActions[actionKey(movieId, action)]);
+  const isRowLeaving = (movieId: number) => Boolean(leavingRows[movieId]);
   const setActionPending = (movieId: number, action: string, isPending: boolean) => {
     const key = actionKey(movieId, action);
     pendingActions = {
       ...pendingActions,
       [key]: isPending
+    };
+  };
+  const setRowLeaving = (movieId: number, isLeaving: boolean) => {
+    leavingRows = {
+      ...leavingRows,
+      [movieId]: isLeaving
     };
   };
 
@@ -404,12 +414,13 @@
     const previousMovies = [...movies];
     const previousSummary = { ...summary };
     const previousFilteredTotalCount = filteredTotalCount;
-    const shouldRemoveFromCurrentView =
-      activePriority !== DEFAULT_PRIORITY_FILTER && activePriority !== targetPriorityKey;
+    const shouldRemoveFromCurrentView = activePriority !== "ALL" && activePriority !== targetPriorityKey;
 
     setActionPending(movie.id, action, true);
 
     if (shouldRemoveFromCurrentView) {
+      setRowLeaving(movie.id, true);
+      await new Promise((resolve) => setTimeout(resolve, 180));
       movies = movies.filter((item) => item.id !== movie.id);
       filteredTotalCount = Math.max(0, filteredTotalCount - 1);
     } else {
@@ -440,6 +451,7 @@
       filteredTotalCount = previousFilteredTotalCount;
       toast.error(error instanceof Error ? error.message : "Action failed");
     } finally {
+      setRowLeaving(movie.id, false);
       setActionPending(movie.id, action, false);
     }
   };
@@ -800,179 +812,201 @@
       </CardHeader>
     </Card>
   {:else}
-    <Card class="kz-table-card">
-      <CardContent class="p-0">
-        <div class="kz-table-wrap">
+    <div class="kz-table-shell">
+      <div class="kz-table-wrap">
           <table class="kz-table">
-            <colgroup>
-              <col class="w-[156px]" />
-              <col class="w-[280px]" />
-              <col class="w-[190px]" />
-              <col class="w-[300px]" />
-              <col />
-              <col class="w-[220px]" />
-              <col class="w-[170px]" />
-            </colgroup>
-            <thead class="bg-muted/35">
-              <tr>
-                <th class="kz-th">Poster</th>
-                <th class="kz-th">Title</th>
-                <th class="kz-th">Facts</th>
-                <th class="kz-th">People & meta</th>
-                <th class="kz-th">Plot</th>
-                <th class="kz-th">Translate</th>
-                <th class="kz-th">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each movies as movie (movie.id)}
-                <tr class={`kz-row ${movie.kinorium_partial_match ? "kz-row--partial" : ""}`}>
-                  <td class="kz-cell">
-                    <KinozalPoster
-                      src={movie.poster_url}
-                      alt={`Poster of ${movie.title}`}
-                      containerClass="kz-poster"
-                    />
-                  </td>
-                  <td class="kz-cell">
-                    <div class="kz-title-block">
-                      <div class="kz-title-stack">
-                        <p class="kz-title">{movie.title}</p>
-                        <p class="kz-subtitle">{movie.original_title || "—"}</p>
-                      </div>
+          <colgroup>
+            <col class="w-[184px]" />
+            <col class="w-[290px]" />
+            <col class="w-[176px]" />
+            <col class="w-[350px]" />
+            <col />
+            <col class="w-[130px]" />
+            <col class="w-[165px]" />
+          </colgroup>
+          <thead class="bg-muted/25">
+            <tr>
+              <th class="kz-th">Poster</th>
+              <th class="kz-th">Title</th>
+              <th class="kz-th">Facts</th>
+              <th class="kz-th">People & meta</th>
+              <th class="kz-th">Plot</th>
+              <th class="kz-th">Translate</th>
+              <th class="kz-th">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each movies as movie (movie.id)}
+              <tr class={`kz-row ${movie.kinorium_partial_match ? "kz-row--partial" : ""} ${isRowLeaving(movie.id) ? "kz-row--leaving" : ""}`}>
+                <td class="kz-cell">
+                  <KinozalPoster
+                    src={movie.poster_url}
+                    alt={`Poster of ${movie.title}`}
+                    containerClass="kz-poster"
+                  />
+                </td>
+                <td class="kz-cell">
+                  <div class="kz-title-block">
+                    <div class="kz-title-stack">
+                      <p class="kz-title">{movie.title}</p>
+                      <p class="kz-subtitle">{movie.original_title || "—"}</p>
+                    </div>
 
-                      <div class="kz-pill-row">
-                        <span class={`kz-status-pill ${priorityToneMap[movie.priority_key] ?? "border border-border bg-muted text-muted-foreground"}`}>
-                          {movie.priority_label}
+                    <div class="kz-pill-row">
+                      <span class={`kz-status-pill ${priorityToneMap[movie.priority_key] ?? "border border-border bg-muted text-muted-foreground"}`}>
+                        {movie.priority_label}
+                      </span>
+                      {#if movie.kinorium_partial_match}
+                        <span class="kz-status-pill kz-status-pill--warning">
+                          Partial match
                         </span>
-                        {#if movie.kinorium_partial_match}
-                          <span class="kz-status-pill kz-status-pill--warning">
-                            Partial match
-                          </span>
-                        {/if}
-                      </div>
-
-                      <p class="kz-meta-line">ID {movie.kinozal_id}</p>
+                      {/if}
                     </div>
-                  </td>
-                  <td class="kz-cell">
-                    <dl class="kz-facts">
-                      <div class="kz-fact">
-                        <dt class="kz-fact-label">Year</dt>
-                        <dd class="kz-fact-value">{movie.year}</dd>
-                      </div>
-                      <div class="kz-fact">
-                        <dt class="kz-fact-label">IMDB</dt>
-                        <dd class="kz-fact-value">{formatRating(movie.imdb_rating)}</dd>
-                      </div>
-                      <div class="kz-fact">
-                        <dt class="kz-fact-label">KP</dt>
-                        <dd class="kz-fact-value">{formatRating(movie.kinopoisk_rating)}</dd>
-                      </div>
-                      <div class="kz-fact">
-                        <dt class="kz-fact-label">Scan</dt>
-                        <dd class="kz-fact-value">{formatScanDate(movie.date_added)}</dd>
-                      </div>
-                    </dl>
-                  </td>
-                  <td class="kz-cell">
-                    <div class="kz-meta-stack">
-                      <div class="kz-meta-group">
-                        <p class="kz-meta-label">Genres</p>
-                        <p class="kz-meta-value">{compactTextList(movie.genres, 8)}</p>
-                      </div>
 
-                      <div class="kz-meta-group">
-                        <p class="kz-meta-label">Countries</p>
-                        <p class="kz-meta-value">{compactTextList(movie.countries, 6)}</p>
-                      </div>
-
-                      <div class="kz-meta-group">
-                        <p class="kz-meta-label">Director</p>
-                        <p class="kz-meta-value">{compactTextList(movie.directors, 4)}</p>
-                      </div>
-
-                      <div class="kz-meta-group">
-                        <p class="kz-meta-label">Actors</p>
-                        <p class="kz-meta-value">{compactTextList(movie.actors, 6)}</p>
-                      </div>
+                    <p class="kz-meta-line">ID {movie.kinozal_id}</p>
+                  </div>
+                </td>
+                <td class="kz-cell">
+                  <dl class="kz-facts">
+                    <div class="kz-fact">
+                      <dt class="kz-fact-label">Year</dt>
+                      <dd class="kz-fact-value">{movie.year}</dd>
                     </div>
-                  </td>
-                  <td class="kz-cell">
-                    <p class="kz-plot [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:10] overflow-hidden">
-                      {movie.plot || "—"}
-                    </p>
-                  </td>
-                  <td class="kz-cell">
-                    <p class="kz-translate">{movie.translate || "—"}</p>
-                  </td>
-                  <td class="kz-cell">
-                    <div class="kz-actions">
-                      <Button
-                        href={movie.open_url ?? undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        variant="outline"
-                        size="sm"
-                        class="kz-action-button"
-                        disabled={!movie.open_url}
-                      >
-                        <ExternalLink class="mr-2 size-4" />
-                        Open
-                      </Button>
-
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        class="kz-action-button"
-                        onclick={() => openDownloadDialog(movie)}
-                        disabled={loadingDownloadMovieId === movie.id}
-                      >
-                        <ArrowDownToLine class="mr-2 size-4" />
-                        {loadingDownloadMovieId === movie.id ? "..." : "Download"}
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="kz-action-button"
-                        onclick={() => performMovieAction(movie, "defer", "DEFER")}
-                        disabled={isActionPending(movie.id, "defer")}
-                      >
-                        <Clock3 class="mr-2 size-4" />
-                        {isActionPending(movie.id, "defer") ? "..." : "Defer"}
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="kz-action-button"
-                        onclick={() => performMovieAction(movie, "wait-trans", "WAIT_TRANS")}
-                        disabled={isActionPending(movie.id, "wait-trans")}
-                      >
-                        <Languages class="mr-2 size-4" />
-                        {isActionPending(movie.id, "wait-trans") ? "..." : "Wait trans"}
-                      </Button>
-
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        class="kz-action-button"
-                        onclick={() => performMovieAction(movie, "hide", "SKIP")}
-                        disabled={isActionPending(movie.id, "hide")}
-                      >
-                        <EyeOff class="mr-2 size-4" />
-                        {isActionPending(movie.id, "hide") ? "..." : "Hide"}
-                      </Button>
+                    <div class="kz-fact">
+                      <dt class="kz-fact-label">IMDB</dt>
+                      <dd class="kz-fact-value">{formatRating(movie.imdb_rating)}</dd>
                     </div>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+                    <div class="kz-fact">
+                      <dt class="kz-fact-label">KP</dt>
+                      <dd class="kz-fact-value">{formatRating(movie.kinopoisk_rating)}</dd>
+                    </div>
+                    <div class="kz-fact">
+                      <dt class="kz-fact-label">Scan</dt>
+                      <dd class="kz-fact-value">{formatScanDate(movie.date_added)}</dd>
+                    </div>
+                  </dl>
+                </td>
+                <td class="kz-cell">
+                  <div class="kz-meta-stack">
+                    <div class="kz-meta-group">
+                      <span class="kz-meta-label kz-meta-label--inline">Genres</span>
+                      {#if compactList(movie.genres, 8).length}
+                        {#each compactList(movie.genres, 8) as genre (genre)}
+                          <span class="kz-meta-tag">{genre}</span>
+                        {/each}
+                      {:else}
+                        <span class="kz-meta-empty">—</span>
+                      {/if}
+                    </div>
+
+                    <div class="kz-meta-group">
+                      <span class="kz-meta-label kz-meta-label--inline">Countries</span>
+                      {#if compactList(movie.countries, 6).length}
+                        {#each compactList(movie.countries, 6) as country (country)}
+                          <span class="kz-meta-tag">{country}</span>
+                        {/each}
+                      {:else}
+                        <span class="kz-meta-empty">—</span>
+                      {/if}
+                    </div>
+
+                    <div class="kz-meta-group">
+                      <span class="kz-meta-label kz-meta-label--inline">Director</span>
+                      {#if compactList(movie.directors, 4).length}
+                        {#each compactList(movie.directors, 4) as director (director)}
+                          <span class="kz-meta-tag">{director}</span>
+                        {/each}
+                      {:else}
+                        <span class="kz-meta-empty">—</span>
+                      {/if}
+                    </div>
+
+                    <div class="kz-meta-group">
+                      <span class="kz-meta-label kz-meta-label--inline">Actors</span>
+                      {#if compactList(movie.actors, 6).length}
+                        {#each compactList(movie.actors, 6) as actor (actor)}
+                          <span class="kz-meta-tag">{actor}</span>
+                        {/each}
+                      {:else}
+                        <span class="kz-meta-empty">—</span>
+                      {/if}
+                    </div>
+                  </div>
+                </td>
+                <td class="kz-cell">
+                  <p class="kz-plot [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:10] overflow-hidden">
+                    {movie.plot || "—"}
+                  </p>
+                </td>
+                <td class="kz-cell">
+                  <p class="kz-translate">{movie.translate || "—"}</p>
+                </td>
+                <td class="kz-cell">
+                  <div class="kz-actions">
+                    <Button
+                      href={movie.open_url ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button"
+                      disabled={!movie.open_url}
+                    >
+                      <ExternalLink class="mr-2 size-4" />
+                      Open
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button bg-chart-3 text-white hover:opacity-90 dark:text-white"
+                      onclick={() => openDownloadDialog(movie)}
+                      disabled={loadingDownloadMovieId === movie.id}
+                    >
+                      <ArrowDownToLine class="mr-2 size-4" />
+                      {loadingDownloadMovieId === movie.id ? "..." : "Download"}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button"
+                      onclick={() => performMovieAction(movie, "defer", "DEFER")}
+                      disabled={isActionPending(movie.id, "defer")}
+                    >
+                      <Clock3 class="mr-2 size-4" />
+                      {isActionPending(movie.id, "defer") ? "..." : "Defer"}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button"
+                      onclick={() => performMovieAction(movie, "wait-trans", "WAIT_TRANS")}
+                      disabled={isActionPending(movie.id, "wait-trans")}
+                    >
+                      <Languages class="mr-2 size-4" />
+                      {isActionPending(movie.id, "wait-trans") ? "..." : "Wait trans"}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button kz-action-button--hide"
+                      onclick={() => performMovieAction(movie, "hide", "SKIP")}
+                      disabled={isActionPending(movie.id, "hide")}
+                    >
+                      <EyeOff class="mr-2 size-4" />
+                      {isActionPending(movie.id, "hide") ? "..." : "Hide"}
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
     {#if loadMoreError}
       <Card class="border-destructive/30">
@@ -1014,7 +1048,7 @@
 </div>
 
 <Dialog.Root bind:open={downloadDialogOpen}>
-  <Dialog.Content class="max-w-5xl">
+  <Dialog.Content class="sm:max-w-[1320px]">
     <Dialog.Header>
       <Dialog.Title>Available torrents</Dialog.Title>
       <Dialog.Description>
@@ -1062,52 +1096,61 @@
       </div>
     {:else}
       <div class="max-h-[70vh] overflow-auto">
-        <table class="w-full min-w-[900px] table-fixed border-collapse">
+        <table class="w-full min-w-[980px] table-fixed border-collapse text-sm">
+          <colgroup>
+            <col class="w-[620px]" />
+            <col class="w-[82px]" />
+            <col class="w-[64px]" />
+            <col class="w-[64px]" />
+            <col class="w-[92px]" />
+            <col class="w-[98px]" />
+          </colgroup>
           <thead class="bg-muted/50">
             <tr class="text-left">
-              <th class="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Title</th>
-              <th class="w-[100px] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Size</th>
-              <th class="w-[80px] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Seed</th>
-              <th class="w-[80px] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Peer</th>
-              <th class="w-[120px] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Created</th>
-              <th class="w-[170px] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Actions</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Title</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Size</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Seed</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Peer</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Created</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Down</th>
             </tr>
           </thead>
           <tbody>
             {#each downloadOptions as option (option.id)}
               <tr class="border-t align-top">
-                <td class="px-3 py-3">
+                <td class="px-2.5 py-2.5">
                   <div class="space-y-1">
-                    <div class="flex flex-wrap gap-2">
+                    <div class="text-sm leading-5 font-medium">
                       {#if option.is_4k}
-                        <Badge variant="secondary">4K</Badge>
+                        <BootstrapBadge4kFill class="mr-1 inline-block size-3.5 align-[-0.15em] text-foreground/80" />
                       {/if}
                       {#if option.is_sdr}
-                        <Badge variant="outline">SDR</Badge>
+                        <BootstrapBadgeSdFill class="mr-1 inline-block size-3.5 align-[-0.15em] text-foreground/80" />
                       {/if}
+                      <a
+                        href={option.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        class="kz-download-title-link"
+                      >
+                        {option.header}
+                      </a>
                     </div>
-                    <a href={option.link} target="_blank" rel="noreferrer" class="text-sm font-medium underline underline-offset-4">
-                      {option.header}
-                    </a>
                   </div>
                 </td>
-                <td class="px-3 py-3 text-sm">{option.size}</td>
-                <td class="px-3 py-3 text-sm">{option.seed}</td>
-                <td class="px-3 py-3 text-sm">{option.peer}</td>
-                <td class="px-3 py-3 text-sm">{option.created}</td>
-                <td class="px-3 py-3">
-                  <div class="flex gap-2">
-                    <Button variant="outline" size="sm" href={option.link} target="_blank" rel="noreferrer">
-                      <ExternalLink class="mr-2 size-4" />
-                      Open
-                    </Button>
+                <td class="px-2.5 py-2.5 text-xs">{option.size}</td>
+                <td class="px-2.5 py-2.5 text-xs">{option.seed}</td>
+                <td class="px-2.5 py-2.5 text-xs">{option.peer}</td>
+                <td class="px-2.5 py-2.5 text-xs">{formatCreatedDate(option.created)}</td>
+                <td class="px-2.5 py-2.5">
+                  <div class="flex">
                     <Button
-                      variant="secondary"
+                      variant="default"
                       size="sm"
+                      class="h-7 px-2.5 text-xs"
                       onclick={() => downloadTorrent(option.id)}
                       disabled={downloadingTorrentId === option.id}
                     >
-                      <ArrowDownToLine class="mr-2 size-4" />
                       {downloadingTorrentId === option.id ? "..." : "Down"}
                     </Button>
                   </div>

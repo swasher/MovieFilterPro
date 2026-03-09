@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360" role="img" aria-labelledby="title desc">
+  <title id="title">Poster placeholder</title>
+  <desc id="desc">Fallback placeholder when movie poster is unavailable.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f3f4f6" />
+      <stop offset="100%" stop-color="#d1d5db" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="360" rx="18" fill="url(#bg)" />
+  <rect x="24" y="24" width="192" height="312" rx="14" fill="none" stroke="#94a3b8" stroke-dasharray="8 8" stroke-width="4" />
+  <g fill="none" stroke="#64748b" stroke-linecap="round" stroke-linejoin="round" stroke-width="8">
+    <rect x="70" y="92" width="100" height="136" rx="10" />
+    <path d="M90 206l28-30 20 20 24-26 18 20" />
+    <circle cx="102" cy="126" r="10" fill="#64748b" stroke="none" />
+  </g>
+  <text x="120" y="278" fill="#475569" font-family="Arial, sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    POSTER
+  </text>
+  <text x="120" y="304" fill="#64748b" font-family="Arial, sans-serif" font-size="14" text-anchor="middle">
+    unavailable
+  </text>
+</svg>

@@ -77,12 +77,12 @@
     @apply text-[12px] font-semibold text-foreground;
   }
 
-  .kz-table-card {
-    @apply overflow-hidden border-border/70;
+  .kz-table-shell {
+    @apply overflow-x-auto;
   }
 
   .kz-table-wrap {
-    @apply overflow-x-auto;
+    @apply overflow-x-auto border-y border-border/60;
   }
 
   .kz-table {
@@ -90,23 +90,28 @@
   }
 
   .kz-th {
-    @apply px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+    @apply px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
   }
 
   .kz-row {
-    @apply border-t align-top bg-background transition-colors;
+    @apply border-t align-top bg-background transition-all duration-200 ease-out;
   }
 
   .kz-row--partial {
     @apply bg-amber-500/5;
   }
 
+  .kz-row--leaving {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
   .kz-cell {
-    @apply px-5 py-4;
+    @apply px-2.5 py-2.5;
   }
 
   .kz-poster {
-    @apply h-52 w-36 rounded-lg;
+    @apply h-[15.75rem] w-[10.5rem] rounded-lg;
   }
 
   .kz-title-block {
@@ -118,11 +123,11 @@
   }
 
   .kz-title {
-    @apply text-[17px] font-semibold leading-6 tracking-tight text-foreground;
+    @apply text-[19px] font-semibold leading-6 tracking-tight text-foreground;
   }
 
   .kz-subtitle {
-    @apply text-sm leading-5 text-muted-foreground;
+    @apply text-[15px] leading-5 text-muted-foreground;
   }
 
   .kz-pill-row {
@@ -162,15 +167,23 @@
   }
 
   .kz-meta-group {
-    @apply space-y-1;
+    @apply flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/40 pb-2.5 last:border-b-0 last:pb-0;
   }
 
   .kz-meta-label {
     @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
   }
 
-  .kz-meta-value {
-    @apply text-sm leading-6 text-foreground/90;
+  .kz-meta-label--inline {
+    @apply shrink-0;
+  }
+
+  .kz-meta-tag {
+    @apply inline-flex items-center rounded-[0.45rem] border border-border/60 bg-muted/45 px-2 py-1 text-[11px] leading-none text-foreground/85;
+  }
+
+  .kz-meta-empty {
+    @apply text-sm leading-5 text-muted-foreground;
   }
 
   .kz-plot {
@@ -178,7 +191,7 @@
   }
 
   .kz-translate {
-    @apply text-sm leading-6 text-foreground/90;
+    @apply text-xs leading-5 text-muted-foreground;
   }
 
   .kz-actions {
@@ -187,6 +200,16 @@
 
   .kz-action-button {
     @apply h-9 justify-start;
+  }
+
+  .kz-action-button--hide {
+    @apply border-rose-500/20 bg-rose-500/4 text-rose-700 hover:bg-rose-500/8 dark:text-rose-300;
+  }
+
+  .kz-download-title-link {
+    @apply inline transition-colors hover:text-primary;
+    color: color-mix(in oklab, var(--color-foreground) 90%, transparent);
+    text-decoration: none;
   }
 }
 

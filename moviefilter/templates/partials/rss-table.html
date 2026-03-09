@@ -1,3 +1,4 @@
+{% load static %}
 {% if found_total %}
     <div id="popup" class="copied-popup">Copied!</div>
     <table class="table w-auto table-sm">
@@ -32,7 +33,10 @@
                     class="htmx-scroll"
                 {% endif %}>
                 <td>
-                    <img src="{{ f.poster_url }}" class="imgdiv" alt="Poster of {{ f.title }}">
+                    <img src="{{ f.poster_url }}"
+                         class="imgdiv"
+                         alt="Poster of {{ f.title }}"
+                         onerror="this.onerror=null;this.src='{% static 'img/poster-placeholder.svg' %}';">
                 </td>
                 <td>
                     <h5>
