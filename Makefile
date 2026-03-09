@@ -179,8 +179,13 @@ run:
 pack:
 	docker save -o movie-filter-pro.tar movie-filter-pro
 
+huey:
+	uv run python -m huey.bin.huey_consumer movie_filter_pro.huey.HUEY -k thread -w 2 -v -S
+
+
 #
 # DEBUGGING
 #
 get_details_one_movie:
 	python manage.py get_details_one_movie 2104619
+

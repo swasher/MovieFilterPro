@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -173,12 +174,12 @@ class KinozalApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["detail"]["code"], "invalid_torrent_response")
 
-    @patch("moviefilter.api.KinozalDownloadImportService.handle_successful_download")
+    @patch("moviefilter.api.KinozalDownloadImportService.enqueue_successful_download")
     @patch("moviefilter.services.torrent_download_service.KinozalClient")
     def test_download_torrent_triggers_vault_import_when_movie_id_provided(
         self,
         kinozal_client_mock,
-        import_service_mock,
+        enqueue_service_mock,
     ):
         fake_response = SimpleNamespace(
             headers={
@@ -189,6 +190,11 @@ class KinozalApiTests(TestCase):
             status_code=200,
         )
         kinozal_client_mock.return_value.download_torrent.return_value = fake_response
+        enqueue_service_mock.return_value = SimpleNamespace(
+            status="queued",
+            message="Torrent сохранен. Импорт в Vault поставлен в очередь",
+            operation_id=uuid4(),
+        )
 
         with TemporaryDirectory() as temp_dir:
             self.preferences.torrents_hotfolder = temp_dir
@@ -201,8 +207,8 @@ class KinozalApiTests(TestCase):
             )
 
             self.assertEqual(response.status_code, 200)
-            import_service_mock.assert_called_once()
-            _, kwargs = import_service_mock.call_args
+            enqueue_service_mock.assert_called_once()
+            _, kwargs = enqueue_service_mock.call_args
             self.assertEqual(kwargs["movie_rss_id"], self.movie_high.pk)
             self.assertEqual(kwargs["torrent_id"], 1001)
             self.assertEqual(kwargs["user"], self.user)

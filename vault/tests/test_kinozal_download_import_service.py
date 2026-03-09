@@ -54,6 +54,32 @@ class KinozalDownloadImportServiceTests(TestCase):
             vote_average=8.7,
         )
 
+    @patch("vault.tasks.process_kinozal_download_import")
+    def test_enqueue_successful_download_logs_queue_event(self, queue_task_mock):
+        rss_movie = self._create_rss_movie()
+
+        result = KinozalDownloadImportService.enqueue_successful_download(
+            movie_rss_id=rss_movie.id,
+            torrent_id=4999,
+            user=self.user,
+            saved_to="/tmp/queued.torrent",
+        )
+
+        self.assertEqual(result.status, "queued")
+        queue_task_mock.assert_called_once()
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="download_saved",
+            ).exists()
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="import_queued",
+            ).exists()
+        )
+
     @patch("vault.services.kinozal_download_import_service.TMDBMovieImportService.import_movie")
     @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.find_by_imdb_id")
     def test_successful_imdb_flow_imports_movie_sets_status_and_logs_events(self, find_by_imdb_id_mock, import_movie_mock):

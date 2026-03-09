@@ -129,6 +129,7 @@ class KinozalTorrentDownloadOut(Schema):
     message: str
     filename: str | None = None
     saved_to: str | None = None
+    operation_id: str | None = None
 
 
 def _require_api_user(request):
@@ -511,16 +512,20 @@ def download_torrent(request, torrent_id: int):
     user = _require_api_user(request)
     filename, message, saved_to = _download_torrent_file(torrent_id)
     movie_id = _extract_download_movie_id(request)
+    operation_id = None
     if movie_id:
-        KinozalDownloadImportService.handle_successful_download(
+        queue_result = KinozalDownloadImportService.enqueue_successful_download(
             movie_rss_id=movie_id,
             torrent_id=torrent_id,
             user=user,
             saved_to=saved_to,
         )
+        message = queue_result.message
+        operation_id = str(queue_result.operation_id)
     return KinozalTorrentDownloadOut(
         torrent_id=torrent_id,
         filename=filename,
         message=message,
         saved_to=saved_to,
+        operation_id=operation_id,
     )

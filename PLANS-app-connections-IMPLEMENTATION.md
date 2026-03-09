@@ -70,6 +70,16 @@
 - [x] Подключить вызов orchestration service из `moviefilter/htmx_views.py`.
 - [x] Подключить тот же вызов из `moviefilter/api.py`, если API тоже должен поддерживать сценарий.
 
+## Фаза 6a. Перевести post-download обработку в фон через Huey
+
+- [x] Добавить `SqliteHuey`-конфиг в проект с хранением очереди рядом с Django project files.
+- [x] Добавить task module для фонового запуска `Kinozal -> Vault`.
+- [x] Перевести `moviefilter/htmx_views.py` с синхронного orchestration на enqueue.
+- [x] Перевести `moviefilter/api.py` с синхронного orchestration на enqueue.
+- [x] Обновить audit trail: фиксировать `download_saved`, `import_queued`, `background_import_started`.
+- [x] Обновить UX-сообщения так, чтобы быстрый response означал только сохранение torrent и постановку в очередь.
+- [x] Обновить runtime/entrypoint так, чтобы worker действительно запускался.
+
 ## Фаза 7. Добавить audit API
 
 - [x] Добавить endpoint списка событий в `vault/api.py`.
@@ -99,7 +109,7 @@
 
 ## Фаза 10. Финальная сверка с критериями готовности
 
-- [x] После успешной записи `.torrent` автоматически стартует связка `Kinozal -> Vault`.
+- [x] После успешной записи `.torrent` связка `Kinozal -> Vault` ставится в очередь и не блокирует HTTP response.
 - [x] При уверенном матче фильм оказывается в `Vault` со статусом `Буду смотреть`.
 - [x] Повторное нажатие `Download` не создаёт дубликаты.
 - [x] `imdb_id` и `kinopoisk_id` доходят до `Vault`.

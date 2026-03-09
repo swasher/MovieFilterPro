@@ -91,6 +91,7 @@ export type KinozalTorrentDownloadResponse = {
   message: string;
   filename: string | null;
   saved_to: string | null;
+  operation_id?: string | null;
 };
 
 export type KinozalApiErrorDetail = {

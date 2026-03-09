@@ -15,6 +15,7 @@ from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
 
 
 ImportStatus = Literal["created", "reused", "not_found", "ambiguous", "error"]
+QueueStatus = Literal["queued", "error"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -25,10 +26,96 @@ class KinozalDownloadImportResult:
     movie: Movie | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class KinozalDownloadEnqueueResult:
+    operation_id: UUID
+    status: QueueStatus
+    message: str
+
+
 class KinozalDownloadImportService:
     # ------------------------------------ #
     #          APPLICATION LAYER           #
     # ------------------------------------ #
+
+    @classmethod
+    def enqueue_successful_download(
+        cls,
+        *,
+        movie_rss_id: int,
+        torrent_id: int,
+        user,
+        saved_to: str,
+    ) -> KinozalDownloadEnqueueResult:
+        operation_id = uuid4()
+        movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
+        if movie_rss is None:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="rss_movie_missing",
+                message=f"MovieRSS #{movie_rss_id} не найден",
+                torrent_id=torrent_id,
+                user=user,
+            )
+            return KinozalDownloadEnqueueResult(
+                operation_id=operation_id,
+                status="error",
+                message="MovieRSS не найден",
+            )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="download_saved",
+            message=f"Torrent сохранен: {saved_to}",
+            movie_rss=movie_rss,
+            torrent_id=torrent_id,
+            user=user,
+            payload={"saved_to": saved_to},
+        )
+        try:
+            from vault.tasks import process_kinozal_download_import
+
+            process_kinozal_download_import(
+                str(operation_id),
+                movie_rss_id,
+                torrent_id,
+                user.id if getattr(user, "is_authenticated", False) else None,
+                saved_to,
+            )
+        except Exception as exc:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="import_queue_failed",
+                message=f"Не удалось поставить импорт в очередь: {exc}",
+                movie_rss=movie_rss,
+                torrent_id=torrent_id,
+                user=user,
+                payload={"error_type": type(exc).__name__},
+            )
+            return KinozalDownloadEnqueueResult(
+                operation_id=operation_id,
+                status="error",
+                message="Torrent сохранен, но импорт в Vault не удалось поставить в очередь",
+            )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="import_queued",
+            message="Импорт в Vault поставлен в очередь",
+            movie_rss=movie_rss,
+            torrent_id=torrent_id,
+            user=user,
+            payload={"saved_to": saved_to},
+        )
+        return KinozalDownloadEnqueueResult(
+            operation_id=operation_id,
+            status="queued",
+            message="Torrent сохранен. Импорт в Vault поставлен в очередь",
+        )
 
     @classmethod
     @transaction.atomic
@@ -39,8 +126,10 @@ class KinozalDownloadImportService:
         torrent_id: int,
         user,
         saved_to: str,
+        operation_id: UUID | None = None,
+        log_download_saved: bool = True,
     ) -> KinozalDownloadImportResult:
-        operation_id = uuid4()
+        operation_id = operation_id or uuid4()
         movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
         if movie_rss is None:
             cls._log(
@@ -57,16 +146,28 @@ class KinozalDownloadImportService:
                 message="MovieRSS не найден",
             )
 
-        cls._log(
-            operation_id=operation_id,
-            level=VaultConnectionEvent.Level.INFO,
-            event_type="download_saved",
-            message=f"Torrent сохранен: {saved_to}",
-            movie_rss=movie_rss,
-            torrent_id=torrent_id,
-            user=user,
-            payload={"saved_to": saved_to},
-        )
+        if log_download_saved:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.INFO,
+                event_type="download_saved",
+                message=f"Torrent сохранен: {saved_to}",
+                movie_rss=movie_rss,
+                torrent_id=torrent_id,
+                user=user,
+                payload={"saved_to": saved_to},
+            )
+        else:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.INFO,
+                event_type="background_import_started",
+                message="Фоновый импорт в Vault запущен",
+                movie_rss=movie_rss,
+                torrent_id=torrent_id,
+                user=user,
+                payload={"saved_to": saved_to},
+            )
 
         movie = cls._find_existing_movie(movie_rss, operation_id=operation_id, torrent_id=torrent_id, user=user)
         candidate = None

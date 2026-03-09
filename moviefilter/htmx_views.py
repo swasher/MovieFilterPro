@@ -176,19 +176,16 @@ def get_torrent_file(request, kinozal_id: int):
 
     try:
         result = download_torrent_file(kinozal_id)
-        import_result = KinozalDownloadImportService.handle_successful_download(
+        queue_result = KinozalDownloadImportService.enqueue_successful_download(
             movie_rss_id=movie_rss_id,
             torrent_id=kinozal_id,
             user=request.user,
             saved_to=result.saved_to,
         )
-        messages.success(request, result.message)
-        if import_result.status in {"created", "reused"}:
-            messages.success(request, import_result.message)
-        elif import_result.status == "ambiguous":
-            messages.warning(request, import_result.message)
+        if queue_result.status == "queued":
+            messages.success(request, queue_result.message)
         else:
-            messages.error(request, import_result.message)
+            messages.warning(request, queue_result.message)
         return HttpResponse(good_sign)
     except TorrentDownloadError as exc:
         error_message = exc.message
