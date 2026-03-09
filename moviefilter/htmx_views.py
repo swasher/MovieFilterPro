@@ -17,6 +17,8 @@ from .image_caching import remove_cached_image
 from .kinozal import LinkConstructor
 from .kinozal import KinozalClient
 from .classes import KinozalSearch
+from .services.torrent_download_service import TorrentDownloadError, download_torrent_file
+from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 
 
 @login_required()
@@ -141,6 +143,7 @@ def wait_trains(request, pk):
 
 
 @require_GET
+@login_required()
 def kinozal_download(request, kinozal_id: int):
     """
     Запускается при клике на кнопку "Download"
@@ -150,58 +153,50 @@ def kinozal_download(request, kinozal_id: int):
     """
     found = kinozal_search(kinozal_id)
 
-    context = {'found': found}
+    context = {
+        'found': found,
+        'movie_rss_id': kinozal_id,
+    }
     return render(request, 'partials/kinozal_download.html', context)
 
 
+@require_POST
+@login_required()
 def get_torrent_file(request, kinozal_id: int):
-    client = KinozalClient()
-    pref = UserPreferences.get()
-
-    destination = pref.torrents_hotfolder or ""
-    resolved_destination = resolve_torrents_hotfolder_path(destination)
-
-    out_of_torrent_number_message = 'Вам недоступен торрент-файл для скачивания'
-
-    print('GET torrent', kinozal_id)
-
-    r = client.download_torrent(kinozal_id)
-
     bad_sign = '<i class="bi bi-x-lg" style="color: red"></i>'
     good_sign = '<i class="bi bi-check-lg"></i>'
-
-    if r.headers.get('Content-Type') != 'application/x-bittorrent':
-        if out_of_torrent_number_message in r.content.decode('windows-1251'):
-            messages.error(request, f"Too much torrents today!")
-            return HttpResponse(bad_sign)
-        else:
-            messages.error(request, f"Kinozal return html instead torrent")
-            return HttpResponse(bad_sign)
-
-    if r.status_code != 200:
-        messages.error(request, f"Bad kinozal response")
+    movie_rss_id_raw = request.POST.get('movie_rss_id')
+    try:
+        movie_rss_id = int(movie_rss_id_raw)
+    except (TypeError, ValueError):
+        messages.error(request, "Не передан исходный MovieRSS для post-download обработки.")
         return HttpResponse(bad_sign)
+
+    print('GET torrent', kinozal_id, movie_rss_id)
 
     try:
-        filename = r.headers['content-disposition'].split('=')[1].strip('"')
-        resolved_destination.mkdir(parents=True, exist_ok=True)
-        full_path = resolved_destination / filename
-        with open(full_path, 'wb') as file:
-            file.write(r.content)
-
-        messages.success(request, f"Torrent saved to {full_path}")
-        return HttpResponse(good_sign)
-    except (FileNotFoundError, OSError) as e:
-        messages.error(
-            request,
-            f"File system error. Configured hotfolder: {destination}. Resolved path: {resolved_destination}. {str(e)}",
+        result = download_torrent_file(kinozal_id)
+        import_result = KinozalDownloadImportService.handle_successful_download(
+            movie_rss_id=movie_rss_id,
+            torrent_id=kinozal_id,
+            user=request.user,
+            saved_to=result.saved_to,
         )
-        return HttpResponse(bad_sign)
-    except KeyError:
-        messages.error(request, "Unknown error, can't get torrent filename")
+        messages.success(request, result.message)
+        if import_result.status in {"created", "reused"}:
+            messages.success(request, import_result.message)
+        elif import_result.status == "ambiguous":
+            messages.warning(request, import_result.message)
+        else:
+            messages.error(request, import_result.message)
+        return HttpResponse(good_sign)
+    except TorrentDownloadError as exc:
+        error_message = exc.message
+        if exc.hint:
+            error_message = f"{error_message} {exc.hint}"
+        messages.error(request, error_message)
         return HttpResponse(bad_sign)
     except Exception as e:
-        # Общая обработка других ошибок
         messages.error(request, f"Unexpected error: {str(e)}")
         return HttpResponse(bad_sign)
 

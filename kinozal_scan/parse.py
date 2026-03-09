@@ -75,8 +75,31 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
             counter += len(movies)
             for m in movies:
                 # todo использовать bulk_create
-                MovieRSS.objects.get_or_create(title=m.title, original_title=m.original_title, year=m.year,
-                                               defaults=dataclasses.asdict(m))
+                movie, created = MovieRSS.objects.get_or_create(
+                    title=m.title,
+                    original_title=m.original_title,
+                    year=m.year,
+                    defaults=dataclasses.asdict(m),
+                )
+                if created:
+                    continue
+
+                update_fields = []
+                if not movie.imdb_id and m.imdb_id:
+                    movie.imdb_id = m.imdb_id
+                    update_fields.append('imdb_id')
+                if movie.imdb_rating is None and m.imdb_rating is not None:
+                    movie.imdb_rating = m.imdb_rating
+                    update_fields.append('imdb_rating')
+                if not movie.kinopoisk_id and m.kinopoisk_id:
+                    movie.kinopoisk_id = m.kinopoisk_id
+                    update_fields.append('kinopoisk_id')
+                if movie.kinopoisk_rating is None and m.kinopoisk_rating is not None:
+                    movie.kinopoisk_rating = m.kinopoisk_rating
+                    update_fields.append('kinopoisk_rating')
+
+                if update_fields:
+                    movie.save(update_fields=update_fields)
         log('')
 
         # переходим к сканированию следующей странице

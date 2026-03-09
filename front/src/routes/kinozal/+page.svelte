@@ -488,7 +488,13 @@
 
     try {
       const response = await fetch(`/api/kinozal/torrents/${torrentId}/download`, {
-        method: "POST"
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          movie_id: selectedMovie?.id ?? null
+        })
       });
       const payload = (await response.json()) as KinozalTorrentDownloadResponse | KinozalApiErrorPayload;
 
@@ -1151,7 +1157,11 @@
                       onclick={() => downloadTorrent(option.id)}
                       disabled={downloadingTorrentId === option.id}
                     >
-                      {downloadingTorrentId === option.id ? "..." : "Down"}
+                      {#if downloadingTorrentId === option.id}
+                        <CircleDashed class="size-3.5 animate-spin" />
+                      {:else}
+                        Down
+                      {/if}
                     </Button>
                   </div>
                 </td>

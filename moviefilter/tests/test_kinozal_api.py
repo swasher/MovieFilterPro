@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -132,7 +133,7 @@ class KinozalApiTests(TestCase):
         self.assertEqual(self.movie_low.priority, WAIT_TRANS)
         remove_cached_image_mock.assert_called_once_with(self.movie_low.pk)
 
-    @patch("moviefilter.api.KinozalClient")
+    @patch("moviefilter.services.torrent_download_service.KinozalClient")
     def test_download_torrent_writes_file_to_configured_hotfolder(self, kinozal_client_mock):
         fake_response = SimpleNamespace(
             headers={
@@ -157,7 +158,7 @@ class KinozalApiTests(TestCase):
             self.assertEqual(saved_path.read_bytes(), b"torrent-bytes")
             self.assertIn("Torrent сохранен", payload["message"])
 
-    @patch("moviefilter.api.KinozalClient")
+    @patch("moviefilter.services.torrent_download_service.KinozalClient")
     def test_download_torrent_returns_structured_error_when_kinozal_returns_html(self, kinozal_client_mock):
         fake_response = SimpleNamespace(
             headers={"Content-Type": "text/html"},
@@ -171,6 +172,41 @@ class KinozalApiTests(TestCase):
         self.assertEqual(response.status_code, 502)
         payload = response.json()
         self.assertEqual(payload["detail"]["code"], "invalid_torrent_response")
+
+    @patch("moviefilter.api.KinozalDownloadImportService.handle_successful_download")
+    @patch("moviefilter.services.torrent_download_service.KinozalClient")
+    def test_download_torrent_triggers_vault_import_when_movie_id_provided(
+        self,
+        kinozal_client_mock,
+        import_service_mock,
+    ):
+        fake_response = SimpleNamespace(
+            headers={
+                "Content-Type": "application/x-bittorrent",
+                "content-disposition": 'attachment; filename="[kinozal.tv]id1001.torrent"',
+            },
+            content=b"torrent-bytes",
+            status_code=200,
+        )
+        kinozal_client_mock.return_value.download_torrent.return_value = fake_response
+
+        with TemporaryDirectory() as temp_dir:
+            self.preferences.torrents_hotfolder = temp_dir
+            self.preferences.save()
+
+            response = self.client.post(
+                "/api/kinozal/torrents/1001/download",
+                data=json.dumps({"movie_id": self.movie_high.pk}),
+                content_type="application/json",
+            )
+
+            self.assertEqual(response.status_code, 200)
+            import_service_mock.assert_called_once()
+            _, kwargs = import_service_mock.call_args
+            self.assertEqual(kwargs["movie_rss_id"], self.movie_high.pk)
+            self.assertEqual(kwargs["torrent_id"], 1001)
+            self.assertEqual(kwargs["user"], self.user)
+            self.assertTrue(Path(kwargs["saved_to"]).exists())
 
     def test_requires_authentication(self):
         self.client.logout()

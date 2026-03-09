@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from slugify import slugify
 from django.conf import settings
+import uuid
 
 import core
 
@@ -151,6 +152,8 @@ class Movie(models.Model):
 
     imdb_rating = models.DecimalField('Рейтинг IMDb', max_digits=3, decimal_places=1, null=True, blank=True)
     imdb_votes = models.PositiveIntegerField('Голосов IMDb', null=True, blank=True)
+    imdb_id = models.CharField('IMDb ID', max_length=15, null=True, blank=True, db_index=True)
+    kinopoisk_id = models.PositiveIntegerField('Kinopoisk ID', null=True, blank=True, db_index=True)
 
     created_at = models.DateTimeField('Создано', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлено', auto_now=True)
@@ -225,6 +228,42 @@ class Movie(models.Model):
 
     def get_actors(self):
         return self.movie_persons.filter(role='actor')
+
+
+class VaultConnectionEvent(models.Model):
+    class Source(models.TextChoices):
+        KINOZAL_DOWNLOAD = "kinozal_download", "Kinozal download"
+
+    class Level(models.TextChoices):
+        INFO = "info", "Info"
+        SUCCESS = "success", "Success"
+        WARNING = "warning", "Warning"
+        ERROR = "error", "Error"
+
+    operation_id = models.UUIDField('Operation ID', default=uuid.uuid4, db_index=True)
+    source = models.CharField('Источник', max_length=50, choices=Source, db_index=True)
+    event_type = models.CharField('Тип события', max_length=100, db_index=True)
+    level = models.CharField('Уровень', max_length=20, choices=Level, default=Level.INFO, db_index=True)
+    message = models.TextField('Сообщение')
+    payload = models.JSONField('Payload', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='vault_connection_events', null=True, blank=True)
+    movie_rss = models.ForeignKey('moviefilter.MovieRSS', on_delete=models.SET_NULL, related_name='vault_connection_events', null=True, blank=True)
+    vault_movie = models.ForeignKey('Movie', on_delete=models.SET_NULL, related_name='connection_events', null=True, blank=True)
+    rss_kinozal_id = models.PositiveIntegerField('RSS Kinozal ID', null=True, blank=True, db_index=True)
+    torrent_kinozal_id = models.PositiveIntegerField('Torrent Kinozal ID', null=True, blank=True, db_index=True)
+    imdb_id = models.CharField('IMDb ID snapshot', max_length=15, null=True, blank=True, db_index=True)
+    kinopoisk_id = models.PositiveIntegerField('Kinopoisk ID snapshot', null=True, blank=True, db_index=True)
+    tmdb_id = models.PositiveIntegerField('TMDB ID snapshot', null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Событие связи приложений'
+        verbose_name_plural = 'События связи приложений'
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['source', '-created_at']),
+            models.Index(fields=['operation_id', '-created_at']),
+        ]
 
 
 class Season(models.Model):

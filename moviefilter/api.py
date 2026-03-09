@@ -13,6 +13,12 @@ from moviefilter.image_caching import get_cached_image_url
 from moviefilter.image_caching import remove_cached_image
 from moviefilter.kinozal import KinozalClient, LinkConstructor
 from moviefilter.models import MovieRSS, UserPreferences
+from moviefilter.services.torrent_download_service import (
+    TorrentDownloadError,
+    download_torrent_file,
+    validate_download_preferences,
+)
+from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 
 
 api = NinjaAPI(title="Kinozal API", version="1.0", urls_namespace="kinozal-api")
@@ -162,32 +168,18 @@ def _normalize_page_size(limit: int) -> int:
 
 
 def _require_kinozal_preferences(*, require_hotfolder: bool = False) -> UserPreferences:
-    preferences = UserPreferences.get()
-
-    if not (preferences.kinozal_domain or "").strip():
-        _raise_kinozal_error(
-            400,
-            "settings_missing_domain",
-            "Не указан домен Kinozal.",
-            "Открой Preferences и заполни `kinozal_domain`.",
-        )
-
-    if not (preferences.cookie_uid or "").strip() or not (preferences.cookie_pass or "").strip():
-        _raise_kinozal_error(
-            400,
-            "settings_missing_auth",
-            "Не настроены cookies для авторизации на Kinozal.",
-            "Открой Preferences и заполни `cookie_uid` и `cookie_pass`.",
-        )
-
-    if require_hotfolder and not (preferences.torrents_hotfolder or "").strip():
-        _raise_kinozal_error(
-            400,
-            "settings_missing_hotfolder",
-            "Не настроен hotfolder для torrent-файлов.",
-            "На сервере в Docker обычно используется `/torrents_hotfolder`, а локально на Windows лучше указывать явный путь вроде `\\\\qnap\\TorrentsHotFolder`.",
-        )
-
+    try:
+        preferences = validate_download_preferences()
+    except TorrentDownloadError as exc:
+        hint = exc.hint
+        if exc.code == "settings_missing_hotfolder":
+            hint = hint or (
+                "На сервере в Docker обычно используется `/torrents_hotfolder`, "
+                "а локально на Windows лучше указывать явный путь вроде `\\\\qnap\\TorrentsHotFolder`."
+            )
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, hint)
+    if not require_hotfolder:
+        return preferences
     return preferences
 
 
@@ -291,6 +283,31 @@ def _priority_key(priority: int) -> str:
     return PRIORITY_KEY_MAP.get(priority, str(priority))
 
 
+def _extract_download_movie_id(request) -> int | None:
+    content_type = (getattr(request, "content_type", "") or "").lower()
+    if content_type and "application/json" not in content_type:
+        return None
+    if not request.body:
+        return None
+
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HttpError(400, "Invalid JSON body") from exc
+
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise HttpError(400, "Invalid JSON body")
+
+    movie_id = payload.get("movie_id")
+    if movie_id in (None, ""):
+        return None
+    if not isinstance(movie_id, int):
+        raise HttpError(400, "movie_id must be an integer")
+    return movie_id
+
+
 def _serialize_download_option(item: KinozalSearch) -> KinozalDownloadOptionOut:
     return KinozalDownloadOptionOut(
         id=int(item.id),
@@ -326,66 +343,11 @@ def _update_movie_priority(movie_id: int, target_priority: int, *, message_prefi
 
 def _download_torrent_file(torrent_id: int) -> tuple[str | None, str, str]:
     preferences = _require_kinozal_preferences(require_hotfolder=True)
-    client = KinozalClient()
-    configured_destination = preferences.torrents_hotfolder or ""
-    resolved_destination = resolve_torrents_hotfolder_path(configured_destination)
-
     try:
-        response = client.download_torrent(torrent_id)
-    except RequestException as exc:
-        _raise_kinozal_error(
-            502,
-            "kinozal_unreachable",
-            "Не удалось связаться с Kinozal при скачивании torrent-файла.",
-            str(exc),
-        )
-
-    out_of_torrent_number_message = "Вам недоступен торрент-файл для скачивания"
-
-    if response.headers.get("Content-Type") != "application/x-bittorrent":
-        body = response.content.decode("windows-1251", errors="ignore")
-        if out_of_torrent_number_message in body:
-            _raise_kinozal_error(
-                409,
-                "download_limit_reached",
-                "Kinozal сообщил, что дневной лимит скачиваний исчерпан.",
-            )
-        _raise_kinozal_error(
-            502,
-            "invalid_torrent_response",
-            "Kinozal вернул HTML вместо torrent-файла.",
-        )
-
-    if response.status_code != 200:
-        _raise_kinozal_error(
-            502,
-            "bad_kinozal_response",
-            f"Kinozal вернул неожиданный статус: {response.status_code}.",
-        )
-
-    try:
-        filename = response.headers["content-disposition"].split("=")[1].strip('"')
-    except (KeyError, IndexError) as exc:
-        _raise_kinozal_error(
-            502,
-            "missing_torrent_filename",
-            "Не удалось определить имя torrent-файла из ответа Kinozal.",
-        )
-
-    try:
-        resolved_destination.mkdir(parents=True, exist_ok=True)
-        full_path = resolved_destination / filename
-        with open(full_path, "wb") as file:
-            file.write(response.content)
-    except (FileNotFoundError, OSError) as exc:
-        _raise_kinozal_error(
-            400,
-            "hotfolder_write_failed",
-            "Не удалось записать torrent-файл в hotfolder.",
-            f"Настройка: {configured_destination}. Реальный путь: {resolved_destination}. {exc}",
-        )
-
-    return filename, f"Torrent сохранен: {full_path}", str(full_path)
+        result = download_torrent_file(torrent_id, preferences=preferences)
+    except TorrentDownloadError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+    return result.filename, result.message, result.saved_to
 
 
 def _kinozal_search(movie_id: int) -> list[KinozalSearch]:
@@ -546,8 +508,16 @@ def movie_download_options(request, movie_id: int):
 
 @api.post("/torrents/{torrent_id}/download", response=KinozalTorrentDownloadOut)
 def download_torrent(request, torrent_id: int):
-    _require_api_user(request)
+    user = _require_api_user(request)
     filename, message, saved_to = _download_torrent_file(torrent_id)
+    movie_id = _extract_download_movie_id(request)
+    if movie_id:
+        KinozalDownloadImportService.handle_successful_download(
+            movie_rss_id=movie_id,
+            torrent_id=torrent_id,
+            user=user,
+            saved_to=saved_to,
+        )
     return KinozalTorrentDownloadOut(
         torrent_id=torrent_id,
         filename=filename,

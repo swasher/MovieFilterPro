@@ -5,7 +5,7 @@ from django.db.models import Count, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from vault.models import Genre, Movie, MoviePerson, Person, UserList, UserListMovie, UserMovie
+from vault.models import Genre, Movie, MoviePerson, Person, UserList, UserListMovie, UserMovie, VaultConnectionEvent
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
@@ -89,6 +89,33 @@ class SidebarGroupOut(Schema):
     title: str
     href: str = "#"
     children: list[SidebarItemOut]
+
+
+class ConnectionEventMovieRefOut(Schema):
+    id: int
+    title: str
+    slug: str | None = None
+
+
+class ConnectionEventOut(Schema):
+    id: int
+    operation_id: str
+    created_at: str
+    source: str
+    event_type: str
+    level: str
+    message: str
+    rss_kinozal_id: int | None = None
+    torrent_kinozal_id: int | None = None
+    imdb_id: str | None = None
+    kinopoisk_id: int | None = None
+    tmdb_id: int | None = None
+    movie_rss_title: str | None = None
+    vault_movie: ConnectionEventMovieRefOut | None = None
+
+
+class ConnectionEventsOut(Schema):
+    items: list[ConnectionEventOut]
 
 
 class TMDBSyncIn(Schema):
@@ -249,6 +276,10 @@ def _date_to_iso(value) -> str | None:
     return value.isoformat() if value else None
 
 
+def _datetime_to_iso(value) -> str | None:
+    return value.isoformat() if value else None
+
+
 def _tmdb_image_url(raw_path: str | None, size: str = "w342") -> str | None:
     if not raw_path:
         return None
@@ -307,6 +338,32 @@ def _build_tmdb_candidate_out(item) -> TMDBCandidateOut:
         poster_url=_tmdb_image_url(item.poster_path),
         popularity=item.popularity,
         vote_average=item.vote_average,
+    )
+
+
+def _build_connection_event_out(item: VaultConnectionEvent) -> ConnectionEventOut:
+    vault_movie = None
+    if item.vault_movie_id:
+        vault_movie = ConnectionEventMovieRefOut(
+            id=item.vault_movie.id,
+            title=item.vault_movie.title,
+            slug=item.vault_movie.slug,
+        )
+    return ConnectionEventOut(
+        id=item.id,
+        operation_id=str(item.operation_id),
+        created_at=_datetime_to_iso(item.created_at) or "",
+        source=item.source,
+        event_type=item.event_type,
+        level=item.level,
+        message=item.message,
+        rss_kinozal_id=item.rss_kinozal_id,
+        torrent_kinozal_id=item.torrent_kinozal_id,
+        imdb_id=item.imdb_id,
+        kinopoisk_id=item.kinopoisk_id,
+        tmdb_id=item.tmdb_id,
+        movie_rss_title=item.movie_rss.title if item.movie_rss_id else None,
+        vault_movie=vault_movie,
     )
 
 
@@ -510,6 +567,32 @@ def tmdb_search(request, q: str, limit: int = 10):
     return TMDBSearchOut(results=[_build_tmdb_candidate_out(item) for item in results])
 
 
+@api.get("/connection-events", response=ConnectionEventsOut)
+def connection_events(
+    request,
+    limit: int = 100,
+    level: str | None = None,
+    source: str | None = None,
+    movie_rss_id: int | None = None,
+    operation_id: str | None = None,
+):
+    _require_api_user(request)
+
+    bounded_limit = max(1, min(limit, 200))
+    qs = VaultConnectionEvent.objects.select_related("movie_rss", "vault_movie").order_by("-created_at", "-id")
+
+    if level:
+        qs = qs.filter(level=level.strip().lower())
+    if source:
+        qs = qs.filter(source=source.strip())
+    if movie_rss_id:
+        qs = qs.filter(movie_rss_id=movie_rss_id)
+    if operation_id:
+        qs = qs.filter(operation_id=operation_id.strip())
+
+    return ConnectionEventsOut(items=[_build_connection_event_out(item) for item in qs[:bounded_limit]])
+
+
 @api.post("/tmdb/import", response=TMDBImportOut)
 def tmdb_import(request, payload: TMDBImportIn):
     _require_api_user(request)
@@ -680,6 +763,13 @@ def sidebar_data(request):
                 ],
             ),
             SidebarGroupOut(id="custom", title="Мои списки", children=[]),
+            SidebarGroupOut(
+                id="connections",
+                title="Интеграции",
+                children=[
+                    SidebarItemOut(id="connection_events", title="События связок", href="/connections", count=0),
+                ],
+            ),
         ]
 
     counts = MovieStatusService.get_system_lists_counts(user)
@@ -733,4 +823,17 @@ def sidebar_data(request):
         ],
     )
 
-    return [system_group, custom_group, genres_group]
+    connections_group = SidebarGroupOut(
+        id="connections",
+        title="Интеграции",
+        children=[
+            SidebarItemOut(
+                id="connection_events",
+                title="События связок",
+                href="/connections",
+                count=VaultConnectionEvent.objects.count(),
+            ),
+        ],
+    )
+
+    return [system_group, custom_group, genres_group, connections_group]

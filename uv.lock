@@ -820,6 +820,15 @@ http2 = [
 ]
 
 [[package]]
+name = "huey"
+version = "2.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/29/3428d52eb8e85025e264a291641a9f9d6407cc1e51d1b630f6ac5815999a/huey-2.6.0.tar.gz", hash = "sha256:8d11f8688999d65266af1425b831f6e3773e99415027177b8734b0ffd5e251f6", size = 221068, upload-time = "2026-01-06T03:01:02.055Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/34/fae9ac8f1c3a552fd3f7ff652b94c78d219dedc5fce0c0a4232457760a00/huey-2.6.0-py3-none-any.whl", hash = "sha256:1b9df9d370b49c6d5721ba8a01ac9a787cf86b3bdc584e4679de27b920395c3f", size = 76951, upload-time = "2026-01-06T03:01:00.808Z" },
+]
+
+[[package]]
 name = "hyperframe"
 version = "6.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -882,6 +891,7 @@ dependencies = [
     { name = "firebase-admin" },
     { name = "git-filter-repo" },
     { name = "gunicorn" },
+    { name = "huey" },
     { name = "pandas" },
     { name = "plexapi" },
     { name = "python-decouple" },
@@ -916,6 +926,7 @@ requires-dist = [
     { name = "firebase-admin", specifier = ">=7.1.0" },
     { name = "git-filter-repo", specifier = ">=2.47.0" },
     { name = "gunicorn", specifier = ">=23.0.0" },
+    { name = "huey", specifier = ">=2.6.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "plexapi", specifier = ">=4.16.1" },
     { name = "python-decouple", specifier = ">=3.8" },

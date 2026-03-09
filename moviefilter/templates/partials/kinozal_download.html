@@ -30,7 +30,8 @@
                     <td><small>{{ m.created }}</small></td>
                     <td>
                         <button type="button" class="btn btn-sm btn-info"
-                                hx-get="{% url 'get_torrent_file' m.id %}"
+                                hx-post="{% url 'get_torrent_file' m.id %}"
+                                hx-vals='{"movie_rss_id": "{{ movie_rss_id }}"}'
                                 hx-target="#answer-{{ m.id }}"
                                 hx-swap="innerHTML"
                         >Down

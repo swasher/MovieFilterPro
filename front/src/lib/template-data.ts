@@ -14,6 +14,7 @@ export type SidebarItem = {
 export const headerLinks: HeaderLink[] = [
   { label: "Kinozal", href: "/kinozal" },
   { label: "Vault", href: "/" },
+  { label: "Связки", href: "/connections" },
   { label: "Plex", href: "/plex" },
   { label: "Scan", href: "/scan" }
 ];
@@ -35,5 +36,11 @@ export const defaultSidebarItems: SidebarItem[] = [
     title: "Мои списки",
     href: "#",
     children: []
+  },
+  {
+    id: "connections",
+    title: "Интеграции",
+    href: "#",
+    children: [{ id: "connection_events", title: "События связок", href: "/connections", count: 0 }]
   }
 ];

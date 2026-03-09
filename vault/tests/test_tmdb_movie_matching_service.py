@@ -14,11 +14,12 @@ class _FakeSearchResponse:
 
 
 class _FakeTMDB:
-    def __init__(self, movie_results=None, tv_results=None, movie_details=None, tv_details=None):
+    def __init__(self, movie_results=None, tv_results=None, movie_details=None, tv_details=None, find_results=None):
         self._movie_results = movie_results or []
         self._tv_results = tv_results or []
         self._movie_details = movie_details or {}
         self._tv_details = tv_details or {}
+        self._find_results = find_results or SimpleNamespace(movie_results=[], tv_results=[])
 
     def movie_search(self, query, include_adult=True, primary_release_year=None):
         return _FakeSearchResponse(self._movie_results)
@@ -31,6 +32,9 @@ class _FakeTMDB:
 
     def tv_show(self, tv_id):
         return self._tv_details.get(tv_id, SimpleNamespace(alternative_titles=[]))
+
+    def find_by_id(self, imdb_id=None, **kwargs):
+        return self._find_results
 
 
 class TMDBMovieMatchingServiceTests(SimpleTestCase):
@@ -123,3 +127,30 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         ids = {c.tmdb_id for c in result.candidates}
         self.assertIn(10, ids)
         self.assertIn(11, ids)
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_find_by_imdb_id_returns_auto_match_for_single_movie_result(self, get_tmdb_client_mock):
+        fake_tmdb = _FakeTMDB(
+            find_results=SimpleNamespace(
+                movie_results=[
+                    SimpleNamespace(
+                        id=321,
+                        title="Интерстеллар",
+                        original_title="Interstellar",
+                        release_date=date(2014, 11, 7),
+                        poster_path="/poster.jpg",
+                        popularity=99.0,
+                        vote_average=8.7,
+                    )
+                ],
+                tv_results=[],
+            )
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.find_by_imdb_id("tt0816692", expected_media_type="movie")
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 321)
+        self.assertEqual(result.selected_candidate.media_type, "movie")

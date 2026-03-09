@@ -52,7 +52,7 @@ class MovieRSS(models.Model):
     imdb_id = models.CharField(max_length=15, blank=True, null=True)
     imdb_rating = models.FloatField(blank=True, null=True)
 
-    kinopoisk_id = models.PositiveSmallIntegerField(blank=True, null=True)
+    kinopoisk_id = models.PositiveIntegerField(blank=True, null=True)
     kinopoisk_rating = models.FloatField(blank=True, null=True)
 
     genres = models.CharField(max_length=300)

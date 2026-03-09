@@ -139,6 +139,102 @@ class TMDBMovieMatchingService:
         )
 
     @classmethod
+    def find_by_imdb_id(
+        cls,
+        imdb_id: str,
+        *,
+        expected_media_type: MediaType | None = None,
+        top_n: int | None = None,
+    ) -> TMDBMatchingResult:
+        normalized_imdb_id = (imdb_id or "").strip()
+        if not normalized_imdb_id:
+            return TMDBMatchingResult(
+                status="not_found",
+                selected_candidate=None,
+                candidates=tuple(),
+                message="IMDb ID отсутствует",
+            )
+
+        top_n = top_n or cls.TOP_CANDIDATES_LIMIT
+        tmdb = get_tmdb_client()
+
+        try:
+            result = tmdb.find_by_id(imdb_id=normalized_imdb_id)
+        except Exception:
+            return TMDBMatchingResult(
+                status="not_found",
+                selected_candidate=None,
+                candidates=tuple(),
+                message="TMDB lookup по IMDb ID завершился ошибкой",
+            )
+
+        candidates: list[TMDBCandidate] = []
+        for media_type, attr_name in (("movie", "movie_results"), ("tv", "tv_results")):
+            for item in getattr(result, attr_name, None) or []:
+                candidate = cls._to_raw_candidate(item, media_type)
+                if candidate is None:
+                    continue
+                candidates.append(
+                    TMDBCandidate(
+                        tmdb_id=candidate.tmdb_id,
+                        media_type=media_type,
+                        title=candidate.title,
+                        original_title=candidate.original_title,
+                        year=candidate.year,
+                        score=cls.AUTO_MATCH_MIN_SCORE + (5 if media_type == expected_media_type else 0),
+                        score_reasons=("imdb_id_lookup",),
+                        poster_path=candidate.poster_path,
+                        popularity=candidate.popularity,
+                        vote_average=candidate.vote_average,
+                    )
+                )
+
+        if not candidates:
+            return TMDBMatchingResult(
+                status="not_found",
+                selected_candidate=None,
+                candidates=tuple(),
+                message="TMDB не вернул кандидатов по IMDb ID",
+            )
+
+        candidates.sort(
+            key=lambda item: (
+                item.media_type == expected_media_type,
+                item.popularity or 0.0,
+                item.vote_average or 0.0,
+                item.year or 0,
+            ),
+            reverse=True,
+        )
+
+        filtered = [item for item in candidates if expected_media_type is None or item.media_type == expected_media_type]
+        relevant = filtered or candidates
+        best = relevant[0]
+        if len(relevant) == 1:
+            return TMDBMatchingResult(
+                status="auto_match",
+                selected_candidate=best,
+                candidates=(best,),
+                message="TMDB нашел уверенный матч по IMDb ID",
+            )
+
+        same_media = [item for item in relevant if item.media_type == best.media_type]
+        if len(same_media) == 1 and expected_media_type is not None and best.media_type == expected_media_type:
+            return TMDBMatchingResult(
+                status="auto_match",
+                selected_candidate=best,
+                candidates=tuple(relevant[:top_n]),
+                message="TMDB нашел уверенный матч по IMDb ID и типу медиа",
+            )
+
+        return TMDBMatchingResult(
+            status="needs_user_choice",
+            selected_candidate=None,
+            candidates=tuple(relevant[:top_n]),
+            message="TMDB вернул несколько кандидатов по IMDb ID",
+        )
+
+    @classmethod
     def normalize_title(cls, title: str) -> str:
         value = (title or "").lower().replace("ё", "е")
         value = re.sub(r"[^\w\s]", " ", value, flags=re.UNICODE)

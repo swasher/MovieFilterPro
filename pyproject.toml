@@ -21,6 +21,7 @@ dependencies = [
     "firebase-admin>=7.1.0",
     "git-filter-repo>=2.47.0",
     "gunicorn>=23.0.0",
+    "huey>=2.6.0",
     "pandas>=2.3.3",
     "plexapi>=4.16.1",
     "python-decouple>=3.8",
