@@ -7,6 +7,18 @@ from django.conf import settings
 import core
 
 
+def _build_unique_slug(model_class, raw_value: str | None, fallback: str, current_pk: int | None = None) -> str:
+    base_slug = slugify(raw_value or "") or fallback
+    slug = base_slug
+    counter = 2
+
+    while model_class.objects.filter(slug=slug).exclude(pk=current_pk).exists():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    return slug
+
+
 def _build_tmdb_image_url(raw_path: str | None, size: str) -> str | None:
     if not raw_path:
         return None
@@ -77,13 +89,7 @@ class Genre(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            base_slug = slugify(self.name) or 'genre'
-            slug = base_slug
-            counter = 2
-            while Genre.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f'{base_slug}-{counter}'
-                counter += 1
-            self.slug = slug
+            self.slug = _build_unique_slug(Genre, self.name, 'genre', self.pk)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -182,7 +188,7 @@ class Movie(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.title)
+            self.slug = _build_unique_slug(Movie, self.title, 'movie', self.pk)
         super().save(*args, **kwargs)
 
     def get_year_display(self):

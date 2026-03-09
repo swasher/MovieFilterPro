@@ -151,6 +151,10 @@
   - `ok`
   - `needs_confirmation` (один неуверенный кандидат)
   - `needs_user_choice` (несколько кандидатов)
+- `tmdb_adapter` — инфраструктурный слой для TMDB:
+  - `tmdb_adapter.client_singleton.get_tmdb_client()` создает и кеширует `TMDbAPIs` клиент с текущими ключами из `UserPreferences`.
+  - `tmdb_adapter.auth` отвечает за TMDB auth / logout flow и сброс singleton-клиента.
+  - Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`, а не в `tmdb_adapter`.
 - При переносе новых сценариев для `vault`:
   - не менять модели без явной необходимости;
   - не ломать существующий Django UI;

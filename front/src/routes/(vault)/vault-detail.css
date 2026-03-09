@@ -81,6 +81,10 @@
     @apply flex flex-wrap items-center gap-2;
   }
 
+  .vd-status-row--service {
+    @apply justify-start md:justify-end;
+  }
+
   .vd-status-pill {
     @apply inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none;
   }
@@ -145,12 +149,12 @@
     @apply inline-flex items-center rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] leading-none text-foreground/80;
   }
 
-  .vd-service-box {
-    @apply rounded-xl border border-border/70 bg-muted/30 p-4;
-  }
-
   .vd-service-actions {
     @apply flex flex-wrap gap-2;
+  }
+
+  .vd-service-row {
+    @apply flex flex-col gap-3 border-t border-border/50 pt-5 md:flex-row md:items-center md:justify-between;
   }
 
   .vd-primary-actions {

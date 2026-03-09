@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from "$app/state";
   import type { Snippet } from "svelte";
   import type { SidebarItem } from "$lib/template-data";
   import { Badge } from "$lib/components/ui/badge";
@@ -12,9 +13,14 @@
   let { children, sidebarItems }: Props = $props();
 
   const isActive = (href: string): boolean => {
-    if (typeof window === "undefined") return false;
-    const current = `${window.location.pathname}${window.location.search}`;
-    return current === href || (href !== "/" && current.startsWith(href));
+    const currentPath = page.url.pathname;
+    const currentSearch = page.url.search;
+
+    if (href.includes("?")) {
+      return `${currentPath}${currentSearch}` === href;
+    }
+
+    return href === "/" ? currentPath === "/" : currentPath === href || currentPath.startsWith(`${href}/`);
   };
 </script>
 

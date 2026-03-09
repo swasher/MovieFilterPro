@@ -7,6 +7,7 @@ from ninja.errors import HttpError
 
 from vault.models import Genre, Movie, MoviePerson, Person, UserList, UserListMovie, UserMovie
 from vault.services.movie_status_service import MovieStatusService
+from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
 
@@ -134,6 +135,11 @@ class RateMovieOut(Schema):
     user_state: UserStateOut
 
 
+class DeleteMovieOut(Schema):
+    message: str
+    orphan_persons_deleted: int = 0
+
+
 class ToggleMovieListIn(Schema):
     list_id: int
 
@@ -147,6 +153,22 @@ class ToggleMovieListOut(Schema):
 class TMDBCandidateConfirmIn(Schema):
     tmdb_id: int
     media_type: str
+
+
+class TMDBSearchOut(Schema):
+    results: list[TMDBCandidateOut] = []
+
+
+class TMDBImportIn(Schema):
+    tmdb_id: int
+    media_type: str
+
+
+class TMDBImportOut(Schema):
+    status: str
+    message: str
+    created: bool
+    movie: MovieOut | None = None
 
 
 class PersonMovieOut(Schema):
@@ -269,21 +291,33 @@ def _build_tmdb_sync_out(result) -> TMDBSyncOut:
         message=result.message,
         updated_fields=list(result.updated_fields),
         orphan_persons_deleted=result.orphan_persons_deleted,
-        candidates=[
-            TMDBCandidateOut(
-                tmdb_id=item.tmdb_id,
-                media_type=item.media_type,
-                title=item.title,
-                original_title=item.original_title,
-                year=item.year,
-                score=item.score,
-                score_reasons=list(item.score_reasons),
-                poster_url=_tmdb_image_url(item.poster_path),
-                popularity=item.popularity,
-                vote_average=item.vote_average,
-            )
-            for item in result.candidates
-        ],
+        candidates=[_build_tmdb_candidate_out(item) for item in result.candidates],
+    )
+
+
+def _build_tmdb_candidate_out(item) -> TMDBCandidateOut:
+    return TMDBCandidateOut(
+        tmdb_id=item.tmdb_id,
+        media_type=item.media_type,
+        title=item.title,
+        original_title=item.original_title,
+        year=item.year,
+        score=item.score,
+        score_reasons=list(item.score_reasons),
+        poster_url=_tmdb_image_url(item.poster_path),
+        popularity=item.popularity,
+        vote_average=item.vote_average,
+    )
+
+
+def _build_movie_out(movie: Movie) -> MovieOut:
+    return MovieOut(
+        id=movie.id,
+        title=movie.title,
+        original_title=movie.original_title,
+        year=movie.year,
+        slug=movie.slug,
+        poster_url=movie.poster_url,
     )
 
 
@@ -352,17 +386,7 @@ def list_movies(
         ordering = allowed_orders.get(order, allowed_orders["-year"])
 
     qs = qs.order_by(*ordering).distinct()[:limit]
-    return [
-        MovieOut(
-            id=movie.id,
-            title=movie.title,
-            original_title=movie.original_title,
-            year=movie.year,
-            slug=movie.slug,
-            poster_url=movie.poster_url,
-        )
-        for movie in qs
-    ]
+    return [_build_movie_out(movie) for movie in qs]
 
 
 @api.get("/movies/{slug}", response=MovieDetailOut)
@@ -474,6 +498,38 @@ def movie_fetch_tmdb_confirm(request, slug: str, payload: TMDBCandidateConfirmIn
     return _build_tmdb_sync_out(result)
 
 
+@api.get("/tmdb/search", response=TMDBSearchOut)
+def tmdb_search(request, q: str, limit: int = 10):
+    _require_api_user(request)
+
+    try:
+        results = TMDBMovieImportService.search_movies(q, limit=limit)
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    return TMDBSearchOut(results=[_build_tmdb_candidate_out(item) for item in results])
+
+
+@api.post("/tmdb/import", response=TMDBImportOut)
+def tmdb_import(request, payload: TMDBImportIn):
+    _require_api_user(request)
+
+    try:
+        result = TMDBMovieImportService.import_movie(
+            tmdb_id=payload.tmdb_id,
+            media_type=payload.media_type,
+        )
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    return TMDBImportOut(
+        status=result.status,
+        message=result.message,
+        created=result.status == "created",
+        movie=_build_movie_out(result.movie),
+    )
+
+
 @api.post("/movies/{slug}/toggle-status", response=ToggleStatusOut)
 def movie_toggle_status(request, slug: str, payload: ToggleStatusIn):
     movie = Movie.objects.filter(slug=slug).first()
@@ -541,6 +597,22 @@ def movie_rate(request, slug: str, payload: RateMovieIn):
     return RateMovieOut(
         rating=state.rating,
         user_state=state,
+    )
+
+
+@api.post("/movies/{slug}/delete", response=DeleteMovieOut)
+def movie_delete(request, slug: str):
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    _require_api_user(request)
+
+    movie.delete()
+    orphan_persons_deleted = TMDBMovieSyncService._cleanup_orphan_persons()
+    return DeleteMovieOut(
+        message="Фильм удален из Vault",
+        orphan_persons_deleted=orphan_persons_deleted,
     )
 
 

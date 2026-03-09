@@ -19,6 +19,7 @@
     Link2,
     RefreshCw,
     Shield,
+    Trash2,
     XCircle
   } from "@lucide/svelte";
 
@@ -27,7 +28,9 @@
 
   let isSyncing = $state(false);
   let isConfirmingCandidate = $state(false);
+  let isDeletingMovie = $state(false);
   let candidateDialogOpen = $state(false);
+  let deleteDialogOpen = $state(false);
   let candidateDialogMode = $state<"needs_confirmation" | "needs_user_choice">("needs_user_choice");
   let tmdbCandidates = $state<
     Array<{
@@ -289,6 +292,40 @@
     }
   };
 
+  const deleteMovie = async () => {
+    isDeletingMovie = true;
+
+    try {
+      const response = await fetch(`/api/vault/movies/${movie.slug}/delete`, {
+        method: "POST"
+      });
+      const payload = (await response.json()) as {
+        message?: string;
+        orphan_persons_deleted?: number;
+      };
+
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) {
+          return;
+        }
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+
+      deleteDialogOpen = false;
+      if ((payload.orphan_persons_deleted ?? 0) > 0) {
+        toast.success(`${payload.message ?? "Фильм удален."} Очищено персон: ${payload.orphan_persons_deleted}.`);
+      } else {
+        toast.success(payload.message ?? "Фильм удален.");
+      }
+      await goto("/");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось удалить фильм");
+    } finally {
+      isDeletingMovie = false;
+    }
+  };
+
   const initials = (name: string) =>
     name
       .split(" ")
@@ -502,32 +539,6 @@
 
       <Card class="vd-card">
         <CardHeader>
-          <CardTitle class="text-xl">Служебное</CardTitle>
-        </CardHeader>
-        <CardContent class="vd-card-content">
-          <div class="vd-service-box">
-            <div class="vd-status-row">
-              <span class={`vd-status-pill ${movie.tmdb_linked ? "vd-status-pill--success" : "vd-status-pill--secondary"}`}>
-                {movie.tmdb_linked ? `TMDB linked #${movie.tmdb_id}` : "TMDB not linked"}
-              </span>
-              <span class="vd-status-pill vd-status-pill--secondary">source: {movie.source_display}</span>
-            </div>
-          </div>
-
-          <div class="vd-service-actions">
-            <Button onclick={() => runTmdbSync(false)} disabled={isSyncing}>
-              {isSyncing ? "Sync..." : "Fetch"}
-            </Button>
-            <Button variant="outline" onclick={() => runTmdbSync(true)} disabled={isSyncing}>
-              <RefreshCw class="size-4" />
-              Force data
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card class="vd-card">
-        <CardHeader>
           <CardTitle class="text-xl">Съемочная группа</CardTitle>
         </CardHeader>
         <CardContent class="vd-card-content">
@@ -583,8 +594,34 @@
               {/if}
             </div>
           </div>
+
         </CardContent>
       </Card>
+
+      <div class="vd-service-row">
+        <div class="vd-service-actions">
+          <Button onclick={() => runTmdbSync(false)} disabled={isSyncing}>
+            {isSyncing ? "Sync..." : "Fetch"}
+          </Button>
+          <Button variant="outline" onclick={() => runTmdbSync(true)} disabled={isSyncing}>
+            <RefreshCw class="size-4" />
+            Force data
+          </Button>
+          <Button variant="destructive" onclick={() => {
+            deleteDialogOpen = true;
+          }} disabled={isDeletingMovie}>
+            <Trash2 class="size-4" />
+            Delete
+          </Button>
+        </div>
+
+        <div class="vd-status-row vd-status-row--service">
+          <span class={`vd-status-pill ${movie.tmdb_linked ? "vd-status-pill--success" : "vd-status-pill--secondary"}`}>
+            {movie.tmdb_linked ? `TMDB linked #${movie.tmdb_id}` : "TMDB not linked"}
+          </span>
+          <span class="vd-status-pill vd-status-pill--secondary">source: {movie.source_display}</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -667,6 +704,28 @@
       </Button>
       <Button onclick={confirmTmdbCandidate} disabled={isConfirmingCandidate || selectedCandidateId === null}>
         {isConfirmingCandidate ? "Сохраняю..." : "Выбрать"}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={deleteDialogOpen}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Удалить фильм?</Dialog.Title>
+      <Dialog.Description>
+        Это удалит <strong>{movie.title}</strong> из Vault вместе со связанными пользовательскими статусами и списками.
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => {
+        deleteDialogOpen = false;
+      }} disabled={isDeletingMovie}>
+        Отмена
+      </Button>
+      <Button variant="destructive" onclick={deleteMovie} disabled={isDeletingMovie}>
+        {isDeletingMovie ? "Удаляю..." : "Удалить"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

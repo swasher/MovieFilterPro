@@ -20,6 +20,10 @@
 - [x] Реализовать обновление `countries` через `core.Country`
 - [x] Реализовать обновление `poster` (ссылка/путь TMDB)
 
+## Notes
+- `tmdb_adapter` не хранит прикладную логику Vault. Его роль: auth-flow и singleton-клиент `TMDbAPIs`.
+- Для `vault`-сценариев (`matching`, `sync`, `search`, `import`) использовать `tmdb_adapter.client_singleton.get_tmdb_client()` как инфраструктурную точку входа и держать бизнес-логику в `vault/services/*`.
+
 ## Phase 4: Cast and Persons
 - [x] Реализовать пересборку `MoviePerson` из cast/crew
 - [x] Реализовать upsert для `Person` по `tmdb_id/imdb_id`

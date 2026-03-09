@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from "$app/state";
   import { invalidateAll } from "$app/navigation";
   import { toast } from "svelte-sonner";
   import type { Snippet } from "svelte";
@@ -28,9 +29,14 @@
   let isLoggingOut = $state(false);
 
   const isActive = (href: string): boolean => {
-    if (typeof window === "undefined") return false;
-    const current = `${window.location.pathname}${window.location.search}`;
-    return current === href || (href !== "/" && current.startsWith(href));
+    const currentPath = page.url.pathname;
+    const currentSearch = page.url.search;
+
+    if (href.includes("?")) {
+      return `${currentPath}${currentSearch}` === href;
+    }
+
+    return href === "/" ? currentPath === "/" : currentPath === href || currentPath.startsWith(`${href}/`);
   };
 
   const toggleTheme = () => {
