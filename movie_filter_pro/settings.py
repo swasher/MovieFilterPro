@@ -73,7 +73,6 @@ INSTALLED_APPS = [
     'core',
     'crispy_forms',
     'crispy_bootstrap5',
-    'compressor',
     'django_htmx',
     'widget_tweaks',
     'channels',
@@ -208,7 +207,6 @@ if static_dir.exists():
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-    'compressor.finders.CompressorFinder',
 ]
 
 if ENABLE_SAAS_COMPILER:

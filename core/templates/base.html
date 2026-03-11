@@ -3,7 +3,6 @@
 {% load i18n %}
 {% load static %}
 {#{% load admin_urls %}#}
-{% load compress %}
 
 
 <!DOCTYPE html >
@@ -41,10 +40,6 @@
 
     <!-- hint.ccs (tooltips) -->
     <link href="{% static 'hint.css-2.7.0/hint.base.min.css' %}" rel="stylesheet">
-
-    {% comment %}    {% compress css %}
-        <link type="text/x-scss" href="{% static 'style.scss' %}" rel="stylesheet" media="screen">
-    {% endcompress %}{% endcomment %}
 
     <script src="{% static 'toasts.js' %}"></script>
 

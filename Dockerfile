@@ -48,6 +48,5 @@ EXPOSE 8008
 # Устанавливаем entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-# CMD остаётся как запасной вариант, но entrypoint его перехватит
-#CMD ["gunicorn", "--bind", "0.0.0.0:8008", "movie_filter_pro.wsgi:application"]
-#CMD ["daphne", "-b", "0.0.0.0", "-p", "8008", "movie_filter_pro.asgi:application"]
+# По умолчанию запускаем web-режим.
+CMD ["web"]

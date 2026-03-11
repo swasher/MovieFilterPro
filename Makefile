@@ -148,6 +148,8 @@ build-and-push:
 	#docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
 	docker build -t swasher/movie-filter-pro:amd64 . && docker push swasher/movie-filter-pro:amd64
 	rm requirements.txt
+	@echo "--- Образ успешно залит в Docker Hub! ---"
+	@echo "Отправляю сигнал на QNAP и жду, пока Watchtower скачает обновление..."
 	curl -H "Authorization: Bearer $$WATCHTOWER_TOKEN" qnap:9090/v1/update
 
 # Деплой с кэшем
