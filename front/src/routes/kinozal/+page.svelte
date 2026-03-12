@@ -158,6 +158,12 @@
         return;
       }
 
+      const hasFatalSnapshotError = Boolean((snapshot.initialError ?? "").trim());
+      if (hasFatalSnapshotError) {
+        sessionStorage.removeItem(KINOZAL_STATE_STORAGE_KEY);
+        return;
+      }
+
       movies = snapshot.movies ?? movies;
       summary = snapshot.summary ?? summary;
       nextCursor = snapshot.nextCursor ?? nextCursor;
