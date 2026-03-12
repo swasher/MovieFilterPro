@@ -1,5 +1,4 @@
-import type { PageServerLoad } from "./$types";
-import { djangoFetch } from "$lib/server/django";
+import type { PageLoad } from "./$types";
 
 type ApiConnectionEvent = {
   id: number;
@@ -26,9 +25,9 @@ type ApiConnectionEventsResponse = {
   items?: ApiConnectionEvent[];
 };
 
-export const load: PageServerLoad = async (event) => {
+export const load: PageLoad = async ({ fetch }) => {
   try {
-    const response = await djangoFetch(event, "/api/vault/connection-events?limit=100");
+    const response = await fetch("/api/vault/connection-events?limit=100");
     if (!response.ok) {
       return {
         events: [] as ApiConnectionEvent[],

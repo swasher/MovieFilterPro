@@ -1,6 +1,5 @@
 import { error } from "@sveltejs/kit";
-import type { PageServerLoad } from "./$types";
-import { djangoFetch } from "$lib/server/django";
+import type { PageLoad } from "./$types";
 
 type ApiMovieDetail = {
   id: number;
@@ -52,8 +51,8 @@ type ApiMovieDetail = {
   }>;
 };
 
-export const load: PageServerLoad = async (event) => {
-  const response = await djangoFetch(event, `/api/vault/movies/${event.params.slug}`);
+export const load: PageLoad = async ({ fetch, params }) => {
+  const response = await fetch(`/api/vault/movies/${params.slug}`);
   if (response.status === 404) {
     throw error(404, "Movie not found");
   }

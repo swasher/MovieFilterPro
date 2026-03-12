@@ -25,7 +25,7 @@
       formData.set("username", username);
       formData.set("password", password);
 
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/auth/login/", {
         method: "POST",
         body: formData
       });

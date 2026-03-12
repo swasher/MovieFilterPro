@@ -3,7 +3,7 @@ import { type PreferencesApiErrorPayload, type PreferencesData } from "$lib/pref
 
 export const load: PageLoad = async ({ fetch }) => {
   try {
-    const response = await fetch("/api/preferences");
+    const response = await fetch("/api/core/preferences");
 
     if (!response.ok) {
       let detail = `API error: ${response.status}`;

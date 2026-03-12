@@ -58,7 +58,7 @@
     isLoggingOut = true;
 
     try {
-      const response = await fetch("/api/auth/logout", {
+      const response = await fetch("/api/auth/logout/", {
         method: "POST"
       });
       const payload = (await response.json()) as { message?: string };

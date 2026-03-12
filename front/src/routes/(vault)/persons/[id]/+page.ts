@@ -1,6 +1,5 @@
 import { error } from "@sveltejs/kit";
-import type { PageServerLoad } from "./$types";
-import { djangoFetch } from "$lib/server/django";
+import type { PageLoad } from "./$types";
 
 type PersonMovie = {
   id: number;
@@ -33,8 +32,8 @@ type PersonDetail = {
   producer_count: number;
 };
 
-export const load: PageServerLoad = async (event) => {
-  const response = await djangoFetch(event, `/api/vault/persons/${event.params.id}`);
+export const load: PageLoad = async ({ fetch, params }) => {
+  const response = await fetch(`/api/vault/persons/${params.id}`);
   if (response.status === 404) {
     throw error(404, "Person not found");
   }

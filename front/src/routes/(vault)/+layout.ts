@@ -1,6 +1,5 @@
-import type { LayoutServerLoad } from "./$types";
+import type { LayoutLoad } from "./$types";
 import { defaultSidebarItems, type SidebarItem } from "$lib/template-data";
-import { djangoFetch } from "$lib/server/django";
 
 type ApiSidebarItem = {
   id: string;
@@ -16,9 +15,9 @@ type ApiSidebarGroup = {
   children: ApiSidebarItem[];
 };
 
-export const load: LayoutServerLoad = async (event) => {
+export const load: LayoutLoad = async ({ fetch }) => {
   try {
-    const response = await djangoFetch(event, "/api/vault/sidebar");
+    const response = await fetch("/api/vault/sidebar");
     if (!response.ok) {
       return {
         sidebarItems: defaultSidebarItems satisfies SidebarItem[]

@@ -110,6 +110,8 @@
   let saveError = $state("");
   let isSaving = $state(false);
   let form = $state<PreferencesFormState>(emptyFormState);
+  let hasUnsavedChanges = $state(false);
+  let formRevision = $state(0);
   let initialSnapshot = $state(payloadSnapshot(emptyFormState));
 
   $effect(() => {
@@ -120,11 +122,17 @@
     const nextPreferences = data.preferences ?? emptyPreferences();
     const nextFormState = createFormState(nextPreferences);
     form = nextFormState;
+    hasUnsavedChanges = false;
     initialSnapshot = payloadSnapshot(nextFormState);
   });
 
-  const currentSnapshot = $derived(payloadSnapshot(form));
-  const isDirty = $derived(Boolean(preferences) && currentSnapshot !== initialSnapshot);
+  const currentSnapshot = $derived.by(() => {
+    formRevision;
+    return payloadSnapshot(form);
+  });
+  const isDirty = $derived(
+    Boolean(preferences) && (hasUnsavedChanges || currentSnapshot !== initialSnapshot)
+  );
   const savedHotfolderPath = $derived(preferences?.resolved_torrents_hotfolder ?? "");
   const hotfolderExists = $derived(preferences?.hotfolder_exists ?? false);
   const hotfolderNeedsRefresh = $derived(
@@ -134,6 +142,7 @@
   const resetForm = () => {
     const nextPreferences = preferences ?? emptyPreferences();
     form = createFormState(nextPreferences);
+    hasUnsavedChanges = false;
     saveError = "";
   };
 
@@ -146,7 +155,7 @@
     saveError = "";
 
     try {
-      const response = await fetch("/api/preferences", {
+      const response = await fetch("/api/core/preferences", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
@@ -163,6 +172,7 @@
       preferences = savedPreferences;
       const nextFormState = createFormState(savedPreferences);
       form = nextFormState;
+      hasUnsavedChanges = false;
       initialSnapshot = payloadSnapshot(nextFormState);
       toast.success("Preferences сохранены.");
     } catch (error) {
@@ -175,7 +185,13 @@
 </script>
 
 {#if preferences}
-  <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-col gap-6"
+    oninput={() => {
+      formRevision++;
+      hasUnsavedChanges = true;
+    }}
+  >
     <Card class="border-border/70 bg-gradient-to-br from-background via-background to-muted/30">
       <CardHeader class="gap-4 md:flex-row md:items-start md:justify-between">
         <div class="space-y-2">
