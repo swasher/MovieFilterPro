@@ -1,7 +1,7 @@
 from dataclasses import fields
 from django.core.management.base import BaseCommand
 
-from moviefilter.parse import get_details
+from kinozal_scan.parse import get_details
 from moviefilter.classes import KinozalMovie
 
 

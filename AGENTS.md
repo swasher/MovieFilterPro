@@ -127,10 +127,9 @@
 ## Известные несоответствия (важно перед правками)
 - Устаревшие команды `moviefilter`:
   - `get_details_one_movie` и `get_all_movies_from_page` падают из-за ссылок на удаленный `moviefilter.parse`.
-- `test_parse_detail.py` тоже ссылается на `moviefilter.parse` и ломает `uv run python manage.py test`.
-- `vault populate_movies` в текущем виде нерабочий (устаревшие импорты/поля, не синхронизирован с текущими моделями).
-- В `vault` есть рассинхрон между моделями и частью шаблонов/admin (в шаблонах местами ожидается `ImageField`-поведение `.url`, а в моделях `poster/photo` это `CharField`).
-- `vault.models.Person.photo_url` использует `settings.TMDB_IMAGE_SIZE`, но этот ключ сейчас не задан в `settings.py`.
+  - `test_parse_detail.py` тоже ссылается на `moviefilter.parse` и ломает `uv run python manage.py test`.
+  - В `vault` есть рассинхрон между моделями и частью шаблонов/admin (в шаблонах местами ожидается `ImageField`-поведение `.url`, а в моделях `poster/photo` это `CharField`).
+  - `vault.models.Person.photo_url` использует `settings.TMDB_IMAGE_SIZE`, но этот ключ сейчас не задан в `settings.py`.
 
 ## Практическая последовательность при новой задаче
 - Проверить, к какому потоку относится задача: RSS (`moviefilter`/`kinozal_scan`) или Vault (`vault`).

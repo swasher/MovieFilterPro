@@ -5,13 +5,13 @@
 Фишка в том, что мы не будем делать заходить внутрь фильмов, только парсить список фильмов, для ускорения.
 """
 from movie_filter_pro import wsgi
-from moviefilter.classes import LinkConstructor
+from moviefilter.kinozal import LinkConstructor
 from datetime import date
 import dataclasses
 from django.contrib.auth.models import User
 from moviefilter.models import MovieRSS
-from moviefilter.parse import parse_page, movie_audit
-from moviefilter.checks import exist_in_kinorium
+from kinozal_scan.parse import parse_page, movie_audit
+from kinozal_scan.checks import exist_in_kinorium
 from django.core.exceptions import ObjectDoesNotExist
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS
 

@@ -78,7 +78,6 @@ INSTALLED_APPS = [
     'channels',
     'moviefilter',
     'tmdb_adapter',
-    'firebase_adapter',
     'plex',
     'tmdb',
     'kinorium',

@@ -17,12 +17,12 @@ application = get_wsgi_application()
 from django.shortcuts import get_object_or_404
 
 # from movie_filter_pro import wsgi
-from moviefilter.classes import LinkConstructor
+from moviefilter.kinozal import LinkConstructor
 from datetime import date
 import dataclasses
 from django.contrib.auth.models import User
 from moviefilter.models import MovieRSS, UserPreferences
-from moviefilter.parse import parse_page, movie_audit
+from kinozal_scan.parse import parse_page, movie_audit
 
 
 def modified_kinozal_scan(site: LinkConstructor, user):

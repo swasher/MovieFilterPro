@@ -21,7 +21,8 @@ from datetime import date
 import dataclasses
 from django.contrib.auth.models import User
 from moviefilter.models import MovieRSS, UserPreferences
-from moviefilter.parse import parse_page, movie_audit
+from kinozal_scan.parse import parse_page, movie_audit
+from moviefilter.kinozal import LinkConstructor
 
 
 def modified_kinozal_scan(site: LinkConstructor, user):
