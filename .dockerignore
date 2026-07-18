@@ -23,3 +23,4 @@ db.sqlite3
 logs/*.log
 media/cached_images/
 one_time_scripts/
+huey_tasks.db
