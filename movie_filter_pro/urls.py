@@ -6,6 +6,7 @@ from core.api import api as core_api
 from vault import views as vault_views
 from vault.api import api as vault_api
 from moviefilter.api import api as kinozal_api
+from plex.api import api as plex_api
 
 
 urlpatterns = [
@@ -13,6 +14,7 @@ urlpatterns = [
     path('api/core/', core_api.urls),
     path('api/vault/', vault_api.urls),
     path('api/kinozal/', kinozal_api.urls),
+    path('api/plex/', plex_api.urls),
     # Legacy unprefixed Vault routes kept for compatibility (old links/bookmarks).
     path('movies/', vault_views.MovieListView.as_view()),
     path('movies/<slug:slug>/', vault_views.MovieDetailView.as_view()),
