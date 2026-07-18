@@ -10,4 +10,4 @@ api.md
 .env.production
 media/cached_images/
 .make_targets_cache
-*huey_tasks.db*
+*.sqlite3
