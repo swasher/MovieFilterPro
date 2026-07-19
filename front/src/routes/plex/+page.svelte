@@ -38,7 +38,7 @@
   // Load Plex libraries (sections)
   async function loadSections() {
     isLoadingSections = true;
-    errorMessage = null;
+    let errorMessage: string = '';
     selectedSection = null;
     movies = [];
     try {

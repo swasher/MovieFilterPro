@@ -529,3 +529,12 @@ def download_torrent(request, torrent_id: int):
         saved_to=saved_to,
         operation_id=operation_id,
     )
+
+
+# Register scan and logs routers
+from kinozal_scan.api import router as scan_router
+from web_logger.api import router as logger_router
+
+api.add_router("/scan", scan_router)
+api.add_router("/logs", logger_router)
+
