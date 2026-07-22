@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  moviefilter:
+    build: .
+    container_name: moviefilter-pro
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - /torrents_hotfolder
+    environment:
+      - DEBUG=false
+      - DATABASE_URL=sqlite:///db.sqlite3
+      - SECRET_KEY=your-secret-key-here
+      - ENABLE_DEBUG_TOOLBAR=false
+      - ENABLE_BROWSER_RELOAD=false
+    # Ограничение ресурсов для QNAP NAS с 4GB RAM
+    mem_limit: 3g
+    mem_reservation: 1g
+    # Ограничение процессора
+    cpus: "1.0"

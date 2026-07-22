@@ -1,7 +1,10 @@
-#FROM arm32v7/python:3.12-slim
+# Intel 64 архитектура
 FROM python:3.12-slim
 
-#ENV IN_DOCKER=True
+# Устанавливаем переменные окружения для экономии памяти
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV NODE_OPTIONS="--max_old_space_size=1024"
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
@@ -10,15 +13,18 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
+    nodejs \
+    npm \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем директорию /torrents_hotfolder
 RUN mkdir -p /torrents_hotfolder
 
-# Копируем файл зависимостей
+# Копируем файл зависимостей Python
 COPY requirements.txt /app
 
-# Устанавливаем зависимости
+# Устанавливаем зависимости Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем проект
@@ -27,22 +33,21 @@ COPY . /app
 # Копируем файл .env.production и переименовываем его в .env
 COPY .env.production /app/.env
 
-# Не запускаем миграции, так как база у нас отдельно от проекта и еще не примонтирована
-# Миграции будет запущены через entrypoint.sh при старте контейнера
-# RUN python manage.py migrate
+# Собираем frontend Svelte с ограничением памяти
+WORKDIR /app/front
+RUN npm install && npm run build
 
-# Статику не собираем, а
-# просто копируем всю статику collectstatic вместе со всем проектом
-# RUN python manage.py collectstatic --noinput
+# Возвращаемся в рабочую директорию
+WORKDIR /app
 
-# Копируем entrypoint.sh
+# Создаем временный файл для проверки
+RUN echo "$(date +'%Y-%m-%d %H:%M:%S')" > /app/timestamp
+
+# Копируем entrypoint.sh (для одного контейнера)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-
-RUN echo "$(date +'%Y-%m-%d %H:%M:%S')" > /app/timestamp
-
-# Открываем порт
+# Открываем порты
 EXPOSE 8008
 
 # Устанавливаем entrypoint

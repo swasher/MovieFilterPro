@@ -1,27 +1,45 @@
-*.pyc
-.pycache__/
-.git/
-.github/
-.env
-.idea
-.venv
-.gitignore
-.dockerignore
-Dockerfile
-current_csv/
-static/
-fixtures/
-old/
-sample_detail_pages/
-remote_QNAP/
-README.md
-Makefile
-tst.py
-tst.torrent
-uv.lock
-logs/*.log
-media/cached_images/
-one_time_scripts/
-huey_tasks.db
-*.sqlite3
+# .dockerignore
 
+# Игнорируем .git
+.git
+
+# Игнорируем виртуальные окружения
+env/
+venv/
+.venv/
+pyvenv.cfg
+
+# Игнорируем логи
+*.log
+logs/
+
+# Игнорируем временные файлы
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Игнорируем тестовые данные и ненужные директории
+node_modules/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Игнорируем IDE файлы
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Игнорируем файлы с приватными данными
+.env
+.env.local
+.env.*.local
+
+# Игнорируем локальные данные (если есть)
+data/

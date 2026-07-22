@@ -13,16 +13,8 @@ case "$MODE" in
             exit 1
         fi
 
-        #echo "Starting Gunicorn..."
-        #exec gunicorn --bind 0.0.0.0:8008 movie_filter_pro.wsgi:application
-        if [ -n "${DJANGO_SOCKET_PATH:-}" ]; then
-            echo "Starting Daphne on unix socket..."
-            mkdir -p "$(dirname "$DJANGO_SOCKET_PATH")"
-            rm -f "$DJANGO_SOCKET_PATH"
-            exec daphne -u "$DJANGO_SOCKET_PATH" --http-timeout 600 --proxy-headers movie_filter_pro.asgi:application
-        fi
-
-        echo "Starting Daphne..."
+        # Запускаем Django с помощью Daphne
+        echo "Starting Django with Daphne..."
         exec daphne -b 0.0.0.0 -p 8008 --http-timeout 600 movie_filter_pro.asgi:application
         ;;
     worker)
