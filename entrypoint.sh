@@ -15,7 +15,7 @@ case "$MODE" in
 
         # Запускаем Django с помощью Daphne
         echo "Starting Django with Daphne..."
-        exec daphne -b 0.0.0.0 -p 8008 --http-timeout 600 movie_filter_pro.asgi:application
+        exec daphne -b 0.0.0.0 -p 8009 --http-timeout 600 movie_filter_pro.asgi:application
         ;;
     worker)
         echo "Starting Huey consumer..."

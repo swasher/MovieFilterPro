@@ -55,7 +55,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN mkdir -p /torrents_hotfolder
+RUN mkdir -p /torrents_hotfolder /app/logs
 
 # Готовое python-окружение из builder-стадии
 COPY --from=python-builder /opt/venv /opt/venv

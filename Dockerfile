@@ -1,57 +1,85 @@
+# syntax=docker/dockerfile:1
+
 # Intel 64 архитектура
-FROM python:3.12-slim
 
-# Устанавливаем переменные окружения для экономии памяти
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV NODE_OPTIONS="--max_old_space_size=1024"
+#############################################
+# Stage 1: сборка фронтенда (Svelte, pnpm)
+#############################################
+FROM node:24-slim AS frontend-builder
 
-# Устанавливаем рабочую директорию
-WORKDIR /app
+# 1. Жестко ставим стабильный pnpm 9 через npm.
+# Флаг --force убирает конфликт с предустановленной заглушкой в Node 24.
+RUN npm install -g pnpm@9 --force
 
-# Устанавливаем инструменты сборки
+WORKDIR /app/front
+
+# 2. Копируем манифесты И конфиги, необходимые для 'svelte-kit sync'
+COPY front/package.json front/pnpm-lock.yaml front/.npmrc* ./
+COPY front/svelte.config.js* front/vite.config.js* front/tsconfig.json* ./
+
+# 3. Спокойно ставим зависимости (pnpm 9 не блокирует esbuild по умолчанию)
+RUN pnpm install --frozen-lockfile
+
+# 4. Копируем весь исходный код и собираем
+COPY front/ .
+RUN pnpm run build
+
+
+#############################################
+# Stage 2: сборка Python-зависимостей
+#############################################
+FROM python:3.12-slim AS python-builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Инструменты сборки нужны только на этом этапе —
+# в финальный образ они не попадут
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
-    nodejs \
-    npm \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем директорию /torrents_hotfolder
-RUN mkdir -p /torrents_hotfolder
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Копируем файл зависимостей Python
-COPY requirements.txt /app
-
-# Устанавливаем зависимости Python
+WORKDIR /app
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем проект
-COPY . /app
 
-# Копируем файл .env.production и переименовываем его в .env
-COPY .env.production /app/.env
+#############################################
+# Stage 3: финальный (runtime) образ
+#############################################
+FROM python:3.12-slim
 
-# Собираем frontend Svelte с ограничением памяти
-WORKDIR /app/front
-RUN npm install && npm run build
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
 
-# Возвращаемся в рабочую директорию
 WORKDIR /app
 
-# Создаем временный файл для проверки
+RUN mkdir -p /torrents_hotfolder /app/logs
+
+# Готовое python-окружение из builder-стадии
+COPY --from=python-builder /opt/venv /opt/venv
+
+# Код проекта (Django и всё остальное)
+COPY . /app
+
+# Готовая статика Svelte (перезаписывает front/, если он попал в COPY выше)
+COPY --from=frontend-builder /app/front/build /app/front/build
+
+# .env.production -> .env
+COPY .env.production /app/.env
+
+# Временная метка сборки (как в оригинале)
 RUN echo "$(date +'%Y-%m-%d %H:%M:%S')" > /app/timestamp
 
-# Копируем entrypoint.sh (для одного контейнера)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Открываем порты
-EXPOSE 8008
+EXPOSE 8009
 
-# Устанавливаем entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
-
-# По умолчанию запускаем web-режим.
 CMD ["web"]

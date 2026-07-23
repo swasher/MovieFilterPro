@@ -1,6 +1,6 @@
 [project]
 name = "moviefilterpro"
-version = "0.1.103"
+version = "0.1.126"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
