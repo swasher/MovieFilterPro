@@ -145,7 +145,6 @@ build-and-push:
 	uv version --frozen --bump patch
 	python manage.py collectstatic --noinput
 	uv export --no-dev --format requirements-txt > requirements.txt
-	#docker buildx build --platform linux/arm/v7 $(CACHE_OPTION) -t swasher/movie-filter-pro:armv7 --push .
 	docker build -t swasher/movie-filter-pro-v2:amd64 . && docker push swasher/movie-filter-pro-v2:amd64
 	rm requirements.txt
 	@echo "--- Образ успешно залит в Docker Hub! ---"

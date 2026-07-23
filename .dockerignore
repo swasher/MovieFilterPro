@@ -22,7 +22,7 @@ Thumbs.db
 # Игнорируем тестовые данные и ненужные директории
 node_modules/
 *.egg-info/
-__pycache__/
+**/__pycache__
 *.pyc
 *.pyo
 *.pyd
@@ -43,3 +43,8 @@ pip-delete-this-directory.txt
 
 # Игнорируем локальные данные (если есть)
 data/
+
+# Игнорируем фронт, так как он все равно копируется отдельной командой
+front/node_modules
+front/src
+front/build
