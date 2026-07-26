@@ -47,3 +47,7 @@ data/
 # Игнорируем фронт, так как он все равно копируется отдельной командой
 front/node_modules
 front/build
+front/.svelte-kit
+.vite
+npm-debug.log*
+pnpm-debug.log*

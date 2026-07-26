@@ -1,6 +1,0 @@
-node_modules
-build
-.svelte-kit
-.vite
-npm-debug.log*
-pnpm-debug.log*

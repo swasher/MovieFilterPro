@@ -6,7 +6,8 @@
   import type { HeaderLink } from "$lib/template-data";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
-  import { Moon, Sun, User, KeyRound, Settings } from "@lucide/svelte";
+  import { Moon, Sun, User, KeyRound, Settings, ShieldCheck, Cable, LogOut, ChevronDown } from "@lucide/svelte";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   type Props = {
     children?: Snippet;
@@ -107,24 +108,6 @@
           Preferences
         </Button>
 
-        {#if auth.is_authenticated && auth.user}
-          <div class="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled>
-              <User class="size-4" />
-              {auth.user.username}
-            </Button>
-            <Button variant="outline" size="sm" onclick={logout} disabled={isLoggingOut}>
-              <User class="size-4" />
-              {isLoggingOut ? "..." : "Выйти"}
-            </Button>
-          </div>
-        {:else}
-          <Button href="/login" variant="outline" size="sm">
-            <User class="size-4" />
-            Войти
-          </Button>
-        {/if}
-
         <Button variant="outline" size="icon" onclick={toggleTheme} aria-label="Toggle theme">
           {#if darkMode}
             <Moon class="size-4" />
@@ -132,6 +115,55 @@
             <Sun class="size-4" />
           {/if}
         </Button>
+
+        {#if auth.is_authenticated && auth.user}
+          {@const user = auth.user}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              {#snippet child({ props })}
+                <Button variant="outline" size="sm" {...props}>
+                  <User class="size-4" />
+                  {user.username}
+                  <ChevronDown class="size-3.5 opacity-60 ml-0.5" />
+                </Button>
+              {/snippet}
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" class="w-48">
+              <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">
+                Пользователь: <span class="font-semibold text-foreground">{user.username}</span>
+              </DropdownMenu.Label>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Group>
+                <DropdownMenu.Item>
+                  {#snippet child({ props })}
+                    <a href="/admin/" target="_blank" rel="noreferrer" {...props}>
+                      <ShieldCheck class="mr-2 size-4" />
+                      <span>Django Admin</span>
+                    </a>
+                  {/snippet}
+                </DropdownMenu.Item>
+                <DropdownMenu.Item>
+                  {#snippet child({ props })}
+                    <a href="/connections" {...props}>
+                      <Cable class="mr-2 size-4" />
+                      <span>События связок</span>
+                    </a>
+                  {/snippet}
+                </DropdownMenu.Item>
+              </DropdownMenu.Group>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item onclick={logout} disabled={isLoggingOut}>
+                <LogOut class="mr-2 size-4" />
+                <span>{isLoggingOut ? "Выход..." : "Выйти"}</span>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        {:else}
+          <Button href="/login" variant="outline" size="sm">
+            <User class="size-4" />
+            Войти
+          </Button>
+        {/if}
       </div>
     </div>
     <Separator />
