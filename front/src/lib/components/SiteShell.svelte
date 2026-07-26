@@ -81,14 +81,9 @@
   <header class="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b backdrop-blur">
     <div class="flex min-h-14 items-center justify-between gap-3 px-3 py-2 md:px-4">
       <div class="flex min-w-0 items-center gap-3">
-        <a href="/" class="flex items-center gap-2">
-          <div class="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-md text-xs font-semibold">
-            MF
-          </div>
-          <div class="min-w-0">
-            <p class="truncate text-sm font-semibold">{appName}</p>
-          </div>
-        </a>
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold">{appName}</p>
+        </div>
 
         <nav class="flex flex-wrap items-center gap-1">
           {#each headerLinks as link (link.href)}

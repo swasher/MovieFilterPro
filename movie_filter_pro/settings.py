@@ -198,7 +198,7 @@ USE_TZ = True
 # FRONTEND (Svelte static build, отдаём через WhiteNoise с корня домена)
 #
 FRONT_BUILD_DIR = BASE_DIR / 'front' / 'build'
-if FRONT_BUILD_DIR.exists():
+if not DEBUG and FRONT_BUILD_DIR.exists():
     WHITENOISE_ROOT = str(FRONT_BUILD_DIR)
     WHITENOISE_INDEX_FILE = True
 

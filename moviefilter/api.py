@@ -67,7 +67,9 @@ class KinozalMovieOut(Schema):
     plot: str
     translate: str | None = None
     poster_url: str | None = None
+    imdb_id: str | None = None
     imdb_rating: float | None = None
+    kinopoisk_id: int | None = None
     kinopoisk_rating: float | None = None
     priority_key: str
     priority_label: str
@@ -77,6 +79,7 @@ class KinozalMovieOut(Schema):
     directors: list[str]
     actors: list[str]
     open_url: str | None = None
+    kinorium_url: str | None = None
 
 
 class KinozalSummaryOut(Schema):
@@ -246,6 +249,24 @@ def _build_open_url(movie: MovieRSS) -> str | None:
     ).search_url()
 
 
+def _build_kinorium_url(movie: MovieRSS) -> str:
+    url = "https://ru.kinorium.com/search/?q="
+    search_parts = [movie.title]
+    if movie.original_title:
+        search_parts.append(movie.original_title)
+    if movie.year:
+        search_parts.append(str(movie.year))
+
+    search_string = " ".join(search_parts)
+    preferences = UserPreferences.get()
+    if preferences.ignore_title:
+        ignored_words = [w.strip() for w in preferences.ignore_title.split(",") if w.strip()]
+        for w in ignored_words:
+            search_string = search_string.replace(w, "")
+
+    return url + search_string
+
+
 def _serialize_movie(request, movie: MovieRSS) -> KinozalMovieOut:
     return KinozalMovieOut(
         id=movie.id,
@@ -260,7 +281,9 @@ def _serialize_movie(request, movie: MovieRSS) -> KinozalMovieOut:
             request,
             get_cached_image_url(movie.poster, movie.pk, movie.priority),
         ),
+        imdb_id=movie.imdb_id or None,
         imdb_rating=movie.imdb_rating,
+        kinopoisk_id=movie.kinopoisk_id or None,
         kinopoisk_rating=movie.kinopoisk_rating,
         priority_key=PRIORITY_KEY_MAP.get(movie.priority, str(movie.priority)),
         priority_label=movie.get_priority_display(),
@@ -270,6 +293,7 @@ def _serialize_movie(request, movie: MovieRSS) -> KinozalMovieOut:
         directors=movie.director_as_list,
         actors=movie.actors_as_list,
         open_url=_build_open_url(movie),
+        kinorium_url=_build_kinorium_url(movie),
     )
 
 

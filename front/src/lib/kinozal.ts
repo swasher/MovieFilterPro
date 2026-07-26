@@ -29,7 +29,9 @@ export type KinozalMovie = {
   plot: string;
   translate: string | null;
   poster_url: string | null;
+  imdb_id?: string | null;
   imdb_rating: number | null;
+  kinopoisk_id?: number | null;
   kinopoisk_rating: number | null;
   priority_key: string;
   priority_label: string;
@@ -39,6 +41,7 @@ export type KinozalMovie = {
   directors: string[];
   actors: string[];
   open_url: string | null;
+  kinorium_url?: string | null;
 };
 
 export type KinozalMoviesPage = {

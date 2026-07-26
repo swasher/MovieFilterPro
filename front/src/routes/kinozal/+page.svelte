@@ -80,7 +80,7 @@
   let debounceHandle: ReturnType<typeof setTimeout> | null = null;
   let snapshotKey = "";
 
-  const KINOZAL_STATE_STORAGE_KEY = "kinozal-page-state";
+  const KINOZAL_STATE_STORAGE_KEY = "kinozal-page-state-v2";
 
   const priorityToneMap: Record<string, string> = {
     HIGH: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20",
@@ -101,6 +101,39 @@
   const compactTextList = (items: string[], limit: number) => {
     const result = compactList(items, limit).join(", ");
     return result || "—";
+  };
+
+  const getKinoriumUrl = (movie: KinozalMovie) => {
+    if (movie.kinorium_url) {
+      return movie.kinorium_url;
+    }
+    const parts = [movie.title, movie.original_title, movie.year].filter(Boolean);
+    const query = parts.join(" ");
+    return `https://ru.kinorium.com/search/?q=${encodeURIComponent(query)}`;
+  };
+
+  const getTmdbUrl = (movie: KinozalMovie) => {
+    const query = movie.original_title?.trim() || movie.title;
+    return `https://www.themoviedb.org/search?query=${encodeURIComponent(query)}`;
+  };
+
+  const getImdbUrl = (movie: KinozalMovie) => {
+    const rawId = movie.imdb_id?.toString().trim();
+    if (rawId) {
+      const formattedId = rawId.startsWith("tt") ? rawId : `tt${rawId}`;
+      return `https://www.imdb.com/title/${formattedId}/`;
+    }
+    const query = movie.original_title?.trim() || movie.title;
+    return `https://www.imdb.com/find/?q=${encodeURIComponent(query)}`;
+  };
+
+  const getKinopoiskUrl = (movie: KinozalMovie) => {
+    const rawId = movie.kinopoisk_id?.toString().trim();
+    if (rawId) {
+      return `https://www.kinopoisk.ru/film/${rawId}/`;
+    }
+    const query = movie.title;
+    return `https://www.kinopoisk.ru/index.php?kp_query=${encodeURIComponent(query)}`;
   };
 
   const getSnapshotKey = () => `${window.location.pathname}${window.location.search}`;
@@ -873,6 +906,45 @@
                           Partial match
                         </span>
                       {/if}
+                    </div>
+
+                    <div class="flex items-center gap-1.5 pt-1">
+                      <a
+                        href={getKinoriumUrl(movie)}
+                        target="_blank"
+                        rel="noreferrer"
+                        class="inline-flex items-center justify-center rounded px-2.5 py-1 text-xs font-semibold tracking-wide bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 dark:text-teal-400 dark:bg-teal-400/10 transition-colors"
+                        title="Search on Kinorium"
+                      >
+                        KR
+                      </a>
+                      <a
+                        href={getTmdbUrl(movie)}
+                        target="_blank"
+                        rel="noreferrer"
+                        class="inline-flex items-center justify-center rounded px-2.5 py-1 text-xs font-semibold tracking-wide bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 dark:text-sky-400 dark:bg-sky-400/10 transition-colors"
+                        title="Search on TMDB"
+                      >
+                        TMDB
+                      </a>
+                      <a
+                        href={getImdbUrl(movie)}
+                        target="_blank"
+                        rel="noreferrer"
+                        class="inline-flex items-center justify-center rounded px-2.5 py-1 text-xs font-semibold tracking-wide bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400 dark:bg-amber-400/10 transition-colors"
+                        title={movie.imdb_id ? `View on IMDB (${movie.imdb_id})` : "Search on IMDB"}
+                      >
+                        IMDB
+                      </a>
+                      <a
+                        href={getKinopoiskUrl(movie)}
+                        target="_blank"
+                        rel="noreferrer"
+                        class="inline-flex items-center justify-center rounded px-2.5 py-1 text-xs font-semibold tracking-wide bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:text-orange-400 dark:bg-orange-400/10 transition-colors"
+                        title={movie.kinopoisk_id ? `View on Kinopoisk (${movie.kinopoisk_id})` : "Search on Kinopoisk"}
+                      >
+                        KP
+                      </a>
                     </div>
 
                     <p class="kz-meta-line">ID {movie.kinozal_id}</p>

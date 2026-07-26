@@ -66,6 +66,7 @@ def frontend_fallback(request):
     index_file = settings.FRONT_BUILD_DIR / 'index.html'
     return HttpResponse(index_file.read_text(encoding='utf-8'))
 
-urlpatterns += [
-    re_path(r'^.*$', frontend_fallback),
-]
+if not settings.DEBUG:
+    urlpatterns += [
+        re_path(r'^.*$', frontend_fallback),
+    ]
