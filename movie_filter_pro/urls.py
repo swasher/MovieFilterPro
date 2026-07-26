@@ -7,6 +7,8 @@ from vault import views as vault_views
 from vault.api import api as vault_api
 from moviefilter.api import api as kinozal_api
 from plex.api import api as plex_api
+from django.http import HttpResponse
+from django.urls import re_path
 
 
 urlpatterns = [
@@ -59,3 +61,11 @@ if settings.DEBUG:
 
     # add serve for Static during development
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+def frontend_fallback(request):
+    index_file = settings.FRONT_BUILD_DIR / 'index.html'
+    return HttpResponse(index_file.read_text(encoding='utf-8'))
+
+urlpatterns += [
+    re_path(r'^.*$', frontend_fallback),
+]

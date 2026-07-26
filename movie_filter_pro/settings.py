@@ -193,6 +193,15 @@ USE_I18N = True
 USE_TZ = True
 
 
+
+#
+# FRONTEND (Svelte static build, отдаём через WhiteNoise с корня домена)
+#
+FRONT_BUILD_DIR = BASE_DIR / 'front' / 'build'
+if FRONT_BUILD_DIR.exists():
+    WHITENOISE_ROOT = str(FRONT_BUILD_DIR)
+    WHITENOISE_INDEX_FILE = True
+
 #
 # STATIC
 #
@@ -207,6 +216,7 @@ STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
+
 
 if ENABLE_SAAS_COMPILER:
     COMPRESS_PRECOMPILERS = (
