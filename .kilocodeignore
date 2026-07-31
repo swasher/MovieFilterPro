@@ -1,0 +1,16 @@
+*sqlite3*
+*.log
+.idea/
+__pycache__/
+collectstatic
+/fixtures/auth.Group.json
+/current_csv/
+api.md
+.env
+.env.production
+media/cached_images/
+.make_targets_cache
+*.sqlite3
+.lancedb/
+front/node_modules/
+front/build/

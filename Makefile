@@ -190,3 +190,5 @@ huey:
 get_details_one_movie:
 	python manage.py get_details_one_movie 2104619
 
+cloc:
+	cloc . --exclude-dir=.venv,migrations,.idea,.git,__pycache__,static,collectstatic,.svelte-kit,build,node_modules,components,media

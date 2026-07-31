@@ -11,3 +11,4 @@ api.md
 media/cached_images/
 .make_targets_cache
 *.sqlite3
+.lancedb/

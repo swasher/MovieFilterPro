@@ -59,6 +59,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Установка supervisor для управления процессами
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir -p /torrents_hotfolder /app/logs
 
 # Готовое python-окружение из builder-стадии
@@ -73,13 +77,19 @@ COPY --from=frontend-builder /app/front/build /app/front/build
 # .env.production -> .env
 COPY .env.production /app/.env
 
+# Конфиг supervisord
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
 # Временная метка сборки (как в оригинале)
 RUN echo "$(date +'%Y-%m-%d %H:%M:%S')" > /app/timestamp
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 EXPOSE 8009
 
-ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["web"]
+# Запуск миграций, затем supervisord (web + worker)
+CMD ["/app/start.sh"]
