@@ -8,7 +8,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Eye, Heart, Plus } from "@lucide/svelte";
+  import { LayoutGrid, TextAlignJustify, ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Eye, Heart, Plus } from "@lucide/svelte";
 
   type MovieCard = {
     id: number;
@@ -46,6 +46,7 @@
   let searchQuery = $state("");
   let searchDebounceHandle = $state<ReturnType<typeof setTimeout> | null>(null);
   let activeOrder = $state("-year");
+  let isListView = $state(false);
 
   let addMovieDialogOpen = $state(false);
   let tmdbSearchQuery = $state("");
@@ -370,6 +371,20 @@
             {/if}
           </Button>
 
+          <Button
+            variant="outline"
+            size="icon"
+            class="h-11 w-11"
+            onclick={() => (isListView = !isListView)}
+            aria-label="Toggle view mode"
+          >
+            {#if isListView}
+              <TextAlignJustify class="size-4 text-foreground" />
+            {:else}
+              <LayoutGrid class="size-4 text-muted-foreground" />
+            {/if}
+          </Button>
+
           <Button class="h-11 min-w-[132px]" onclick={openAddMovieDialog}>
             <Plus class="size-4" />
             Add movie
@@ -396,58 +411,127 @@
         </CardHeader>
       </Card>
     {:else}
-      <div class="flex flex-wrap gap-4">
-        {#each data.movies as movie (movie.id)}
-          <a
-            href={`/movies/${movie.slug}`}
-            data-sveltekit-preload-data="hover"
-            class="block"
-            onmouseenter={() => onMovieEnter(movie)}
-            onmousemove={onMovieMove}
-            onmouseleave={onMovieLeave}
-          >
-            <Card class="relative h-[270px] w-[180px] overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
-              <CardContent class="h-full !p-0">
-                {#if movie.movie_type === "series"}
-                  <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">SERIES</Badge>
-                {/if}
-
-                <div class="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
-                  {#if movie.in_favorites && data.activeStatus !== "favorites"}
-                    <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
-                      <Heart class="h-3 w-3 text-red-500" />
-                    </Badge>
+      {#if isListView}
+        <div class="rounded-md border">
+          <table class="w-full table-fixed text-sm">
+            <thead class="bg-muted/60 sticky top-0 z-10 border-b backdrop-blur">
+              <tr>
+                <th class="w-14 px-2 py-2 font-medium">Poster</th>
+                <th class="px-3 py-2 font-medium">Title</th>
+                <th class="px-3 py-2 font-medium">Original title</th>
+                <th class="w-20 px-3 py-2 font-medium">Year</th>
+                <th class="w-20 px-3 py-2 font-medium">Type</th>
+                <th class="w-28 px-3 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each data.movies as movie (movie.id)}
+                <tr
+                  class="border-b last:border-b-0 transition hover:bg-accent/20"
+                >
+                  <td class="px-2 py-2 align-middle">
+                    <a href={`/movies/${movie.slug}`} data-sveltekit-preload-data="hover">
+                      {#if movie.poster_url}
+                        <img
+                          src={movie.poster_url}
+                          alt={movie.title}
+                          class="h-12 w-8 object-cover rounded"
+                          loading="lazy"
+                        />
+                      {:else}
+                        <div class="bg-muted text-muted-foreground flex h-12 w-8 items-center justify-center text-[10px]">
+                          no
+                        </div>
+                      {/if}
+                    </a>
+                  </td>
+                  <td class="px-3 py-2 align-middle font-medium">
+                    <a href={`/movies/${movie.slug}`} data-sveltekit-preload-data="hover">
+                      {movie.title}
+                    </a>
+                  </td>
+                  <td class="text-muted-foreground px-3 py-2 align-middle">
+                    {movie.original_title || "—"}
+                  </td>
+                  <td class="px-3 py-2 align-middle">{movie.year ?? "—"}</td>
+                  <td class="px-3 py-2 align-middle">
+                    {#if movie.movie_type === "series"}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]">SERIES</Badge>
+                    {:else}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]">MOVIE</Badge>
+                    {/if}
+                  </td>
+                  <td class="px-3 py-2 align-middle flex items-center gap-1.5">
+                    {#if movie.in_favorites}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
+                        <Heart class="h-3 w-3 text-red-500" />
+                      </Badge>
+                    {/if}
+                    {#if movie.in_watched}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Просмотрено">
+                        <Eye class="h-3 w-3" />
+                      </Badge>
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {:else}
+        <div class="flex flex-wrap gap-4">
+          {#each data.movies as movie (movie.id)}
+            <a
+              href={`/movies/${movie.slug}`}
+              data-sveltekit-preload-data="hover"
+              class="block"
+              onmouseenter={() => onMovieEnter(movie)}
+              onmousemove={onMovieMove}
+              onmouseleave={onMovieLeave}
+            >
+              <Card class="relative h-[270px] w-[180px] overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
+                <CardContent class="h-full !p-0">
+                  {#if movie.movie_type === "series"}
+                    <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">SERIES</Badge>
                   {/if}
-                  {#if movie.in_watched && data.activeStatus !== "watched"}
-                    <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Просмотрено">
-                      <Eye class="h-3 w-3" />
-                    </Badge>
-                  {/if}
-                </div>
 
-                <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0.5 text-[10px]">
-                  {movie.year ?? "?"}
-                </Badge>
-
-                {#if movie.poster_url}
-                  <img
-                    src={movie.poster_url}
-                    alt={movie.title}
-                    class="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                {:else}
-                  <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs">
-                    no poster
+                  <div class="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
+                    {#if movie.in_favorites && data.activeStatus !== "favorites"}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
+                        <Heart class="h-3 w-3 text-red-500" />
+                      </Badge>
+                    {/if}
+                    {#if movie.in_watched && data.activeStatus !== "watched"}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Просмотрено">
+                        <Eye class="h-3 w-3" />
+                      </Badge>
+                    {/if}
                   </div>
-                {/if}
-              </CardContent>
-            </Card>
-          </a>
-        {/each}
-      </div>
 
-      {#if hoveredMovie}
+                  <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0.5 text-[10px]">
+                    {movie.year ?? "?"}
+                  </Badge>
+
+                  {#if movie.poster_url}
+                    <img
+                      src={movie.poster_url}
+                      alt={movie.title}
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  {:else}
+                    <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs">
+                      no poster
+                    </div>
+                  {/if}
+                </CardContent>
+              </Card>
+            </a>
+          {/each}
+        </div>
+      {/if}
+
+      {#if hoveredMovie && !isListView}
         <div
           class="bg-popover text-popover-foreground pointer-events-none fixed z-50 max-w-[220px] rounded-lg border border-border/70 px-3 py-2.5 shadow-lg backdrop-blur-sm"
           style={`left:${tooltipX}px; top:${tooltipY}px;`}
