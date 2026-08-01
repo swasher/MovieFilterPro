@@ -2,6 +2,7 @@
   import { goto, invalidateAll } from "$app/navigation";
   import "../../vault-detail.css";
   import { toast } from "svelte-sonner";
+  import { fly } from "svelte/transition";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
@@ -389,10 +390,9 @@
                     class="py-1"
                     checked={item.is_in_list}
                     disabled={pendingListIds.includes(item.id)}
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      void toggleCustomList(item.id);
-                    }}
+                    onSelect={() => {
+                    void toggleCustomList(item.id);
+                  }}
                   >
                     {item.name}
                   </DropdownMenu.CheckboxItem>
@@ -414,22 +414,36 @@
               return userState.in_wont_watch;
             }) as item (item.key)}
               {@const Icon = item.icon}
-              <button
-                type="button"
+              <span
                 class="vd-list-chip justify-between"
-                onclick={() => toggleStatus(item.key)}
+                transition:fly={{ x: 20, duration: 200 }}
               >
                 <span class="inline-flex items-center gap-1.5">
-                  <Icon class="size-3.5" />
+                  <span
+                    class="size-3.5"
+                    class:text-amber-400={item.key === "will_watch"}
+                    class:text-red-500={item.key === "favorites" || item.key === "wont_watch"}
+                    class:text-emerald-500={item.key === "watched"}
+                  >
+                    <Icon class="size-3.5" />
+                  </span>
                   {item.label}
                 </span>
-                <span class="size-1.5 rounded-full bg-primary -translate-x-2"></span>
-              </button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="size-6 p-0 text-muted-foreground/50 hover:bg-muted hover:text-foreground/70"
+                  onclick={() => toggleStatus(item.key)}
+                  title="Удалить из списка"
+                >
+                  <Trash class="size-3" />
+                </Button>
+              </span>
             {/each}
 
             {#if customLists.some((item) => item.is_in_list)}
               {#each customLists.filter((item) => item.is_in_list) as item (item.id)}
-                <div class="vd-list-chip">
+                <div class="vd-list-chip" transition:fly={{ x: 20, duration: 200 }}>
                   <span class="flex-1 truncate">{item.name}</span>
                   <Button
                     variant="ghost"
