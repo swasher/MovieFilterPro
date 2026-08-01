@@ -177,6 +177,23 @@ class ToggleMovieListOut(Schema):
     custom_lists: list[MovieUserListOut]
 
 
+class UserListCreateIn(Schema):
+    name: str
+
+
+class UserListUpdateIn(Schema):
+    name: str
+
+
+class UserListOut(Schema):
+    id: int
+    name: str
+
+
+class UserListDeleteOut(Schema):
+    message: str
+
+
 class TMDBCandidateConfirmIn(Schema):
     tmdb_id: int
     media_type: str
@@ -763,13 +780,6 @@ def sidebar_data(request):
                 ],
             ),
             SidebarGroupOut(id="custom", title="Мои списки", children=[]),
-            SidebarGroupOut(
-                id="connections",
-                title="Интеграции",
-                children=[
-                    SidebarItemOut(id="connection_events", title="События связок", href="/connections", count=0),
-                ],
-            ),
         ]
 
     counts = MovieStatusService.get_system_lists_counts(user)
@@ -804,36 +814,53 @@ def sidebar_data(request):
         ],
     )
 
-    genres_qs = (
-        Genre.objects.filter(movies__status=Movie.Status.RELEASED)
-        .annotate(movies_count=Count("movies"))
-        .order_by("name")
-    )
-    genres_group = SidebarGroupOut(
-        id="genres",
-        title="Жанры",
-        children=[
-            SidebarItemOut(
-                id=f"genre_{genre.slug}",
-                title=genre.name,
-                href=f"/?genre={genre.slug}",
-                count=genre.movies_count,
-            )
-            for genre in genres_qs
-        ],
-    )
+    return [system_group, custom_group]
 
-    connections_group = SidebarGroupOut(
-        id="connections",
-        title="Интеграции",
-        children=[
-            SidebarItemOut(
-                id="connection_events",
-                title="События связок",
-                href="/connections",
-                count=VaultConnectionEvent.objects.count(),
-            ),
-        ],
-    )
 
-    return [system_group, custom_group, genres_group, connections_group]
+# ------------------------------------ #
+#          USER LISTS CRUD             #
+# ------------------------------------ #
+
+
+@api.post("/lists", response={201: UserListOut})
+def list_create(request, payload: UserListCreateIn):
+    user = _require_api_user(request)
+
+    name = payload.name.strip()
+    if not name:
+        raise HttpError(400, "Name cannot be empty")
+
+    user_list = UserList.objects.create(user=user, name=name)
+    return UserListOut(id=user_list.id, name=user_list.name)
+
+
+@api.patch("/lists/{list_id}", response=UserListOut)
+def list_update(request, list_id: int, payload: UserListUpdateIn):
+    user = _require_api_user(request)
+
+    user_list = UserList.objects.filter(id=list_id, user=user).first()
+    if user_list is None:
+        raise HttpError(404, "List not found")
+
+    name = payload.name.strip()
+    if not name:
+        raise HttpError(400, "Name cannot be empty")
+
+    user_list.name = name
+    user_list.save(update_fields=["name", "updated_at"])
+    return UserListOut(id=user_list.id, name=user_list.name)
+
+
+@api.delete("/lists/{list_id}", response=UserListDeleteOut)
+def list_delete(request, list_id: int):
+    user = _require_api_user(request)
+
+    user_list = UserList.objects.filter(id=list_id, user=user).first()
+    if user_list is None:
+        raise HttpError(404, "List not found")
+
+    # Удаляем связи фильмов, сами фильмы остаются
+    UserListMovie.objects.filter(user_list=user_list).delete()
+    user_list.delete()
+
+    return UserListDeleteOut(message="Список удален")
