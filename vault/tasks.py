@@ -50,3 +50,41 @@ def process_kinozal_download_import(
             payload={"error_type": type(exc).__name__},
         )
         raise
+
+
+@HUEY.task()
+def process_kinozal_hide_action(
+    operation_id: str,
+    movie_rss_id: int,
+    user_id: int | None,
+):
+    operation_uuid = UUID(operation_id)
+    user = None
+    if user_id is not None:
+        user = get_user_model().objects.filter(pk=user_id).first()
+
+    try:
+        result = KinozalDownloadImportService.handle_hide_action(
+            movie_rss_id=movie_rss_id,
+            user=user,
+            operation_id=operation_uuid,
+        )
+        return {
+            "operation_id": str(result.operation_id),
+            "status": result.status,
+            "message": result.message,
+            "movie_id": result.movie.id if result.movie is not None else None,
+        }
+    except Exception as exc:
+        movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
+        KinozalDownloadImportService._log(
+            operation_id=operation_uuid,
+            level="error",
+            event_type="background_import_failed",
+            message=f"Фоновая hide-обработка завершилась ошибкой: {exc}",
+            torrent_id=0,
+            user=user,
+            movie_rss=movie_rss,
+            payload={"error_type": type(exc).__name__},
+        )
+        raise

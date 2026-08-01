@@ -489,13 +489,23 @@ def list_movies(
 
 @api.post("/movies/{movie_id}/hide", response=KinozalActionOut)
 def hide_movie(request, movie_id: int):
-    _require_api_user(request)
-    return _update_movie_priority(
+    user = _require_api_user(request)
+
+    # Update RSS priority to SKIP (synchronous, immediate)
+    result = _update_movie_priority(
         movie_id,
         SKIP,
         message_prefix="Hide",
         remove_cache=True,
     )
+
+    # Queue background task for Vault import + "wont_watch" status (like Download does)
+    KinozalDownloadImportService.enqueue_hide_action(
+        movie_rss_id=movie_id,
+        user=user,
+    )
+
+    return result
 
 
 @api.post("/movies/{movie_id}/defer", response=KinozalActionOut)

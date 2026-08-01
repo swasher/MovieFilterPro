@@ -296,6 +296,242 @@ class KinozalDownloadImportService:
             movie=movie,
         )
 
+    @classmethod
+    def enqueue_hide_action(
+        cls,
+        *,
+        movie_rss_id: int,
+        user,
+    ) -> KinozalDownloadEnqueueResult:
+        operation_id = uuid4()
+        movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
+        if movie_rss is None:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="rss_movie_missing",
+                message=f"MovieRSS #{movie_rss_id} не найден",
+                torrent_id=0,
+                user=user,
+            )
+            return KinozalDownloadEnqueueResult(
+                operation_id=operation_id,
+                status="error",
+                message="MovieRSS не найден",
+            )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="hide_requested",
+            message=f"Hide requested for '{movie_rss.title}'",
+            torrent_id=0,
+            movie_rss=movie_rss,
+            user=user,
+        )
+        try:
+            from vault.tasks import process_kinozal_hide_action
+
+            process_kinozal_hide_action(
+                str(operation_id),
+                movie_rss_id,
+                user.id if getattr(user, "is_authenticated", False) else None,
+            )
+        except Exception as exc:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="import_queue_failed",
+                message=f"Не удалось поставить hide-импорт в очередь: {exc}",
+                torrent_id=0,
+                movie_rss=movie_rss,
+                user=user,
+                payload={"error_type": type(exc).__name__},
+            )
+            return KinozalDownloadEnqueueResult(
+                operation_id=operation_id,
+                status="error",
+                message="Hide запрос принят, но импорт в Vault не удалось поставить в очередь",
+            )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="import_queued",
+            message="Hide-импорт в Vault поставлен в очередь",
+            torrent_id=0,
+            movie_rss=movie_rss,
+            user=user,
+        )
+        return KinozalDownloadEnqueueResult(
+            operation_id=operation_id,
+            status="queued",
+            message="Hide запрос принят. Импорт в Vault поставлен в очередь",
+        )
+
+    @classmethod
+    @transaction.atomic
+    def handle_hide_action(
+        cls,
+        *,
+        movie_rss_id: int,
+        user,
+        operation_id: UUID | None = None,
+    ) -> KinozalDownloadImportResult:
+        operation_id = operation_id or uuid4()
+        movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
+        if movie_rss is None:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="rss_movie_missing",
+                message=f"MovieRSS #{movie_rss_id} не найден",
+                torrent_id=0,
+                user=user,
+            )
+            return KinozalDownloadImportResult(
+                operation_id=operation_id,
+                status="error",
+                message="MovieRSS не найден",
+            )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="background_import_started",
+            message="Фоновый hide-импорт в Vault запущен",
+            torrent_id=0,
+            movie_rss=movie_rss,
+            user=user,
+        )
+
+        movie = cls._find_existing_movie(movie_rss, operation_id=operation_id, torrent_id=0, user=user)
+        candidate = None
+        if movie is None or not movie.tmdb_id:
+            match_result = cls._resolve_tmdb_match(movie_rss, operation_id=operation_id, torrent_id=0, user=user)
+            if match_result is not None and match_result.selected_candidate is not None:
+                candidate = match_result.selected_candidate
+            elif movie is None:
+                status = "ambiguous" if match_result and match_result.status == "needs_user_choice" else "not_found"
+                message = match_result.message if match_result else "Не удалось подобрать фильм на TMDB"
+                cls._log(
+                    operation_id=operation_id,
+                    level=VaultConnectionEvent.Level.WARNING if status == "ambiguous" else VaultConnectionEvent.Level.ERROR,
+                    event_type="tmdb_resolution_stopped",
+                    message=message,
+                    torrent_id=0,
+                    movie_rss=movie_rss,
+                    user=user,
+                )
+                return KinozalDownloadImportResult(
+                    operation_id=operation_id,
+                    status=status,
+                    message=message,
+                )
+
+        if movie is None and candidate is not None:
+            import_result = TMDBMovieImportService.import_movie(candidate.tmdb_id, candidate.media_type)
+            movie = import_result.movie
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.SUCCESS if import_result.status == "created" else VaultConnectionEvent.Level.INFO,
+                event_type="vault_movie_imported",
+                message=import_result.message,
+                torrent_id=0,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                tmdb_id=candidate.tmdb_id,
+            )
+
+        if movie is not None and candidate is not None and (not movie.tmdb_id or movie.tmdb_id != candidate.tmdb_id):
+            sync_result = TMDBMovieSyncService.sync_movie(
+                movie=movie,
+                force_rematch=True,
+                selected_candidate=candidate,
+            )
+            if sync_result.status != "ok":
+                cls._log(
+                    operation_id=operation_id,
+                    level=VaultConnectionEvent.Level.ERROR,
+                    event_type="tmdb_sync_failed",
+                    message=sync_result.message,
+                    torrent_id=0,
+                    movie_rss=movie_rss,
+                    vault_movie=movie,
+                    user=user,
+                    tmdb_id=candidate.tmdb_id,
+                )
+                return KinozalDownloadImportResult(
+                    operation_id=operation_id,
+                    status="error",
+                    message=sync_result.message,
+                    movie=movie,
+                )
+            movie.refresh_from_db()
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.SUCCESS,
+                event_type="tmdb_sync_completed",
+                message=sync_result.message,
+                torrent_id=0,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                tmdb_id=movie.tmdb_id,
+                payload={"updated_fields": list(sync_result.updated_fields)},
+            )
+
+        if movie is None:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="vault_movie_missing",
+                message="После обработки TMDB фильм в Vault не определен",
+                torrent_id=0,
+                movie_rss=movie_rss,
+                user=user,
+            )
+            return KinozalDownloadImportResult(
+                operation_id=operation_id,
+                status="error",
+                message="Не удалось определить фильм в Vault",
+            )
+
+        cls._persist_external_ids(movie, movie_rss)
+        MovieStatusService.set_status(user, movie, "wont_watch")
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.SUCCESS,
+            event_type="wont_watch_applied",
+            message="Статус 'Не буду смотреть' выставлен",
+            torrent_id=0,
+            movie_rss=movie_rss,
+            vault_movie=movie,
+            user=user,
+            tmdb_id=movie.tmdb_id,
+        )
+
+        final_status: ImportStatus = "created" if candidate is not None and movie.source == Movie.Source.TMDB else "reused"
+        final_message = "Фильм обработан и статус 'Не буду смотреть' выставлен"
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.SUCCESS,
+            event_type="operation_completed",
+            message=final_message,
+            torrent_id=0,
+            movie_rss=movie_rss,
+            vault_movie=movie,
+            user=user,
+            tmdb_id=movie.tmdb_id,
+        )
+        return KinozalDownloadImportResult(
+            operation_id=operation_id,
+            status=final_status,
+            message=final_message,
+            movie=movie,
+        )
+
     # ------------------------------------ #
     #            DOMAIN LAYER              #
     # ------------------------------------ #
