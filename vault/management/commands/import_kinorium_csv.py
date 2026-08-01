@@ -1,4 +1,5 @@
 import csv
+import logging
 import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -11,6 +12,8 @@ from django.db import transaction
 from slugify import slugify
 
 from core.models import Country
+from movie_filter_pro.settings import SKIP
+from moviefilter.models import MovieRSS
 from vault.models import (
     FavoritePerson,
     Genre,
@@ -21,6 +24,9 @@ from vault.models import (
     UserListMovie,
     UserMovie,
 )
+
+
+logger = logging.getLogger('debug_logger')
 
 
 STATUS_TO_WATCH_STATUS = {
@@ -312,6 +318,93 @@ class Command(BaseCommand):
             user_movie.watched_at = watched_at
         user_movie.save(update_fields=['rating', 'watch_status', 'watched_at', 'updated_at'])
 
+    # ------------------------------------ #
+    #     Import Kinozal HIDE movies       #
+    # ------------------------------------ #
+
+    @staticmethod
+    def _rss_year_as_int(rss: MovieRSS) -> int | None:
+        """Год в Kinozal может быть диапазоном (1982-1994), берём первые 4 цифры."""
+        raw = (rss.year or '').strip()
+        if not raw:
+            return None
+        primary = raw[:4]
+        return int(primary) if primary.isdigit() else None
+
+    @staticmethod
+    def _find_vault_movie(rss: MovieRSS, year: int | None) -> Movie | None:
+        """Умное сопоставление Kinozal <-> Vault по title/original_title/year."""
+        title = (rss.title or '').strip()
+        original_title = (rss.original_title or '').strip()
+
+        movie = Movie.objects.filter(title=title, original_title=original_title, year=year).first()
+        if movie:
+            return movie
+
+        if title and original_title:
+            movie = Movie.objects.filter(title=title, original_title=original_title).first()
+            if movie:
+                return movie
+
+        if title and year is not None:
+            movie = Movie.objects.filter(title=title, year=year).first()
+            if movie:
+                return movie
+
+        if original_title and year is not None:
+            movie = Movie.objects.filter(original_title=original_title, year=year).first()
+            if movie:
+                return movie
+
+        return None
+
+    def _import_hidden_movies(self, user):
+        self.stdout.write("\n--- Kinozal HIDE movies (SKIP) -> Vault ---")
+        hidden_movies = MovieRSS.objects.filter(priority=SKIP)
+        total = hidden_movies.count()
+        self.stdout.write(f"Found {total} hidden (SKIP) movies in Kinozal")
+
+        created = 0
+        skipped_existing = 0
+        no_year = 0
+
+        for rss in hidden_movies:
+            year = self._rss_year_as_int(rss)
+            movie = self._find_vault_movie(rss, year)
+            if movie:
+                skipped_existing += 1
+                logger.info(f"[Kinozal-HIDE] already in Vault, skip: {rss.title} ({year or '?'})")
+                continue
+
+            if year is None:
+                no_year += 1
+                logger.warning(f"[Kinozal-HIDE] missing year, skip: {rss.title}")
+                continue
+
+            movie = Movie.objects.create(
+                title=rss.title,
+                original_title=rss.original_title or None,
+                year=year,
+                imdb_id=rss.imdb_id or None,
+                kinopoisk_id=rss.kinopoisk_id or None,
+                poster=rss.poster or None,
+                description=rss.plot or '',
+            )
+            UserMovie.objects.create(
+                user=user,
+                movie=movie,
+                watch_status=UserMovie.WatchStatus.SKIP,
+            )
+            created += 1
+            logger.info(f"[Kinozal-HIDE] created in Vault as 'Не буду смотреть': {rss.title} ({year})")
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Kinozal HIDE import: processed={total}, created={created}, "
+                f"skipped_existing={skipped_existing}, no_year={no_year}"
+            )
+        )
+
     @transaction.atomic
     def handle(self, *args, **kwargs):
         self.stdout.write(self.style.SUCCESS("Starting Kinorium CSV data import..."))
@@ -464,5 +557,8 @@ class Command(BaseCommand):
             note_text = row.get('Note')
             if note_text:
                 self._append_movie_note(user, movie, note_text)
+
+        # 6. Kinozal HIDE movies (priority=SKIP) -> Vault as 'Не буду смотреть'
+        self._import_hidden_movies(user)
 
         self.stdout.write(self.style.SUCCESS("\nImport completed successfully."))

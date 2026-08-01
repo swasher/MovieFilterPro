@@ -48,6 +48,9 @@ class Command(BaseCommand):
             v.UserListMovie,
             v.MoviePerson,
 
+            # События связи приложений
+            v.VaultConnectionEvent,
+
             # Иерархия сериалов
             v.Episode,
             v.Season,
