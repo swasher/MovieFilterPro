@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
@@ -19,6 +19,9 @@ class MovieOut(Schema):
     year: int | None = None
     slug: str
     poster_url: str | None = None
+    movie_type: str | None = None
+    in_watched: bool = False
+    in_favorites: bool = False
 
 
 class MovieDetailOut(Schema):
@@ -384,7 +387,13 @@ def _build_connection_event_out(item: VaultConnectionEvent) -> ConnectionEventOu
     )
 
 
-def _build_movie_out(movie: Movie) -> MovieOut:
+def _build_movie_out(movie: Movie, user=None) -> MovieOut:
+    in_watched = False
+    in_favorites = False
+    if user is not None:
+        state = MovieStatusService.get_movie_status(user, movie)
+        in_watched = state["in_watched"]
+        in_favorites = state["in_favorites"]
     return MovieOut(
         id=movie.id,
         title=movie.title,
@@ -392,6 +401,9 @@ def _build_movie_out(movie: Movie) -> MovieOut:
         year=movie.year,
         slug=movie.slug,
         poster_url=movie.poster_url,
+        movie_type=movie.movie_type,
+        in_watched=in_watched,
+        in_favorites=in_favorites,
     )
 
 
@@ -460,7 +472,7 @@ def list_movies(
         ordering = allowed_orders.get(order, allowed_orders["-year"])
 
     qs = qs.order_by(*ordering).distinct()[:limit]
-    return [_build_movie_out(movie) for movie in qs]
+    return [_build_movie_out(movie, user=user) for movie in qs]
 
 
 @api.get("/movies/{slug}", response=MovieDetailOut)

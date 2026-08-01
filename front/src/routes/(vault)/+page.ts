@@ -7,6 +7,9 @@ type ApiMovie = {
   year: number | null;
   slug: string;
   poster_url: string | null;
+  movie_type: string | null;
+  in_watched: boolean;
+  in_favorites: boolean;
 };
 
 export const load: PageLoad = async ({ fetch, url }) => {

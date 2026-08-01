@@ -8,7 +8,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Plus } from "@lucide/svelte";
+  import { ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Eye, Heart, Plus } from "@lucide/svelte";
 
   type MovieCard = {
     id: number;
@@ -17,6 +17,9 @@
     year: number | null;
     slug: string;
     poster_url: string | null;
+    movie_type: string | null;
+    in_watched: boolean;
+    in_favorites: boolean;
   };
 
   type TmdbSearchResult = {
@@ -405,6 +408,23 @@
           >
             <Card class="relative h-[270px] w-[180px] overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
               <CardContent class="h-full !p-0">
+                {#if movie.movie_type === "series"}
+                  <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">SERIES</Badge>
+                {/if}
+
+                <div class="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
+                  {#if movie.in_favorites && data.activeStatus !== "favorites"}
+                    <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
+                      <Heart class="h-3 w-3 text-red-500" />
+                    </Badge>
+                  {/if}
+                  {#if movie.in_watched && data.activeStatus !== "watched"}
+                    <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Просмотрено">
+                      <Eye class="h-3 w-3" />
+                    </Badge>
+                  {/if}
+                </div>
+
                 <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0.5 text-[10px]">
                   {movie.year ?? "?"}
                 </Badge>
