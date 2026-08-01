@@ -17,8 +17,10 @@
     Clock3,
     Heart,
     Link2,
+    Plus,
     RefreshCw,
     Shield,
+    Trash,
     Trash2,
     XCircle
   } from "@lucide/svelte";
@@ -370,8 +372,11 @@
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
-              <Button {...props} variant="outline" class="w-full justify-between">
-                <span>Добавить в список</span>
+              <Button {...props} variant="secondary" class="w-full justify-between">
+                <span class="inline-flex items-center gap-1.5">
+                  <Plus class="size-3.5" />
+                  Добавить в список
+                </span>
                 <ChevronDown class="size-4" />
               </Button>
             {/snippet}
@@ -401,17 +406,46 @@
 
         <div class="vd-section">
           <p class="vd-section-title">В списках</p>
-          {#if customLists.some((item) => item.is_in_list)}
-            <div class="vd-list-column">
+          <div class="vd-list-column">
+            {#each statusButtons.filter((item) => {
+              if (item.key === "will_watch") return userState.in_will_watch;
+              if (item.key === "favorites") return userState.in_favorites;
+              if (item.key === "watched") return userState.in_watched;
+              return userState.in_wont_watch;
+            }) as item (item.key)}
+              {@const Icon = item.icon}
+              <button
+                type="button"
+                class="vd-list-chip justify-between"
+                onclick={() => toggleStatus(item.key)}
+              >
+                <span class="inline-flex items-center gap-1.5">
+                  <Icon class="size-3.5" />
+                  {item.label}
+                </span>
+                <span class="size-1.5 rounded-full bg-primary -translate-x-2"></span>
+              </button>
+            {/each}
+
+            {#if customLists.some((item) => item.is_in_list)}
               {#each customLists.filter((item) => item.is_in_list) as item (item.id)}
                 <div class="vd-list-chip">
-                  {item.name}
+                  <span class="flex-1 truncate">{item.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="size-6 p-0 text-muted-foreground/50 hover:bg-muted hover:text-foreground/70"
+                    onclick={() => toggleCustomList(item.id)}
+                    title="Удалить из списка"
+                  >
+                    <Trash class="size-3" />
+                  </Button>
                 </div>
               {/each}
-            </div>
-          {:else}
-            <p class="vd-sidebar-note">Фильм пока не добавлен в пользовательские списки.</p>
-          {/if}
+            {:else}
+              <p class="vd-sidebar-note mt-1">Фильм пока не добавлен в пользовательские списки.</p>
+            {/if}
+          </div>
         </div>
       </div>
     </div>

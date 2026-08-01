@@ -186,7 +186,7 @@
   }
 
   .vd-list-chip {
-    @apply inline-flex min-h-9 w-full items-center rounded-lg border border-border/60 bg-muted/40 px-3 text-sm;
+    @apply inline-flex min-h-9 w-full items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 text-sm;
   }
 
   .vd-related-grid {
