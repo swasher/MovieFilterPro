@@ -86,10 +86,7 @@ RUN echo "$(date +'%Y-%m-%d %H:%M:%S')" > /app/timestamp
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
 EXPOSE 8009
 
 # Запуск миграций, затем supervisord (web + worker)
-CMD ["/app/start.sh"]
+CMD ["/app/entrypoint.sh"]
