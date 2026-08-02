@@ -2,27 +2,33 @@
   import { goto } from "$app/navigation";
   import { tick } from "svelte";
   import { toast } from "svelte-sonner";
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
-  import { Badge } from "$lib/components/ui/badge";
-  import { Input } from "$lib/components/ui/input";
-  import { Button } from "$lib/components/ui/button";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { LayoutGrid, TextAlignJustify, ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Eye, Heart, Plus } from "@lucide/svelte";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
+import { Badge } from "$lib/components/ui/badge";
+import { Input } from "$lib/components/ui/input";
+import { Button } from "$lib/components/ui/button";
+import * as Dialog from "$lib/components/ui/dialog";
+import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+import * as ToggleGroup from "$lib/components/ui/toggle-group";
+  import { LayoutGrid, TextAlignJustify, ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Eye, Heart, Plus, Filter, RotateCcw } from "@lucide/svelte";
 
-  type MovieCard = {
-    id: number;
-    title: string;
-    original_title: string | null;
-    year: number | null;
-    slug: string;
-    poster_url: string | null;
-    movie_type: string | null;
-    in_watched: boolean;
-    in_favorites: boolean;
-  };
+type MovieCard = {
+  id: number;
+  title: string;
+  original_title: string | null;
+  year: number | null;
+  slug: string;
+  poster_url: string | null;
+  movie_type: string | null;
+  in_watched: boolean;
+  in_favorites: boolean;
+};
 
-  type TmdbSearchResult = {
+type Genre = {
+  name: string;
+  slug: string;
+};
+
+type TmdbSearchResult = {
     tmdb_id: number;
     media_type: string;
     title: string;
@@ -60,6 +66,15 @@
   let tmdbSearchResults = $state<TmdbSearchResult[]>([]);
   let selectedTmdbKey = $state<string | null>(null);
 
+  let filterOpen = $state(false);
+  let selectedGenres = $state<string[]>([]);
+  let yearFrom = $state("");
+  let yearTo = $state("");
+  let selectedMovieType = $state("");
+  let selectedWatchStatus = $state("");
+  let isFavorite = $state(false);
+  let selectedList = $state("");
+
   const orderOptions = [
     { field: "year", label: "По году" },
     { field: "imdb_rating", label: "По рейтингу" },
@@ -77,6 +92,16 @@
   $effect(() => {
     searchQuery = data.activeQuery ?? "";
     activeOrder = data.activeOrder ?? "-year";
+  });
+
+  $effect(() => {
+    selectedGenres = data.activeGenre ?? [];
+    yearFrom = data.activeYearFrom ?? "";
+    yearTo = data.activeYearTo ?? "";
+    selectedMovieType = data.activeMovieType ?? "";
+    selectedWatchStatus = data.activeWatchStatus ?? "";
+    isFavorite = data.activeIsFavorite ?? false;
+    selectedList = data.activeList ?? "";
   });
 
   $effect(() => {
@@ -184,6 +209,39 @@
     const currentField = getOrderField(activeOrder || "-year");
     const nextDirection = getOrderDirection(activeOrder || "-year") === "desc" ? "asc" : "desc";
     await applyOrder(buildOrderValue(currentField, nextDirection));
+  };
+
+  const applyFilters = async () => {
+    const params = new URLSearchParams(window.location.search);
+
+    params.delete("genre");
+    selectedGenres.forEach(g => params.append("genre", g));
+
+    if (yearFrom) params.set("year_from", yearFrom); else params.delete("year_from");
+    if (yearTo) params.set("year_to", yearTo); else params.delete("year_to");
+    if (selectedMovieType) params.set("movie_type", selectedMovieType); else params.delete("movie_type");
+    if (selectedWatchStatus) params.set("watch_status", selectedWatchStatus); else params.delete("watch_status");
+    if (isFavorite) params.set("is_favorite", "true"); else params.delete("is_favorite");
+    if (selectedList) params.set("list", selectedList); else params.delete("list");
+
+    params.delete("page");
+
+    const queryString = params.toString();
+    await goto(queryString ? `/?${queryString}` : "/", {
+      replaceState: true, keepFocus: true, noScroll: true, invalidateAll: true
+    });
+    filterOpen = false;
+  };
+
+  const resetFilters = async () => {
+    selectedGenres = [];
+    yearFrom = "";
+    yearTo = "";
+    selectedMovieType = "";
+    selectedWatchStatus = "";
+    isFavorite = false;
+    selectedList = "";
+    await applyFilters();
   };
 
   const onSearchInput = () => {
@@ -385,6 +443,15 @@
             {/if}
           </Button>
 
+          <Button
+            variant="outline"
+            class="h-11"
+            onclick={() => (filterOpen = true)}
+          >
+            <Filter class="size-4" />
+            Фильтр
+          </Button>
+
           <Button class="h-11 min-w-[132px]" onclick={openAddMovieDialog}>
             <Plus class="size-4" />
             Add movie
@@ -392,14 +459,51 @@
         </div>
       </div>
 
-      {#if data.activeGenre}
-        <p class="text-muted-foreground text-sm">Фильтр по жанру: <strong>{data.activeGenre}</strong></p>
-      {/if}
-      {#if data.activeList}
-        <p class="text-muted-foreground text-sm">Фильтр по списку: <strong>{data.activeList}</strong></p>
-      {/if}
-      {#if data.activeQuery}
-        <p class="text-muted-foreground text-sm">Поиск: <strong>{data.activeQuery}</strong></p>
+      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || data.activeList || data.activeQuery}
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          {#if selectedGenres.length > 0}
+            <p class="text-muted-foreground">
+              Жанр: {selectedGenres.join(", ")}
+              <button class="underline hover:text-foreground" onclick={() => { selectedGenres = []; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if yearFrom || yearTo}
+            <span class="text-border/50">|</span>
+            <p class="text-muted-foreground">
+              Год: {yearFrom || "?"}–{yearTo || "?"}
+              <button class="underline hover:text-foreground" onclick={() => { yearFrom = ""; yearTo = ""; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if selectedMovieType}
+            <span class="text-border/50">|</span>
+            <p class="text-muted-foreground">
+              Тип: {selectedMovieType}
+              <button class="underline hover:text-foreground" onclick={() => { selectedMovieType = ""; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if selectedWatchStatus}
+            <span class="text-border/50">|</span>
+            <p class="text-muted-foreground">
+              Просмотрено: {selectedWatchStatus === "watched" ? "Да" : "Нет"}
+              <button class="underline hover:text-foreground" onclick={() => { selectedWatchStatus = ""; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if isFavorite}
+            <span class="text-border/50">|</span>
+            <p class="text-muted-foreground">
+              Только избранное
+              <button class="underline hover:text-foreground" onclick={() => { isFavorite = false; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if data.activeList}
+            <span class="text-border/50">|</span>
+            <p class="text-muted-foreground">Список: <strong>{data.activeList}</strong></p>
+          {/if}
+          {#if data.activeQuery}
+            <span class="text-border/50">|</span>
+            <p class="text-muted-foreground">Поиск: <strong>{data.activeQuery}</strong></p>
+          {/if}
+        </div>
       {/if}
     </div>
 
@@ -667,6 +771,121 @@
       <Button onclick={importSelectedTmdbMovie} disabled={isImportingTmdb || !selectedTmdbCandidate}>
         {isImportingTmdb ? "Добавляю..." : "Add"}
       </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={filterOpen}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Фильтры</Dialog.Title>
+      <Dialog.Description>Настрой фильтрацию списка фильмов.</Dialog.Description>
+    </Dialog.Header>
+
+    <div class="space-y-4 py-2">
+      <div class="space-y-2">
+        <p class="text-sm font-medium">Жанр</p>
+        {#if data.genres}
+          <div class="max-h-48 overflow-y-auto space-y-1 rounded-md border p-2">
+            {#each data.genres as genre}
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedGenres.includes(genre.slug)}
+                  onchange={() => {
+                    if (selectedGenres.includes(genre.slug)) {
+                      selectedGenres = selectedGenres.filter(g => g !== genre.slug);
+                    } else {
+                      selectedGenres = [...selectedGenres, genre.slug];
+                    }
+                  }}
+                  class="rounded border-input"
+                />
+                {genre.name}
+              </label>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-muted-foreground text-sm">Загрузка жанров...</p>
+        {/if}
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm font-medium">Год</p>
+        <div class="flex items-center gap-2">
+          <Input
+            type="number"
+            placeholder="от"
+            bind:value={yearFrom}
+            class="h-9 w-24"
+            min="1800"
+            max="2100"
+          />
+          <span class="text-muted-foreground">—</span>
+          <Input
+            type="number"
+            placeholder="до"
+            bind:value={yearTo}
+            class="h-9 w-24"
+            min="1800"
+            max="2100"
+          />
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm font-medium">Тип</p>
+        <ToggleGroup.Root type="single" value={selectedMovieType} onValueChange={(v) => selectedMovieType = v ?? ""}>
+          <ToggleGroup.Item value="movie">Фильм</ToggleGroup.Item>
+          <ToggleGroup.Item value="series">Сериал</ToggleGroup.Item>
+          <ToggleGroup.Item value="">Не важно</ToggleGroup.Item>
+        </ToggleGroup.Root>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm font-medium">Просмотрено</p>
+        <ToggleGroup.Root type="single" value={selectedWatchStatus} onValueChange={(v) => selectedWatchStatus = v ?? ""}>
+          <ToggleGroup.Item value="watched">Просмотрено</ToggleGroup.Item>
+          <ToggleGroup.Item value="not_watched">Не просмотрено</ToggleGroup.Item>
+          <ToggleGroup.Item value="">Не важно</ToggleGroup.Item>
+        </ToggleGroup.Root>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={isFavorite}
+          onchange={() => { isFavorite = !isFavorite; }}
+          class="rounded border-input"
+          id="filter-favorite"
+        />
+        <label for="filter-favorite" class="text-sm cursor-pointer">Только избранное</label>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm font-medium">Список</p>
+        {#if data.userLists}
+          <select
+            bind:value={selectedList}
+            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="">Не важно</option>
+            {#each data.userLists as list}
+              <option value={list.id}>{list.name}</option>
+            {/each}
+          </select>
+        {:else}
+          <p class="text-muted-foreground text-sm">Загрузка списков...</p>
+        {/if}
+      </div>
+    </div>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={resetFilters}>
+        <RotateCcw class="size-4 mr-2" />
+        Сбросить
+      </Button>
+      <Button onclick={applyFilters}>Применить</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

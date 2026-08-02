@@ -411,16 +411,22 @@ def _build_movie_out(movie: Movie, user=None) -> MovieOut:
 def list_movies(
     request,
     limit: int = 50,
-    genre: str | None = None,
+    genre: list[str] | None = None,
     status: str | None = None,
     list: int | None = None,
     q: str | None = None,
     order: str = "-year",
+    year_from: int | None = None,
+    year_to: int | None = None,
+    movie_type: str | None = None,
+    is_favorite: bool | None = None,
+    watch_status: str | None = None,
 ):
     user = _resolve_api_user(request)
     qs = Movie.objects.filter(status=Movie.Status.RELEASED)
+
     if genre:
-        qs = qs.filter(genres__slug=genre)
+        qs = qs.filter(genres__slug__in=genre).distinct()
     if q:
         query = q.strip()
         if query:
@@ -429,6 +435,12 @@ def list_movies(
                 | Q(original_title__icontains=query)
                 | Q(description__icontains=query)
             )
+    if year_from is not None:
+        qs = qs.filter(year__gte=year_from)
+    if year_to is not None:
+        qs = qs.filter(year__lte=year_to)
+    if movie_type:
+        qs = qs.filter(movie_type=movie_type)
     if user and status:
         if status == "favorites":
             qs = qs.filter(user_movies__user=user, user_movies__is_favorite=True)
@@ -438,6 +450,13 @@ def list_movies(
             qs = qs.filter(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.PLAN)
         elif status == "wont_watch":
             qs = qs.filter(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.SKIP)
+    if user and is_favorite:
+        qs = qs.filter(user_movies__user=user, user_movies__is_favorite=True)
+    if user and watch_status:
+        if watch_status == "watched":
+            qs = qs.filter(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.WATCHED)
+        elif watch_status == "not_watched":
+            qs = qs.exclude(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.WATCHED)
     if user and list:
         qs = qs.filter(in_lists__user_list_id=list, in_lists__user_list__user=user)
 
@@ -473,6 +492,31 @@ def list_movies(
 
     qs = qs.order_by(*ordering).distinct()[:limit]
     return [_build_movie_out(movie, user=user) for movie in qs]
+
+
+@api.get("/genres", response=list[NamedItemOut])
+def genre_list(request):
+    return [
+        NamedItemOut(name=genre.name, slug=genre.slug)
+        for genre in Genre.objects.all().order_by("name")
+    ]
+
+
+class UserListOutShort(Schema):
+    id: int
+    name: str
+
+
+@api.get("/lists", response=list[UserListOutShort])
+def user_lists(request):
+    _require_api_user(request)
+    user = _resolve_api_user(request)
+    if user is None:
+        return []
+    return [
+        UserListOutShort(id=lst.id, name=lst.name)
+        for lst in UserList.objects.filter(user=user).order_by("-updated_at", "id")
+    ]
 
 
 @api.get("/movies/{slug}", response=MovieDetailOut)

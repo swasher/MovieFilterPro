@@ -12,8 +12,23 @@ type ApiMovie = {
   in_favorites: boolean;
 };
 
+type ApiGenre = {
+  name: string;
+  slug: string;
+};
+
+type ApiUserList = {
+  id: number;
+  name: string;
+};
+
 export const load: PageLoad = async ({ fetch, url }) => {
-  const genre = (url.searchParams.get("genre") ?? "").trim();
+  const genre = url.searchParams.getAll("genre");
+  const yearFrom = url.searchParams.get("year_from") ?? "";
+  const yearTo = url.searchParams.get("year_to") ?? "";
+  const movieType = url.searchParams.get("movie_type") ?? "";
+  const watchStatus = url.searchParams.get("watch_status") ?? "";
+  const isFavorite = url.searchParams.get("is_favorite") === "true";
   const status = (url.searchParams.get("status") ?? "").trim();
   const list = (url.searchParams.get("list") ?? "").trim();
   const q = (url.searchParams.get("q") ?? "").trim();
@@ -21,55 +36,65 @@ export const load: PageLoad = async ({ fetch, url }) => {
 
   try {
     const params = new URLSearchParams({ limit: "30" });
-    const selectedGenre = genre;
-    if (selectedGenre) {
-      params.set("genre", selectedGenre);
-    }
-    if (status) {
-      params.set("status", status);
-    }
-    if (list) {
-      params.set("list", list);
-    }
-    if (q) {
-      params.set("q", q);
-    }
-    if (order && order !== "-year") {
-      params.set("order", order);
-    }
+    genre.forEach(g => params.append("genre", g));
+    if (yearFrom) params.set("year_from", yearFrom);
+    if (yearTo) params.set("year_to", yearTo);
+    if (movieType) params.set("movie_type", movieType);
+    if (watchStatus) params.set("watch_status", watchStatus);
+    if (isFavorite) params.set("is_favorite", "true");
+    if (status) params.set("status", status);
+    if (list) params.set("list", list);
+    if (q) params.set("q", q);
+    if (order && order !== "-year") params.set("order", order);
 
-    const response = await fetch(`/api/vault/movies?${params.toString()}`);
-    if (!response.ok) {
-      return {
-        movies: [] as ApiMovie[],
-        apiError: `API error: ${response.status}`,
-        activeGenre: selectedGenre,
-        activeStatus: status,
-        activeList: list,
-        activeQuery: q,
-        activeOrder: order
-      };
-    }
+    const [moviesResponse, genresResponse, listsResponse] = await Promise.all([
+      fetch(`/api/vault/movies?${params.toString()}`),
+      fetch("/api/vault/genres"),
+      fetch("/api/vault/lists"),
+    ]);
 
-    const movies = (await response.json()) as ApiMovie[];
+    const movies = moviesResponse.ok
+      ? ((await moviesResponse.json()) as ApiMovie[])
+      : [];
+    const genres = genresResponse.ok
+      ? ((await genresResponse.json()) as ApiGenre[])
+      : [];
+    const userLists = listsResponse.ok
+      ? ((await listsResponse.json()) as ApiUserList[])
+      : [];
+
     return {
       movies,
-      apiError: "",
-      activeGenre: selectedGenre,
+      genres,
+      userLists,
+      apiError: !moviesResponse.ok ? `API error: ${moviesResponse.status}` : "",
+      activeGenre: genre,
+      activeYearFrom: yearFrom,
+      activeYearTo: yearTo,
+      activeMovieType: movieType,
+      activeWatchStatus: watchStatus,
+      activeIsFavorite: isFavorite,
       activeStatus: status,
       activeList: list,
       activeQuery: q,
-      activeOrder: order
+      activeOrder: order,
     };
   } catch (error) {
     return {
       movies: [] as ApiMovie[],
+      genres: [] as ApiGenre[],
+      userLists: [] as ApiUserList[],
       apiError: error instanceof Error ? error.message : "Unknown API error",
       activeGenre: genre,
+      activeYearFrom: yearFrom,
+      activeYearTo: yearTo,
+      activeMovieType: movieType,
+      activeWatchStatus: watchStatus,
+      activeIsFavorite: isFavorite,
       activeStatus: status,
       activeList: list,
       activeQuery: q,
-      activeOrder: order
+      activeOrder: order,
     };
   }
 };
