@@ -468,35 +468,35 @@ type TmdbSearchResult = {
             </p>
           {/if}
           {#if yearFrom || yearTo}
-            <span class="text-border/50">|</span>
+            <span class="text-border">|</span>
             <p class="text-muted-foreground">
               Год: {yearFrom || "?"}–{yearTo || "?"}
               <button class="underline hover:text-foreground" onclick={() => { yearFrom = ""; yearTo = ""; applyFilters(); }}>×</button>
             </p>
           {/if}
           {#if selectedMovieType}
-            <span class="text-border/50">|</span>
+            <span class="text-border">|</span>
             <p class="text-muted-foreground">
               Тип: {selectedMovieType}
               <button class="underline hover:text-foreground" onclick={() => { selectedMovieType = ""; applyFilters(); }}>×</button>
             </p>
           {/if}
           {#if selectedWatchStatus}
-            <span class="text-border/50">|</span>
+            <span class="text-border">|</span>
             <p class="text-muted-foreground">
               Просмотрено: {selectedWatchStatus === "watched" ? "Да" : "Нет"}
               <button class="underline hover:text-foreground" onclick={() => { selectedWatchStatus = ""; applyFilters(); }}>×</button>
             </p>
           {/if}
           {#if isFavorite}
-            <span class="text-border/50">|</span>
+            <span class="text-border">|</span>
             <p class="text-muted-foreground">
               Только избранное
               <button class="underline hover:text-foreground" onclick={() => { isFavorite = false; applyFilters(); }}>×</button>
             </p>
           {/if}
           {#if data.activeQuery}
-            <span class="text-border/50">|</span>
+            <span class="text-border">|</span>
             <p class="text-muted-foreground">Поиск: <strong>{data.activeQuery}</strong></p>
           {/if}
         </div>
