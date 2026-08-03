@@ -170,82 +170,55 @@ import XIcon from "@lucide/svelte/icons/x";
 
       <Sidebar.Content>
         <Sidebar.Group>
-          <Sidebar.GroupLabel>Списки</Sidebar.GroupLabel>
           <Sidebar.GroupContent>
-<Sidebar.Menu>
-               {#each sidebarItems as item (item.id)}
-                 <Sidebar.MenuItem>
-                   <Sidebar.MenuButton isActive={isActive(item.href)}>
-                     {#snippet child({ props })}
-                        <a {...props} href={item.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(item.href); }}>
-                         <span>{item.title}</span>
-                         {#if typeof item.count === "number"}
-                           <Badge variant="secondary" class="ml-auto">{item.count}</Badge>
-                         {:else if item.children?.length}
-                           <Badge variant="secondary" class="ml-auto">{item.children.length}</Badge>
-                         {/if}
-                         {#if isActive(item.href) && item.href.includes("?")}
-                           <button
-                             class="text-muted-foreground hover:text-foreground ml-auto inline-flex h-4 w-4 items-center justify-center rounded-sm"
-                             title="Снять фильтр"
-                             onclick={(e) => { e.stopPropagation(); e.preventDefault(); clearSidebarFilter(item.href); }}
-                           >
-                             <XIcon class="h-3 w-3" />
-                           </button>
-                         {/if}
-                       </a>
-                     {/snippet}
-                   </Sidebar.MenuButton>
+            <Sidebar.Menu>
+              {#each sidebarItems as group, groupIndex (group.id)}
+                {#each group.children ?? [] as subItem (subItem.id)}
+                  <Sidebar.MenuItem>
+                    <Sidebar.MenuButton isActive={isActive(subItem.href)}>
+                      {#snippet child({ props })}
+                        <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
+                          <span>{subItem.title}</span>
+                          {#if typeof subItem.count === "number"}
+                            <Badge variant="secondary" class="ml-auto">{subItem.count}</Badge>
+                          {/if}
+                          {#if isActive(subItem.href) && subItem.href.includes("?")}
+                            <button
+                              class="text-muted-foreground hover:text-foreground ml-auto inline-flex h-4 w-4 items-center justify-center rounded-sm"
+                              title="Снять фильтр"
+                              onclick={(e) => { e.stopPropagation(); e.preventDefault(); clearSidebarFilter(subItem.href); }}
+                            >
+                              <XIcon class="h-3 w-3" />
+                            </button>
+                          {/if}
+                        </a>
+                      {/snippet}
+                    </Sidebar.MenuButton>
 
-                  {#if item.children?.length}
-                    <Sidebar.MenuSub>
-                      {#each item.children as subItem (subItem.id)}
-                        <Sidebar.MenuSubItem>
-                          <div class="flex items-center">
-<Sidebar.MenuSubButton isActive={isActive(subItem.href)} class="flex-1">
-                               {#snippet child({ props })}
-                                  <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
-                                   <span>{subItem.title}</span>
-                                   {#if typeof subItem.count === "number"}
-                                     <Badge variant="outline" class="ml-auto">{subItem.count}</Badge>
-                                   {/if}
-                                   {#if isActive(subItem.href) && subItem.href.includes("?")}
-                                     <button
-                                       class="text-muted-foreground hover:text-foreground ml-1 inline-flex h-4 w-4 items-center justify-center rounded-sm"
-                                       title="Снять фильтр"
-                                       onclick={(e) => { e.stopPropagation(); e.preventDefault(); clearSidebarFilter(subItem.href); }}
-                                     >
-                                       <XIcon class="h-3 w-3" />
-                                     </button>
-                                   {/if}
-                                 </a>
-                               {/snippet}
-                             </Sidebar.MenuSubButton>
+                    {#if editMode && group.id === "custom" && isCustomList(subItem.id)}
+                      <div class="ml-1 flex shrink-0 gap-0.5">
+                        <button
+                          class="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 items-center justify-center rounded-sm"
+                          title="Переименовать"
+                          onclick={(e) => { e.stopPropagation(); openRename(getListId(subItem.id), subItem.title); }}
+                        >
+                          <PencilIcon class="h-3 w-3" />
+                        </button>
+                        <button
+                          class="text-muted-foreground hover:text-destructive inline-flex h-5 w-5 items-center justify-center rounded-sm"
+                          title="Удалить список"
+                          onclick={(e) => { e.stopPropagation(); openDelete(getListId(subItem.id), subItem.title); }}
+                        >
+                          <Trash2Icon class="h-3 w-3" />
+                        </button>
+                      </div>
+                    {/if}
+                  </Sidebar.MenuItem>
+                {/each}
 
-                            {#if editMode && item.id === "custom" && isCustomList(subItem.id)}
-                              <div class="ml-1 flex shrink-0 gap-0.5">
-                                <button
-                                  class="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 items-center justify-center rounded-sm"
-                                  title="Переименовать"
-                                  onclick={(e) => { e.stopPropagation(); openRename(getListId(subItem.id), subItem.title); }}
-                                >
-                                  <PencilIcon class="h-3 w-3" />
-                                </button>
-                                <button
-                                  class="text-muted-foreground hover:text-destructive inline-flex h-5 w-5 items-center justify-center rounded-sm"
-                                  title="Удалить список"
-                                  onclick={(e) => { e.stopPropagation(); openDelete(getListId(subItem.id), subItem.title); }}
-                                >
-                                  <Trash2Icon class="h-3 w-3" />
-                                </button>
-                              </div>
-                            {/if}
-                          </div>
-                        </Sidebar.MenuSubItem>
-                      {/each}
-                    </Sidebar.MenuSub>
-                  {/if}
-                </Sidebar.MenuItem>
+                {#if groupIndex < sidebarItems.length - 1}
+                  <Sidebar.Separator class="my-1" />
+                {/if}
               {/each}
             </Sidebar.Menu>
           </Sidebar.GroupContent>
