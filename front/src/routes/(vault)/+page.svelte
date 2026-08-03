@@ -73,7 +73,10 @@ type TmdbSearchResult = {
   let selectedMovieType = $state("");
   let selectedWatchStatus = $state("");
   let isFavorite = $state(false);
-  let selectedList = $state("");
+
+  const genreNameMap = $derived(
+    Object.fromEntries((data.genres ?? []).map((g) => [g.slug, g.name]))
+  );
 
   const orderOptions = [
     { field: "year", label: "По году" },
@@ -101,7 +104,6 @@ type TmdbSearchResult = {
     selectedMovieType = data.activeMovieType ?? "";
     selectedWatchStatus = data.activeWatchStatus ?? "";
     isFavorite = data.activeIsFavorite ?? false;
-    selectedList = data.activeList ?? "";
   });
 
   $effect(() => {
@@ -215,14 +217,13 @@ type TmdbSearchResult = {
     const params = new URLSearchParams(window.location.search);
 
     params.delete("genre");
-    selectedGenres.forEach(g => params.append("genre", g));
+    if (selectedGenres.length > 0) params.set("genre", selectedGenres.join(","));
 
     if (yearFrom) params.set("year_from", yearFrom); else params.delete("year_from");
     if (yearTo) params.set("year_to", yearTo); else params.delete("year_to");
     if (selectedMovieType) params.set("movie_type", selectedMovieType); else params.delete("movie_type");
     if (selectedWatchStatus) params.set("watch_status", selectedWatchStatus); else params.delete("watch_status");
     if (isFavorite) params.set("is_favorite", "true"); else params.delete("is_favorite");
-    if (selectedList) params.set("list", selectedList); else params.delete("list");
 
     params.delete("page");
 
@@ -240,7 +241,6 @@ type TmdbSearchResult = {
     selectedMovieType = "";
     selectedWatchStatus = "";
     isFavorite = false;
-    selectedList = "";
     await applyFilters();
   };
 
@@ -459,11 +459,11 @@ type TmdbSearchResult = {
         </div>
       </div>
 
-      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || data.activeList || data.activeQuery}
+      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || data.activeQuery}
         <div class="flex flex-wrap items-center gap-3 text-sm">
           {#if selectedGenres.length > 0}
             <p class="text-muted-foreground">
-              Жанр: {selectedGenres.join(", ")}
+              Жанр: {selectedGenres.map((g) => genreNameMap[g] ?? g).join(", ")}
               <button class="underline hover:text-foreground" onclick={() => { selectedGenres = []; applyFilters(); }}>×</button>
             </p>
           {/if}
@@ -494,10 +494,6 @@ type TmdbSearchResult = {
               Только избранное
               <button class="underline hover:text-foreground" onclick={() => { isFavorite = false; applyFilters(); }}>×</button>
             </p>
-          {/if}
-          {#if data.activeList}
-            <span class="text-border/50">|</span>
-            <p class="text-muted-foreground">Список: <strong>{data.activeList}</strong></p>
           {/if}
           {#if data.activeQuery}
             <span class="text-border/50">|</span>
@@ -860,23 +856,6 @@ type TmdbSearchResult = {
           id="filter-favorite"
         />
         <label for="filter-favorite" class="text-sm cursor-pointer">Только избранное</label>
-      </div>
-
-      <div class="space-y-2">
-        <p class="text-sm font-medium">Список</p>
-        {#if data.userLists}
-          <select
-            bind:value={selectedList}
-            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="">Не важно</option>
-            {#each data.userLists as list}
-              <option value={list.id}>{list.name}</option>
-            {/each}
-          </select>
-        {:else}
-          <p class="text-muted-foreground text-sm">Загрузка списков...</p>
-        {/if}
       </div>
     </div>
 

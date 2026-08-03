@@ -17,11 +17,6 @@ type ApiGenre = {
   slug: string;
 };
 
-type ApiUserList = {
-  id: number;
-  name: string;
-};
-
 export const load: PageLoad = async ({ fetch, url }) => {
   const genre = url.searchParams.getAll("genre");
   const yearFrom = url.searchParams.get("year_from") ?? "";
@@ -36,7 +31,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 
   try {
     const params = new URLSearchParams({ limit: "30" });
-    genre.forEach(g => params.append("genre", g));
+    if (genre.length > 0) params.set("genre", genre.join(","));
     if (yearFrom) params.set("year_from", yearFrom);
     if (yearTo) params.set("year_to", yearTo);
     if (movieType) params.set("movie_type", movieType);
@@ -47,10 +42,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
     if (q) params.set("q", q);
     if (order && order !== "-year") params.set("order", order);
 
-    const [moviesResponse, genresResponse, listsResponse] = await Promise.all([
+    const [moviesResponse, genresResponse] = await Promise.all([
       fetch(`/api/vault/movies?${params.toString()}`),
       fetch("/api/vault/genres"),
-      fetch("/api/vault/lists"),
     ]);
 
     const movies = moviesResponse.ok
@@ -59,14 +53,10 @@ export const load: PageLoad = async ({ fetch, url }) => {
     const genres = genresResponse.ok
       ? ((await genresResponse.json()) as ApiGenre[])
       : [];
-    const userLists = listsResponse.ok
-      ? ((await listsResponse.json()) as ApiUserList[])
-      : [];
 
     return {
       movies,
       genres,
-      userLists,
       apiError: !moviesResponse.ok ? `API error: ${moviesResponse.status}` : "",
       activeGenre: genre,
       activeYearFrom: yearFrom,
@@ -83,7 +73,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
     return {
       movies: [] as ApiMovie[],
       genres: [] as ApiGenre[],
-      userLists: [] as ApiUserList[],
       apiError: error instanceof Error ? error.message : "Unknown API error",
       activeGenre: genre,
       activeYearFrom: yearFrom,

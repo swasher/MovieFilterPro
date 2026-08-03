@@ -411,7 +411,7 @@ def _build_movie_out(movie: Movie, user=None) -> MovieOut:
 def list_movies(
     request,
     limit: int = 50,
-    genre: list[str] | None = None,
+    genre: str | None = None,
     status: str | None = None,
     list: int | None = None,
     q: str | None = None,
@@ -426,7 +426,9 @@ def list_movies(
     qs = Movie.objects.filter(status=Movie.Status.RELEASED)
 
     if genre:
-        qs = qs.filter(genres__slug__in=genre).distinct()
+        genre_slugs = [g.strip() for g in genre.split(",") if g.strip()]
+        if genre_slugs:
+            qs = qs.filter(genres__slug__in=genre_slugs).distinct()
     if q:
         query = q.strip()
         if query:

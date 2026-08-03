@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { page } from "$app/state";
-  import type { Snippet } from "svelte";
-  import type { SidebarItem } from "$lib/template-data";
-  import { defaultSidebarItems } from "$lib/template-data";
-  import { Badge } from "$lib/components/ui/badge";
-  import { Button } from "$lib/components/ui/button";
-  import * as Sidebar from "$lib/components/ui/sidebar";
-  import PencilIcon from "@lucide/svelte/icons/pencil";
-  import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import PlusIcon from "@lucide/svelte/icons/plus";
+import { page } from "$app/state";
+import { goto } from "$app/navigation";
+import type { Snippet } from "svelte";
+import type { SidebarItem } from "$lib/template-data";
+import { defaultSidebarItems } from "$lib/template-data";
+import { Badge } from "$lib/components/ui/badge";
+import { Button } from "$lib/components/ui/button";
+import * as Sidebar from "$lib/components/ui/sidebar";
+import PencilIcon from "@lucide/svelte/icons/pencil";
+import Trash2Icon from "@lucide/svelte/icons/trash-2";
+import PlusIcon from "@lucide/svelte/icons/plus";
+import XIcon from "@lucide/svelte/icons/x";
   import ListRenameDialog from "$lib/components/ListRenameDialog.svelte";
   import ListDeleteDialog from "$lib/components/ListDeleteDialog.svelte";
   import ListCreateDialog from "$lib/components/ListCreateDialog.svelte";
@@ -40,7 +42,14 @@
     const currentSearch = page.url.search;
 
     if (href.includes("?")) {
-      return `${currentPath}${currentSearch}` === href;
+      const [hrefPath, hrefSearch] = href.split("?");
+      if (currentPath !== hrefPath) return false;
+      const hrefParams = new URLSearchParams(hrefSearch);
+      const currentParams = new URLSearchParams(currentSearch);
+      for (const [key, value] of hrefParams) {
+        if (currentParams.get(key) !== value) return false;
+      }
+      return true;
     }
 
     return href === "/" ? currentPath === "/" : currentPath === href || currentPath.startsWith(`${href}/`);
@@ -109,6 +118,35 @@
     deleteOpen = false;
   }
 
+  function navigateToSidebarItem(href: string) {
+    if (!href.includes("?")) {
+      goto(href, { replaceState: true, invalidateAll: true });
+      return;
+    }
+    const [, hrefSearch] = href.split("?");
+    const newParams = new URLSearchParams(hrefSearch);
+    const currentParams = new URLSearchParams(page.url.search);
+    currentParams.delete("list");
+    currentParams.delete("status");
+    for (const [key, value] of newParams) {
+      currentParams.set(key, value);
+    }
+    const mergedUrl = page.url.pathname + "?" + currentParams.toString();
+    goto(mergedUrl, { replaceState: true, invalidateAll: true });
+  }
+
+  function clearSidebarFilter(href: string) {
+    if (!href.includes("?")) return;
+    const [, hrefSearch] = href.split("?");
+    const newParams = new URLSearchParams(hrefSearch);
+    const currentParams = new URLSearchParams(page.url.search);
+    for (const key of newParams.keys()) {
+      currentParams.delete(key);
+    }
+    const mergedUrl = page.url.pathname + "?" + currentParams.toString();
+    goto(mergedUrl, { replaceState: true, invalidateAll: true });
+  }
+
   function handleCreateList(name: string, id: number) {
     createOpen = false;
     refreshSidebar();
@@ -134,37 +172,55 @@
         <Sidebar.Group>
           <Sidebar.GroupLabel>Списки</Sidebar.GroupLabel>
           <Sidebar.GroupContent>
-            <Sidebar.Menu>
-              {#each sidebarItems as item (item.id)}
-                <Sidebar.MenuItem>
-                  <Sidebar.MenuButton isActive={isActive(item.href)}>
-                    {#snippet child({ props })}
-                      <a {...props} href={item.href}>
-                        <span>{item.title}</span>
-                        {#if typeof item.count === "number"}
-                          <Badge variant="secondary" class="ml-auto">{item.count}</Badge>
-                        {:else if item.children?.length}
-                          <Badge variant="secondary" class="ml-auto">{item.children.length}</Badge>
-                        {/if}
-                      </a>
-                    {/snippet}
-                  </Sidebar.MenuButton>
+<Sidebar.Menu>
+               {#each sidebarItems as item (item.id)}
+                 <Sidebar.MenuItem>
+                   <Sidebar.MenuButton isActive={isActive(item.href)}>
+                     {#snippet child({ props })}
+                        <a {...props} href={item.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(item.href); }}>
+                         <span>{item.title}</span>
+                         {#if typeof item.count === "number"}
+                           <Badge variant="secondary" class="ml-auto">{item.count}</Badge>
+                         {:else if item.children?.length}
+                           <Badge variant="secondary" class="ml-auto">{item.children.length}</Badge>
+                         {/if}
+                         {#if isActive(item.href) && item.href.includes("?")}
+                           <button
+                             class="text-muted-foreground hover:text-foreground ml-auto inline-flex h-4 w-4 items-center justify-center rounded-sm"
+                             title="Снять фильтр"
+                             onclick={(e) => { e.stopPropagation(); e.preventDefault(); clearSidebarFilter(item.href); }}
+                           >
+                             <XIcon class="h-3 w-3" />
+                           </button>
+                         {/if}
+                       </a>
+                     {/snippet}
+                   </Sidebar.MenuButton>
 
                   {#if item.children?.length}
                     <Sidebar.MenuSub>
                       {#each item.children as subItem (subItem.id)}
                         <Sidebar.MenuSubItem>
                           <div class="flex items-center">
-                            <Sidebar.MenuSubButton isActive={isActive(subItem.href)} class="flex-1">
-                              {#snippet child({ props })}
-                                <a {...props} href={subItem.href}>
-                                  <span>{subItem.title}</span>
-                                  {#if typeof subItem.count === "number"}
-                                    <Badge variant="outline" class="ml-auto">{subItem.count}</Badge>
-                                  {/if}
-                                </a>
-                              {/snippet}
-                            </Sidebar.MenuSubButton>
+<Sidebar.MenuSubButton isActive={isActive(subItem.href)} class="flex-1">
+                               {#snippet child({ props })}
+                                  <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
+                                   <span>{subItem.title}</span>
+                                   {#if typeof subItem.count === "number"}
+                                     <Badge variant="outline" class="ml-auto">{subItem.count}</Badge>
+                                   {/if}
+                                   {#if isActive(subItem.href) && subItem.href.includes("?")}
+                                     <button
+                                       class="text-muted-foreground hover:text-foreground ml-1 inline-flex h-4 w-4 items-center justify-center rounded-sm"
+                                       title="Снять фильтр"
+                                       onclick={(e) => { e.stopPropagation(); e.preventDefault(); clearSidebarFilter(subItem.href); }}
+                                     >
+                                       <XIcon class="h-3 w-3" />
+                                     </button>
+                                   {/if}
+                                 </a>
+                               {/snippet}
+                             </Sidebar.MenuSubButton>
 
                             {#if editMode && item.id === "custom" && isCustomList(subItem.id)}
                               <div class="ml-1 flex shrink-0 gap-0.5">
