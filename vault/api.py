@@ -33,9 +33,12 @@ class MovieDetailOut(Schema):
     description: str
     movie_type: str
     movie_type_display: str
+    tmdb_media_type: str | None = None
     status: str
     status_display: str
     imdb_rating: float | None = None
+    imdb_id: str | None = None
+    kinopoisk_id: int | None = None
     poster_url: str | None = None
     duration: int | None = None
     age_rating: str | None = None
@@ -537,9 +540,12 @@ def movie_detail(request, slug: str):
         description=movie.description or "",
         movie_type=movie.movie_type,
         movie_type_display=movie.get_movie_type_display(),
+        tmdb_media_type=movie.tmdb_media_type,
         status=movie.status,
         status_display=movie.get_status_display(),
         imdb_rating=_decimal_to_float(movie.imdb_rating),
+        imdb_id=movie.imdb_id or None,
+        kinopoisk_id=movie.kinopoisk_id or None,
         poster_url=movie.poster_url,
         duration=movie.duration,
         age_rating=movie.age_rating or None,

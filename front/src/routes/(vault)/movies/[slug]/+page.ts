@@ -13,12 +13,15 @@ type ApiMovieDetail = {
   status: string;
   status_display: string;
   imdb_rating: number | null;
+  imdb_id: string | null;
+  kinopoisk_id: number | null;
   poster_url: string | null;
   duration: number | null;
   age_rating: string | null;
   trailer_url: string | null;
   tmdb_id: number | null;
   tmdb_linked: boolean;
+  tmdb_media_type: string | null;
   source: string;
   source_display: string;
   genres: Array<{ name: string; slug: string | null }>;

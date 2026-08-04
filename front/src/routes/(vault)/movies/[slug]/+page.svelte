@@ -16,6 +16,7 @@
     CheckCheck,
     ChevronDown,
     Clock3,
+    ExternalLink,
     Heart,
     Link2,
     Plus,
@@ -468,7 +469,48 @@
       <Card class="vd-card">
         <CardHeader class="vd-hero">
           <div class="vd-title-block">
-            <p class="vd-overline">Movie</p>
+            <div class="flex items-center gap-2">
+              <p class="vd-overline">Movie</p>
+              {#if movie.movie_type === "series"}
+                <span class="vd-overline-vip">SERIES</span>
+              {/if}
+              <span class="vd-service-badges">
+                {#if movie.tmdb_id}
+                  {@const tmdbType = movie.tmdb_media_type || (movie.movie_type === 'series' ? 'tv' : 'movie')}
+                  <a
+                    href="https://www.themoviedb.org/{tmdbType}/{movie.tmdb_id}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="vd-service-badge vd-service-badge--tmdb"
+                    title="Open on TMDB"
+                  >
+                    TMDB
+                  </a>
+                {/if}
+                {#if movie.imdb_id}
+                  <a
+                    href="https://www.imdb.com/title/{movie.imdb_id}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="vd-service-badge vd-service-badge--imdb"
+                    title="Open on IMDb"
+                  >
+                    IMDb
+                  </a>
+                {/if}
+                {#if movie.kinopoisk_id}
+                  <a
+                    href="https://www.kinopoisk.ru/film/{movie.kinopoisk_id}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="vd-service-badge vd-service-badge--kinopoisk"
+                    title="Open on Kinopoisk"
+                  >
+                    Кинопоиск
+                  </a>
+                {/if}
+              </span>
+            </div>
             <CardTitle class="vd-title">{movie.title}</CardTitle>
             {#if movie.original_title}
               <CardDescription class="vd-subtitle">{movie.original_title}</CardDescription>
