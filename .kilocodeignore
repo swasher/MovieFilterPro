@@ -14,3 +14,4 @@ media/cached_images/
 .lancedb/
 front/node_modules/
 front/build/
+.vscode/
