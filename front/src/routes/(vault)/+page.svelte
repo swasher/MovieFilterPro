@@ -7,9 +7,9 @@ import { Badge } from "$lib/components/ui/badge";
 import { Input } from "$lib/components/ui/input";
 import { Button } from "$lib/components/ui/button";
 import * as Dialog from "$lib/components/ui/dialog";
-import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
-  import { LayoutGrid, TextAlignJustify, ArrowDownWideNarrow, ArrowUpDown, ArrowUpWideNarrow, Eye, Heart, Plus, Filter, RotateCcw } from "@lucide/svelte";
+import { SortSelect } from "$lib/components/ui/sort-select";
+import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw } from "@lucide/svelte";
 
 type MovieCard = {
   id: number;
@@ -78,19 +78,7 @@ type TmdbSearchResult = {
     Object.fromEntries((data.genres ?? []).map((g) => [g.slug, g.name]))
   );
 
-  const orderOptions = [
-    { field: "year", label: "По году" },
-    { field: "imdb_rating", label: "По рейтингу" },
-    { field: "title", label: "По названию" },
-    { field: "added_at", label: "По дате добавления" }
-  ];
-
-  const getOrderField = (value: string) => value.replace(/^-/, "");
-  const getOrderDirection = (value: string) => (value.startsWith("-") ? "desc" : "asc");
-  const buildOrderValue = (field: string, direction: "asc" | "desc") =>
-    direction === "desc" ? `-${field}` : field;
-  const buildTmdbSelectionKey = (candidate: Pick<TmdbSearchResult, "media_type" | "tmdb_id">) =>
-    `${candidate.media_type}:${candidate.tmdb_id}`;
+  const trimmedTmdbSearchQuery = $derived(tmdbSearchQuery.trim());
 
   $effect(() => {
     searchQuery = data.activeQuery ?? "";
@@ -138,9 +126,9 @@ type TmdbSearchResult = {
     };
   });
 
-  const trimmedTmdbSearchQuery = $derived(tmdbSearchQuery.trim());
-  const activeOrderField = $derived(getOrderField(activeOrder || "-year"));
-  const activeOrderDirection = $derived(getOrderDirection(activeOrder || "-year"));
+  const buildTmdbSelectionKey = (candidate: Pick<TmdbSearchResult, "media_type" | "tmdb_id">) =>
+    `${candidate.media_type}:${candidate.tmdb_id}`;
+
   const selectedTmdbCandidate = $derived(
     tmdbSearchResults.find((item) => buildTmdbSelectionKey(item) === selectedTmdbKey) ?? null
   );
@@ -205,12 +193,6 @@ type TmdbSearchResult = {
       noScroll: true,
       invalidateAll: true
     });
-  };
-
-  const toggleOrderDirection = async () => {
-    const currentField = getOrderField(activeOrder || "-year");
-    const nextDirection = getOrderDirection(activeOrder || "-year") === "desc" ? "asc" : "desc";
-    await applyOrder(buildOrderValue(currentField, nextDirection));
   };
 
   const applyFilters = async () => {
@@ -396,38 +378,7 @@ type TmdbSearchResult = {
         />
 
         <div class="flex flex-wrap items-center gap-3">
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              {#snippet child({ props })}
-                <Button {...props} variant="outline" class="h-11 min-w-[180px] justify-between">
-                  {orderOptions.find((item) => item.field === activeOrderField)?.label ?? "Сортировка"}
-                  <ArrowUpDown class="size-4" />
-                </Button>
-              {/snippet}
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content class="w-56" align="end">
-              <DropdownMenu.RadioGroup
-                value={activeOrderField}
-                onValueChange={(value) => applyOrder(buildOrderValue(value, activeOrderDirection))}
-              >
-                {#each orderOptions as item (item.field)}
-                  <DropdownMenu.RadioItem value={item.field}>
-                    {item.label}
-                  </DropdownMenu.RadioItem>
-                {/each}
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-
-          <Button variant="outline" class="h-11 min-w-[96px]" onclick={toggleOrderDirection}>
-            {#if activeOrderDirection === "desc"}
-              <ArrowDownWideNarrow class="size-4" />
-              DESC
-            {:else}
-              <ArrowUpWideNarrow class="size-4" />
-              ASC
-            {/if}
-          </Button>
+          <SortSelect value={activeOrder} onChange={applyOrder} />
 
           <Button
             variant="outline"
