@@ -36,10 +36,11 @@
 - Run Django management commands via `uv run python manage.py <command>`.
 
 ### Search Discipline
-- Use `rg`/`rg --files` for codebase search so `.rgignore` is respected.
+- Use `semblance_search` (MCP) as the primary tool for codebase search — it provides AST-aware results with exact file paths and line numbers.
+- Use `rg`/`rg --files` for text-based search in any files (logs, configs, templates) so `.rgignore` is respected.
 - Do not run repository-wide recursive listing commands like `Get-ChildItem -Recurse` from the repo root unless the user explicitly asks for it.
 - Use `fd` (program to find entries in your filesystem).
-- Use `sg` (ast-grep, syntax-aware search and rewrite using AST patterns).
+- Use `sg` (ast-grep, syntax-aware search and rewrite using AST patterns) for refactoring.
 - Use `bat` for reading concrete files when syntax highlighting and line-oriented viewing are helpful.
 
 ### Search Tools

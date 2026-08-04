@@ -4,7 +4,6 @@ import { goto } from "$app/navigation";
 import type { Snippet } from "svelte";
 import type { SidebarItem } from "$lib/template-data";
 import { defaultSidebarItems } from "$lib/template-data";
-import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Sidebar from "$lib/components/ui/sidebar";
 import PencilIcon from "@lucide/svelte/icons/pencil";
@@ -180,15 +179,27 @@ import XIcon from "@lucide/svelte/icons/x";
                         <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
                           <span>{subItem.title}</span>
                           {#if typeof subItem.count === "number"}
-                            <Badge variant="secondary" class="ml-auto">{subItem.count}</Badge>
-                          {/if}
-                          {#if isActive(subItem.href) && subItem.href.includes("?")}
                             <button
-                              class="text-muted-foreground hover:text-foreground ml-auto inline-flex h-4 w-4 items-center justify-center rounded-sm"
-                              title="Снять фильтр"
-                              onclick={(e) => { e.stopPropagation(); e.preventDefault(); clearSidebarFilter(subItem.href); }}
+                              type="button"
+                              class="ml-auto relative inline-flex items-center justify-center overflow-hidden rounded-full border border-transparent bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground transition-colors duration-200"
+                              class:bg-sidebar-accent={isActive(subItem.href) && subItem.href.includes("?")}
+                              class:text-sidebar-accent-foreground={isActive(subItem.href) && subItem.href.includes("?")}
+                              data-active={isActive(subItem.href) && subItem.href.includes("?")}
+                              onclick={(e) => {
+                                if (isActive(subItem.href) && subItem.href.includes("?")) {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  clearSidebarFilter(subItem.href);
+                                }
+                              }}
+                              aria-label={isActive(subItem.href) && subItem.href.includes("?") ? "Снять фильтр" : String(subItem.count)}
                             >
-                              <XIcon class="h-3 w-3" />
+                              <span class="badge-count inline-flex items-center transition-opacity duration-200">
+                                {subItem.count}
+                              </span>
+                              <span class="badge-reset-icon absolute inset-0 flex items-center justify-center transition-opacity duration-200 opacity-0">
+                                <XIcon class="h-3 w-3" />
+                              </span>
                             </button>
                           {/if}
                         </a>
@@ -295,3 +306,23 @@ import XIcon from "@lucide/svelte/icons/x";
   oncreate={handleCreateList}
   oncancel={handleCreateCancel}
 />
+
+<style>
+  @media (hover: hover) {
+    :global([data-active="true"]:hover .badge-count) {
+      opacity: 0;
+    }
+    :global([data-active="true"]:hover .badge-reset-icon) {
+      opacity: 1;
+    }
+  }
+
+  @media (hover: none) {
+    :global([data-active="true"] .badge-count) {
+      opacity: 0;
+    }
+    :global([data-active="true"] .badge-reset-icon) {
+      opacity: 1;
+    }
+  }
+</style>
