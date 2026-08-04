@@ -65,10 +65,6 @@
     @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground;
   }
 
-  .vd-overline-vip {
-    @apply text-[11px] font-bold uppercase tracking-[0.15em] text-foreground/50;
-  }
-
   .vd-service-badges {
     @apply inline-flex items-center gap-1.5;
   }

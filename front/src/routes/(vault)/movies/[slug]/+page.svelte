@@ -470,9 +470,10 @@
         <CardHeader class="vd-hero">
           <div class="vd-title-block">
             <div class="flex items-center gap-2">
-              <p class="vd-overline">Movie</p>
               {#if movie.movie_type === "series"}
-                <span class="vd-overline-vip">SERIES</span>
+                <p class="vd-overline">SERIES</p>
+              {:else}
+                <p class="vd-overline">Movie</p>
               {/if}
               <span class="vd-service-badges">
                 {#if movie.tmdb_id}
