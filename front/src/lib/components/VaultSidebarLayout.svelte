@@ -122,7 +122,7 @@ import XIcon from "@lucide/svelte/icons/x";
       goto(href, { replaceState: true, invalidateAll: true });
       return;
     }
-    const [, hrefSearch] = href.split("?");
+    const [hrefPath, hrefSearch] = href.split("?");
     const newParams = new URLSearchParams(hrefSearch);
     const currentParams = new URLSearchParams(page.url.search);
     currentParams.delete("list");
@@ -130,19 +130,19 @@ import XIcon from "@lucide/svelte/icons/x";
     for (const [key, value] of newParams) {
       currentParams.set(key, value);
     }
-    const mergedUrl = page.url.pathname + "?" + currentParams.toString();
+    const mergedUrl = hrefPath + "?" + currentParams.toString();
     goto(mergedUrl, { replaceState: true, invalidateAll: true });
   }
 
   function clearSidebarFilter(href: string) {
     if (!href.includes("?")) return;
-    const [, hrefSearch] = href.split("?");
+    const [hrefPath, hrefSearch] = href.split("?");
     const newParams = new URLSearchParams(hrefSearch);
     const currentParams = new URLSearchParams(page.url.search);
     for (const key of newParams.keys()) {
       currentParams.delete(key);
     }
-    const mergedUrl = page.url.pathname + "?" + currentParams.toString();
+    const mergedUrl = hrefPath + (currentParams.toString() ? "?" + currentParams.toString() : "");
     goto(mergedUrl, { replaceState: true, invalidateAll: true });
   }
 
