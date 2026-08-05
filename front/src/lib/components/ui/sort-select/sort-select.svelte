@@ -35,7 +35,7 @@
   <DropdownMenu.Root>
     <DropdownMenu.Trigger>
       {#snippet child({ props })}
-        <Button {...props} variant="ghost" class="border-0 rounded-none h-9 focus:ring-0 shadow-none px-3">
+        <Button {...props} variant="ghost" class="border-0 rounded-none h-11 focus:ring-0 shadow-none px-3 bg-background">
           {orderOptions.find((item) => item.field === activeOrderField)?.label ?? "Сортировка"}
         </Button>
       {/snippet}
@@ -59,7 +59,7 @@
   <Button
     variant="ghost"
     size="icon"
-    class="rounded-none h-9 w-9"
+    class="rounded-none h-11 w-11"
     onclick={toggleDirection}
   >
     {#if activeOrderDirection === "desc"}
