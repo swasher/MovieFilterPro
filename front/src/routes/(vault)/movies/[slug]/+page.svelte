@@ -11,7 +11,6 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Dialog from "$lib/components/ui/dialog";
   import {
-    ArrowLeft,
     Bookmark,
     CheckCheck,
     ChevronDown,
@@ -80,15 +79,6 @@
     userState = { ...movie.user_state };
     customLists = movie.custom_lists.map((item) => ({ ...item }));
   });
-
-  const goBack = async () => {
-    if (typeof window === "undefined") return;
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    await goto("/");
-  };
 
   const handleUnauthorized = async (status: number, message?: string) => {
     if (status !== 401) {
@@ -342,13 +332,6 @@
 </script>
 
 <div class="vd-page">
-  <div class="vd-back">
-    <Button variant="ghost" size="sm" onclick={goBack}>
-      <ArrowLeft class="size-4" />
-      Back
-    </Button>
-  </div>
-
   <div class="vd-layout vd-layout--movie">
     <div class="vd-sidebar">
       <Card class="vd-poster-card !gap-0 !py-0">

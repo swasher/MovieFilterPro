@@ -540,7 +540,7 @@ type TmdbSearchResult = {
               onmousemove={onMovieMove}
               onmouseleave={onMovieLeave}
             >
-              <Card class="relative h-[270px] w-[180px] overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
+              <Card class="relative h-[270px] w-[180px] flex-none overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
                 <CardContent class="h-full !p-0">
                   {#if movie.movie_type === "series"}
                     <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">SERIES</Badge>
