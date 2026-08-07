@@ -373,7 +373,7 @@
                   <Icon class="size-5 transition-colors" />
                 </button>
               </Tooltip.Trigger>
-              <Tooltip.Content side="right" align="center" class="vd-tooltip">
+              <Tooltip.Content side="bottom" align="center" class="vd-tooltip">
                 {item.label}
               </Tooltip.Content>
             </Tooltip.Root>
