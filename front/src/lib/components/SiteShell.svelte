@@ -83,7 +83,9 @@
     <div class="flex min-h-14 items-center justify-between gap-3 px-3 py-2 md:px-4">
       <div class="flex min-w-0 items-center gap-3">
         <div class="min-w-0">
-          <p class="truncate text-sm font-semibold">{appName}</p>
+          <div class="inline-flex items-center rounded-md bg-muted/50 px-2.5 py-1 text-sm font-semibold transition-colors hover:bg-muted/70">
+            {appName}
+          </div>
         </div>
 
         <nav class="flex flex-wrap items-center gap-1">
