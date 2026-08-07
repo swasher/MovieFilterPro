@@ -25,6 +25,7 @@
     Trash2,
     XCircle
   } from "@lucide/svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   let { data } = $props();
   const movie = $derived(data.movie);
@@ -69,8 +70,8 @@
   });
 
   const statusButtons = [
-    { key: "will_watch", label: "Буду смотреть", icon: Bookmark },
     { key: "favorites", label: "Избранное", icon: Heart },
+    { key: "will_watch", label: "Буду смотреть", icon: Bookmark },
     { key: "watched", label: "Просмотрено", icon: CheckCheck },
     { key: "wont_watch", label: "Не буду смотреть", icon: XCircle }
   ] as const;
@@ -346,12 +347,39 @@
         </CardContent>
       </Card>
 
-      {#if movie.trailer_url}
-        <Button href={movie.trailer_url} variant="outline" class="w-full">
-          <Link2 class="size-4" />
-          Trailer
-        </Button>
-      {/if}
+      <div class="vd-status-icons" role="group" aria-label="Статусы фильма">
+        {#each statusButtons as item (item.key)}
+          {@const Icon = item.icon}
+          {@const isActive =
+            (item.key === "will_watch" && userState.in_will_watch) ||
+            (item.key === "favorites" && userState.in_favorites) ||
+            (item.key === "watched" && userState.in_watched) ||
+            (item.key === "wont_watch" && userState.in_wont_watch)
+          }
+          <Tooltip.Provider>
+            <Tooltip.Root>
+              <Tooltip.Trigger>
+                <button
+                  type="button"
+                  class={`vd-status-icon rounded-full size-10 transition-all duration-200 flex items-center justify-center ${
+                    isActive
+                      ? "vd-status-icon--active"
+                      : "vd-status-icon--inactive"
+                  }`}
+                  data-status={item.key}
+                  onclick={() => toggleStatus(item.key)}
+                  aria-pressed={isActive}
+                >
+                  <Icon class="size-5 transition-colors" />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Content side="right" align="center" class="vd-tooltip">
+                {item.label}
+              </Tooltip.Content>
+            </Tooltip.Root>
+          </Tooltip.Provider>
+        {/each}
+      </div>
 
       <div class="vd-sidebar-stack">
         <DropdownMenu.Root>
@@ -550,24 +578,12 @@
               <p class="vd-section-title">User actions</p>
             </div>
             <div class="vd-primary-actions">
-              {#each statusButtons as item (item.key)}
-                {@const Icon = item.icon}
-                <Button
-                  variant={
-                    (item.key === "will_watch" && userState.in_will_watch) ||
-                    (item.key === "favorites" && userState.in_favorites) ||
-                    (item.key === "watched" && userState.in_watched) ||
-                    (item.key === "wont_watch" && userState.in_wont_watch)
-                      ? "default"
-                      : "outline"
-                  }
-                  class="vd-segment"
-                  onclick={() => toggleStatus(item.key)}
-                >
-                  <Icon class="size-4" />
-                  {item.label}
+              {#if movie.trailer_url}
+                <Button href={movie.trailer_url} variant="outline" class="vd-segment">
+                  <Link2 class="size-4" />
+                  Trailer
                 </Button>
-              {/each}
+              {/if}
             </div>
           </div>
 

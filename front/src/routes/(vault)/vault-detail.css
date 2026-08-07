@@ -33,6 +33,42 @@
     @apply bg-muted text-muted-foreground flex aspect-[2/3] items-center justify-center text-sm;
   }
 
+  .vd-status-icons {
+    @apply flex items-center justify-center gap-2 pt-4;
+  }
+
+  .vd-status-icon {
+    @apply rounded-full size-10 flex items-center justify-center transition-all duration-200;
+  }
+
+  .vd-status-icon--inactive {
+    @apply bg-muted text-muted-foreground/60 border border-border/50 hover:bg-muted/80 hover:text-foreground/80 hover:border-border;
+  }
+
+  .vd-status-icon--active {
+    @apply text-white shadow-lg;
+  }
+
+  .vd-status-icon--active[data-status="will_watch"] {
+    @apply bg-amber-500 hover:bg-amber-600;
+  }
+
+  .vd-status-icon--active[data-status="favorites"] {
+    @apply bg-red-500 hover:bg-red-600;
+  }
+
+  .vd-status-icon--active[data-status="watched"] {
+    @apply bg-emerald-500 hover:bg-emerald-600;
+  }
+
+  .vd-status-icon--active[data-status="wont_watch"] {
+    @apply bg-red-500 hover:bg-red-600;
+  }
+
+  .vd-tooltip {
+    @apply bg-popover text-popover-foreground border border-border rounded-md px-2 py-1 text-xs;
+  }
+
   .vd-photo-fallback {
     @apply bg-muted flex aspect-[3/4] items-center justify-center;
   }
