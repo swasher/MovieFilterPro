@@ -303,6 +303,39 @@ class Episode(models.Model):
         unique_together = ['season', 'episode_number']
 
 
+class UserSeason(models.Model):
+    """Пользовательский статус сезона: статус просмотра и оценка"""
+    class WatchStatus(models.IntegerChoices):
+        WATCHED = 1, 'Просмотрено'
+        PLAN = 2, 'Буду смотреть'
+        SKIP = 3, 'Не буду смотреть'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_seasons')
+    season = models.ForeignKey('Season', on_delete=models.CASCADE, related_name='user_seasons')
+    watch_status = models.PositiveSmallIntegerField(
+        'Статус просмотра',
+        choices=WatchStatus,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    rating = models.PositiveSmallIntegerField(
+        'Оценка',
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        null=True,
+        blank=True,
+    )
+    note = models.TextField('Заметка', blank=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлено', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Статус пользователя по сезону'
+        verbose_name_plural = 'Статусы пользователей по сезонам'
+        unique_together = ['user', 'season']
+        ordering = ['-updated_at']
+
+
 class MoviePerson(models.Model):
     """Связь фильмов с персонами (актеры, режиссеры и т.д.)"""
     ROLE_CHOICES = [

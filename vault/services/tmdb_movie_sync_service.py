@@ -10,11 +10,12 @@ from django.utils import timezone
 
 from core.models import Country as CoreCountry
 from tmdb_adapter.client_singleton import get_tmdb_client
-from vault.models import Genre, Movie, MoviePerson, Person
+from vault.models import Genre, Movie, MoviePerson, Episode, Person, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
     TMDBCandidate,
     TMDBMovieMatchingService,
 )
+from vault.services.season_status_service import SeasonStatusService
 
 
 SyncStatus = Literal["ok", "needs_confirmation", "needs_user_choice", "error"]
@@ -133,6 +134,12 @@ class TMDBMovieSyncService:
                 relations_updated.append("countries")
             if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
                 relations_updated.append("movie_persons")
+            if media_type == "tv":
+                season_updates = cls._sync_seasons_and_episodes(movie, details, tmdb)
+                if season_updates:
+                    relations_updated.append("seasons")
+                    relations_updated.append("episodes")
+                cls._sync_season_user_statuses(movie)
             orphan_deleted_count = cls._cleanup_orphan_persons()
             if orphan_deleted_count:
                 relations_updated.append("orphan_person_cleanup")
@@ -370,6 +377,178 @@ class TMDBMovieSyncService:
         if count:
             orphan_qs.delete()
         return count
+
+    # ------------------------------------ #
+    #            DOMAIN LAYER              #
+    # ------------------------------------ #
+
+    @classmethod
+    def _sync_seasons_and_episodes(cls, movie: Movie, details, tmdb) -> bool:
+        """
+        Синхронизирует сезоны и эпизоды для сериала из TMDB.
+        Обновляет существующие Season/Episode и создает новые.
+        Возвращает True, если были изменения.
+        """
+        tmdb_id = cls._safe_int(getattr(details, "id", None) or movie.tmdb_id)
+        if not tmdb_id:
+            return False
+
+        tmdb_seasons = getattr(details, "seasons", None)
+        if not tmdb_seasons:
+            return False
+
+        changed = False
+
+        for tmdb_season in tmdb_seasons:
+            season_number = cls._safe_int(getattr(tmdb_season, "season_number", None))
+            if season_number is None:
+                continue
+
+            season, created = Season.objects.get_or_create(
+                movie=movie,
+                season_number=season_number,
+                defaults={
+                    "title": cls._clean_text(getattr(tmdb_season, "name", None), 255, ""),
+                    "description": (getattr(tmdb_season, "overview", None) or "").strip(),
+                    "release_date": getattr(tmdb_season, "air_date", None),
+                    "poster": getattr(tmdb_season, "poster_path", None),
+                    "source": Movie.Source.TMDB,
+                },
+            )
+
+            if not created:
+                updated = False
+                new_title = cls._clean_text(getattr(tmdb_season, "name", None), 255, "")
+                new_desc = (getattr(tmdb_season, "overview", None) or "").strip()
+                new_poster = getattr(tmdb_season, "poster_path", None)
+                new_release = getattr(tmdb_season, "air_date", None)
+
+                if season.title != new_title:
+                    season.title = new_title
+                    updated = True
+                if season.description != new_desc:
+                    season.description = new_desc
+                    updated = True
+                if season.poster != new_poster:
+                    season.poster = new_poster
+                    updated = True
+                if season.release_date != new_release:
+                    season.release_date = new_release
+                    updated = True
+                if updated:
+                    season.save(update_fields=["title", "description", "poster", "release_date"])
+                    changed = True
+
+            # Load episode details
+            try:
+                season_details = tmdb.tv_season(tmdb_id, season_number)
+            except Exception:
+                season_details = None
+
+            tmdb_episodes = getattr(season_details, "episodes", None)
+            if tmdb_episodes:
+                changed = cls._sync_episodes(season, tmdb_episodes) or changed
+
+        # Remove seasons that no longer exist in TMDB
+        tmdb_season_numbers = {
+            cls._safe_int(getattr(s, "season_number", None))
+            for s in tmdb_seasons
+            if cls._safe_int(getattr(s, "season_number", None)) is not None
+        }
+        orphaned_seasons = movie.seasons.exclude(season_number__in=tmdb_season_numbers)
+        if orphaned_seasons.exists():
+            orphaned_seasons.delete()
+            changed = True
+
+        return changed
+
+    @classmethod
+    def _sync_episodes(cls, season: Season, tmdb_episodes) -> bool:
+        """Синхронизирует эпизоды сезона из TMDB."""
+        if not tmdb_episodes:
+            return False
+
+        tmdb_episode_map = {}
+        for tmdb_ep in tmdb_episodes:
+            ep_num = cls._safe_int(getattr(tmdb_ep, "episode_number", None))
+            if ep_num is not None:
+                tmdb_episode_map[ep_num] = tmdb_ep
+
+        changed = False
+
+        # Create or update episodes
+        for ep_num, tmdb_ep in tmdb_episode_map.items():
+            episode, created = Episode.objects.get_or_create(
+                season=season,
+                episode_number=ep_num,
+                defaults={
+                    "title": cls._clean_text(getattr(tmdb_ep, "name", None), 255, ""),
+                    "description": (getattr(tmdb_ep, "overview", None) or "").strip(),
+                    "duration": cls._safe_int(getattr(tmdb_ep, "runtime", None)),
+                    "release_date": getattr(tmdb_ep, "air_date", None),
+                },
+            )
+
+            if not created:
+                updated = False
+                new_title = cls._clean_text(getattr(tmdb_ep, "name", None), 255, "")
+                new_desc = (getattr(tmdb_ep, "overview", None) or "").strip()
+                new_duration = cls._safe_int(getattr(tmdb_ep, "runtime", None))
+                new_release = getattr(tmdb_ep, "air_date", None)
+
+                if episode.title != new_title:
+                    episode.title = new_title
+                    updated = True
+                if episode.description != new_desc:
+                    episode.description = new_desc
+                    updated = True
+                if episode.duration != new_duration:
+                    episode.duration = new_duration
+                    updated = True
+                if episode.release_date != new_release:
+                    episode.release_date = new_release
+                    updated = True
+                if updated:
+                    episode.save(update_fields=["title", "description", "duration", "release_date"])
+                    changed = True
+
+        # Remove episodes that no longer exist in TMDB
+        existing_numbers = set(
+            Episode.objects.filter(season=season).values_list("episode_number", flat=True)
+        )
+        tmdb_numbers = set(tmdb_episode_map.keys())
+        orphaned_numbers = existing_numbers - tmdb_numbers
+        if orphaned_numbers:
+            Episode.objects.filter(season=season, episode_number__in=orphaned_numbers).delete()
+            changed = True
+
+        return changed
+
+    @classmethod
+    def _sync_season_user_statuses(cls, movie: Movie) -> None:
+        """
+        Синхронизирует статусы сезонов на основе статуса сериала у каждого пользователя.
+        Если сериал просмотрен — все сезоны отмечаются как просмотренные.
+        Если сериал в планах — сезоны в планы.
+        Если сериал пропущен — сезоны пропущены.
+        """
+        if movie.movie_type != Movie.MovieType.SERIES:
+            return
+
+        for user_movie in movie.user_movies.exclude(watch_status=None):
+            watch_status_key = (
+                "watched" if user_movie.watch_status == UserMovie.WatchStatus.WATCHED
+                else "skip" if user_movie.watch_status == UserMovie.WatchStatus.SKIP
+                else "plan" if user_movie.watch_status == UserMovie.WatchStatus.PLAN
+                else None
+            )
+            if watch_status_key is None:
+                continue
+            SeasonStatusService.sync_statuses_from_user_movie(
+                user=user_movie.user,
+                movie=movie,
+                watch_status_key=watch_status_key,
+            )
 
     @classmethod
     def _upsert_person_from_credit(

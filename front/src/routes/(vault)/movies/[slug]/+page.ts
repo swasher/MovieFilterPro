@@ -52,6 +52,20 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
   }>;
+  seasons: Array<{
+    id: number;
+    season_number: int;
+    title: string;
+    description: string;
+    release_date: string | null;
+    poster_url: string | null;
+    episodes_count: int;
+    air_year: number | null;
+    user_state: {
+      watch_status: "watched" | "plan" | "skip" | null;
+      rating: number | null;
+    };
+  }>;
 };
 
 export const load: PageLoad = async ({ fetch, params }) => {

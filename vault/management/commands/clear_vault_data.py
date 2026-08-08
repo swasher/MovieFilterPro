@@ -52,6 +52,7 @@ class Command(BaseCommand):
             v.VaultConnectionEvent,
 
             # Иерархия сериалов
+            v.UserSeason,
             v.Episode,
             v.Season,
 

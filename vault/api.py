@@ -5,8 +5,9 @@ from django.db.models import Count, Exists, OuterRef, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from vault.models import Genre, Movie, MoviePerson, Person, UserList, UserListMovie, UserMovie, VaultConnectionEvent
+from vault.models import Genre, Movie, MoviePerson, Person, Season, UserList, UserListMovie, UserMovie, UserSeason, VaultConnectionEvent
 from vault.services.movie_status_service import MovieStatusService
+from vault.services.season_status_service import SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
@@ -53,6 +54,7 @@ class MovieDetailOut(Schema):
     custom_lists: list["MovieUserListOut"]
     directors: list["PersonCreditOut"]
     actors: list["PersonCreditOut"]
+    seasons: list["SeasonOut"] = []
 
 
 class NamedItemOut(Schema):
@@ -219,6 +221,42 @@ class TMDBImportOut(Schema):
     message: str
     created: bool
     movie: MovieOut | None = None
+
+
+class SeasonOut(Schema):
+    id: int
+    season_number: int
+    title: str
+    description: str
+    release_date: str | None = None
+    poster_url: str | None = None
+    episodes_count: int
+    air_year: int | None = None
+    user_state: "UserSeasonStateOut"
+
+
+class UserSeasonStateOut(Schema):
+    watch_status: str | None = None
+    rating: int | None = None
+
+
+class EpisodeOut(Schema):
+    id: int
+    episode_number: int
+    title: str
+    description: str
+    duration: int | None = None
+    release_date: str | None = None
+
+
+class SetSeasonStatusIn(Schema):
+    watch_status: str | None = None
+    rating: int | None = None
+
+
+class SetSeasonStatusOut(Schema):
+    season_id: int
+    user_state: UserSeasonStateOut
 
 
 class PersonMovieOut(Schema):
@@ -410,6 +448,31 @@ def _build_movie_out(movie: Movie, user=None) -> MovieOut:
     )
 
 
+def _build_season_out(season: Season, user=None) -> SeasonOut:
+    episodes_count = season.episodes.count()
+    release_date = season.release_date
+    air_year = release_date.year if release_date else None
+
+    user_state_data = {"watch_status": None, "rating": None}
+    if user is not None:
+        user_state_data = SeasonStatusService.get_season_state(user, season)
+
+    return SeasonOut(
+        id=season.id,
+        season_number=season.season_number,
+        title=season.title,
+        description=season.description,
+        release_date=_date_to_iso(season.release_date),
+        poster_url=_tmdb_image_url(season.poster),
+        episodes_count=episodes_count,
+        air_year=air_year,
+        user_state=UserSeasonStateOut(
+            watch_status=user_state_data["watch_status"],
+            rating=user_state_data["rating"],
+        ),
+    )
+
+
 @api.get("/movies", response=list[MovieOut])
 def list_movies(
     request,
@@ -584,6 +647,72 @@ def movie_detail(request, slug: str):
             )
             for item in movie.get_actors().select_related("person")[:12]
         ],
+        seasons=[
+            _build_season_out(season, user=user)
+            for season in movie.seasons.all().order_by("season_number")
+        ],
+    )
+
+
+# ------------------------------------ #
+#          SEASONS & EPISODES          #
+# ------------------------------------ #
+
+@api.get("/movies/{slug}/seasons", response=list[SeasonOut])
+def movie_seasons(request, slug: str):
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+    user = _resolve_api_user(request)
+    return [
+        _build_season_out(season, user=user)
+        for season in movie.seasons.all().order_by("season_number")
+    ]
+
+
+@api.get("/seasons/{season_id}/episodes", response=list[EpisodeOut])
+def season_episodes(request, season_id: int):
+    season = Season.objects.filter(id=season_id).first()
+    if season is None:
+        raise HttpError(404, "Season not found")
+    return [
+        EpisodeOut(
+            id=episode.id,
+            episode_number=episode.episode_number,
+            title=episode.title,
+            description=episode.description,
+            duration=episode.duration,
+            release_date=_date_to_iso(episode.release_date),
+        )
+        for episode in season.episodes.all().order_by("episode_number")
+    ]
+
+
+@api.patch("/seasons/{season_id}/status", response=SetSeasonStatusOut)
+def season_toggle_status(request, season_id: int, payload: SetSeasonStatusIn):
+    season = Season.objects.filter(id=season_id).first()
+    if season is None:
+        raise HttpError(404, "Season not found")
+
+    user = _require_api_user(request)
+
+    try:
+        obj = SeasonStatusService.set_season_status(
+            user=user,
+            season=season,
+            watch_status=payload.watch_status,
+            rating=payload.rating,
+        )
+    except ValueError as exc:
+        raise HttpError(400, str(exc))
+
+    state = SeasonStatusService.get_season_state(user, season)
+    return SetSeasonStatusOut(
+        season_id=season.id,
+        user_state=UserSeasonStateOut(
+            watch_status=state["watch_status"],
+            rating=state["rating"],
+        ),
     )
 
 
