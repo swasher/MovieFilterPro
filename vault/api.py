@@ -414,6 +414,7 @@ def _build_movie_out(movie: Movie, user=None) -> MovieOut:
 def list_movies(
     request,
     limit: int = 50,
+    offset: int = 0,
     genre: str | None = None,
     status: str | None = None,
     list: int | None = None,
@@ -466,36 +467,38 @@ def list_movies(
         qs = qs.filter(in_lists__user_list_id=list, in_lists__user_list__user=user)
 
     allowed_orders = {
-        "-year": ("-year", "title"),
-        "year": ("year", "title"),
-        "-imdb_rating": ("-imdb_rating", "title"),
-        "imdb_rating": ("imdb_rating", "title"),
-        "title": ("title",),
-        "-title": ("-title",),
+        "-year": ("-year", "title", "id"),
+        "year": ("year", "title", "id"),
+        "-imdb_rating": ("-imdb_rating", "title", "id"),
+        "imdb_rating": ("imdb_rating", "title", "id"),
+        "title": ("title", "id"),
+        "-title": ("-title", "id"),
     }
     if order in {"-added_at", "added_at"}:
         if user and list:
             ordering = (
-                ("-in_lists__added_at", "-year", "title")
+                ("-in_lists__added_at", "-year", "title", "id")
                 if order == "-added_at"
-                else ("in_lists__added_at", "-year", "title")
+                else ("in_lists__added_at", "-year", "title", "id")
             )
         elif user and status:
             ordering = (
-                ("-user_movies__created_at", "-year", "title")
+                ("-user_movies__created_at", "-year", "title", "id")
                 if order == "-added_at"
-                else ("user_movies__created_at", "-year", "title")
+                else ("user_movies__created_at", "-year", "title", "id")
             )
         else:
             ordering = (
-                ("-created_at", "-year", "title")
+                ("-created_at", "-year", "title", "id")
                 if order == "-added_at"
-                else ("created_at", "-year", "title")
+                else ("created_at", "-year", "title", "id")
             )
     else:
         ordering = allowed_orders.get(order, allowed_orders["-year"])
 
-    qs = qs.order_by(*ordering).distinct()[:limit]
+    bounded_limit = max(1, min(limit, 100))
+    bounded_offset = max(0, offset)
+    qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
     return [_build_movie_out(movie, user=user) for movie in qs]
 
 

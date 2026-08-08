@@ -28,9 +28,10 @@ export const load: PageLoad = async ({ fetch, url }) => {
   const list = (url.searchParams.get("list") ?? "").trim();
   const q = (url.searchParams.get("q") ?? "").trim();
   const order = (url.searchParams.get("order") ?? "-year").trim();
+  const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
 
   try {
-    const params = new URLSearchParams({ limit: "30" });
+    const params = new URLSearchParams({ limit: "30", offset: offset.toString() });
     if (genre.length > 0) params.set("genre", genre.join(","));
     if (yearFrom) params.set("year_from", yearFrom);
     if (yearTo) params.set("year_to", yearTo);
@@ -68,6 +69,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeList: list,
       activeQuery: q,
       activeOrder: order,
+      initialOffset: offset,
     };
   } catch (error) {
     return {
@@ -84,6 +86,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeList: list,
       activeQuery: q,
       activeOrder: order,
+      initialOffset: offset,
     };
   }
 };

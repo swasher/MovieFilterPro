@@ -54,6 +54,23 @@ type TmdbSearchResult = {
   let activeOrder = $state("-year");
   let isListView = $state(false);
 
+// Infinite scroll state
+  let allMovies = $state<MovieCard[]>(data.movies ?? []);
+  let currentOffset = $state(data.initialOffset ?? 0);
+  let isLoadingMore = $state(false);
+  let hasMore = $state((data.movies ?? []).length >= 30);
+  let sentinelRef = $state<HTMLDivElement | null>(null);
+  // Immediate guard for IntersectionObserver (runs before Svelte state updates)
+  let loadingGuard = false;
+
+  // Initialize allMovies when data.movies changes (e.g., after filter/search/sort)
+  $effect(() => {
+    allMovies = data.movies ?? [];
+    currentOffset = data.initialOffset ?? 0;
+    hasMore = (data.movies ?? []).length >= 30;
+    loadingGuard = false;
+  });
+
   let addMovieDialogOpen = $state(false);
   let tmdbSearchQuery = $state("");
   let tmdbSearchInputRef = $state<HTMLInputElement | null>(null);
@@ -125,6 +142,68 @@ type TmdbSearchResult = {
       tmdbSearchAbortController?.abort();
     };
   });
+
+  // Infinite scroll: IntersectionObserver on sentinel
+  $effect(() => {
+    const sentinel = sentinelRef;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && !loadingGuard && hasMore && !isLoadingMore) {
+          loadingGuard = true;
+          void loadMore();
+        }
+      },
+      { rootMargin: "200px", threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  });
+
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore) {
+      loadingGuard = false;
+      return;
+    }
+    isLoadingMore = true;
+    loadingGuard = true;
+
+    const nextOffset = currentOffset + 30;
+    const params = new URLSearchParams(window.location.search);
+    params.set("offset", nextOffset.toString());
+
+    try {
+      const response = await fetch(`/api/vault/movies?${params.toString()}`);
+      if (!response.ok) {
+        hasMore = false;
+        return;
+      }
+      const newMovies: MovieCard[] = await response.json();
+      if (newMovies.length === 0) {
+        hasMore = false;
+        return;
+      }
+      // Filter out any duplicates by ID (defensive: API might return overlapping results)
+      const existingIds = new Set(allMovies.map(m => m.id));
+      const uniqueNewMovies = newMovies.filter(m => !existingIds.has(m.id));
+      if (uniqueNewMovies.length === 0) {
+        hasMore = false;
+        return;
+      }
+      allMovies = [...allMovies, ...uniqueNewMovies];
+      currentOffset = nextOffset;
+      hasMore = newMovies.length >= 30;
+    } catch {
+      hasMore = false;
+    } finally {
+      isLoadingMore = false;
+      // Small delay to prevent immediate re-trigger from IntersectionObserver
+      setTimeout(() => { loadingGuard = false; }, 100);
+    }
+  };
 
   const buildTmdbSelectionKey = (candidate: Pick<TmdbSearchResult, "media_type" | "tmdb_id">) =>
     `${candidate.media_type}:${candidate.tmdb_id}`;
@@ -476,7 +555,7 @@ type TmdbSearchResult = {
               </tr>
             </thead>
             <tbody>
-              {#each data.movies as movie (movie.id)}
+              {#each allMovies as movie (movie.id)}
                 <tr
                   class="border-b last:border-b-0 transition hover:bg-accent/20"
                 >
@@ -528,10 +607,22 @@ type TmdbSearchResult = {
               {/each}
             </tbody>
           </table>
+          {#if hasMore || isLoadingMore}
+            <div bind:this={sentinelRef} class="h-8 flex items-center justify-center">
+              {#if isLoadingMore}
+                <div class="flex items-center gap-2 text-sm text-muted-foreground">
+                  <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                  Загрузка...
+                </div>
+              {:else}
+                <div class="text-sm text-muted-foreground">Прокрутите для загрузки ещё</div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="flex flex-wrap gap-4">
-          {#each data.movies as movie (movie.id)}
+          {#each allMovies as movie (movie.id)}
             <a
               href={`/movies/${movie.slug}`}
               data-sveltekit-preload-data="hover"
@@ -579,6 +670,18 @@ type TmdbSearchResult = {
               </Card>
             </a>
           {/each}
+          {#if hasMore || isLoadingMore}
+            <div bind:this={sentinelRef} class="w-full h-8 flex items-center justify-center">
+              {#if isLoadingMore}
+                <div class="flex items-center gap-2 text-sm text-muted-foreground">
+                  <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                  Загрузка...
+                </div>
+              {:else}
+                <div class="text-sm text-muted-foreground">Прокрутите для загрузки ещё</div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -597,7 +700,7 @@ type TmdbSearchResult = {
         </div>
       {/if}
 
-      {#if data.movies.length === 0}
+      {#if allMovies.length === 0}
         <Card>
           <CardHeader>
             <CardTitle>Список пуст</CardTitle>
