@@ -3,10 +3,26 @@ from __future__ import annotations
 from uuid import UUID
 
 from django.contrib.auth import get_user_model
+from huey import crontab
 
 from movie_filter_pro.huey import HUEY
 from moviefilter.models import MovieRSS
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
+from vault.services.tmdb_sync_queue_service import TMDBSyncQueueService
+
+
+@HUEY.task()
+def tmdb_sync_tick():
+    """Один такт массовой синхронизации: обрабатывает один фильм и
+    само-перепланирует следующий тик через delay_seconds."""
+    return TMDBSyncQueueService.process_one()
+
+
+@HUEY.periodic_task(crontab(minute="*/1"))
+def tmdb_sync_watchdog():
+    """Подстраховка: раз в минуту перезапускает цепочку тиков,
+    если она заглохла (например, после рестарта воркера)."""
+    return TMDBSyncQueueService.watchdog_run()
 
 
 @HUEY.task()

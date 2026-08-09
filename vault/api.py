@@ -5,12 +5,25 @@ from django.db.models import Count, Exists, OuterRef, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from vault.models import Genre, Movie, MoviePerson, Person, Season, UserList, UserListMovie, UserMovie, UserSeason, VaultConnectionEvent
+from vault.models import (
+    Genre,
+    Movie,
+    MoviePerson,
+    Person,
+    Season,
+    TMDBSyncQueueItem,
+    UserList,
+    UserListMovie,
+    UserMovie,
+    UserSeason,
+    VaultConnectionEvent,
+)
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.season_status_service import UNSET, SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
+from vault.services.tmdb_sync_queue_service import TMDBSyncQueueService
 
 
 class MovieOut(Schema):
@@ -221,6 +234,53 @@ class TMDBImportOut(Schema):
     message: str
     created: bool
     movie: MovieOut | None = None
+
+
+class TMDBSyncQueueStateIn(Schema):
+    delay_seconds: int
+
+
+class TMDBSyncQueueStateOut(Schema):
+    enabled: bool
+    delay_seconds: int
+    counters: dict[str, int]  # pending, in_progress, synced, confirm, not_found, error
+    total_unsynced: int  # сколько в базе вообще несинхронизированных (source=KINORIUM, tmdb_id IS NULL)
+
+
+class TMDBSyncQueueItemOut(Schema):
+    id: int
+    movie_id: int
+    movie_slug: str
+    movie_title: str
+    snapshot_title: str
+    snapshot_original_title: str
+    snapshot_year: int | None = None
+    state: str
+    queued_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    result_status: str
+    result_title: str
+    result_original_title: str
+    result_year: int | None = None
+    result_tmdb_id: int | None = None
+    result_media_type: str
+    result_message: str
+    retry_count: int
+
+
+class TMDBSyncQueueItemsOut(Schema):
+    items: list[TMDBSyncQueueItemOut]
+    total: int
+
+
+class TMDBSyncQueueEnqueueOut(Schema):
+    added: int
+    total: int
+
+
+class TMDBSyncQueueDeleteOut(Schema):
+    deleted: int
 
 
 class SeasonOut(Schema):
@@ -1062,3 +1122,93 @@ def list_delete(request, list_id: int):
     user_list.delete()
 
     return UserListDeleteOut(message="Список удален")
+
+
+# ------------------------------------ #
+#           TMDB SYNC QUEUE            #
+# ------------------------------------ #
+
+
+def _build_tmdb_sync_queue_item_out(item: "TMDBSyncQueueItem") -> TMDBSyncQueueItemOut:
+    return TMDBSyncQueueItemOut(
+        id=item.id,
+        movie_id=item.movie_id,
+        movie_slug=item.movie.slug if item.movie_id else "",
+        movie_title=item.movie.title if item.movie_id else "",
+        snapshot_title=item.snapshot_title,
+        snapshot_original_title=item.snapshot_original_title,
+        snapshot_year=item.snapshot_year,
+        state=item.state,
+        queued_at=_datetime_to_iso(item.queued_at) or "",
+        started_at=_datetime_to_iso(item.started_at),
+        finished_at=_datetime_to_iso(item.finished_at),
+        result_status=item.result_status,
+        result_title=item.result_title,
+        result_original_title=item.result_original_title,
+        result_year=item.result_year,
+        result_tmdb_id=item.result_tmdb_id,
+        result_media_type=item.result_media_type,
+        result_message=item.result_message,
+        retry_count=item.retry_count,
+    )
+
+
+@api.get("/tmdb-sync/state", response=TMDBSyncQueueStateOut)
+def tmdb_sync_state(request):
+    _require_api_user(request)
+    return TMDBSyncQueueService.get_state()
+
+
+@api.post("/tmdb-sync/queue", response=TMDBSyncQueueEnqueueOut)
+def tmdb_sync_enqueue(request):
+    _require_api_user(request)
+    return TMDBSyncQueueService.enqueue_unsynced()
+
+
+@api.delete("/tmdb-sync/queue", response=TMDBSyncQueueDeleteOut)
+def tmdb_sync_delete_all(request):
+    _require_api_user(request)
+    deleted = TMDBSyncQueueService.remove_all()
+    return TMDBSyncQueueDeleteOut(deleted=deleted)
+
+
+@api.post("/tmdb-sync/start", response=TMDBSyncQueueStateOut)
+def tmdb_sync_start(request):
+    _require_api_user(request)
+    TMDBSyncQueueService.start()
+    return TMDBSyncQueueService.get_state()
+
+
+@api.post("/tmdb-sync/stop", response=TMDBSyncQueueStateOut)
+def tmdb_sync_stop(request):
+    _require_api_user(request)
+    TMDBSyncQueueService.stop()
+    return TMDBSyncQueueService.get_state()
+
+
+@api.patch("/tmdb-sync/state", response=TMDBSyncQueueStateOut)
+def tmdb_sync_update_state(request, payload: TMDBSyncQueueStateIn):
+    _require_api_user(request)
+    try:
+        TMDBSyncQueueService.set_delay(payload.delay_seconds)
+    except ValueError as exc:
+        raise HttpError(400, str(exc))
+    return TMDBSyncQueueService.get_state()
+
+
+@api.get("/tmdb-sync/items", response=TMDBSyncQueueItemsOut)
+def tmdb_sync_items(request, state: str | None = None, offset: int = 0, limit: int = 100):
+    _require_api_user(request)
+
+    qs = TMDBSyncQueueItem.objects.select_related("movie").order_by("queued_at", "id")
+    if state:
+        qs = qs.filter(state=state)
+
+    limit = min(max(limit, 1), 500)
+    offset = max(offset, 0)
+    total = qs.count()
+    items = list(qs[offset : offset + limit])
+    return TMDBSyncQueueItemsOut(
+        items=[_build_tmdb_sync_queue_item_out(item) for item in items],
+        total=total,
+    )
