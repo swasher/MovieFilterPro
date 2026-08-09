@@ -16,6 +16,25 @@ WATCH_STATUS_TO_KEY = {
 }
 
 
+class _UnsetType:
+    """Sentinel: поле не было прислано в PATCH-запросе."""
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self):
+        return "UNSET"
+
+    def __bool__(self):
+        return False
+
+
+UNSET = _UnsetType()
+
+
 # ------------------------------------ #
 #          APPLICATION LAYER           #
 # ------------------------------------ #
@@ -40,9 +59,15 @@ class SeasonStatusService:
 
     @staticmethod
     @transaction.atomic
-    def set_season_status(user, season: Season, watch_status: str | None = None, rating: int | None = None, note: str | None = None) -> UserSeason:
+    def set_season_status(
+        user,
+        season: Season,
+        watch_status: str | None | type(UNSET) = UNSET,
+        rating: int | None | type(UNSET) = UNSET,
+        note: str | None | type(UNSET) = UNSET,
+    ) -> UserSeason:
         obj, _ = UserSeason.objects.get_or_create(user=user, season=season)
-        if watch_status is not None:
+        if watch_status is not UNSET:
             if watch_status == "":
                 obj.watch_status = None
             else:
@@ -50,12 +75,14 @@ class SeasonStatusService:
                 if mapped is None:
                     raise ValueError(f"Неизвестный статус: {watch_status}")
                 obj.watch_status = mapped
-        if rating is not None:
-            if rating == 0 or rating < 1 or rating > 10:
+        if rating is not UNSET:
+            if rating is None:
                 obj.rating = None
+            elif rating < 1 or rating > 10:
+                raise ValueError("Оценка должна быть от 1 до 10")
             else:
                 obj.rating = rating
-        if note is not None:
+        if note is not UNSET:
             obj.note = note
         obj.save(update_fields=["watch_status", "rating", "note"])
         return obj

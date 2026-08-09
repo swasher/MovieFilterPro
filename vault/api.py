@@ -7,7 +7,7 @@ from ninja.errors import HttpError
 
 from vault.models import Genre, Movie, MoviePerson, Person, Season, UserList, UserListMovie, UserMovie, UserSeason, VaultConnectionEvent
 from vault.services.movie_status_service import MovieStatusService
-from vault.services.season_status_service import SeasonStatusService
+from vault.services.season_status_service import UNSET, SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
@@ -696,12 +696,14 @@ def season_toggle_status(request, season_id: int, payload: SetSeasonStatusIn):
 
     user = _require_api_user(request)
 
+    changes = payload.model_dump(exclude_unset=True)
+
     try:
         obj = SeasonStatusService.set_season_status(
             user=user,
             season=season,
-            watch_status=payload.watch_status,
-            rating=payload.rating,
+            watch_status=changes.get("watch_status", UNSET),
+            rating=changes.get("rating", UNSET),
         )
     except ValueError as exc:
         raise HttpError(400, str(exc))
