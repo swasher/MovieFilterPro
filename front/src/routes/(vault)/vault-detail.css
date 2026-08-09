@@ -1,6 +1,6 @@
 @reference "../layout.css";
 
-@layer components {
+
   .vd-page {
     @apply flex w-full flex-col gap-5 px-4 py-5;
   }
@@ -285,8 +285,12 @@
     @apply text-sm text-muted-foreground;
   }
 
-  .vd-season-grid {
+/*  .vd-season-grid {
     @apply grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4;
+  }*/
+  .vd-season-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fill, 190px);
   }
 
 
@@ -306,7 +310,7 @@
 
   .vd-season-card {
     /* используется вместе с .vd-card: class="vd-card vd-season-card" */
-    @apply flex flex-col gap-3 p-3;
+    @apply flex flex-col gap-3 p-3 ;
   }
 
   .vd-season-poster-block {
@@ -328,18 +332,18 @@
   .vd-season-watched--inactive {
     @apply bg-muted text-muted-foreground;
   }
-}
+
 
 @media (min-width: 768px) {
-  @layer components {
+
     .vd-page {
       @apply px-6 py-6;
     }
-  }
+
 }
 
 @media (min-width: 1280px) {
-  @layer components {
+
     .vd-layout--movie {
       grid-template-columns: 280px minmax(0, 1fr);
     }
@@ -348,4 +352,4 @@
       grid-template-columns: 240px minmax(0, 1fr);
     }
   }
-}
+
