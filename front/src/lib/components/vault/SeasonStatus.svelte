@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as Popover from "$lib/components/ui/popover";
   import * as StarRating from "$lib/components/ui/star-rating";
-  import { CheckCheck } from "@lucide/svelte";
+  import { CheckCheck, X } from "@lucide/svelte";
   import { cn } from "$lib/utils.js";
 
   interface SeasonUserState {
@@ -16,23 +16,47 @@
 
   interface Props {
     season: Season;
+    revision: number;
     onStatusClick: (season: Season) => void;
     onRatingClick: (season: Season, rating: number | null) => void;
   }
 
-  let { season, onStatusClick, onRatingClick } = $props();
+  let { season, revision, onStatusClick, onRatingClick } = $props();
 
-  const isWatched = $derived(season.user_state.watch_status === "watched");
-  const hasRating = $derived(season.user_state.rating !== null);
-  const currentRating = $derived(season.user_state.rating ?? 0);
+  let open = $state(false);
 
-  const triggerClass = cn(
-    "vd-season-watched",
-    isWatched ? "vd-season-watched--active" : "vd-season-watched--inactive"
+  const isWatched = $derived.by(() => {
+    revision;
+    return season.user_state.watch_status === "watched";
+  });
+  const hasRating = $derived.by(() => {
+    revision;
+    return season.user_state.rating !== null;
+  });
+  const currentRating = $derived.by(() => {
+    revision;
+    return season.user_state.rating ?? 0;
+  });
+
+  const triggerClass = $derived(
+    cn(
+      "vd-season-watched",
+      isWatched ? "vd-season-watched--active" : "vd-season-watched--inactive"
+    )
   );
+
+  const handleRatingChange = (value: number) => {
+    onRatingClick(season, Math.round(value * 2));
+    open = false;
+  };
+
+  const handleClearRating = () => {
+    onRatingClick(season, null);
+    open = false;
+  };
 </script>
 
-<Popover.Root>
+<Popover.Root bind:open>
   <Popover.Trigger class={triggerClass} onclick={() => onStatusClick(season)} openOnHover>
     {#if hasRating}
       <span class="text-emerald-600 font-medium text-sm">{currentRating}</span>
@@ -45,40 +69,34 @@
 
   <Popover.Content class="w-56" side="bottom" align="center">
     <div class="p-2">
-      <StarRating.Root
-        value={currentRating / 2}
-        max={5}
-        allowHalf
-        class="text-amber-500"
-        onValueChange={(value) => onRatingClick(season, Math.round(value * 2))}
-      >
-        {#snippet children({ items })}
-          <div class="flex gap-1">
-            {#each items as item (item.index)}
-              <StarRating.Star index={item.index} state={item.state} class="size-5" />
-            {/each}
-          </div>
-        {/snippet}
-      </StarRating.Root>
+      <div class="flex items-center justify-center gap-2">
+        <StarRating.Root
+          value={currentRating / 2}
+          max={5}
+          allowHalf
+          class="text-amber-500"
+          onValueChange={handleRatingChange}
+        >
+          {#snippet children({ items })}
+            <div class="flex gap-1">
+              {#each items as item (item.index)}
+                <StarRating.Star index={item.index} state={item.state} class="size-5" />
+              {/each}
+            </div>
+          {/snippet}
+        </StarRating.Root>
 
-      {#if hasRating}
-        <div class="flex justify-center gap-2 mt-2">
-          <span class="text-sm text-muted-foreground">
-            Текущая: {currentRating} / 10
-          </span>
+        {#if hasRating}
           <button
             type="button"
-            class="text-xs text-muted-foreground hover:text-foreground underline"
-            onclick={() => onRatingClick(season, null)}
+            class="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Сбросить оценку"
+            onclick={handleClearRating}
           >
-            Сбросить
+            <X class="size-4" />
           </button>
-        </div>
-      {:else}
-        <div class="text-center text-sm text-muted-foreground mt-2">
-          {currentRating} / 10
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
   </Popover.Content>
 </Popover.Root>

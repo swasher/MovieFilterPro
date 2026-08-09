@@ -70,6 +70,7 @@
     rating: null as number | null,
     note: ""
   });
+  let seasonsRevision = $state(0);
 
   const statusButtons = [
     { key: "favorites", label: "Избранное", icon: Heart },
@@ -351,6 +352,7 @@
       }
 
       season.user_state = { ...payload.user_state };
+      seasonsRevision++;
     } catch (error) {
       toast.error("Не удалось обновить статус сезона");
     }
@@ -371,6 +373,7 @@
       }
 
       season.user_state = { ...payload.user_state };
+      seasonsRevision++;
     } catch (error) {
       toast.error("Не удалось установить оценку");
     }
@@ -704,6 +707,7 @@
 
                     <SeasonStatus
                       {season}
+                      revision={seasonsRevision}
                       onStatusClick={setSeasonStatus}
                       onRatingClick={setSeasonRating}
                     />
