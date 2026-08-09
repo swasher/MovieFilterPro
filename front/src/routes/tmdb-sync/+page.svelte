@@ -20,6 +20,7 @@
     TableRow
   } from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import { ExternalLink, Play, Plus, Square, Trash2 } from "@lucide/svelte";
 
   let { data } = $props();
@@ -67,6 +68,7 @@
   let removeDialogOpen = $state(false);
   let delayInput = $state(String(delaySeconds));
   let isSavingDelay = $state(false);
+  let deletingIds = $state<Record<number, boolean>>({});
 
   const handleUnauthorized = async (status: number, message?: string): Promise<boolean> => {
     if (status !== 401) return false;
@@ -199,6 +201,26 @@
       toast.error(error instanceof Error ? error.message : "Не удалось очистить очередь");
     } finally {
       isRemoving = false;
+    }
+  };
+
+  const deleteItem = async (item: QueueItem) => {
+    if (deletingIds[item.id]) return;
+    deletingIds = { ...deletingIds, [item.id]: true };
+    try {
+      const response = await fetch(`/api/vault/tmdb-sync/items/${item.id}`, { method: "DELETE" });
+      const payload = (await response.json()) as { deleted?: number; detail?: string };
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.detail)) return;
+        toast.error(payload.detail ?? `HTTP ${response.status}`);
+        return;
+      }
+      items = items.filter((entry) => entry.id !== item.id);
+      toast.success(`Запись «${item.snapshot_title}» удалена из очереди.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось удалить запись из очереди");
+    } finally {
+      deletingIds = { ...deletingIds, [item.id]: false };
     }
   };
 
@@ -414,14 +436,38 @@
                   {/if}
                 </TableCell>
                 <TableCell>
-                  <a
-                    href={`/movies/${item.movie_slug}`}
-                    data-sveltekit-preload-data="hover"
-                    class="inline-flex items-center gap-1 text-sm text-foreground underline-offset-4 hover:underline"
-                  >
-                    <ExternalLink data-icon="inline-start" />
-                    Открыть
-                  </a>
+                  <div class="flex items-center gap-1">
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            href={`/movies/${item.movie_slug}`}
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Открыть фильм"
+                            data-sveltekit-preload-data="hover"
+                          >
+                            <ExternalLink data-icon="inline-start" />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="bottom" align="center">Открыть</Tooltip.Content>
+                      </Tooltip.Root>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Удалить из очереди"
+                            disabled={deletingIds[item.id]}
+                            onclick={() => deleteItem(item)}
+                          >
+                            <Trash2 data-icon="inline-start" />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="bottom" align="center">Удалить</Tooltip.Content>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  </div>
                 </TableCell>
               </TableRow>
             {/each}

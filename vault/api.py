@@ -1172,6 +1172,18 @@ def tmdb_sync_delete_all(request):
     return TMDBSyncQueueDeleteOut(deleted=deleted)
 
 
+@api.delete("/tmdb-sync/items/{item_id}", response=TMDBSyncQueueDeleteOut)
+def tmdb_sync_delete_item(request, item_id: int):
+    _require_api_user(request)
+    try:
+        item = TMDBSyncQueueService.remove_item(item_id)
+    except ValueError as exc:
+        raise HttpError(400, str(exc))
+    if item is None:
+        raise HttpError(404, "Queue item not found")
+    return TMDBSyncQueueDeleteOut(deleted=1)
+
+
 @api.post("/tmdb-sync/start", response=TMDBSyncQueueStateOut)
 def tmdb_sync_start(request):
     _require_api_user(request)

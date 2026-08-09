@@ -91,6 +91,18 @@ class TMDBSyncQueueService:
         return removed
 
     @classmethod
+    def remove_item(cls, item_id: int) -> TMDBSyncQueueItem | None:
+        """Удалить одну запись очереди (без остановки обработки)."""
+        item = TMDBSyncQueueItem.objects.filter(pk=item_id).first()
+        if item is None:
+            return None
+        if item.state == TMDBSyncQueueItem.State.IN_PROGRESS:
+            raise ValueError("Нельзя удалить элемент, который сейчас синхронизируется")
+        item.delete()
+        logger.info(f"TMDB_SYNC_REMOVE_ITEM | item_id={item_id}")
+        return item
+
+    @classmethod
     def set_delay(cls, seconds: int) -> int:
         seconds = int(seconds)
         if not 1 <= seconds <= 3600:
