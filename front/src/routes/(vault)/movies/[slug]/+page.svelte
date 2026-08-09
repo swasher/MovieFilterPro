@@ -670,6 +670,106 @@
         </CardContent>
       </Card>
 
+
+
+
+      {#if movie.movie_type === "series" && movie.seasons.length > 0}
+        <Card class="vd-card">
+          <CardHeader>
+            <CardTitle class="text-xl">Сезоны</CardTitle>
+          </CardHeader>
+          <CardContent class="vd-card-content">
+            <div class="vd-season-grid">
+
+
+
+              <!--              {#each movie.seasons as season (season.id)}
+                              <div class="vd-season-card">
+                                <Tooltip.Provider>
+                                  <Tooltip.Root>
+                                    <div class="vd-season-poster-block">
+                                      {#if season.poster_url}
+                                        <img src={season.poster_url} alt={`Постер сезона ${season.season_number}`} class="vd-season-poster-img" />
+                                      {:else}
+                                        <div class="vd-season-poster-fallback">no poster</div>
+                                      {/if}
+                                      <span class="vd-season-number">{season.season_number}</span>
+                                    </div>
+
+                                    <div class="vd-season-bottom">
+                                      <div class="vd-season-chips">
+                                        {#if season.air_year}
+                                          <span class="vd-season-chip">{season.air_year}</span>
+                                        {/if}
+                                        <span class="vd-season-chip">{season.episodes_count} серий</span>
+                                      </div>
+                                      <Tooltip.Trigger>
+                                        <button
+                                          type="button"
+                                          class={`vd-season-watched ${season.user_state.watch_status === "watched" ? "vd-season-watched&#45;&#45;active" : "vd-season-watched&#45;&#45;inactive"}`}
+                                          onclick={() => setSeasonStatus(season)}
+                                        >
+                                          <CheckCheck class="size-4" />
+                                        </button>
+                                      </Tooltip.Trigger>
+                                      <Tooltip.Content side="bottom" class="vd-tooltip">
+                                        {season.user_state.watch_status === "watched" ? "Снять просмотр" : "Просмотрено"}
+                                      </Tooltip.Content>
+                                    </div>
+                                  </Tooltip.Root>
+                                </Tooltip.Provider>
+                              </div>
+                            {/each}-->
+              {#each movie.seasons as season (season.id)}
+                <div class="vd-card vd-season-card">
+                  <div class="vd-season-poster-block">
+                    {#if season.poster_url}
+                      <img src={season.poster_url} alt={`Постер сезона ${season.season_number}`} class="vd-season-poster-img" />
+                    {:else}
+                      <div class="vd-season-poster-fallback">no poster</div>
+                    {/if}
+                    <span class="vd-season-number">{season.season_number}</span>
+                  </div>
+
+                  <div class="vd-season-meta">
+                    <div class="vd-tag-stack">
+                      {#if season.air_year}
+                        <span class="vd-chip">{season.air_year}</span>
+                      {/if}
+                      <span class="vd-chip">{season.episodes_count} серий</span>
+                    </div>
+
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <button
+                                  type="button"
+                                  class={`vd-season-watched ${season.user_state.watch_status === "watched" ? "vd-season-watched--active" : "vd-season-watched--inactive"}`}
+                                  onclick={() => setSeasonStatus(season)}
+                          >
+                            <CheckCheck class="size-4" />
+                          </button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="bottom" class="vd-tooltip">
+                          {season.user_state.watch_status === "watched" ? "Снять просмотр" : "Просмотрено"}
+                        </Tooltip.Content>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  </div>
+                </div>
+              {/each}
+
+
+
+            </div>
+          </CardContent>
+        </Card>
+      {/if}
+
+
+
+
+
       <Card class="vd-card">
         <CardHeader>
           <CardTitle class="text-xl">Съемочная группа</CardTitle>
@@ -731,54 +831,7 @@
         </CardContent>
       </Card>
 
-      {#if movie.movie_type === "series" && movie.seasons.length > 0}
-        <Card class="vd-card">
-          <CardHeader>
-            <CardTitle class="text-xl">Сезоны</CardTitle>
-          </CardHeader>
-          <CardContent class="vd-card-content">
-            <div class="vd-season-grid">
-              {#each movie.seasons as season (season.id)}
-                <div class="vd-season-card">
-                  <Tooltip.Provider>
-                    <Tooltip.Root>
-                      <div class="vd-season-poster-block">
-                        {#if season.poster_url}
-                          <img src={season.poster_url} alt={`Постер сезона ${season.season_number}`} class="vd-season-poster-img" />
-                        {:else}
-                          <div class="vd-season-poster-fallback">no poster</div>
-                        {/if}
-                        <span class="vd-season-number">{season.season_number}</span>
-                      </div>
 
-                      <div class="vd-season-bottom">
-                        <div class="vd-season-chips">
-                          {#if season.air_year}
-                            <span class="vd-season-chip">{season.air_year}</span>
-                          {/if}
-                          <span class="vd-season-chip">{season.episodes_count} серий</span>
-                        </div>
-                        <Tooltip.Trigger>
-                          <button
-                            type="button"
-                            class={`vd-season-watched ${season.user_state.watch_status === "watched" ? "vd-season-watched--active" : "vd-season-watched--inactive"}`}
-                            onclick={() => setSeasonStatus(season)}
-                          >
-                            <CheckCheck class="size-4" />
-                          </button>
-                        </Tooltip.Trigger>
-                        <Tooltip.Content side="bottom" class="vd-tooltip">
-                          {season.user_state.watch_status === "watched" ? "Снять просмотр" : "Просмотрено"}
-                        </Tooltip.Content>
-                      </div>
-                    </Tooltip.Root>
-                  </Tooltip.Provider>
-                </div>
-              {/each}
-            </div>
-          </CardContent>
-        </Card>
-      {/if}
 
       <div class="vd-service-row">
         <div class="vd-service-actions">

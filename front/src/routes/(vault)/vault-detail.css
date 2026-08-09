@@ -289,13 +289,6 @@
     @apply grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4;
   }
 
-  .vd-season-card {
-    @apply relative w-36 h-52 rounded-md overflow-hidden bg-muted flex flex-col;
-  }
-
-  .vd-season-poster-block {
-    @apply relative w-full h-40 overflow-hidden bg-muted flex items-center justify-center;
-  }
 
   .vd-season-poster-img {
     @apply w-full h-full object-cover;
@@ -309,16 +302,19 @@
     @apply absolute bottom-1 right-1 text-[32px] font-bold text-muted-foreground/30 select-none;
   }
 
-  .vd-season-bottom {
-    @apply flex items-end justify-between w-full px-2 pb-2 gap-2;
+
+
+  .vd-season-card {
+    /* используется вместе с .vd-card: class="vd-card vd-season-card" */
+    @apply flex flex-col gap-3 p-3;
   }
 
-  .vd-season-chips {
-    @apply flex flex-col gap-1;
+  .vd-season-poster-block {
+    @apply relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted flex items-center justify-center;
   }
 
-  .vd-season-chip {
-    @apply text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded;
+  .vd-season-meta {
+    @apply flex items-center justify-between gap-2;
   }
 
   .vd-season-watched {
