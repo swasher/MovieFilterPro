@@ -175,6 +175,12 @@ class UserPreferences(models.Model):
     tmdb_v4_read_access_token = models.CharField(max_length=400, blank=True, null=True)
     tmdb_v4_authenticated_access_token = models.CharField(max_length=400, blank=True, null=True)
 
+    tmdb_sync_enabled = models.BooleanField('Обработка очереди TMDB включена', default=False)
+    tmdb_sync_delay_seconds = models.PositiveSmallIntegerField(
+        'Секунд на фильм при массовой синхронизации',
+        default=60,
+    )
+
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью
         super().save(*args, **kwargs)

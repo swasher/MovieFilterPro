@@ -442,17 +442,65 @@ class UserList(models.Model):
 
 
 class UserListMovie(models.Model):
-    """Связь фильмов с пользовательскими списками"""
-    user_list = models.ForeignKey(UserList, on_delete=models.CASCADE, related_name='list_movies')
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='in_lists')
-    added_at = models.DateTimeField('Добавлен', auto_now_add=True)
-    # DEPRECATED note = models.TextField('Заметка', blank=True)
+        """Связь фильмов с пользовательскими списками"""
+        user_list = models.ForeignKey(UserList, on_delete=models.CASCADE, related_name='list_movies')
+        movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='in_lists')
+        added_at = models.DateTimeField('Добавлен', auto_now_add=True)
+        # DEPRECATED note = models.TextField('Заметка', blank=True)
 
-    class Meta:
-        verbose_name = 'Фильм в списке'
-        verbose_name_plural = 'Фильмы в списках'
-        ordering = ['-added_at']
-        unique_together = ['user_list', 'movie']
+        class Meta:
+            verbose_name = 'Фильм в списке'
+            verbose_name_plural = 'Фильмы в списках'
+            ordering = ['-added_at']
+            unique_together = ['user_list', 'movie']
 
-    def __str__(self):
-        return f"{self.movie} в {self.user_list}"
+        def __str__(self):
+            return f"{self.movie} в {self.user_list}"
+
+
+class TMDBSyncQueueItem(models.Model):
+        """Запись очереди массовой синхронизации фильма с TMDB."""
+        class State(models.TextChoices):
+            PENDING = 'pending', 'Ждёт очереди'
+            IN_PROGRESS = 'in_progress', 'Синхронизируется'
+            SYNCED = 'synced', 'Синхронизирован'
+            CONFIRM = 'confirm', 'Нужен ручной выбор'
+            NOT_FOUND = 'not_found', 'Не найден'
+            ERROR = 'error', 'Ошибка'
+
+        movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='tmdb_sync_items')
+
+        # snapshot данных «До» (из Kinorium) на момент постановки в очередь
+        snapshot_title = models.CharField('Название (до)', max_length=255)
+        snapshot_original_title = models.CharField('Оригинальное название (до)', max_length=255, blank=True, default='')
+        snapshot_year = models.PositiveSmallIntegerField('Год (до)', null=True, blank=True)
+        snapshot_movie_type = models.CharField('Тип (до)', max_length=20)
+        snapshot_imdb_id = models.CharField('IMDb ID (до)', max_length=15, blank=True, default='')
+        snapshot_kinopoisk_id = models.PositiveIntegerField('Kinopoisk ID (до)', null=True, blank=True)
+
+        state = models.CharField('Состояние', max_length=20, choices=State, default=State.PENDING, db_index=True)
+        queued_at = models.DateTimeField('Добавлен в очередь', auto_now_add=True, db_index=True)
+        started_at = models.DateTimeField('Старт синхронизации', null=True, blank=True)
+        finished_at = models.DateTimeField('Завершение', null=True, blank=True)
+        retry_count = models.PositiveSmallIntegerField('Число попыток', default=0)
+
+        # результат «после»
+        result_status = models.CharField('Статус результата', max_length=30, blank=True, default='')
+        result_title = models.CharField('Название (после)', max_length=255, blank=True, default='')
+        result_original_title = models.CharField('Оригинальное название (после)', max_length=255, blank=True, default='')
+        result_year = models.PositiveSmallIntegerField('Год (после)', null=True, blank=True)
+        result_tmdb_id = models.PositiveIntegerField('TMDB ID (результат)', null=True, blank=True)
+        result_media_type = models.CharField('TMDB тип (результат)', max_length=10, blank=True, default='')
+        result_message = models.TextField('Сообщение', blank=True, default='')
+        error_trace = models.TextField('Трассировка ошибки', blank=True, default='')
+
+        class Meta:
+            verbose_name = 'Запись очереди TMDB sync'
+            verbose_name_plural = 'Записи очереди TMDB sync'
+            ordering = ['queued_at', 'id']
+            indexes = [
+                models.Index(fields=['movie', 'state']),
+            ]
+
+        def __str__(self):
+            return f"TMDBSync #{self.pk} {self.snapshot_title} ({self.state})"
