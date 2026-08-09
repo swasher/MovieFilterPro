@@ -353,7 +353,8 @@
               <TableHead>До</TableHead>
               <TableHead>После</TableHead>
               <TableHead>Результат</TableHead>
-              <TableHead class="w-40">Время</TableHead>
+              <TableHead class="w-44">Поставлен</TableHead>
+              <TableHead class="w-44">Синхронизирован</TableHead>
               <TableHead class="w-28">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -388,7 +389,11 @@
                   {/if}
                 </TableCell>
                 <TableCell>
-                  {#if item.state === "in_progress"}
+                  {#if item.state === "synced"}
+                    <Badge variant="outline" class="border-emerald-600/40 text-emerald-700 dark:text-emerald-400">
+                      OK
+                    </Badge>
+                  {:else if item.state === "in_progress"}
                     <span class="text-xs text-amber-600 dark:text-amber-400">Обработка…</span>
                   {:else if item.result_message}
                     <span class="line-clamp-2 max-w-md text-xs text-muted-foreground" title={item.result_message}>
@@ -400,6 +405,13 @@
                 </TableCell>
                 <TableCell>
                   <div class="text-xs">{formatDateTime(item.queued_at)}</div>
+                </TableCell>
+                <TableCell>
+                  {#if item.finished_at}
+                    <div class="text-xs">{formatDateTime(item.finished_at)}</div>
+                  {:else}
+                    <span class="text-xs text-muted-foreground">—</span>
+                  {/if}
                 </TableCell>
                 <TableCell>
                   <a
