@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Popover from "$lib/components/ui/popover";
-  import { CheckCheck, Star } from "@lucide/svelte";
+  import * as StarRating from "$lib/components/ui/star-rating";
+  import { CheckCheck } from "@lucide/svelte";
   import { cn } from "$lib/utils.js";
 
   interface SeasonUserState {
@@ -21,10 +22,9 @@
 
   let { season, onStatusClick, onRatingClick } = $props();
 
-  let hoverRating = $state(0);
-
-  const isWatched = season.user_state.watch_status === "watched";
-  const hasRating = season.user_state.rating !== null;
+  const isWatched = $derived(season.user_state.watch_status === "watched");
+  const hasRating = $derived(season.user_state.rating !== null);
+  const currentRating = $derived(season.user_state.rating ?? 0);
 
   const triggerClass = cn(
     "vd-season-watched",
@@ -33,9 +33,9 @@
 </script>
 
 <Popover.Root>
-  <Popover.Trigger openOnHover class={triggerClass} onclick={() => onStatusClick(season)}>
+  <Popover.Trigger class={triggerClass} onclick={() => onStatusClick(season)} openOnHover>
     {#if hasRating}
-      <span class="text-emerald-600 font-medium text-sm">{season.user_state.rating}</span>
+      <span class="text-emerald-600 font-medium text-sm">{currentRating}</span>
     {:else if isWatched}
       <CheckCheck class="size-4" />
     {:else}
@@ -43,32 +43,28 @@
     {/if}
   </Popover.Trigger>
 
-  <Popover.Content class="w-64" side="bottom" align="center">
-    <div class="space-y-3 p-2">
-
-      <div class="flex gap-1 justify-center">
-        {#each Array(10) as _, i}
-          {@const value = i + 1}
-          {@const isFilled = value <= (hoverRating || (season.user_state.rating ?? 0))}
-          <button
-            type="button"
-            aria-label={`Rate ${value} out of 10`}
-            class="transition-colors p-1"
-            onmouseenter={() => hoverRating = value}
-            onmouseleave={() => hoverRating = 0}
-            onclick={() => onRatingClick(season, value)}
-          >
-            <Star
-              class={isFilled ? "size-5 fill-current text-amber-500" : "size-5 text-muted-foreground"}
-            />
-          </button>
-        {/each}
-      </div>
+  <Popover.Content class="w-56" side="bottom" align="center">
+    <div class="p-2">
+      <StarRating.Root
+        value={currentRating / 2}
+        max={5}
+        allowHalf
+        class="text-amber-500"
+        onValueChange={(value) => onRatingClick(season, Math.round(value * 2))}
+      >
+        {#snippet children({ items })}
+          <div class="flex gap-1">
+            {#each items as item (item.index)}
+              <StarRating.Star index={item.index} state={item.state} class="size-5" />
+            {/each}
+          </div>
+        {/snippet}
+      </StarRating.Root>
 
       {#if hasRating}
-        <div class="flex justify-center gap-2">
+        <div class="flex justify-center gap-2 mt-2">
           <span class="text-sm text-muted-foreground">
-            Текущая: {season.user_state.rating} / 10
+            Текущая: {currentRating} / 10
           </span>
           <button
             type="button"
@@ -79,8 +75,8 @@
           </button>
         </div>
       {:else}
-        <div class="text-center text-sm text-muted-foreground">
-          {hoverRating || (season.user_state.rating ?? 0)} / 10
+        <div class="text-center text-sm text-muted-foreground mt-2">
+          {currentRating} / 10
         </div>
       {/if}
     </div>
