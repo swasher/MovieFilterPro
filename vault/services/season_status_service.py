@@ -68,7 +68,7 @@ class SeasonStatusService:
     ) -> UserSeason:
         obj, _ = UserSeason.objects.get_or_create(user=user, season=season)
         if watch_status is not UNSET:
-            if watch_status == "":
+            if watch_status in (None, ""):
                 obj.watch_status = None
             else:
                 mapped = STATUS_TO_WATCH_STATUS.get(watch_status)

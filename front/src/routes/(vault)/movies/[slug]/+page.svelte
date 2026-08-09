@@ -334,15 +334,12 @@
 
   const compactText = (items: Array<{ name: string }>) => items.map((item) => item.name).join(", ") || "Not set";
 
-  const setSeasonStatus = async (season: { id: number; user_state: { watch_status: string | null; rating: number | null } }) => {
-    const current = season.user_state.watch_status;
-    const next = current === "watched" ? null : "watched";
-
+  const setSeasonStatus = async (season: { id: number; user_state: { watch_status: string | null; rating: number | null } }, watched: boolean) => {
     try {
       const response = await fetch(`/api/vault/seasons/${season.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ watch_status: next })
+        body: JSON.stringify({ watch_status: watched ? "watched" : null, rating: null })
       });
 
       const payload = await response.json();

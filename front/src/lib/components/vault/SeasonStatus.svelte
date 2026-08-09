@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Popover from "$lib/components/ui/popover";
   import * as StarRating from "$lib/components/ui/star-rating";
+  import { Button } from "$lib/components/ui/button";
   import { CheckCheck, X } from "@lucide/svelte";
   import { cn } from "$lib/utils.js";
 
@@ -54,10 +55,15 @@
     onRatingClick(season, null);
     open = false;
   };
+
+  const handleStatusClick = (watched: boolean) => {
+    onStatusClick(season, watched);
+    open = false;
+  };
 </script>
 
 <Popover.Root bind:open>
-  <Popover.Trigger class={triggerClass} onclick={() => onStatusClick(season)} openOnHover>
+  <Popover.Trigger class={triggerClass} openOnHover>
     {#if hasRating}
       <span class="text-emerald-600 font-medium text-sm">{currentRating}</span>
     {:else if isWatched}
@@ -80,7 +86,7 @@
           {#snippet children({ items })}
             <div class="flex gap-1">
               {#each items as item (item.index)}
-                <StarRating.Star index={item.index} state={item.state} class="size-5" />
+                <StarRating.Star index={item.index} state={item.state} class="size-5 text-amber-500" />
               {/each}
             </div>
           {/snippet}
@@ -96,6 +102,23 @@
             <X class="size-4" />
           </button>
         {/if}
+      </div>
+
+      <div class="flex flex-col pt-2 mt-2 border-t">
+        <Button
+          variant="link"
+          class="px-0 h-7 justify-start"
+          onclick={() => handleStatusClick(true)}
+        >
+          Просмотрено
+        </Button>
+        <Button
+          variant="link"
+          class="px-0 h-7 justify-start"
+          onclick={() => handleStatusClick(false)}
+        >
+          Непросмотрено
+        </Button>
       </div>
     </div>
   </Popover.Content>
