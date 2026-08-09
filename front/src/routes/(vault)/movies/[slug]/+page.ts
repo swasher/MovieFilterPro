@@ -54,12 +54,12 @@ type ApiMovieDetail = {
   }>;
   seasons: Array<{
     id: number;
-    season_number: int;
+    season_number: number;
     title: string;
     description: string;
     release_date: string | null;
     poster_url: string | null;
-    episodes_count: int;
+    episodes_count: number;
     air_year: number | null;
     user_state: {
       watch_status: "watched" | "plan" | "skip" | null;

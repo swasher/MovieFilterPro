@@ -21,11 +21,13 @@
     Plus,
     RefreshCw,
     Shield,
+    Star,
     Trash,
     Trash2,
     XCircle
   } from "@lucide/svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import SeasonStatus from "$lib/components/vault/SeasonStatus.svelte";
 
   let { data } = $props();
   const movie = $derived(data.movie);
@@ -700,22 +702,11 @@
                       <span class="vd-chip">{season.episodes_count} серий</span>
                     </div>
 
-                    <Tooltip.Provider>
-                      <Tooltip.Root>
-                        <Tooltip.Trigger>
-                          <button
-                                  type="button"
-                                  class={`vd-season-watched ${season.user_state.watch_status === "watched" ? "vd-season-watched--active" : "vd-season-watched--inactive"}`}
-                                  onclick={() => setSeasonStatus(season)}
-                          >
-                            <CheckCheck class="size-4" />
-                          </button>
-                        </Tooltip.Trigger>
-                        <Tooltip.Content side="bottom" class="vd-tooltip">
-                          {season.user_state.watch_status === "watched" ? "Снять просмотр" : "Просмотрено"}
-                        </Tooltip.Content>
-                      </Tooltip.Root>
-                    </Tooltip.Provider>
+                    <SeasonStatus
+                      {season}
+                      onStatusClick={setSeasonStatus}
+                      onRatingClick={setSeasonRating}
+                    />
                   </div>
                 </div>
               {/each}
