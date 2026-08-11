@@ -7,12 +7,9 @@
 ## Project Agreements
 
 ### Architecture Transition
-- Проект находится в процессе перехода на новую архитектуру.
-- Django остается backend-слоем и источником данных.
-- Новый frontend постепенно переносится на Svelte и живет в `front/`.
-- Перенос делается инкрементально, без разрушения и без принудительного удаления старого Django UI.
-- Legacy Django templates/views продолжают работать параллельно, пока новые сценарии не перенесены полностью.
-- Новый frontend общается с backend через `django-ninja` API.
+- Проект перешел с импользования django-фронтэнда на svelte фронтэнд. 
+- Django фронтенд остается пока в виде legacy.
+- Svelte frontend общается с backend через `django-ninja` API.
 
 ### Frontend Stack Rules
 - Новый frontend: `Svelte 5` с runes only.
@@ -36,12 +33,11 @@
 - Run Django management commands via `uv run python manage.py <command>`.
 
 ### Search Discipline
-- Use `semblance_search` (MCP) as the primary tool for codebase search — it provides AST-aware results with exact file paths and line numbers.
+- Use `semble search` (MCP) as the primary tool for codebase search — it provides AST-aware results with exact file paths and line numbers.
 - Use `rg`/`rg --files` for text-based search in any files (logs, configs, templates) so `.rgignore` is respected.
 - Do not run repository-wide recursive listing commands like `Get-ChildItem -Recurse` from the repo root unless the user explicitly asks for it.
 - Use `fd` (program to find entries in your filesystem).
 - Use `sg` (ast-grep, syntax-aware search and rewrite using AST patterns) for refactoring.
-- Use `bat` for reading concrete files when syntax highlighting and line-oriented viewing are helpful.
 
 ### Search Tools
 - Use `fd` for fast file and directory discovery when it is a better fit than `rg --files`.
@@ -55,7 +51,7 @@
 - Если удаление, упрощение или замена существующего куска кода не являются прямой частью задачи, сначала явно согласовать это с пользователем.
 
 ### Scope Safety
-- Редактировать системные файлы или файлы, не относящиеся к текущему Django app, только по прямому запросу пользователя.
+- Редактировать системные  файлы (корневые файлы проекта) или файлы, не относящиеся к текущему Django app, только по прямому запросу пользователя.
 
 ## Быстрый локальный старт
 - Установка зависимостей: `uv sync`
@@ -132,13 +128,6 @@
   - В `vault` есть рассинхрон между моделями и частью шаблонов/admin (в шаблонах местами ожидается `ImageField`-поведение `.url`, а в моделях `poster/photo` это `CharField`).
   - `vault.models.Person.photo_url` использует `settings.TMDB_IMAGE_SIZE`, но этот ключ сейчас не задан в `settings.py`.
 
-## Практическая последовательность при новой задаче
-- Проверить, к какому потоку относится задача: RSS (`moviefilter`/`kinozal_scan`) или Vault (`vault`).
-- Найти точку входа в URL -> view -> service/model -> template.
-- Учитывать singleton-настройки через `UserPreferences.get()`.
-- Для изменений в Vault-статусах идти через `MovieStatusService`, а не дублировать логику во views.
-- Для задач импорта в Vault предполагать чистые таблицы (согласно соглашениям выше).
-
 ## Текущее состояние миграции Frontend
 - Новый frontend уже поднят в `front/` и подключен к Django backend.
 - Основной паттерн интеграции: `front` -> SvelteKit proxy routes -> `django-ninja` endpoints в `vault/api.py`.
@@ -158,10 +147,6 @@
   - `tmdb_adapter.client_singleton.get_tmdb_client()` создает и кеширует `TMDbAPIs` клиент с текущими ключами из `UserPreferences`.
   - `tmdb_adapter.auth` отвечает за TMDB auth / logout flow и сброс singleton-клиента.
   - Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`, а не в `tmdb_adapter`.
-- При переносе новых сценариев для `vault`:
-  - не менять модели без явной необходимости;
-  - не ломать существующий Django UI;
-  - по возможности сохранять сервисный слой и добавлять новые API/view-слои поверх него.
 
 ## Шапки для сервисного слоя
 
