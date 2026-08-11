@@ -486,121 +486,250 @@ class Command(BaseCommand):
         movie_by_full_key = {}
         movie_by_title_year = {}
 
+        stats = {
+            'persons_rows': 0,
+            'persons_imported': 0,
+            'favorites_added': 0,
+            'movies_list_rows': 0,
+            'movies_created': 0,
+            'movies_matched': 0,
+            'movies_no_title': 0,
+            'statuses_set': 0,
+            'favorites_set': 0,
+            'custom_list_rows': 0,
+            'ratings_set_list': 0,
+            'votes_rows': 0,
+            'ratings_set_votes': 0,
+            'movies_created_from_votes': 0,
+            'votes_skipped': 0,
+            'comments_rows': 0,
+            'comments_note_applied': 0,
+            'comments_status_set': 0,
+            'movies_created_from_comments': 0,
+            'notes_rows': 0,
+            'notes_note_applied': 0,
+            'movies_created_from_notes': 0,
+        }
+
+        failures = []
+
+        def _register_failure(source, row, exc):
+            title = (row.get('Title') or row.get('Original Title') or '').strip()
+            failures.append((source, title or '<no title>', f"{type(exc).__name__}: {exc}"))
+            logger.error(f"[import][{source}] row failed: {title or '<no title>'}", exc_info=True)
+
         # 1. Favorite persons
         self.stdout.write("\n--- Persons / Favorites ---")
         for row in self._iter_csv(persons_csv):
-            person = self._get_or_create_person(
-                full_name=row.get('Name'),
-                original_name=row.get('Original Name'),
-                note=row.get('Note'),
-                cache=person_cache,
-                unknown_country=unknown_country,
-            )
-            if person:
-                FavoritePerson.objects.get_or_create(user=user, person=person)
+            try:
+                with transaction.atomic():
+                    stats['persons_rows'] += 1
+                    person = self._get_or_create_person(
+                        full_name=row.get('Name'),
+                        original_name=row.get('Original Name'),
+                        note=row.get('Note'),
+                        cache=person_cache,
+                        unknown_country=unknown_country,
+                    )
+                    if person:
+                        stats['persons_imported'] += 1
+                        _, created_fav = FavoritePerson.objects.get_or_create(user=user, person=person)
+                        if created_fav:
+                            stats['favorites_added'] += 1
+            except Exception as exc:
+                _register_failure('persons', row, exc)
 
         # 2. Movies
         self.stdout.write("\n--- Movies ---")
-        skipped_movies_without_title = 0
         for row in self._iter_csv(movies_csv):
-            movie, created = self._create_or_get_movie(
-                row,
-                movie_by_full_key,
-                movie_by_title_year,
-                person_cache,
-                country_cache,
-                unknown_country,
-            )
-            if movie is None:
-                skipped_movies_without_title += 1
-                continue
+            try:
+                with transaction.atomic():
+                    stats['movies_list_rows'] += 1
+                    movie, created = self._create_or_get_movie(
+                        row,
+                        movie_by_full_key,
+                        movie_by_title_year,
+                        person_cache,
+                        country_cache,
+                        unknown_country,
+                    )
+                    if movie is None:
+                        stats['movies_no_title'] += 1
+                        continue
+                    if created:
+                        stats['movies_created'] += 1
+                    else:
+                        stats['movies_matched'] += 1
 
-            # statuses / favorites
-            status_str = (row.get('Status') or '').strip()
-            if status_str in STATUS_TO_WATCH_STATUS:
-                self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
+                    # statuses / favorites
+                    status_str = (row.get('Status') or '').strip()
+                    if status_str in STATUS_TO_WATCH_STATUS:
+                        self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
+                        stats['statuses_set'] += 1
 
-            list_title_str = (row.get('ListTitle') or '').strip()
-            if list_title_str == 'Любимые фильмы':
-                self._set_favorite(user, movie)
-            elif list_title_str and list_title_str not in SYSTEM_LIST_TITLES:
-                self._add_to_custom_list(user, movie, list_title_str)
+                    list_title_str = (row.get('ListTitle') or '').strip()
+                    if list_title_str == 'Любимые фильмы':
+                        self._set_favorite(user, movie)
+                        stats['favorites_set'] += 1
+                    elif list_title_str and list_title_str not in SYSTEM_LIST_TITLES:
+                        self._add_to_custom_list(user, movie, list_title_str)
+                        stats['custom_list_rows'] += 1
 
-            my_rating = parse_int(row.get('My rating'))
-            if my_rating:
-                watched_at = parse_date(row.get('Date'))
-                self._set_rating(user, movie, my_rating, watched_at=watched_at)
+                    my_rating = parse_int(row.get('My rating'))
+                    if my_rating:
+                        watched_at = parse_date(row.get('Date'))
+                        self._set_rating(user, movie, my_rating, watched_at=watched_at)
+                        stats['ratings_set_list'] += 1
+            except Exception as exc:
+                _register_failure('movie_list', row, exc)
 
-        if skipped_movies_without_title:
+        if stats['movies_no_title']:
             self.stdout.write(
-                self.style.WARNING(
-                    f"Skipped movies without Title and Original Title: {skipped_movies_without_title}"
-                )
+                self.style.WARNING(f"Skipped movies without Title and Original Title: {stats['movies_no_title']}")
             )
 
         # 3. Votes (ratings) — фильм может быть оценён, но не состоять ни в одном списке,
         #    поэтому создаём его из строки votes, если он не найден.
         self.stdout.write("\n--- Ratings ---")
         for row in self._iter_csv(votes_csv):
-            rating_val = parse_int(row.get('My rating'))
-            if rating_val is None:
-                continue
-            movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
-            if not movie:
-                movie, _ = self._create_or_get_movie(
-                    row,
-                    movie_by_full_key,
-                    movie_by_title_year,
-                    person_cache,
-                    country_cache,
-                    unknown_country,
-                )
-            if not movie:
-                continue
-            self._set_rating(user, movie, rating_val)
+            try:
+                with transaction.atomic():
+                    stats['votes_rows'] += 1
+                    rating_val = parse_int(row.get('My rating'))
+                    if rating_val is None:
+                        continue
+                    movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
+                    if not movie:
+                        movie, created = self._create_or_get_movie(
+                            row,
+                            movie_by_full_key,
+                            movie_by_title_year,
+                            person_cache,
+                            country_cache,
+                            unknown_country,
+                        )
+                        if created:
+                            stats['movies_created_from_votes'] += 1
+                    if not movie:
+                        stats['votes_skipped'] += 1
+                        continue
+                    self._set_rating(user, movie, rating_val)
+                    stats['ratings_set_votes'] += 1
+            except Exception as exc:
+                _register_failure('votes', row, exc)
 
         # 4. Comments -> user_movie.note + statuses
         self.stdout.write("\n--- Comments to notes ---")
         for row in self._iter_csv(comments_csv):
-            movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
-            if not movie:
-                movie, _ = self._create_or_get_movie(
-                    row,
-                    movie_by_full_key,
-                    movie_by_title_year,
-                    person_cache,
-                    country_cache,
-                    unknown_country,
-                )
-            if not movie:
-                continue
-            comment_text = row.get('Comment')
-            if comment_text:
-                self._append_movie_note(user, movie, comment_text)
-            status_str = (row.get('Status') or '').strip()
-            if status_str in STATUS_TO_WATCH_STATUS:
-                self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
+            try:
+                with transaction.atomic():
+                    stats['comments_rows'] += 1
+                    movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
+                    if not movie:
+                        movie, created = self._create_or_get_movie(
+                            row,
+                            movie_by_full_key,
+                            movie_by_title_year,
+                            person_cache,
+                            country_cache,
+                            unknown_country,
+                        )
+                        if created:
+                            stats['movies_created_from_comments'] += 1
+                    if not movie:
+                        continue
+                    comment_text = row.get('Comment')
+                    if comment_text:
+                        self._append_movie_note(user, movie, comment_text)
+                        stats['comments_note_applied'] += 1
+                    status_str = (row.get('Status') or '').strip()
+                    if status_str in STATUS_TO_WATCH_STATUS:
+                        self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
+                        stats['comments_status_set'] += 1
+            except Exception as exc:
+                _register_failure('comments', row, exc)
 
         # 5. Notes -> user_movie.note
         self.stdout.write("\n--- Notes to user_movie.note ---")
         for row in self._iter_csv(notes_csv):
-            movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
-            if not movie:
-                movie, _ = self._create_or_get_movie(
-                    row,
-                    movie_by_full_key,
-                    movie_by_title_year,
-                    person_cache,
-                    country_cache,
-                    unknown_country,
-                )
-            if not movie:
-                continue
-            note_text = row.get('Note')
-            if note_text:
-                self._append_movie_note(user, movie, note_text)
+            try:
+                with transaction.atomic():
+                    stats['notes_rows'] += 1
+                    movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
+                    if not movie:
+                        movie, created = self._create_or_get_movie(
+                            row,
+                            movie_by_full_key,
+                            movie_by_title_year,
+                            person_cache,
+                            country_cache,
+                            unknown_country,
+                        )
+                        if created:
+                            stats['movies_created_from_notes'] += 1
+                    if not movie:
+                        continue
+                    note_text = row.get('Note')
+                    if note_text:
+                        self._append_movie_note(user, movie, note_text)
+                        stats['notes_note_applied'] += 1
+            except Exception as exc:
+                _register_failure('notes', row, exc)
 
         # 6. Kinozal HIDE movies (priority=SKIP) -> Vault as 'Не буду смотреть'
         self._import_hidden_movies(user)
 
+        self.stdout.write("\n" + "=" * 52)
+        self.stdout.write(self.style.SUCCESS("Import summary"))
+        self.stdout.write("=" * 52)
+        self.stdout.write(
+            f"Persons:          rows={stats['persons_rows']:<5} imported={stats['persons_imported']:<5} "
+            f"favorites={stats['favorites_added']}"
+        )
+        self.stdout.write(
+            f"Movies (list):    rows={stats['movies_list_rows']:<5} created={stats['movies_created']:<5} "
+            f"matched={stats['movies_matched']}"
+        )
+        self.stdout.write(
+            f"  statuses={stats['statuses_set']}  favorites={stats['favorites_set']}  "
+            f"custom_lists={stats['custom_list_rows']}  ratings={stats['ratings_set_list']}"
+        )
+        self.stdout.write(
+            f"Ratings (votes):  rows={stats['votes_rows']:<5} applied={stats['ratings_set_votes']:<5} "
+            f"movies_created={stats['movies_created_from_votes']}"
+        )
+        self.stdout.write(
+            f"Comments:         rows={stats['comments_rows']:<5} notes_applied={stats['comments_note_applied']:<5} "
+            f"statuses={stats['comments_status_set']}  movies_created={stats['movies_created_from_comments']}"
+        )
+        self.stdout.write(
+            f"Notes:            rows={stats['notes_rows']:<5} applied={stats['notes_note_applied']:<5} "
+            f"movies_created={stats['movies_created_from_notes']}"
+        )
+        if stats['votes_skipped']:
+            self.stdout.write(self.style.WARNING(f"Votes skipped (no movie): {stats['votes_skipped']}"))
+        if stats['movies_no_title']:
+            self.stdout.write(self.style.WARNING(f"Movies skipped (no title): {stats['movies_no_title']}"))
+
+        if failures:
+            self.stdout.write("\n" + self.style.ERROR(f"FAILED rows: {len(failures)}"))
+            by_source = {}
+            for src, title, msg in failures:
+                by_source.setdefault(src, []).append((title, msg))
+            max_examples = 8
+            for src, items in by_source.items():
+                self.stdout.write(self.style.ERROR(f"  [{src}] {len(items)} row(s) failed:"))
+                for title, msg in items[:max_examples]:
+                    self.stdout.write(self.style.WARNING(f"    - {title}: {msg}"))
+                if len(items) > max_examples:
+                    self.stdout.write(f"    ... and {len(items) - max_examples} more (see logs/debug.log, tag [import])")
+
+        total_movies = Movie.objects.count()
+        total_user_movies = UserMovie.objects.count()
+        total_user_lists = UserList.objects.count()
+        total_genres = Genre.objects.count()
+        total_persons = Person.objects.count()
+        self.stdout.write("=" * 52)
+        self.stdout.write(f"Vault after import: movies={total_movies}, user_movies={total_user_movies}, "
+                          f"lists={total_user_lists}, genres={total_genres}, persons={total_persons}")
         self.stdout.write(self.style.SUCCESS("\nImport completed successfully."))
