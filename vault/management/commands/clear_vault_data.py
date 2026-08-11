@@ -47,6 +47,7 @@ class Command(BaseCommand):
             v.FavoritePerson,
             v.UserListMovie,
             v.MoviePerson,
+            v.TMDBSyncQueueItem,
 
             # События связи приложений
             v.VaultConnectionEvent,

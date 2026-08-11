@@ -318,6 +318,67 @@ class Command(BaseCommand):
             user_movie.watched_at = watched_at
         user_movie.save(update_fields=['rating', 'watch_status', 'watched_at', 'updated_at'])
 
+    def _create_or_get_movie(self, row, movie_by_full_key, movie_by_title_year, person_cache, country_cache, unknown_country):
+        movie_defaults = self._movie_from_row(row)
+        if movie_defaults is None:
+            return None, False
+        title = movie_defaults['title']
+        year = movie_defaults['year']
+
+        movie, created = Movie.objects.get_or_create(
+            title=title,
+            year=year,
+            defaults=movie_defaults,
+        )
+        if movie_defaults.get('slug') and not movie.slug:
+            movie.slug = movie_defaults['slug']
+            movie.save(update_fields=['slug'])
+
+        full_key, fallback_key = self._movie_lookup_keys(title, movie_defaults['original_title'], year)
+        movie_by_full_key[full_key] = movie
+        movie_by_title_year[fallback_key] = movie
+
+        # genres
+        for genre_name in (row.get('Genres') or '').split(','):
+            name = genre_name.strip()
+            if not self._is_valid_genre(name):
+                continue
+            genre, _ = Genre.objects.get_or_create(name=name)
+            movie.genres.add(genre)
+
+        # countries
+        for cn in (row.get('Countries') or '').split(','):
+            name = cn.strip()
+            if not name:
+                continue
+            country = self._get_country(name, country_cache, unknown_country)
+            movie.countries.add(country)
+
+        # directors
+        for director in (row.get('Directors') or '').split(','):
+            name = director.strip()
+            if not name:
+                continue
+            person = self._get_or_create_person(name, name, None, person_cache, unknown_country)
+            if person:
+                MoviePerson.objects.get_or_create(movie=movie, person=person, role='director')
+
+        # actors
+        for order, actor in enumerate((row.get('Actors') or '').split(',')):
+            name = actor.strip()
+            if not name:
+                continue
+            person = self._get_or_create_person(name, name, None, person_cache, unknown_country)
+            if person:
+                MoviePerson.objects.get_or_create(
+                    movie=movie,
+                    person=person,
+                    role='actor',
+                    defaults={'order': order},
+                )
+
+        return movie, created
+
     # ------------------------------------ #
     #     Import Kinozal HIDE movies       #
     # ------------------------------------ #
@@ -442,64 +503,17 @@ class Command(BaseCommand):
         self.stdout.write("\n--- Movies ---")
         skipped_movies_without_title = 0
         for row in self._iter_csv(movies_csv):
-            movie_defaults = self._movie_from_row(row)
-            if movie_defaults is None:
+            movie, created = self._create_or_get_movie(
+                row,
+                movie_by_full_key,
+                movie_by_title_year,
+                person_cache,
+                country_cache,
+                unknown_country,
+            )
+            if movie is None:
                 skipped_movies_without_title += 1
                 continue
-            title = movie_defaults['title']
-            year = movie_defaults['year']
-
-            movie, created = Movie.objects.get_or_create(
-                title=title,
-                year=year,
-                defaults=movie_defaults,
-            )
-            if movie_defaults.get('slug') and not movie.slug:
-                movie.slug = movie_defaults['slug']
-                movie.save(update_fields=['slug'])
-
-            full_key, fallback_key = self._movie_lookup_keys(title, movie_defaults['original_title'], year)
-            movie_by_full_key[full_key] = movie
-            movie_by_title_year[fallback_key] = movie
-
-            # genres
-            for genre_name in (row.get('Genres') or '').split(','):
-                name = genre_name.strip()
-                if not self._is_valid_genre(name):
-                    continue
-                genre, _ = Genre.objects.get_or_create(name=name)
-                movie.genres.add(genre)
-
-            # countries
-            for cn in (row.get('Countries') or '').split(','):
-                name = cn.strip()
-                if not name:
-                    continue
-                country = self._get_country(name, country_cache, unknown_country)
-                movie.countries.add(country)
-
-            # directors
-            for director in (row.get('Directors') or '').split(','):
-                name = director.strip()
-                if not name:
-                    continue
-                person = self._get_or_create_person(name, name, None, person_cache, unknown_country)
-                if person:
-                    MoviePerson.objects.get_or_create(movie=movie, person=person, role='director')
-
-            # actors
-            for order, actor in enumerate((row.get('Actors') or '').split(',')):
-                name = actor.strip()
-                if not name:
-                    continue
-                person = self._get_or_create_person(name, name, None, person_cache, unknown_country)
-                if person:
-                    MoviePerson.objects.get_or_create(
-                        movie=movie,
-                        person=person,
-                        role='actor',
-                        defaults={'order': order},
-                    )
 
             # statuses / favorites
             status_str = (row.get('Status') or '').strip()
@@ -524,13 +538,23 @@ class Command(BaseCommand):
                 )
             )
 
-        # 3. Votes (ratings)
+        # 3. Votes (ratings) — фильм может быть оценён, но не состоять ни в одном списке,
+        #    поэтому создаём его из строки votes, если он не найден.
         self.stdout.write("\n--- Ratings ---")
         for row in self._iter_csv(votes_csv):
             rating_val = parse_int(row.get('My rating'))
             if rating_val is None:
                 continue
             movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
+            if not movie:
+                movie, _ = self._create_or_get_movie(
+                    row,
+                    movie_by_full_key,
+                    movie_by_title_year,
+                    person_cache,
+                    country_cache,
+                    unknown_country,
+                )
             if not movie:
                 continue
             self._set_rating(user, movie, rating_val)
@@ -539,6 +563,15 @@ class Command(BaseCommand):
         self.stdout.write("\n--- Comments to notes ---")
         for row in self._iter_csv(comments_csv):
             movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
+            if not movie:
+                movie, _ = self._create_or_get_movie(
+                    row,
+                    movie_by_full_key,
+                    movie_by_title_year,
+                    person_cache,
+                    country_cache,
+                    unknown_country,
+                )
             if not movie:
                 continue
             comment_text = row.get('Comment')
@@ -552,6 +585,15 @@ class Command(BaseCommand):
         self.stdout.write("\n--- Notes to user_movie.note ---")
         for row in self._iter_csv(notes_csv):
             movie = self._find_movie(row, movie_by_full_key, movie_by_title_year)
+            if not movie:
+                movie, _ = self._create_or_get_movie(
+                    row,
+                    movie_by_full_key,
+                    movie_by_title_year,
+                    person_cache,
+                    country_cache,
+                    unknown_country,
+                )
             if not movie:
                 continue
             note_text = row.get('Note')
