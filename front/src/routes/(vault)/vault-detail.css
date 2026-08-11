@@ -161,6 +161,14 @@
     @apply text-sm leading-7 text-foreground/90;
   }
 
+  .vd-comment-row {
+    @apply flex items-start gap-2;
+  }
+
+  .vd-comment-buttons {
+    @apply flex flex-col gap-1 pt-0.5;
+  }
+
   .vd-copy--secondary {
     @apply text-muted-foreground;
   }

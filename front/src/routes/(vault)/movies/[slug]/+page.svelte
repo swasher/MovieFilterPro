@@ -4,6 +4,7 @@
   import { toast } from "svelte-sonner";
   import { fly } from "svelte/transition";
   import { Button } from "$lib/components/ui/button";
+  import { Textarea } from "$lib/components/ui/textarea";
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
@@ -12,18 +13,21 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import {
     Bookmark,
+    Check,
     CheckCheck,
     ChevronDown,
     Clock3,
     ExternalLink,
     Heart,
     Link2,
+    Pencil,
     Plus,
     RefreshCw,
     Shield,
     Star,
     Trash,
     Trash2,
+    X,
     XCircle
   } from "@lucide/svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -62,6 +66,10 @@
     }>
   >([]);
   let pendingListIds = $state<number[]>([]);
+  let isSavingComment = $state(false);
+  let isEditingComment = $state(false);
+  let commentDraft = $state("");
+  let commentTextarea = $state<HTMLTextAreaElement | null>(null);
   let userState = $state({
     in_watched: false,
     in_will_watch: false,
@@ -70,6 +78,9 @@
     rating: null as number | null,
     note: ""
   });
+
+  const hasComment = $derived(!!userState.note);
+  const canSaveComment = $derived(commentDraft.trim() !== userState.note);
   let seasonsRevision = $state(0);
 
   const statusButtons = [
@@ -82,6 +93,14 @@
   $effect(() => {
     userState = { ...movie.user_state };
     customLists = movie.custom_lists.map((item) => ({ ...item }));
+    commentDraft = movie.user_state.note;
+    isEditingComment = false;
+  });
+
+  $effect(() => {
+    if (isEditingComment) {
+      commentTextarea?.focus();
+    }
   });
 
   const handleUnauthorized = async (status: number, message?: string) => {
@@ -254,6 +273,92 @@
 
     if (payload.user_state) {
       userState = { ...payload.user_state };
+    }
+  };
+
+  const saveComment = async () => {
+    isSavingComment = true;
+
+    try {
+      const response = await fetch(`/api/vault/movies/${movie.slug}/comment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: commentDraft.trim() })
+      });
+
+      const payload = (await response.json()) as {
+        note?: string;
+        user_state?: typeof userState;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) {
+          return;
+        }
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+
+      if (payload.user_state) {
+        userState = { ...payload.user_state };
+      }
+      commentDraft = payload.note ?? "";
+      isEditingComment = false;
+      toast.success("Комментарий сохранён.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось сохранить комментарий");
+    } finally {
+      isSavingComment = false;
+    }
+  };
+
+  const cancelCommentEdit = () => {
+    commentDraft = userState.note;
+    isEditingComment = false;
+  };
+
+  const onCommentKeydown = (event: KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      if (isEditingComment && canSaveComment && !isSavingComment) {
+        void saveComment();
+      }
+    }
+  };
+
+  const clearComment = async () => {
+    isSavingComment = true;
+
+    try {
+      const response = await fetch(`/api/vault/movies/${movie.slug}/comment`, {
+        method: "DELETE"
+      });
+
+      const payload = (await response.json()) as {
+        note?: string;
+        user_state?: typeof userState;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) {
+          return;
+        }
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+
+      if (payload.user_state) {
+        userState = { ...payload.user_state };
+      }
+      commentDraft = "";
+      isEditingComment = false;
+      toast.success("Комментарий удалён.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось удалить комментарий");
+    } finally {
+      isSavingComment = false;
     }
   };
 
@@ -663,12 +768,102 @@
             </div>
           {/if}
 
-          {#if userState.note}
-            <div class="vd-section">
-              <p class="vd-section-title">Note</p>
-              <p class="vd-copy whitespace-pre-wrap">{userState.note}</p>
+          <div class="vd-section">
+            <div class="vd-section-header">
+              <p class="vd-section-title">Комментарий</p>
             </div>
-          {/if}
+
+            <div class="vd-comment-row">
+              <Textarea
+                bind:value={commentDraft}
+                bind:ref={commentTextarea}
+                rows={4}
+                disabled={!isEditingComment}
+                placeholder="Ваш комментарий к фильму…"
+                onkeydown={onCommentKeydown}
+                aria-label="Комментарий к фильму"
+              />
+
+              <div class="vd-comment-buttons">
+                {#if isEditingComment}
+                  <Tooltip.Provider>
+                    <Tooltip.Root>
+                      <Tooltip.Trigger>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onclick={saveComment}
+                          disabled={isSavingComment || !canSaveComment}
+                          aria-label="Сохранить комментарий"
+                        >
+                          <Check class="size-3.5" />
+                        </Button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Content side="left">
+                        {isSavingComment ? "Сохраняю..." : "Сохранить"}
+                      </Tooltip.Content>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+
+                  <Tooltip.Provider>
+                    <Tooltip.Root>
+                      <Tooltip.Trigger>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onclick={cancelCommentEdit}
+                          disabled={isSavingComment}
+                          aria-label="Отменить редактирование"
+                        >
+                          <X class="size-3.5" />
+                        </Button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Content side="left">Отмена</Tooltip.Content>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+                {:else}
+                  <Tooltip.Provider>
+                    <Tooltip.Root>
+                      <Tooltip.Trigger>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onclick={() => {
+                            isEditingComment = true;
+                          }}
+                          aria-label={hasComment ? "Редактировать комментарий" : "Добавить комментарий"}
+                        >
+                          <Pencil class="size-3.5" />
+                        </Button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Content side="left">
+                        {hasComment ? "Редактировать" : "Добавить"}
+                      </Tooltip.Content>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+
+                  {#if hasComment}
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onclick={clearComment}
+                            disabled={isSavingComment}
+                            aria-label="Удалить комментарий"
+                          >
+                            <Trash class="size-3.5" />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="left">Удалить</Tooltip.Content>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  {/if}
+                {/if}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

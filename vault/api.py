@@ -183,6 +183,15 @@ class RateMovieOut(Schema):
     user_state: UserStateOut
 
 
+class MovieCommentIn(Schema):
+    text: str = ""
+
+
+class MovieCommentOut(Schema):
+    note: str
+    user_state: UserStateOut
+
+
 class DeleteMovieOut(Schema):
     message: str
     orphan_persons_deleted: int = 0
@@ -956,6 +965,36 @@ def movie_rate(request, slug: str, payload: RateMovieIn):
         rating=state.rating,
         user_state=state,
     )
+
+
+@api.patch("/movies/{slug}/comment", response=MovieCommentOut)
+def movie_comment_save(request, slug: str, payload: MovieCommentIn):
+    """Сохранить (создать/обновить) комментарий пользователя к фильму."""
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    user = _require_api_user(request)
+
+    MovieStatusService.set_note(user, movie, payload.text)
+
+    user_state = _build_user_state(user, movie)
+    return MovieCommentOut(note=user_state.note, user_state=user_state)
+
+
+@api.delete("/movies/{slug}/comment", response=MovieCommentOut)
+def movie_comment_delete(request, slug: str):
+    """Удалить комментарий пользователя к фильму."""
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+
+    user = _require_api_user(request)
+
+    MovieStatusService.clear_note(user, movie)
+
+    user_state = _build_user_state(user, movie)
+    return MovieCommentOut(note=user_state.note, user_state=user_state)
 
 
 @api.post("/movies/{slug}/delete", response=DeleteMovieOut)

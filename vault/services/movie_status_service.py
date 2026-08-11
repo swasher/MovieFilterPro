@@ -151,6 +151,29 @@ class MovieStatusService:
         return True
 
     @classmethod
+    @transaction.atomic
+    def set_note(cls, user, movie, text):
+        """Сохранить заметку/комментарий пользователя к фильму."""
+        user_movie = cls._get_or_create_user_movie(user, movie)
+        user_movie.note = (text or "").strip()
+        user_movie.save(update_fields=['note', 'updated_at'])
+        if not user_movie.note:
+            cls._cleanup_user_movie(user_movie)
+        return user_movie
+
+    @classmethod
+    @transaction.atomic
+    def clear_note(cls, user, movie):
+        """Удалить заметку/комментарий пользователя к фильму."""
+        user_movie = UserMovie.objects.filter(user=user, movie=movie).first()
+        if not user_movie or not user_movie.note:
+            return user_movie
+        user_movie.note = ""
+        user_movie.save(update_fields=['note', 'updated_at'])
+        cls._cleanup_user_movie(user_movie)
+        return user_movie
+
+    @classmethod
     def get_system_lists_counts(cls, user):
         user_movies = UserMovie.objects.filter(user=user)
         return {
