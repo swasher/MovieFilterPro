@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/
 import { Badge } from "$lib/components/ui/badge";
 import { Input } from "$lib/components/ui/input";
 import { Button } from "$lib/components/ui/button";
+import { Label } from "$lib/components/ui/label";
+import { Switch } from "$lib/components/ui/switch";
 import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
@@ -51,6 +53,7 @@ type TmdbSearchResult = {
   let tooltipX = $state(0);
   let tooltipY = $state(0);
   let searchQuery = $state("");
+  let exactSearch = $state(false);
   let searchDebounceHandle = $state<ReturnType<typeof setTimeout> | null>(null);
   let lastSubmittedSearchQuery = "";
   let activeOrder = $state("-year");
@@ -117,6 +120,7 @@ type TmdbSearchResult = {
     selectedMovieType = data.activeMovieType ?? "";
     selectedWatchStatus = data.activeWatchStatus ?? "";
     isFavorite = data.activeIsFavorite ?? false;
+    exactSearch = data.activeSearchPlot === false;
   });
 
   $effect(() => {
@@ -247,12 +251,17 @@ type TmdbSearchResult = {
   const applySearch = async (value: string) => {
     const params = new URLSearchParams(window.location.search);
     const trimmedValue = value.trim();
-    lastSubmittedSearchQuery = value;
 
     if (trimmedValue) {
       params.set("q", trimmedValue);
     } else {
       params.delete("q");
+    }
+
+    if (exactSearch) {
+      params.set("search_plot", "false");
+    } else {
+      params.delete("search_plot");
     }
 
     const queryString = params.toString();
@@ -262,6 +271,17 @@ type TmdbSearchResult = {
       noScroll: true,
       invalidateAll: true
     });
+    lastSubmittedSearchQuery = value;
+  };
+
+  const onExactSearchToggle = (checked: boolean) => {
+    exactSearch = checked;
+    void applySearch(searchQuery);
+  };
+
+  const clearSearch = async () => {
+    searchQuery = "";
+    await applySearch("");
   };
 
   const applyOrder = async (value: string) => {
@@ -457,13 +477,34 @@ type TmdbSearchResult = {
   <div class="mx-auto w-full max-w-[964px]">
     <div class="mb-6 space-y-3">
       <div class="flex flex-wrap items-center gap-3">
-        <Input
-          bind:value={searchQuery}
-          type="search"
-          placeholder="Поиск фильмов..."
-          class="h-11 min-w-[260px] flex-1"
-          oninput={onSearchInput}
-        />
+        <div class="relative min-w-[260px] flex-1">
+          <Input
+            bind:value={searchQuery}
+            type="search"
+            placeholder="Поиск фильмов..."
+            class="h-11 w-full pr-36"
+            oninput={onSearchInput}
+          />
+          <div class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5 bg-background px-1">
+            <Switch id="exact-match" checked={exactSearch} onCheckedChange={onExactSearchToggle} />
+            <Label
+              for="exact-match"
+              class="cursor-pointer select-none font-mono text-[10px] transition-colors duration-150 {exactSearch ? 'text-primary font-bold' : 'text-muted-foreground/50'}"
+            >
+              {exactSearch ? "TITLE ONLY" : "WITH PLOT"}
+            </Label>
+            {#if searchQuery.trim()}
+              <button
+                type="button"
+                class="text-muted-foreground hover:text-foreground"
+                onclick={clearSearch}
+                aria-label="Очистить поиск"
+              >
+                <X class="size-4" />
+              </button>
+            {/if}
+          </div>
+        </div>
 
         <div class="flex flex-wrap items-center gap-3">
           <SortSelect value={activeOrder} onChange={applyOrder} />

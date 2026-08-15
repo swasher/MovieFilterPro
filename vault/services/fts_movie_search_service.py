@@ -20,16 +20,21 @@ class FTSMovieSearchService:
         return connection.vendor == "sqlite"
 
     @classmethod
-    def build_match_query(cls, query: str) -> str:
+    def build_match_query(cls, query: str, include_plot: bool = True) -> str:
         tokens = cls._TOKEN_RE.findall(query or "")
-        return " ".join(f"{token}*" for token in tokens)
+        match_expr = " ".join(f"{token}*" for token in tokens)
+        if not match_expr:
+            return ""
+        if include_plot:
+            return match_expr
+        return f"{{title original_title}} : {match_expr}"
 
     @classmethod
-    def search(cls, query: str) -> list[int]:
+    def search(cls, query: str, include_plot: bool = True) -> list[int]:
         """Возвращает id фильмов, отсортированные по релевантности FTS5."""
         if not cls.is_available():
             return []
-        match_query = cls.build_match_query(query)
+        match_query = cls.build_match_query(query, include_plot=include_plot)
         if not match_query:
             return []
         sql = f"SELECT rowid FROM {cls.FTS_TABLE} WHERE {cls.FTS_TABLE} MATCH %s ORDER BY rank"

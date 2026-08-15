@@ -28,6 +28,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
   const status = (url.searchParams.get("status") ?? "").trim();
   const list = (url.searchParams.get("list") ?? "").trim();
   const q = (url.searchParams.get("q") ?? "").trim();
+  const searchPlot = (url.searchParams.get("search_plot") ?? "true") !== "false";
   const order = (url.searchParams.get("order") ?? "-year").trim();
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
 
@@ -42,6 +43,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
     if (status) params.set("status", status);
     if (list) params.set("list", list);
     if (q) params.set("q", q);
+    if (!searchPlot) params.set("search_plot", "false");
     if (order && order !== "-year") params.set("order", order);
 
     const [moviesResponse, genresResponse] = await Promise.all([
@@ -70,6 +72,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeList: list,
       activeQuery: q,
       activeOrder: order,
+      activeSearchPlot: searchPlot,
       initialOffset: offset,
     };
   } catch (error) {
@@ -87,6 +90,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeList: list,
       activeQuery: q,
       activeOrder: order,
+      activeSearchPlot: searchPlot,
       initialOffset: offset,
     };
   }

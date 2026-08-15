@@ -583,6 +583,7 @@ def list_movies(
     status: str | None = None,
     list: int | None = None,
     q: str | None = None,
+    search_plot: bool = True,
     order: str = "-year",
     year_from: int | None = None,
     year_to: int | None = None,
@@ -602,13 +603,12 @@ def list_movies(
         query = q.strip()
         if query:
             if FTSMovieSearchService.is_available():
-                fts_ids = FTSMovieSearchService.search(query)
+                fts_ids = FTSMovieSearchService.search(query, include_plot=search_plot)
             else:
-                qs = qs.filter(
-                    Q(title__icontains=query)
-                    | Q(original_title__icontains=query)
-                    | Q(description__icontains=query)
-                )
+                search_q = Q(title__icontains=query) | Q(original_title__icontains=query)
+                if search_plot:
+                    search_q |= Q(description__icontains=query)
+                qs = qs.filter(search_q)
     if year_from is not None:
         qs = qs.filter(year__gte=year_from)
     if year_to is not None:
