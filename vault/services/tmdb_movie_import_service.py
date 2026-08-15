@@ -95,7 +95,7 @@ class TMDBMovieImportService:
             title=cls._extract_title(details, resolved_media_type),
             original_title=cls._extract_original_title(details, resolved_media_type) or "",
             year=cls._extract_year(details, resolved_media_type),
-            movie_type=cls._map_movie_type(resolved_media_type),
+            movie_type=cls._map_movie_type(resolved_media_type, details),
             status=Movie.Status.RELEASED,
             source=Movie.Source.TMDB,
             tmdb_id=tmdb_id,
@@ -237,8 +237,10 @@ class TMDBMovieImportService:
         return None
 
     @staticmethod
-    def _map_movie_type(media_type: MediaType) -> str:
+    def _map_movie_type(media_type: MediaType, details=None) -> str:
         if media_type == "tv":
+            if (getattr(details, "type", None) or "").strip().lower() == "miniseries":
+                return Movie.MovieType.MINISERIES
             return Movie.MovieType.SERIES
         return Movie.MovieType.MOVIE
 

@@ -38,7 +38,7 @@
   let { data } = $props();
   const movie = $derived(data.movie);
 
-  const isSeries = $derived(movie.movie_type === "series");
+  const isSeries = $derived(movie.movie_type === "series" || movie.movie_type === "miniseries");
   const isSeriesFinished = $derived(
     isSeries && ["completed", "cancelled"].includes(movie.status)
   );
@@ -712,7 +712,7 @@
           <div class="vd-title-block">
             <div class="flex flex-wrap items-center gap-2">
               {#if isSeries}
-                <p class="vd-overline">SERIES</p>
+                <p class="vd-overline">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</p>
               {:else}
                 <p class="vd-overline">Movie</p>
               {/if}
@@ -727,7 +727,7 @@
               {/if}
               <span class="vd-service-badges ml-auto">
                 {#if movie.tmdb_id}
-                  {@const tmdbType = movie.tmdb_media_type || (movie.movie_type === 'series' ? 'tv' : 'movie')}
+                  {@const tmdbType = movie.tmdb_media_type || (movie.movie_type === 'series' || movie.movie_type === 'miniseries' ? 'tv' : 'movie')}
                   <a
                     href="https://www.themoviedb.org/{tmdbType}/{movie.tmdb_id}"
                     target="_blank"
@@ -784,10 +784,16 @@
                   </a>
                 {/if}
                 {#if movie.trailer_url}
-                  <Button href={movie.trailer_url} variant="outline" class="vd-segment">
-                    <Link2 class="size-4" />
+                  <a
+                    href={movie.trailer_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="vd-service-badge vd-service-badge--site"
+                    title="Trailer"
+                  >
+                    <Link2 class="size-3" />
                     Trailer
-                  </Button>
+                  </a>
                 {/if}
               </span>
             </div>
@@ -941,7 +947,7 @@
 
 
 
-      {#if movie.movie_type === "series" && movie.seasons.length > 0}
+      {#if (movie.movie_type === "series" || movie.movie_type === "miniseries") && movie.seasons.length > 0}
         <Card class="vd-card">
           <CardHeader>
             <CardTitle class="text-xl">Сезоны</CardTitle>

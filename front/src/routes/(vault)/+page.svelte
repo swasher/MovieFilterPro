@@ -586,7 +586,9 @@ type TmdbSearchResult = {
                   </td>
                   <td class="px-3 py-2 align-middle">{movie.year ?? "—"}</td>
                   <td class="px-3 py-2 align-middle">
-                    {#if movie.movie_type === "series"}
+                    {#if movie.movie_type === "miniseries"}
+                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]">MINISERIES</Badge>
+                    {:else if movie.movie_type === "series"}
                       <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]">SERIES</Badge>
                     {:else}
                       <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]">MOVIE</Badge>
@@ -634,8 +636,8 @@ type TmdbSearchResult = {
             >
               <Card class="relative h-[270px] w-[180px] flex-none overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
                 <CardContent class="h-full !p-0">
-                  {#if movie.movie_type === "series"}
-                    <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">SERIES</Badge>
+                  {#if movie.movie_type === "series" || movie.movie_type === "miniseries"}
+                    <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</Badge>
                   {/if}
 
                   {#if movie.in_wont_watch && data.activeStatus !== "wont_watch"}
@@ -898,6 +900,7 @@ type TmdbSearchResult = {
         <ToggleGroup.Root type="single" value={selectedMovieType} onValueChange={(v) => selectedMovieType = v ?? ""}>
           <ToggleGroup.Item value="movie">Фильм</ToggleGroup.Item>
           <ToggleGroup.Item value="series">Сериал</ToggleGroup.Item>
+          <ToggleGroup.Item value="miniseries">Минисериал</ToggleGroup.Item>
           <ToggleGroup.Item value="">Не важно</ToggleGroup.Item>
         </ToggleGroup.Root>
       </div>

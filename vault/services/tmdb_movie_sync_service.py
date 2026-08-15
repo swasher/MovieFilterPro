@@ -256,8 +256,12 @@ class TMDBMovieSyncService:
         set_field("homepage", getattr(details, "homepage", None) or "")
         set_field("tvdb_id", cls._safe_int(getattr(details, "tvdb_id", None)))
 
-        if movie.movie_type == Movie.MovieType.MOVIE:
-            set_field("movie_type", Movie.MovieType.SERIES)
+        tmdb_type = (getattr(details, "type", None) or "").strip().lower()
+        target_type = (
+            Movie.MovieType.MINISERIES if tmdb_type == "miniseries" else Movie.MovieType.SERIES
+        )
+        if movie.movie_type in (Movie.MovieType.MOVIE, Movie.MovieType.SERIES) and movie.movie_type != target_type:
+            set_field("movie_type", target_type)
 
     @classmethod
     def _sync_genres(cls, movie: Movie, tmdb_genres) -> bool:
@@ -542,7 +546,7 @@ class TMDBMovieSyncService:
         Если сериал в планах — сезоны в планы.
         Если сериал пропущен — сезоны пропущены.
         """
-        if movie.movie_type != Movie.MovieType.SERIES:
+        if movie.movie_type not in (Movie.MovieType.SERIES, Movie.MovieType.MINISERIES):
             return
 
         for user_movie in movie.user_movies.exclude(watch_status=None):

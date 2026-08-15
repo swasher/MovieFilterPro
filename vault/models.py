@@ -112,6 +112,7 @@ class Movie(models.Model):
     class MovieType(models.TextChoices):
         MOVIE = 'movie', 'Фильм'
         SERIES = 'series', 'Сериал'
+        MINISERIES = 'miniseries', 'Минисериал'
         CARTOON = 'cartoon', 'Мультфильм'
         ANIME = 'anime', 'Аниме'
         SHOW = 'show', 'Шоу'
@@ -197,7 +198,7 @@ class Movie(models.Model):
         super().save(*args, **kwargs)
 
     def get_year_display(self):
-        if self.movie_type != 'series':
+        if self.movie_type not in (Movie.MovieType.SERIES, Movie.MovieType.MINISERIES):
             return str(self.year) if self.year else 'Неизвестно'
 
         if not self.year:

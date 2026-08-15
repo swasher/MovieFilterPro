@@ -290,7 +290,7 @@ class TMDBMovieMatchingService:
     @classmethod
     def _expected_media_type(cls, movie: Movie) -> MediaType | None:
         movie_type = movie.movie_type
-        if movie_type in (Movie.MovieType.SERIES, Movie.MovieType.SHOW):
+        if movie_type in (Movie.MovieType.SERIES, Movie.MovieType.SHOW, Movie.MovieType.MINISERIES):
             return "tv"
         if movie_type in (Movie.MovieType.MOVIE, Movie.MovieType.CARTOON):
             return "movie"
