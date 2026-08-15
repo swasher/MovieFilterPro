@@ -9,8 +9,11 @@ from uuid import uuid4
 from django.contrib.auth.models import User
 from django.test import TestCase
 
+from core.models import Country
 from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, WAIT_TRANS
 from moviefilter.models import MovieRSS, UserPreferences
+from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher, normalize_actor_name
+from vault.models import FavoritePerson, Person
 
 
 class KinozalApiTests(TestCase):
@@ -220,3 +223,77 @@ class KinozalApiTests(TestCase):
         response = self.client.get("/api/kinozal/movies")
 
         self.assertEqual(response.status_code, 401)
+
+
+class FavoriteActorMatcherTests(TestCase):
+    def test_normalize_actor_name_cleans_variants(self):
+        self.assertEqual(normalize_actor_name("Дайан Лэйн"), "дайан лэйн")
+        self.assertEqual(normalize_actor_name("Семён Фурман"), "семен фурман")
+        self.assertEqual(normalize_actor_name("Роберт Дауни-мл."), "роберт дауни мл")
+        self.assertEqual(normalize_actor_name("Дж. Депп (дубляж)"), "депп")
+
+    def test_fuzzy_match_handles_typos_in_russian_names(self):
+        matcher = FavoriteActorMatcher(["Дайан Лейн", "Скарлет Йохансон"])
+
+        self.assertIn("Дайан Лэйн", matcher.favorite_actors(["Брэд Питт", "Дайан Лэйн", "Роберт Дауни мл."]))
+        self.assertIn("Скарлетт Йоханссон", matcher.favorite_actors(["Скарлетт Йоханссон"]))
+        self.assertNotIn("Брэд Питт", matcher.favorite_actors(["Брэд Питт", "Том Хэнкс"]))
+
+    def test_fuzzy_match_handles_word_order_and_none(self):
+        matcher = FavoriteActorMatcher(["Дауни-младший Роберт"])
+
+        self.assertEqual(matcher.favorite_actors(["Роберт Дауни мл."]), ["Роберт Дауни мл."])
+        self.assertEqual(matcher.favorite_actors(["Том Хэнкс"]), [])
+
+    def test_exact_match_uses_original_spelling(self):
+        matcher = FavoriteActorMatcher(["Дайан Лейн"])
+
+        self.assertEqual(matcher.favorite_actors(["Дайан Лейн", "Брэд Питт"]), ["Дайан Лейн"])
+
+    def test_low_cutoff_does_not_match_unrelated_names(self):
+        matcher = FavoriteActorMatcher(["Том Хэнкс", "Мэрил Стрип"], score_cutoff=80.0)
+
+        actors = ["Дайан Лэйн", "Кайл Чендлер", "Скай Янг", "Сельда Кая"]
+        self.assertEqual(matcher.favorite_actors(actors), [])
+
+
+class KinozalApiFavoriteActorsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="fav-actor-user", password="secret")
+        self.client.force_login(self.user)
+        UserPreferences.objects.create(user=self.user, kinozal_domain="kinozal.tv")
+
+        self.country = Country.objects.create(name="USA", code="US")
+        self.person = Person.objects.create(
+            tmdb_id="100",
+            imdb_id="nm100",
+            name="Дайан Лэйн",
+            original_name="Diane Lane",
+            country=self.country,
+        )
+        FavoritePerson.objects.create(user=self.user, person=self.person)
+
+        self.movie = MovieRSS.objects.create(
+            priority=HIGH,
+            kinozal_id=2001,
+            title="Alpha",
+            original_title="Alpha Original",
+            year="2024",
+            date_added=date(2026, 3, 8),
+            genres="Drama",
+            countries="USA",
+            director="Director",
+            actors="Дайан Лейн, Брэд Питт",
+            plot="Alpha plot",
+            translate="Dubbed",
+            poster="https://example.com/poster-a.jpg",
+        )
+
+    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
+    def test_movies_endpoint_marks_favorite_actors(self, _cached_image_mock):
+        response = self.client.get("/api/kinozal/movies", {"priority": "ALL"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        item = payload["items"][0]
+        self.assertEqual(item["favorite_actors"], ["Дайан Лейн"])
