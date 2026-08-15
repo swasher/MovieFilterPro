@@ -349,9 +349,8 @@ class PersonMovieOut(Schema):
     slug: str
     year: int | None = None
     poster_url: str | None = None
-    role: str
-    role_display: str
-    character_name: str | None = None
+    roles: list[str]
+    character_names: list[str]
 
 
 class PersonDetailOut(Schema):
@@ -1095,19 +1094,29 @@ def person_detail(request, person_id: int):
         .select_related("movie")
         .order_by("-movie__year", "order", "id")
     )
-    filmography = [
-        PersonMovieOut(
-            id=item.movie.id,
-            title=item.movie.title,
-            slug=item.movie.slug,
-            year=item.movie.year,
-            poster_url=item.movie.poster_url,
-            role=item.role,
-            role_display=item.get_role_display(),
-            character_name=item.character_name or None,
-        )
-        for item in filmography_qs
-    ]
+
+    grouped: dict[int, dict] = {}
+    for item in filmography_qs:
+        movie = item.movie
+        entry = grouped.get(movie.id)
+        if entry is None:
+            entry = {
+                "id": movie.id,
+                "title": movie.title,
+                "slug": movie.slug,
+                "year": movie.year,
+                "poster_url": movie.poster_url,
+                "roles": [],
+                "character_names": [],
+            }
+            grouped[movie.id] = entry
+        role_display = item.get_role_display()
+        if role_display not in entry["roles"]:
+            entry["roles"].append(role_display)
+        if item.character_name and item.character_name not in entry["character_names"]:
+            entry["character_names"].append(item.character_name)
+
+    filmography = [PersonMovieOut(**data) for data in grouped.values()]
 
     years = [item.movie.year for item in filmography_qs if item.movie.year is not None]
 

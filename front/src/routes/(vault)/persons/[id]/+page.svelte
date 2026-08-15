@@ -9,6 +9,26 @@
   let { data } = $props();
   const person = $derived(data.person);
 
+  const bioParagraphs = $derived(
+    (person.biography ?? "")
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+  );
+
+  const personAge = $derived.by(() => {
+    if (!person.birth_date) return null;
+    const birth = new Date(person.birth_date);
+    if (isNaN(birth.getTime())) return null;
+    const end = person.death_date ? new Date(person.death_date) : new Date();
+    if (isNaN(end.getTime())) return null;
+    let age = end.getFullYear() - birth.getFullYear();
+    const beforeBirthday = end.getMonth() < birth.getMonth() ||
+      (end.getMonth() === birth.getMonth() && end.getDate() < birth.getDate());
+    if (beforeBirthday) age--;
+    return age;
+  });
+
   const goBack = async () => {
     if (typeof window === "undefined") return;
     if (window.history.length > 1) {
@@ -36,7 +56,7 @@
   </div>
 
   <div class="vd-layout vd-layout--person">
-    <Card class="vd-poster-card !gap-0 !py-0">
+    <Card class="vd-poster-card !gap-0 !py-0 self-start">
       <CardContent class="!p-0">
         {#if person.photo_url}
           <img src={person.photo_url} alt={person.name} class="vd-photo" />
@@ -84,7 +104,14 @@
               {#if person.birth_date}
                 <div class="vd-fact">
                   <dt class="vd-fact-label">Born</dt>
-                  <dd class="vd-fact-value">{person.birth_date}</dd>
+                  <dd class="vd-fact-value">
+                    {person.birth_date}
+                    {#if personAge !== null}
+                      <span class="text-muted-foreground">
+                        · {personAge} {person.death_date ? "at death" : "years old"}
+                      </span>
+                    {/if}
+                  </dd>
                 </div>
               {/if}
               {#if person.death_date}
@@ -112,11 +139,13 @@
           </div>
         </CardHeader>
 
-        {#if person.biography}
+        {#if bioParagraphs.length}
           <CardContent class="vd-card-content">
             <div class="vd-section">
               <p class="vd-section-title">Biography</p>
-              <p class="vd-copy">{person.biography}</p>
+              {#each bioParagraphs as paragraph}
+                <p class="vd-copy">{paragraph}</p>
+              {/each}
             </div>
           </CardContent>
         {/if}
@@ -129,7 +158,7 @@
         <CardContent class="vd-card-content">
           {#if person.filmography.length}
             <div class="vd-filmography-grid">
-              {#each person.filmography as item (`${item.id}-${item.role}-${item.character_name ?? ""}`)}
+              {#each person.filmography as item (`${item.id}`)}
                 <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
                   <div class="vd-filmography-card">
                     {#if item.poster_url}
@@ -146,10 +175,10 @@
                         {#if item.year}
                           <span class="vd-fact-inline">{item.year}</span>
                         {/if}
-                        <span class="vd-fact-inline">{item.role_display}</span>
+                        <span class="vd-fact-inline">{item.roles.join(", ")}</span>
                       </div>
-                      {#if item.character_name}
-                        <p class="vd-related-subtitle">{item.character_name}</p>
+                      {#if item.character_names.length}
+                        <p class="vd-related-subtitle">{item.character_names.join(", ")}</p>
                       {/if}
                     </div>
                   </div>

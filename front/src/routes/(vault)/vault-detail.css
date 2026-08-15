@@ -318,7 +318,8 @@
   }
 
   .vd-filmography-grid {
-    @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fill, 170px);
   }
 
   .vd-filmography-card {
@@ -326,7 +327,7 @@
   }
 
   .vd-filmography-copy {
-    @apply space-y-2 p-3;
+    @apply space-y-2 p-2.5;
   }
 
   .vd-empty {

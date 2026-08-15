@@ -7,9 +7,8 @@ type PersonMovie = {
   slug: string;
   year: number | null;
   poster_url: string | null;
-  role: string;
-  role_display: string;
-  character_name: string | null;
+  roles: string[];
+  character_names: string[];
 };
 
 type PersonDetail = {
