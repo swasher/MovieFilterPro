@@ -6,6 +6,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Badge } from "$lib/components/ui/badge";
+  import { Separator } from "$lib/components/ui/separator";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
   import * as StarRating from "$lib/components/ui/star-rating";
@@ -660,7 +661,16 @@
               {:else}
                 <p class="vd-overline">Movie</p>
               {/if}
-              <span class="vd-service-badges">
+              {#if isSeries}
+                <span class="vd-service-badge vd-service-badge--status vd-service-badge--lg">{movie.status_display}</span>
+                {#if releasedSeasonsCount > 0}
+                  <span class="vd-service-badge vd-service-badge--info vd-service-badge--lg">{seasonsLabel}</span>
+                {/if}
+              {/if}
+              {#if yearLabel}
+                <span class="vd-service-badge vd-service-badge--info vd-service-badge--lg">{yearLabel}</span>
+              {/if}
+              <span class="vd-service-badges ml-auto">
                 {#if movie.tmdb_id}
                   {@const tmdbType = movie.tmdb_media_type || (movie.movie_type === 'series' ? 'tv' : 'movie')}
                   <a
@@ -695,16 +705,13 @@
                     Кинопоиск
                   </a>
                 {/if}
-              </span>
-              {#if isSeries}
-                <span class="vd-service-badge vd-service-badge--status">{movie.status_display}</span>
-                {#if releasedSeasonsCount > 0}
-                  <span class="vd-service-badge vd-service-badge--info">{seasonsLabel}</span>
+                {#if movie.trailer_url}
+                  <Button href={movie.trailer_url} variant="outline" class="vd-segment">
+                    <Link2 class="size-4" />
+                    Trailer
+                  </Button>
                 {/if}
-              {/if}
-              {#if yearLabel}
-                <span class="vd-service-badge vd-service-badge--info">{yearLabel}</span>
-              {/if}
+              </span>
             </div>
             <CardTitle class="vd-title">{movie.title}</CardTitle>
             {#if movie.original_title}
@@ -719,11 +726,17 @@
                 {movie.duration} min
               </span>
             {/if}
+            {#if movie.duration && movie.age_rating}
+              <Separator orientation="vertical" class="h-4" />
+            {/if}
             {#if movie.age_rating}
               <span class="vd-fact-inline inline-flex items-center gap-1.5">
                 <Shield class="size-3.5" />
                 {movie.age_rating}
               </span>
+            {/if}
+            {#if movie.age_rating && movie.imdb_rating}
+              <Separator orientation="vertical" class="h-4" />
             {/if}
             {#if movie.imdb_rating}
               <span class="vd-fact-inline">IMDb {movie.imdb_rating}</span>
@@ -741,31 +754,10 @@
                 <dd class="vd-fact-value">{compactText(movie.countries)}</dd>
               </div>
             </dl>
-
-            <div class="vd-section">
-              <p class="vd-section-title">Статус</p>
-              <div class="vd-status-row">
-                <span class="vd-status-pill vd-status-pill--primary">{movie.status_display}</span>
-              </div>
-            </div>
           </div>
         </CardHeader>
 
         <CardContent class="vd-card-content">
-          <div class="vd-section">
-            <div class="vd-section-header">
-              <p class="vd-section-title">User actions</p>
-            </div>
-            <div class="vd-primary-actions">
-              {#if movie.trailer_url}
-                <Button href={movie.trailer_url} variant="outline" class="vd-segment">
-                  <Link2 class="size-4" />
-                  Trailer
-                </Button>
-              {/if}
-            </div>
-          </div>
-
           <div class="vd-section">
             <p class="vd-section-title">Моя оценка</p>
             <div class="vd-rating-row">
