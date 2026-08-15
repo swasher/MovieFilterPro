@@ -81,6 +81,7 @@ class KinozalMovieOut(Schema):
     directors: list[str]
     actors: list[str]
     favorite_actors: list[str] = []
+    favorite_directors: list[str] = []
     open_url: str | None = None
     kinorium_url: str | None = None
 
@@ -311,6 +312,7 @@ def _serialize_movie(request, movie: MovieRSS, favorite_matcher: FavoriteActorMa
         directors=movie.director_as_list,
         actors=movie.actors_as_list,
         favorite_actors=favorite_matcher.favorite_actors(movie.actors_as_list),
+        favorite_directors=favorite_matcher.favorite_actors(movie.director_as_list),
         open_url=_build_open_url(movie),
         kinorium_url=_build_kinorium_url(movie),
     )

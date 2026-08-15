@@ -192,6 +192,15 @@
         return;
       }
 
+      // Свежие данные с сервера (например, изменились избранные актеры в Vault)
+      // всегда приоритетнее устаревшего снапшота. Используем снапшот только
+      // как запасной вариант, когда API не смог вернуть данные.
+      const hasFreshServerData = Boolean(data?.page && !(data.apiError ?? "").trim());
+      if (hasFreshServerData) {
+        sessionStorage.removeItem(KINOZAL_STATE_STORAGE_KEY);
+        return;
+      }
+
       const hasFatalSnapshotError = Boolean((snapshot.initialError ?? "").trim());
       if (hasFatalSnapshotError) {
         sessionStorage.removeItem(KINOZAL_STATE_STORAGE_KEY);
@@ -999,7 +1008,14 @@
                       <span class="kz-meta-label kz-meta-label--inline">Director</span>
                       {#if compactList(movie.directors, 4).length}
                         {#each compactList(movie.directors, 4) as director (director)}
-                          <span class="kz-meta-tag">{director}</span>
+                          {#if movie.favorite_directors?.includes(director)}
+                            <span class="kz-meta-tag kz-meta-tag--favorite">
+                              <Star class="mr-1 size-3" />
+                              {director}
+                            </span>
+                          {:else}
+                            <span class="kz-meta-tag">{director}</span>
+                          {/if}
                         {/each}
                       {:else}
                         <span class="kz-meta-empty">—</span>

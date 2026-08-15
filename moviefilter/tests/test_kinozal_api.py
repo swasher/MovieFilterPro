@@ -297,3 +297,4 @@ class KinozalApiFavoriteActorsTests(TestCase):
         payload = response.json()
         item = payload["items"][0]
         self.assertEqual(item["favorite_actors"], ["Дайан Лейн"])
+        self.assertEqual(item["favorite_directors"], [])

@@ -41,6 +41,7 @@ export type KinozalMovie = {
   directors: string[];
   actors: string[];
   favorite_actors?: string[];
+  favorite_directors?: string[];
   open_url: string | null;
   kinorium_url?: string | null;
 };
