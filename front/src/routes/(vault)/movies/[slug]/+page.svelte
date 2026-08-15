@@ -5,6 +5,7 @@
   import { fly } from "svelte/transition";
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
+  import { Input } from "$lib/components/ui/input";
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
@@ -21,6 +22,7 @@
     ExternalLink,
     Globe,
     Heart,
+    Link,
     Link2,
     Pencil,
     Plus,
@@ -250,6 +252,152 @@
       toast.error(error instanceof Error ? error.message : "Unknown TMDB confirm error");
     } finally {
       isConfirmingCandidate = false;
+    }
+  };
+
+  let linkDialogOpen = $state(false);
+  let linkTmdbIdInput = $state("");
+  let linkCandidate = $state<{
+    tmdb_id: number;
+    media_type: string;
+    title: string;
+    original_title: string;
+    year: number | null;
+    poster_url: string | null;
+    popularity: number | null;
+    vote_average: number | null;
+  } | null>(null);
+  let isLookingUp = $state(false);
+  let linkLookupError = $state("");
+  let isLinking = $state(false);
+  let linkLookupTimer: ReturnType<typeof setTimeout> | null = null;
+
+  $effect(() => {
+    if (linkDialogOpen) {
+      linkTmdbIdInput = "";
+      linkCandidate = null;
+      linkLookupError = "";
+      isLookingUp = false;
+    }
+  });
+
+  const runTmdbLookup = async () => {
+    const tmdbId = Number(linkTmdbIdInput.trim());
+    isLookingUp = true;
+    linkLookupError = "";
+
+    try {
+      const response = await fetch(`/api/vault/tmdb/lookup?tmdb_id=${tmdbId}`);
+
+      let payload: {
+        message?: string;
+        tmdb_id?: number;
+        media_type?: string;
+        title?: string;
+        original_title?: string;
+        year?: number | null;
+        poster_url?: string | null;
+        popularity?: number | null;
+        vote_average?: number | null;
+      } = {};
+      try {
+        payload = await response.json();
+      } catch {
+        linkCandidate = null;
+        linkLookupError = "Сервер вернул неожиданный ответ. Возможно, нужен перезапуск бэкенда.";
+        return;
+      }
+
+      if (!response.ok) {
+        linkCandidate = null;
+        linkLookupError = payload.message ?? `HTTP ${response.status}`;
+        return;
+      }
+
+      linkCandidate = payload as typeof linkCandidate;
+    } catch (error) {
+      linkCandidate = null;
+      linkLookupError = error instanceof Error ? error.message : "Не удалось найти фильм на TMDB";
+    } finally {
+      isLookingUp = false;
+    }
+  };
+
+  const onLinkIdInput = (event: Event) => {
+    linkTmdbIdInput = (event.currentTarget as HTMLInputElement).value;
+    if (linkLookupTimer) {
+      clearTimeout(linkLookupTimer);
+      linkLookupTimer = null;
+    }
+    linkCandidate = null;
+    linkLookupError = "";
+
+    const raw = linkTmdbIdInput.trim();
+    const tmdbId = Number(raw);
+    if (!raw || !Number.isInteger(tmdbId) || tmdbId <= 0) {
+      return;
+    }
+
+    linkLookupTimer = setTimeout(() => {
+      void runTmdbLookup();
+    }, 450);
+  };
+
+  const linkTmdb = async () => {
+    if (!linkCandidate) {
+      return;
+    }
+
+    isLinking = true;
+
+    try {
+      const response = await fetch(`/api/vault/movies/${movie.slug}/fetch-tmdb-confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tmdb_id: linkCandidate.tmdb_id,
+          media_type: linkCandidate.media_type
+        })
+      });
+
+      const payload = (await response.json()) as {
+        status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
+        message?: string;
+        candidates?: typeof tmdbCandidates;
+      };
+
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) {
+          return;
+        }
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+
+      if (payload.status === "ok") {
+        linkDialogOpen = false;
+        linkTmdbIdInput = "";
+        linkCandidate = null;
+        toast.success(payload.message ?? "TMDB sync done.");
+        await invalidateAll();
+        return;
+      }
+
+      if (payload.status === "needs_confirmation" || payload.status === "needs_user_choice") {
+        tmdbCandidates = payload.candidates ?? [];
+        selectedCandidateId = tmdbCandidates[0]?.tmdb_id ?? null;
+        candidateDialogMode = payload.status;
+        linkDialogOpen = false;
+        candidateDialogOpen = true;
+        toast.warning(payload.message ?? "Нужно подтвердить кандидата.");
+        return;
+      }
+
+      toast.error(payload.message ?? "TMDB sync failed.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unknown TMDB sync error");
+    } finally {
+      isLinking = false;
     }
   };
 
@@ -1067,6 +1215,10 @@
             <RefreshCw class="size-4" />
             Force data
           </Button>
+          <Button variant="outline" onclick={() => { linkDialogOpen = true; }} disabled={isSyncing || isLinking}>
+            <Link class="size-4" />
+            Link TMDB
+          </Button>
           <Button variant="destructive" onclick={() => {
             deleteDialogOpen = true;
           }} disabled={isDeletingMovie}>
@@ -1164,6 +1316,79 @@
       </Button>
       <Button onclick={confirmTmdbCandidate} disabled={isConfirmingCandidate || selectedCandidateId === null}>
         {isConfirmingCandidate ? "Сохраняю..." : "Выбрать"}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={linkDialogOpen}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Привязать к TMDB вручную</Dialog.Title>
+      <Dialog.Description>
+        Вставь TMDB ID нужного фильма. Название и год подтянутся автоматически.
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <div class="space-y-3">
+      <Input
+        type="number"
+        placeholder="Например, 550"
+        bind:value={linkTmdbIdInput}
+        oninput={onLinkIdInput}
+        min="1"
+      />
+
+      {#if isLookingUp}
+        <p class="text-muted-foreground text-sm">Ищем на TMDB…</p>
+      {:else if linkLookupError}
+        <p class="text-destructive text-sm">{linkLookupError}</p>
+      {:else if linkCandidate}
+        <div class="flex items-center gap-3 rounded-xl border p-3">
+          <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
+            {#if linkCandidate.poster_url}
+              <img
+                src={linkCandidate.poster_url}
+                alt={linkCandidate.title}
+                class="h-full w-full object-cover"
+                loading="lazy"
+              />
+            {:else}
+              <span class="text-muted-foreground text-[10px]">no poster</span>
+            {/if}
+          </div>
+          <div class="min-w-0 flex-1 space-y-1">
+            <div class="flex items-center gap-2">
+              <p class="truncate text-sm font-semibold">{linkCandidate.title}</p>
+              {#if linkCandidate.year}
+                <Badge variant="outline" class="shrink-0">{linkCandidate.year}</Badge>
+              {/if}
+            </div>
+            {#if linkCandidate.original_title}
+              <p class="text-muted-foreground truncate text-xs">{linkCandidate.original_title}</p>
+            {/if}
+            <div class="flex flex-wrap gap-2">
+              <Badge variant="secondary">{linkCandidate.media_type}</Badge>
+              <Badge variant="outline">#{linkCandidate.tmdb_id}</Badge>
+              {#if linkCandidate.vote_average}
+                <Badge variant="outline">TMDB {linkCandidate.vote_average.toFixed(1)}</Badge>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {:else if linkTmdbIdInput.trim()}
+        <p class="text-muted-foreground text-sm">Введи корректный TMDB ID.</p>
+      {/if}
+    </div>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => {
+        linkDialogOpen = false;
+      }} disabled={isLinking}>
+        Отмена
+      </Button>
+      <Button onclick={linkTmdb} disabled={isLinking || !linkCandidate}>
+        {isLinking ? "Сохраняю..." : "OK"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

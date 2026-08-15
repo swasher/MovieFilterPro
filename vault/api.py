@@ -907,6 +907,21 @@ def tmdb_search(request, q: str, limit: int = 10):
     return TMDBSearchOut(results=[_build_tmdb_candidate_out(item) for item in results])
 
 
+@api.get("/tmdb/lookup", response=TMDBCandidateOut)
+def tmdb_lookup(request, tmdb_id: int):
+    _require_api_user(request)
+
+    try:
+        candidate = TMDBMovieImportService.lookup_by_id(tmdb_id)
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    if candidate is None:
+        raise HttpError(404, "TMDB ID не найден")
+
+    return _build_tmdb_candidate_out(candidate)
+
+
 @api.get("/connection-events", response=ConnectionEventsOut)
 def connection_events(
     request,
