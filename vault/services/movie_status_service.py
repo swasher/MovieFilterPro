@@ -54,7 +54,10 @@ class MovieStatusService:
 
         if status_key in cls.STATUS_KEY_TO_WATCH_STATUS:
             user_movie.watch_status = cls.STATUS_KEY_TO_WATCH_STATUS[status_key]
-            user_movie.save(update_fields=['watch_status', 'updated_at'])
+            if status_key in ('will_watch', 'wont_watch'):
+                user_movie.rating = None
+                user_movie.watched_at = None
+            user_movie.save(update_fields=['watch_status', 'rating', 'watched_at', 'updated_at'])
             return user_movie
 
         if status_key == 'favorites':

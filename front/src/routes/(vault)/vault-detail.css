@@ -65,6 +65,14 @@
     @apply bg-red-500 hover:bg-red-600;
   }
 
+  .vd-status-icon--active.vd-status-icon--rated {
+    @apply bg-orange-400 hover:bg-orange-500;
+  }
+
+  .vd-status-icon-rating {
+    @apply text-sm font-bold text-white;
+  }
+
   .vd-tooltip {
     @apply bg-popover text-popover-foreground border border-border rounded-md px-2 py-1 text-xs;
   }
@@ -243,6 +251,18 @@
 
   .vd-rating-row {
     @apply flex flex-wrap items-center gap-4;
+  }
+
+  .vd-rating-row--sidebar {
+    @apply gap-2;
+  }
+
+  .vd-star {
+    color: #fb923c;
+  }
+
+  .vd-rating-clear {
+    @apply inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground;
   }
 
   .vd-rating-value {

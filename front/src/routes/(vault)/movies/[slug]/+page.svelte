@@ -103,6 +103,7 @@
     rating: null as number | null,
     note: ""
   });
+  let undoRating = $state<number | null>(null);
 
   const hasComment = $derived(!!userState.note);
   const canSaveComment = $derived(commentDraft.trim() !== userState.note);
@@ -252,6 +253,8 @@
   };
 
   const toggleStatus = async (statusKey: (typeof statusButtons)[number]["key"]) => {
+    const prevRating = userState.rating;
+
     const response = await fetch(`/api/vault/movies/${movie.slug}/toggle-status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -273,6 +276,22 @@
 
     if (payload.user_state) {
       userState = { ...payload.user_state };
+    }
+
+    if (prevRating !== null && payload.user_state && payload.user_state.rating === null) {
+      undoRating = prevRating;
+      toast("Рейтинг сброшен при смене статуса", {
+        duration: 8000,
+        action: {
+          label: "Отменить",
+          onClick: () => {
+            if (undoRating !== null) {
+              setRating(undoRating);
+              undoRating = null;
+            }
+          }
+        }
+      });
     }
   };
 
@@ -531,21 +550,28 @@
             (item.key === "watched" && userState.in_watched) ||
             (item.key === "wont_watch" && userState.in_wont_watch)
           }
+          {@const isRated = item.key === "watched" && isActive && !!userState.rating}
           <Tooltip.Provider>
             <Tooltip.Root>
               <Tooltip.Trigger>
                 <button
                   type="button"
                   class={`vd-status-icon rounded-full size-10 transition-all duration-200 flex items-center justify-center ${
-                    isActive
-                      ? "vd-status-icon--active"
-                      : "vd-status-icon--inactive"
+                    isRated
+                      ? "vd-status-icon--active vd-status-icon--rated"
+                      : isActive
+                        ? "vd-status-icon--active"
+                        : "vd-status-icon--inactive"
                   }`}
                   data-status={item.key}
                   onclick={() => toggleStatus(item.key)}
                   aria-pressed={isActive}
                 >
-                  <Icon class="size-5 transition-colors" />
+                  {#if isRated}
+                    <span class="vd-status-icon-rating">{userState.rating}</span>
+                  {:else}
+                    <Icon class="size-5 transition-colors" />
+                  {/if}
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Content side="bottom" align="center" class="vd-tooltip">
@@ -557,6 +583,35 @@
       </div>
 
       <div class="vd-sidebar-stack">
+{#if !userState.in_will_watch && !userState.in_wont_watch}
+          <div class="vd-rating-row vd-rating-row--sidebar">
+            <StarRating.Root
+              value={userState.rating ?? 0}
+              max={10}
+              class="text-orange-400"
+              onValueChange={(value) => setRating(value)}
+            >
+              {#snippet children({ items })}
+                {#each items as item (item.index)}
+                  <StarRating.Star index={item.index} state={item.state} class="size-5 vd-star" />
+                {/each}
+              {/snippet}
+            </StarRating.Root>
+
+            {#if userState.rating}
+              <button
+                type="button"
+                class="vd-rating-clear"
+                onclick={() => setRating(null)}
+                title="Сбросить оценку"
+                aria-label="Сбросить оценку"
+              >
+                <X class="size-3" />
+              </button>
+            {/if}
+          </div>
+        {/if}
+
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
@@ -758,30 +813,7 @@
         </CardHeader>
 
         <CardContent class="vd-card-content">
-          <div class="vd-section">
-            <p class="vd-section-title">Моя оценка</p>
-            <div class="vd-rating-row">
-              <StarRating.Root
-                value={userState.rating ?? 0}
-                max={10}
-                class="text-amber-500"
-                onValueChange={(value) => setRating(value)}
-              >
-                {#snippet children({ items })}
-                  {#each items as item (item.index)}
-                    <StarRating.Star index={item.index} state={item.state} class="size-7" />
-                  {/each}
-                {/snippet}
-              </StarRating.Root>
-
-              <div class="vd-rating-value">{userState.rating ?? 0}/10</div>
-
-              {#if userState.rating}
-                <Button variant="ghost" size="sm" onclick={() => setRating(null)}>Clear</Button>
-              {/if}
-            </div>
-          </div>
-
+          <Separator />
           {#if movie.description}
             <div class="vd-section">
               <p class="vd-section-title">About</p>

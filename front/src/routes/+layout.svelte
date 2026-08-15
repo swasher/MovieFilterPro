@@ -12,7 +12,7 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<Toaster />
+<Toaster position="top-center" />
 <AppShell {headerLinks} auth={data.auth} siteVersion={data.siteVersion} appName="MovieFilter Pro">
   {@render children?.()}
 </AppShell>
