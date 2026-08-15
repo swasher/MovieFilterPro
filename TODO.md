@@ -1,9 +1,9 @@
 VAULT
 ------
 
-[ ] Поиск без case  
+[x] Поиск без case  
 [x] Добавление/удаление фильма в пользовательские списки (на странице фильма)  
-[ ] TMDB needs_user_choice показать кандидатов TMDB и дать выбрать нужный фильм через fetch_tmdb_data_confirm  
+[x] TMDB needs_user_choice показать кандидатов TMDB и дать выбрать нужный фильм через fetch_tmdb_data_confirm  
 [x] Сортировка фильмов (по году, по рейтингу, по названию,по дате добавления в список)  
 [?] Выбор кандидата при Fetch если их несколько; вроде сделано, но не нашел на чем протестить
 [x] CRUD для пользовательских списков - создание, добавление, удаление, переименование. Нет ни эндпоинтов, ни реализации на фронте. Файл-источник: [vault/urls.py](C:\Users\swasher\GitHub\MovieFilterPro\vault\urls.py), [vault/views.py](C:\Users\swasher\GitHub\MovieFilterPro\vault\views.py), [my_lists.html](C:\Users\swasher\GitHub\MovieFilterPro\vault\templates\vault\my_lists.html)
