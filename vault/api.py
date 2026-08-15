@@ -35,6 +35,7 @@ class MovieOut(Schema):
     poster_url: str | None = None
     movie_type: str | None = None
     in_watched: bool = False
+    in_wont_watch: bool = False
     in_favorites: bool = False
 
 
@@ -499,10 +500,12 @@ def _build_connection_event_out(item: VaultConnectionEvent) -> ConnectionEventOu
 
 def _build_movie_out(movie: Movie, user=None) -> MovieOut:
     in_watched = False
+    in_wont_watch = False
     in_favorites = False
     if user is not None:
         state = MovieStatusService.get_movie_status(user, movie)
         in_watched = state["in_watched"]
+        in_wont_watch = state["in_wont_watch"]
         in_favorites = state["in_favorites"]
     return MovieOut(
         id=movie.id,
@@ -513,8 +516,16 @@ def _build_movie_out(movie: Movie, user=None) -> MovieOut:
         poster_url=movie.poster_url,
         movie_type=movie.movie_type,
         in_watched=in_watched,
+        in_wont_watch=in_wont_watch,
         in_favorites=in_favorites,
     )
+
+
+def _ui_status_display(movie: Movie) -> str:
+    """Статус для UI: сериал в статусе released (между сезонами) показываем как «ПАУЗА»."""
+    if movie.movie_type == Movie.MovieType.SERIES and movie.status == Movie.Status.RELEASED:
+        return "ПАУЗА"
+    return movie.get_status_display()
 
 
 def _build_season_out(season: Season, user=None) -> SeasonOut:
@@ -559,7 +570,7 @@ def list_movies(
     watch_status: str | None = None,
 ):
     user = _resolve_api_user(request)
-    qs = Movie.objects.filter(status=Movie.Status.RELEASED)
+    qs = Movie.objects.all()
 
     if genre:
         genre_slugs = [g.strip() for g in genre.split(",") if g.strip()]
@@ -677,7 +688,7 @@ def movie_detail(request, slug: str):
         movie_type_display=movie.get_movie_type_display(),
         tmdb_media_type=movie.tmdb_media_type,
         status=movie.status,
-        status_display=movie.get_status_display(),
+        status_display=_ui_status_display(movie),
         imdb_rating=_decimal_to_float(movie.imdb_rating),
         imdb_id=movie.imdb_id or None,
         kinopoisk_id=movie.kinopoisk_id or None,

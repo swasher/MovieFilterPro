@@ -9,7 +9,7 @@ import { Button } from "$lib/components/ui/button";
 import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
-import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw } from "@lucide/svelte";
+import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X } from "@lucide/svelte";
 
 type MovieCard = {
   id: number;
@@ -20,6 +20,7 @@ type MovieCard = {
   poster_url: string | null;
   movie_type: string | null;
   in_watched: boolean;
+  in_wont_watch: boolean;
   in_favorites: boolean;
 };
 
@@ -635,6 +636,15 @@ type TmdbSearchResult = {
                 <CardContent class="h-full !p-0">
                   {#if movie.movie_type === "series"}
                     <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">SERIES</Badge>
+                  {/if}
+
+                  {#if movie.in_wont_watch && data.activeStatus !== "wont_watch"}
+                    <span
+                      class="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm"
+                      title="Не буду смотреть"
+                    >
+                      <X class="size-3.5" />
+                    </span>
                   {/if}
 
                   <div class="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">

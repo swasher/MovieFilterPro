@@ -9,6 +9,7 @@ type ApiMovie = {
   poster_url: string | null;
   movie_type: string | null;
   in_watched: boolean;
+  in_wont_watch: boolean;
   in_favorites: boolean;
 };
 

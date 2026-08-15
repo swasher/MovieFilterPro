@@ -36,6 +36,30 @@
   let { data } = $props();
   const movie = $derived(data.movie);
 
+  const isSeries = $derived(movie.movie_type === "series");
+  const isSeriesFinished = $derived(
+    isSeries && ["completed", "cancelled"].includes(movie.status)
+  );
+  const yearLabel = $derived(
+    movie.year
+      ? isSeries && !isSeriesFinished
+        ? `${movie.year} — …`
+        : String(movie.year)
+      : ""
+  );
+  const releasedSeasonsCount = $derived(
+    movie.seasons.filter((s) => s.season_number > 0 && s.episodes_count > 0).length
+  );
+  const seasonsLabel = $derived(pluralizeSeasons(releasedSeasonsCount));
+
+  function pluralizeSeasons(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${n} сезон`;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} сезона`;
+    return `${n} сезонов`;
+  }
+
   let isSyncing = $state(false);
   let isConfirmingCandidate = $state(false);
   let isDeletingMovie = $state(false);
@@ -630,8 +654,8 @@
       <Card class="vd-card">
         <CardHeader class="vd-hero">
           <div class="vd-title-block">
-            <div class="flex items-center gap-2">
-              {#if movie.movie_type === "series"}
+            <div class="flex flex-wrap items-center gap-2">
+              {#if isSeries}
                 <p class="vd-overline">SERIES</p>
               {:else}
                 <p class="vd-overline">Movie</p>
@@ -672,6 +696,15 @@
                   </a>
                 {/if}
               </span>
+              {#if isSeries}
+                <span class="vd-service-badge vd-service-badge--status">{movie.status_display}</span>
+                {#if releasedSeasonsCount > 0}
+                  <span class="vd-service-badge vd-service-badge--info">{seasonsLabel}</span>
+                {/if}
+              {/if}
+              {#if yearLabel}
+                <span class="vd-service-badge vd-service-badge--info">{yearLabel}</span>
+              {/if}
             </div>
             <CardTitle class="vd-title">{movie.title}</CardTitle>
             {#if movie.original_title}
@@ -680,10 +713,6 @@
           </div>
 
           <div class="vd-facts-row">
-            {#if movie.year}
-              <span class="vd-fact-inline">{movie.year}</span>
-            {/if}
-            <span class="vd-fact-inline">{movie.movie_type_display}</span>
             {#if movie.duration}
               <span class="vd-fact-inline inline-flex items-center gap-1.5">
                 <Clock3 class="size-3.5" />

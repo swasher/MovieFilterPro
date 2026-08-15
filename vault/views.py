@@ -198,7 +198,7 @@ class MovieListView(ListView):
     }
 
     def get_queryset(self):
-        queryset = Movie.objects.filter(status='released').prefetch_related('genres', 'countries')
+        queryset = Movie.objects.all().prefetch_related('genres', 'countries')
         queryset = self._apply_status_filter(queryset)
 
         # Сортировка
@@ -246,8 +246,7 @@ class MovieByGenreView(ListView):
     def get_queryset(self):
         self.genre = get_object_or_404(Genre, slug=self.kwargs['slug'])
         queryset = Movie.objects.filter(
-            genres=self.genre,
-            status='released'
+            genres=self.genre
         ).prefetch_related('genres', 'countries')
         queryset = self._apply_status_filter(queryset)
 
