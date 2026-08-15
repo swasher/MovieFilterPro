@@ -23,6 +23,12 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 
   let { children, sidebarItems = $bindable() }: Props = $props();
 
+  let items = $state<SidebarItem[]>(sidebarItems);
+
+  $effect(() => {
+    items = sidebarItems;
+  });
+
   let editMode = $state(false);
 
   // Rename dialog state
@@ -65,7 +71,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   }
 
   function getCustomGroup(): SidebarItem | undefined {
-    return sidebarItems.find((g) => g.id === "custom");
+    return items.find((g) => g.id === "custom");
   }
 
   async function refreshSidebar() {
@@ -73,7 +79,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
       const res = await fetch("/api/vault/sidebar");
       if (!res.ok) return;
       const data = await res.json();
-      sidebarItems = data.map((group: any) => ({
+      items = data.map((group: any) => ({
         id: group.id,
         title: group.title,
         href: group.href || "#",
@@ -158,7 +164,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   }
 
   async function saveGroupOrder(groupId: string) {
-    const group = sidebarItems.find((g) => g.id === groupId);
+    const group = items.find((g) => g.id === groupId);
     if (!group?.children) return;
     const keys = group.children.map((c) => c.id);
     const payload: { system_keys?: string[]; custom_keys?: string[] } = {};
@@ -259,7 +265,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
         <Sidebar.Group>
           <Sidebar.GroupContent>
             <Sidebar.Menu>
-              {#each sidebarItems as group, groupIndex (group.id)}
+              {#each items as group, groupIndex (group.id)}
                 {#if group.id === "system" || group.id === "custom"}
                   {#if group.children && group.children.length > 0}
                     <Sortable.Root bind:items={group.children} onDragEnd={() => saveGroupOrder(group.id)}>
@@ -276,7 +282,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
                   {/each}
                 {/if}
 
-                {#if groupIndex < sidebarItems.length - 1}
+                {#if groupIndex < items.length - 1}
                   <Sidebar.Separator class="my-1" />
                 {/if}
               {/each}
