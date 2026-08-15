@@ -12,8 +12,8 @@ export type SidebarItem = {
 };
 
 export const headerLinks: HeaderLink[] = [
-  { label: "Kinozal", href: "/kinozal" },
   { label: "Vault", href: "/" },
+  { label: "Kinozal", href: "/kinozal" },
   { label: "Plex", href: "/plex" },
   { label: "Scan", href: "/scan" }
 ];
