@@ -48,6 +48,7 @@
     Languages,
     RefreshCw,
     Search,
+    Star,
     X
   } from "@lucide/svelte";
 
@@ -1009,7 +1010,14 @@
                       <span class="kz-meta-label kz-meta-label--inline">Actors</span>
                       {#if compactList(movie.actors, 6).length}
                         {#each compactList(movie.actors, 6) as actor (actor)}
-                          <span class="kz-meta-tag">{actor}</span>
+                          {#if movie.favorite_actors?.includes(actor)}
+                            <span class="kz-meta-tag kz-meta-tag--favorite">
+                              <Star class="mr-1 size-3" />
+                              {actor}
+                            </span>
+                          {:else}
+                            <span class="kz-meta-tag">{actor}</span>
+                          {/if}
                         {/each}
                       {:else}
                         <span class="kz-meta-empty">—</span>

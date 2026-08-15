@@ -40,6 +40,7 @@ export type KinozalMovie = {
   countries: string[];
   directors: string[];
   actors: string[];
+  favorite_actors?: string[];
   open_url: string | null;
   kinorium_url?: string | null;
 };

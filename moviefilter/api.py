@@ -18,6 +18,7 @@ from moviefilter.services.torrent_download_service import (
     download_torrent_file,
     validate_download_preferences,
 )
+from vault.models import FavoritePerson
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 
 
@@ -78,6 +79,7 @@ class KinozalMovieOut(Schema):
     countries: list[str]
     directors: list[str]
     actors: list[str]
+    favorite_actors: list[str] = []
     open_url: str | None = None
     kinorium_url: str | None = None
 
@@ -267,7 +269,28 @@ def _build_kinorium_url(movie: MovieRSS) -> str:
     return url + search_string
 
 
-def _serialize_movie(request, movie: MovieRSS) -> KinozalMovieOut:
+def _normalize_actor_name(name: str) -> str:
+    return " ".join((name or "").strip().lower().split())
+
+
+def _build_favorite_actor_names(user) -> set[str]:
+    favorites = (
+        FavoritePerson.objects.filter(user=user)
+        .select_related("person")
+        .only("person__name", "person__original_name")
+    )
+    names: set[str] = set()
+    for favorite in favorites:
+        person = favorite.person
+        for raw in (person.name, person.original_name):
+            normalized = _normalize_actor_name(raw)
+            if normalized:
+                names.add(normalized)
+    return names
+
+
+def _serialize_movie(request, movie: MovieRSS, favorite_actor_names: set[str]) -> KinozalMovieOut:
+    favorite_names = favorite_actor_names or set()
     return KinozalMovieOut(
         id=movie.id,
         kinozal_id=movie.kinozal_id,
@@ -292,6 +315,9 @@ def _serialize_movie(request, movie: MovieRSS) -> KinozalMovieOut:
         countries=movie.countries_as_list,
         directors=movie.director_as_list,
         actors=movie.actors_as_list,
+        favorite_actors=[
+            actor for actor in movie.actors_as_list if _normalize_actor_name(actor) in favorite_names
+        ],
         open_url=_build_open_url(movie),
         kinorium_url=_build_kinorium_url(movie),
     )
@@ -478,8 +504,10 @@ def list_movies(
     page_items = movies[:page_size]
     next_cursor = str(offset + page_size) if has_more else None
 
+    favorite_actor_names = _build_favorite_actor_names(request.user)
+
     return KinozalMoviesPageOut(
-        items=[_serialize_movie(request, movie) for movie in page_items],
+        items=[_serialize_movie(request, movie, favorite_actor_names) for movie in page_items],
         next_cursor=next_cursor,
         has_more=has_more,
         limit=page_size,
