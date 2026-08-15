@@ -4,10 +4,29 @@
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
-  import { ArrowLeft } from "@lucide/svelte";
+  import { ArrowLeft, Heart } from "@lucide/svelte";
 
   let { data } = $props();
   const person = $derived(data.person);
+
+  let isFavorite = $state(person.is_favorite);
+  let favoriteBusy = $state(false);
+
+  const toggleFavorite = async () => {
+    if (favoriteBusy) return;
+    favoriteBusy = true;
+    try {
+      const res = await fetch(`/api/vault/persons/${person.id}/toggle-favorite`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const result = (await res.json()) as { is_favorite: boolean };
+        isFavorite = result.is_favorite;
+      }
+    } finally {
+      favoriteBusy = false;
+    }
+  };
 
   const bioParagraphs = $derived(
     (person.biography ?? "")
@@ -56,30 +75,42 @@
   </div>
 
   <div class="vd-layout vd-layout--person">
-    <Card class="vd-poster-card !gap-0 !py-0 self-start">
-      <CardContent class="!p-0">
-        {#if person.photo_url}
-          <img src={person.photo_url} alt={person.name} class="vd-photo" />
-        {:else}
-          <div class="vd-photo-fallback">
-            <Avatar.Root class="size-28">
-              <Avatar.Fallback class="text-2xl">{initials(person.name)}</Avatar.Fallback>
-            </Avatar.Root>
-          </div>
-        {/if}
-      </CardContent>
-    </Card>
+    <div class="flex w-full flex-col gap-3 self-start">
+      <Card class="vd-poster-card !gap-0 !py-0">
+        <CardContent class="!p-0">
+          {#if person.photo_url}
+            <img src={person.photo_url} alt={person.name} class="vd-photo" />
+          {:else}
+            <div class="vd-photo-fallback">
+              <Avatar.Root class="size-28">
+                <Avatar.Fallback class="text-2xl">{initials(person.name)}</Avatar.Fallback>
+              </Avatar.Root>
+            </div>
+          {/if}
+        </CardContent>
+      </Card>
+      <Button
+        variant={isFavorite ? "default" : "outline"}
+        class={isFavorite
+          ? "w-full bg-red-500 text-white hover:bg-red-600"
+          : "w-full text-red-500 hover:bg-red-500/10"}
+        onclick={toggleFavorite}
+      >
+        <Heart class={isFavorite ? "fill-current" : ""} />
+        {isFavorite ? "In favorites" : "Add to favorites"}
+      </Button>
+    </div>
 
     <div class="space-y-5">
       <Card class="vd-card">
         <CardHeader class="vd-hero">
           <div class="vd-title-block">
-            <p class="vd-overline">Person</p>
-            <CardTitle class="vd-title">{person.name}</CardTitle>
-            {#if person.original_name && person.original_name !== person.name}
-              <CardDescription class="vd-subtitle">{person.original_name}</CardDescription>
-            {/if}
-          </div>
+              <p class="vd-overline">Person</p>
+              <CardTitle class="vd-title">{person.name}</CardTitle>
+              {#if person.original_name && person.original_name !== person.name}
+                <CardDescription class="vd-subtitle">{person.original_name}</CardDescription>
+              {/if}
+            </div>
 
           <div class="vd-facts-row">
             <span class="vd-fact-inline">{person.movies_count} films</span>

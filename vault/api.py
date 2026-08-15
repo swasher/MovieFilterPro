@@ -6,6 +6,7 @@ from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
 from vault.models import (
+    FavoritePerson,
     Genre,
     Movie,
     MoviePerson,
@@ -371,6 +372,11 @@ class PersonDetailOut(Schema):
     actor_count: int
     director_count: int
     producer_count: int
+    is_favorite: bool
+
+
+class TogglePersonFavoriteOut(Schema):
+    is_favorite: bool
 
 
 api = NinjaAPI(title="Vault API", version="1.0")
@@ -1089,6 +1095,11 @@ def person_detail(request, person_id: int):
     if person is None:
         raise HttpError(404, "Person not found")
 
+    user = _resolve_api_user(request)
+    is_favorite = False
+    if user is not None:
+        is_favorite = FavoritePerson.objects.filter(user=user, person=person).exists()
+
     filmography_qs = (
         MoviePerson.objects.filter(person=person)
         .select_related("movie")
@@ -1138,7 +1149,23 @@ def person_detail(request, person_id: int):
         actor_count=filmography_qs.filter(role="actor").count(),
         director_count=filmography_qs.filter(role="director").count(),
         producer_count=filmography_qs.filter(role="producer").count(),
+        is_favorite=is_favorite,
     )
+
+
+@api.post("/persons/{person_id}/toggle-favorite", response=TogglePersonFavoriteOut)
+def person_toggle_favorite(request, person_id: int):
+    person = Person.objects.filter(id=person_id).first()
+    if person is None:
+        raise HttpError(404, "Person not found")
+
+    user = _require_api_user(request)
+
+    favorite, created = FavoritePerson.objects.get_or_create(user=user, person=person)
+    if not created:
+        favorite.delete()
+
+    return TogglePersonFavoriteOut(is_favorite=created)
 
 
 SYSTEM_SIDEBAR_KEYS = ["watched", "will_watch", "wont_watch", "favorites"]

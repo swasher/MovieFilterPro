@@ -29,6 +29,7 @@ type PersonDetail = {
   actor_count: number;
   director_count: number;
   producer_count: number;
+  is_favorite: boolean;
 };
 
 export const load: PageLoad = async ({ fetch, params }) => {
