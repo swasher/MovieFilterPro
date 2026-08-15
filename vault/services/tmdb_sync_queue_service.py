@@ -91,6 +91,16 @@ class TMDBSyncQueueService:
         return removed
 
     @classmethod
+    def remove_synced(cls) -> int:
+        """Удалить только успешно синхронизированные записи очереди."""
+        with transaction.atomic():
+            removed, _ = TMDBSyncQueueItem.objects.filter(
+                state=TMDBSyncQueueItem.State.SYNCED
+            ).delete()
+        logger.info(f"TMDB_SYNC_REMOVE_SYNCED | removed={removed}")
+        return removed
+
+    @classmethod
     def remove_item(cls, item_id: int) -> TMDBSyncQueueItem | None:
         """Удалить одну запись очереди (без остановки обработки)."""
         item = TMDBSyncQueueItem.objects.filter(pk=item_id).first()

@@ -21,7 +21,7 @@
   } from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { ExternalLink, Play, Plus, Square, Trash2 } from "@lucide/svelte";
+  import { CheckCheck, ExternalLink, Play, Plus, Square, Trash2 } from "@lucide/svelte";
 
   let { data } = $props();
 
@@ -65,6 +65,7 @@
   let isStarting = $state(false);
   let isStopping = $state(false);
   let isRemoving = $state(false);
+  let isRemovingSynced = $state(false);
   let removeDialogOpen = $state(false);
   let delayInput = $state(String(delaySeconds));
   let isSavingDelay = $state(false);
@@ -224,6 +225,26 @@
     }
   };
 
+  const removeSynced = async () => {
+    if (isRemovingSynced) return;
+    isRemovingSynced = true;
+    try {
+      const response = await fetch("/api/vault/tmdb-sync/queue/synced", { method: "DELETE" });
+      const payload = (await response.json()) as { deleted?: number; detail?: string };
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.detail)) return;
+        toast.error(payload.detail ?? `HTTP ${response.status}`);
+        return;
+      }
+      toast.success(`Удалено готовых: ${payload.deleted ?? 0}.`);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось удалить готовые записи");
+    } finally {
+      isRemovingSynced = false;
+    }
+  };
+
   const saveDelay = async () => {
     const parsed = parseInt(delayInput, 10);
     if (isNaN(parsed) || parsed < 1 || parsed > 3600) {
@@ -324,6 +345,16 @@
       >
         <Square data-icon="inline-start" />
         Stop
+      </Button>
+
+      <Button
+        variant="outline"
+        onclick={removeSynced}
+        disabled={isRemovingSynced}
+        class="gap-2"
+      >
+        <CheckCheck data-icon="inline-start" />
+        Удалить готовые
       </Button>
 
       <Button variant="destructive" onclick={() => (removeDialogOpen = true)} class="gap-2">

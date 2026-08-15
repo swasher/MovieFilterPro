@@ -254,3 +254,26 @@ class TMDBSyncQueueServiceTests(TestCase):
         with self.assertRaises(ValueError):
             TMDBSyncQueueService.remove_item(item.id)
         self.assertTrue(TMDBSyncQueueItem.objects.filter(pk=item.id).exists())
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_remove_synced_deletes_only_synced_entries(self, sync_mock):
+        movie1 = self._movie(title="Target 1")
+        movie2 = self._movie(title="Target 2")
+        movie3 = self._movie(title="Target 3")
+        TMDBSyncQueueService.enqueue_unsynced()
+
+        item1 = TMDBSyncQueueItem.objects.get(movie=movie1)
+        item2 = TMDBSyncQueueItem.objects.get(movie=movie2)
+        item3 = TMDBSyncQueueItem.objects.get(movie=movie3)
+
+        item1.state = TMDBSyncQueueItem.State.SYNCED
+        item1.save(update_fields=["state"])
+        item2.state = TMDBSyncQueueItem.State.CONFIRM
+        item2.save(update_fields=["state"])
+        # item3 остаётся PENDING
+
+        removed = TMDBSyncQueueService.remove_synced()
+        self.assertEqual(removed, 1)
+        self.assertFalse(TMDBSyncQueueItem.objects.filter(pk=item1.id).exists())
+        self.assertTrue(TMDBSyncQueueItem.objects.filter(pk=item2.id).exists())
+        self.assertTrue(TMDBSyncQueueItem.objects.filter(pk=item3.id).exists())

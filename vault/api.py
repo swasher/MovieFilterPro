@@ -1226,6 +1226,13 @@ def tmdb_sync_delete_all(request):
     return TMDBSyncQueueDeleteOut(deleted=deleted)
 
 
+@api.delete("/tmdb-sync/queue/synced", response=TMDBSyncQueueDeleteOut)
+def tmdb_sync_delete_synced(request):
+    _require_api_user(request)
+    deleted = TMDBSyncQueueService.remove_synced()
+    return TMDBSyncQueueDeleteOut(deleted=deleted)
+
+
 @api.delete("/tmdb-sync/items/{item_id}", response=TMDBSyncQueueDeleteOut)
 def tmdb_sync_delete_item(request, item_id: int):
     _require_api_user(request)
