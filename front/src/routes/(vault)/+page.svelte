@@ -52,6 +52,7 @@ type TmdbSearchResult = {
   let tooltipY = $state(0);
   let searchQuery = $state("");
   let searchDebounceHandle = $state<ReturnType<typeof setTimeout> | null>(null);
+  let lastSubmittedSearchQuery = "";
   let activeOrder = $state("-year");
   let isListView = $state(false);
 
@@ -99,7 +100,13 @@ type TmdbSearchResult = {
   const trimmedTmdbSearchQuery = $derived(tmdbSearchQuery.trim());
 
   $effect(() => {
-    searchQuery = data.activeQuery ?? "";
+    const active = data.activeQuery ?? "";
+    // Sync from URL only when the user hasn't typed anything since the last submit
+    // AND the URL changed for a reason other than echoing back our own (trimmed) search,
+    // otherwise a stale server value would eat the last typed character or trailing space.
+    if (searchQuery === lastSubmittedSearchQuery && active !== lastSubmittedSearchQuery.trim()) {
+      searchQuery = active;
+    }
     activeOrder = data.activeOrder ?? "-year";
   });
 
@@ -240,6 +247,7 @@ type TmdbSearchResult = {
   const applySearch = async (value: string) => {
     const params = new URLSearchParams(window.location.search);
     const trimmedValue = value.trim();
+    lastSubmittedSearchQuery = value;
 
     if (trimmedValue) {
       params.set("q", trimmedValue);
