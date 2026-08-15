@@ -615,7 +615,7 @@
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
-              <Button {...props} variant="secondary" class="w-full justify-between">
+              <Button {...props} variant="outline" size="sm" class="w-full justify-between border-dashed font-normal text-muted-foreground hover:text-foreground">
                 <span class="inline-flex items-center gap-1.5">
                   <Plus class="size-3.5" />
                   Добавить в список
