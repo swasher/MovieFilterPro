@@ -19,6 +19,7 @@
     ChevronDown,
     Clock3,
     ExternalLink,
+    Globe,
     Heart,
     Link2,
     Pencil,
@@ -757,6 +758,29 @@
                     title="Open on Kinopoisk"
                   >
                     Кинопоиск
+                  </a>
+                {/if}
+                {#if movie.tvdb_id}
+                  <a
+                    href="https://www.thetvdb.com/dereferrer/series/{movie.tvdb_id}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="vd-service-badge vd-service-badge--tvdb"
+                    title="Open on TVDB"
+                  >
+                    TVDB
+                  </a>
+                {/if}
+                {#if movie.homepage}
+                  <a
+                    href={movie.homepage}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="vd-service-badge vd-service-badge--site"
+                    title="Официальный сайт"
+                  >
+                    <Globe class="size-3" />
+                    Site
                   </a>
                 {/if}
                 {#if movie.trailer_url}

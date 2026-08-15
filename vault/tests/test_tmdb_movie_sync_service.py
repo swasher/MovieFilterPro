@@ -49,6 +49,8 @@ def _movie_details_with_people():
         title="Интерстеллар",
         original_title="Interstellar",
         overview="Space travel",
+        imdb_id="tt0816692",
+        homepage="https://www.interstellar-movie.com",
         release_date=date(2014, 11, 7),
         runtime=169,
         poster_path="/poster.jpg",
@@ -169,6 +171,9 @@ class TMDBMovieSyncServiceTests(TestCase):
         self.assertEqual(movie.original_title, "Interstellar")
         self.assertEqual(movie.poster, "/poster.jpg")
         self.assertEqual(movie.trailer_url, "https://www.youtube.com/watch?v=abc123")
+        self.assertEqual(movie.imdb_id, "tt0816692")
+        self.assertEqual(movie.homepage, "https://www.interstellar-movie.com")
+        self.assertIsNone(movie.tvdb_id)
 
         genre_names = set(movie.genres.values_list("name", flat=True))
         self.assertEqual(genre_names, {"Фантастика", "Драма"})

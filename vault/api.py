@@ -54,6 +54,8 @@ class MovieDetailOut(Schema):
     imdb_rating: float | None = None
     imdb_id: str | None = None
     kinopoisk_id: int | None = None
+    tvdb_id: int | None = None
+    homepage: str | None = None
     poster_url: str | None = None
     duration: int | None = None
     age_rating: str | None = None
@@ -692,6 +694,8 @@ def movie_detail(request, slug: str):
         imdb_rating=_decimal_to_float(movie.imdb_rating),
         imdb_id=movie.imdb_id or None,
         kinopoisk_id=movie.kinopoisk_id or None,
+        tvdb_id=movie.tvdb_id or None,
+        homepage=movie.homepage or None,
         poster_url=movie.poster_url,
         duration=movie.duration,
         age_rating=movie.age_rating or None,

@@ -217,6 +217,11 @@ class TMDBMovieSyncService:
         set_field("budget", budget)
         set_field("box_office", revenue)
 
+        # Внешние ID и официальный сайт
+        set_field("imdb_id", cls._clean_text(getattr(details, "imdb_id", None), 15, "") or None)
+        set_field("homepage", getattr(details, "homepage", None) or "")
+        set_field("tvdb_id", None)
+
     @classmethod
     def _apply_tv_payload(cls, movie: Movie, details, set_field):
         first_air_date = getattr(details, "first_air_date", None)
@@ -245,6 +250,11 @@ class TMDBMovieSyncService:
         # Для ТВ чистим movie-only поля.
         set_field("budget", None)
         set_field("box_office", None)
+
+        # Внешние ID и официальный сайт
+        set_field("imdb_id", cls._clean_text(getattr(details, "imdb_id", None), 15, "") or None)
+        set_field("homepage", getattr(details, "homepage", None) or "")
+        set_field("tvdb_id", cls._safe_int(getattr(details, "tvdb_id", None)))
 
         if movie.movie_type == Movie.MovieType.MOVIE:
             set_field("movie_type", Movie.MovieType.SERIES)

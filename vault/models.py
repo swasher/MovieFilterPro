@@ -154,6 +154,8 @@ class Movie(models.Model):
     imdb_votes = models.PositiveIntegerField('Голосов IMDb', null=True, blank=True)
     imdb_id = models.CharField('IMDb ID', max_length=15, null=True, blank=True, db_index=True)
     kinopoisk_id = models.PositiveIntegerField('Kinopoisk ID', null=True, blank=True, db_index=True)
+    tvdb_id = models.PositiveIntegerField('TVDB ID', null=True, blank=True, db_index=True)
+    homepage = models.URLField('Официальный сайт', max_length=500, null=True, blank=True)
 
     created_at = models.DateTimeField('Создано', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлено', auto_now=True)
