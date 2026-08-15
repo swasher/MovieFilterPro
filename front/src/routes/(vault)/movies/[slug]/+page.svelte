@@ -707,8 +707,7 @@
     </div>
 
     <div class="space-y-5">
-      <Card class="vd-card">
-        <CardHeader class="vd-hero">
+      <Card class="vd-card px-6">
           <div class="vd-title-block">
             <div class="flex flex-wrap items-center gap-2">
               {#if isSeries}
@@ -799,27 +798,23 @@
           </div>
 
           <div class="vd-facts-grid">
-            <dl class="vd-facts-list">
-              <div class="vd-fact">
-                <dt class="vd-fact-label">Genres</dt>
-                <dd class="vd-fact-value">{compactText(movie.genres)}</dd>
-              </div>
-              <div class="vd-fact">
-                <dt class="vd-fact-label">Countries</dt>
-                <dd class="vd-fact-value">{compactText(movie.countries)}</dd>
-              </div>
-            </dl>
-          </div>
-        </CardHeader>
-
-        <CardContent class="vd-card-content">
-          <Separator />
-          {#if movie.description}
-            <div class="vd-section">
-              <p class="vd-section-title">About</p>
-              <p class="vd-copy">{movie.description}</p>
+            <div class="vd-fact md:col-span-2">
+              <dt class="vd-fact-label">Genres</dt>
+              <dd class="vd-fact-value">{compactText(movie.genres)}</dd>
             </div>
-          {/if}
+            <div class="vd-fact md:col-span-2">
+              <dt class="vd-fact-label">Countries</dt>
+              <dd class="vd-fact-value">{compactText(movie.countries)}</dd>
+            </div>
+            {#if movie.description}
+              <div class="vd-fact md:col-span-2">
+                <dt class="vd-fact-label">Plot</dt>
+                <dd class="vd-fact-value">{movie.description}</dd>
+              </div>
+            {/if}
+          </div>
+
+          <Separator />
 
           <div class="vd-section">
             <div class="vd-section-header">
@@ -917,7 +912,6 @@
               </div>
             </div>
           </div>
-        </CardContent>
       </Card>
 
 
