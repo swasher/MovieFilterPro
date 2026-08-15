@@ -178,7 +178,7 @@ import XIcon from "@lucide/svelte/icons/x";
                       {#snippet child({ props })}
                         <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
                           <span>{subItem.title}</span>
-                          {#if typeof subItem.count === "number"}
+                          {#if typeof subItem.count === "number" && !(editMode && isCustomList(subItem.id))}
                             <button
                               type="button"
                               class="ml-auto relative inline-flex items-center justify-center overflow-hidden rounded-full border border-transparent bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground transition-colors duration-200"
@@ -207,7 +207,10 @@ import XIcon from "@lucide/svelte/icons/x";
                     </Sidebar.MenuButton>
 
                     {#if editMode && group.id === "custom" && isCustomList(subItem.id)}
-                      <div class="ml-1 flex shrink-0 gap-0.5">
+                      <div
+                        class="absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 group-data-[collapsible=icon]:hidden"
+                        data-sidebar="menu-action"
+                      >
                         <button
                           class="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 items-center justify-center rounded-sm"
                           title="Переименовать"
