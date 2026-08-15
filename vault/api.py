@@ -11,6 +11,7 @@ from vault.models import (
     MoviePerson,
     Person,
     Season,
+    SidebarLayout,
     TMDBSyncQueueItem,
     UserList,
     UserListMovie,
@@ -113,6 +114,16 @@ class SidebarGroupOut(Schema):
     title: str
     href: str = "#"
     children: list[SidebarItemOut]
+
+
+class SidebarOrderIn(Schema):
+    system_keys: list[str] = []
+    custom_keys: list[str] = []
+
+
+class SidebarOrderOut(Schema):
+    system_keys: list[str]
+    custom_keys: list[str]
 
 
 class ConnectionEventMovieRefOut(Schema):
@@ -1076,6 +1087,29 @@ def person_detail(request, person_id: int):
     )
 
 
+SYSTEM_SIDEBAR_KEYS = ["watched", "will_watch", "wont_watch", "favorites"]
+
+SYSTEM_SIDEBAR_ITEMS = [
+    SidebarItemOut(id="watched", title="Просмотрено", href="/?status=watched", count=0),
+    SidebarItemOut(id="will_watch", title="Буду смотреть", href="/?status=will_watch", count=0),
+    SidebarItemOut(id="wont_watch", title="Не буду смотреть", href="/?status=wont_watch", count=0),
+    SidebarItemOut(id="favorites", title="Избранное", href="/?status=favorites", count=0),
+]
+
+
+def _order_system_keys(stored_keys: list[str]) -> list[str]:
+    stored = list(dict.fromkeys(key for key in stored_keys if key in SYSTEM_SIDEBAR_KEYS))
+    return stored + [key for key in SYSTEM_SIDEBAR_KEYS if key not in stored]
+
+
+def _order_custom_keys(stored_keys: list[str], custom_items: list[SidebarItemOut]) -> list[SidebarItemOut]:
+    by_id = {item.id: item for item in custom_items}
+    stored = list(dict.fromkeys(key for key in stored_keys if key in by_id))
+    ordered = [by_id[key] for key in stored]
+    ordered.extend(item for item in custom_items if item.id not in stored)
+    return ordered
+
+
 @api.get("/sidebar", response=list[SidebarGroupOut])
 def sidebar_data(request):
     user = _resolve_api_user(request)
@@ -1084,49 +1118,93 @@ def sidebar_data(request):
             SidebarGroupOut(
                 id="system",
                 title="Системные",
-                children=[
-                    SidebarItemOut(id="watched", title="Просмотрено", href="/?status=watched", count=0),
-                    SidebarItemOut(id="will_watch", title="Буду смотреть", href="/?status=will_watch", count=0),
-                    SidebarItemOut(id="wont_watch", title="Не буду смотреть", href="/?status=wont_watch", count=0),
-                    SidebarItemOut(id="favorites", title="Избранное", href="/?status=favorites", count=0),
-                ],
+                children=SYSTEM_SIDEBAR_ITEMS,
             ),
             SidebarGroupOut(id="custom", title="Мои списки", children=[]),
         ]
 
     counts = MovieStatusService.get_system_lists_counts(user)
 
-    system_group = SidebarGroupOut(
-        id="system",
-        title="Системные",
-        children=[
-            SidebarItemOut(id="watched", title="Просмотрено", href="/?status=watched", count=counts["watched"]),
-            SidebarItemOut(id="will_watch", title="Буду смотреть", href="/?status=will_watch", count=counts["will_watch"]),
-            SidebarItemOut(id="wont_watch", title="Не буду смотреть", href="/?status=wont_watch", count=counts["wont_watch"]),
-            SidebarItemOut(id="favorites", title="Избранное", href="/?status=favorites", count=counts["favorites"]),
-        ],
-    )
+    system_items = [
+        SidebarItemOut(
+            id=item.id,
+            title=item.title,
+            href=item.href,
+            count=counts[item.id],
+        )
+        for item in SYSTEM_SIDEBAR_ITEMS
+    ]
 
     custom_lists_qs = (
         UserList.objects.filter(user=user)
         .annotate(movies_count=Count("list_movies"))
         .order_by("-updated_at", "id")
     )
+    custom_items = [
+        SidebarItemOut(
+            id=f"list_{item.id}",
+            title=item.name,
+            href=f"/?list={item.id}",
+            count=item.movies_count,
+        )
+        for item in custom_lists_qs
+    ]
+
+    layout = SidebarLayout.objects.filter(user=user).first()
+    if layout is not None:
+        system_keys = _order_system_keys(layout.system_keys or [])
+        custom_items = _order_custom_keys(layout.custom_keys or [], custom_items)
+    else:
+        system_keys = SYSTEM_SIDEBAR_KEYS
+
+    system_by_id = {item.id: item for item in system_items}
+    system_group = SidebarGroupOut(
+        id="system",
+        title="Системные",
+        children=[system_by_id[key] for key in system_keys],
+    )
+
     custom_group = SidebarGroupOut(
         id="custom",
         title="Мои списки",
-        children=[
-            SidebarItemOut(
-                id=f"list_{item.id}",
-                title=item.name,
-                href=f"/?list={item.id}",
-                count=item.movies_count,
-            )
-            for item in custom_lists_qs
-        ],
+        children=custom_items,
     )
 
     return [system_group, custom_group]
+
+
+@api.post("/sidebar/order", response=SidebarOrderOut)
+def sidebar_order_update(request, payload: SidebarOrderIn):
+    user = _require_api_user(request)
+
+    system_keys = _order_system_keys(payload.system_keys)
+
+    user_list_ids = set(
+        UserList.objects.filter(user=user).values_list("id", flat=True)
+    )
+    valid_custom_keys = [
+        key
+        for key in payload.custom_keys
+        if key.startswith("list_") and key.removeprefix("list_").isdigit()
+        and int(key.removeprefix("list_")) in user_list_ids
+    ]
+    custom_keys = list(dict.fromkeys(valid_custom_keys))
+    missing_ids = user_list_ids - {
+        int(key.removeprefix("list_"))
+        for key in custom_keys
+    }
+    if missing_ids:
+        missing_lists = (
+            UserList.objects.filter(user=user, id__in=missing_ids)
+            .order_by("-updated_at", "id")
+        )
+        custom_keys.extend(f"list_{lst.id}" for lst in missing_lists)
+
+    layout, _ = SidebarLayout.objects.update_or_create(
+        user=user,
+        defaults={"system_keys": system_keys, "custom_keys": custom_keys},
+    )
+    return SidebarOrderOut(system_keys=layout.system_keys, custom_keys=layout.custom_keys)
 
 
 # ------------------------------------ #

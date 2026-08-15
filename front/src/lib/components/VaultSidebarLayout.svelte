@@ -6,10 +6,12 @@ import type { SidebarItem } from "$lib/template-data";
 import { defaultSidebarItems } from "$lib/template-data";
 import { Button } from "$lib/components/ui/button";
 import * as Sidebar from "$lib/components/ui/sidebar";
+import * as Sortable from "$lib/components/ui/sortable";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import Trash2Icon from "@lucide/svelte/icons/trash-2";
 import PlusIcon from "@lucide/svelte/icons/plus";
 import XIcon from "@lucide/svelte/icons/x";
+import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   import ListRenameDialog from "$lib/components/ListRenameDialog.svelte";
   import ListDeleteDialog from "$lib/components/ListDeleteDialog.svelte";
   import ListCreateDialog from "$lib/components/ListCreateDialog.svelte";
@@ -155,7 +157,93 @@ import XIcon from "@lucide/svelte/icons/x";
     createOpen = false;
   }
 
+  async function saveGroupOrder(groupId: string) {
+    const group = sidebarItems.find((g) => g.id === groupId);
+    if (!group?.children) return;
+    const keys = group.children.map((c) => c.id);
+    const payload: { system_keys?: string[]; custom_keys?: string[] } = {};
+    if (groupId === "system") {
+      payload.system_keys = keys;
+    } else {
+      payload.custom_keys = keys;
+    }
+    try {
+      await fetch("/api/vault/sidebar/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // silently fail — локальный порядок сохранится до следующего refresh
+    }
+  }
+
 </script>
+
+{#snippet menuItemContent(subItem: SidebarItem, group: SidebarItem)}
+  <Sidebar.MenuItem>
+    <Sidebar.MenuButton isActive={isActive(subItem.href)}>
+      {#snippet child({ props })}
+        <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
+          <span>{subItem.title}</span>
+          {#if typeof subItem.count === "number" && !editMode}
+            <button
+              type="button"
+              class="ml-auto relative inline-flex items-center justify-center overflow-hidden rounded-full border border-transparent bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground transition-colors duration-200"
+              class:bg-sidebar-accent={isActive(subItem.href) && subItem.href.includes("?")}
+              class:text-sidebar-accent-foreground={isActive(subItem.href) && subItem.href.includes("?")}
+              data-active={isActive(subItem.href) && subItem.href.includes("?")}
+              onclick={(e) => {
+                if (isActive(subItem.href) && subItem.href.includes("?")) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  clearSidebarFilter(subItem.href);
+                }
+              }}
+              aria-label={isActive(subItem.href) && subItem.href.includes("?") ? "Снять фильтр" : String(subItem.count)}
+            >
+              <span class="badge-count inline-flex items-center transition-opacity duration-200">
+                {subItem.count}
+              </span>
+              <span class="badge-reset-icon absolute inset-0 flex items-center justify-center transition-opacity duration-200 opacity-0">
+                <XIcon class="h-3 w-3" />
+              </span>
+            </button>
+          {/if}
+        </a>
+      {/snippet}
+    </Sidebar.MenuButton>
+
+    {#if editMode && (group.id === "system" || group.id === "custom")}
+      <div
+        class="absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 group-data-[collapsible=icon]:hidden"
+        data-sidebar="menu-action"
+      >
+        <Sortable.Handle
+          class="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 items-center justify-center rounded-sm"
+        >
+          <GripVerticalIcon class="h-3 w-3" />
+        </Sortable.Handle>
+        {#if group.id === "custom" && isCustomList(subItem.id)}
+          <button
+            class="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 items-center justify-center rounded-sm"
+            title="Переименовать"
+            onclick={(e) => { e.stopPropagation(); openRename(getListId(subItem.id), subItem.title); }}
+          >
+            <PencilIcon class="h-3 w-3" />
+          </button>
+          <button
+            class="text-muted-foreground hover:text-destructive inline-flex h-5 w-5 items-center justify-center rounded-sm"
+            title="Удалить список"
+            onclick={(e) => { e.stopPropagation(); openDelete(getListId(subItem.id), subItem.title); }}
+          >
+            <Trash2Icon class="h-3 w-3" />
+          </button>
+        {/if}
+      </div>
+    {/if}
+  </Sidebar.MenuItem>
+{/snippet}
 
 <Sidebar.Provider>
   <div class="flex min-h-0 flex-1">
@@ -172,63 +260,21 @@ import XIcon from "@lucide/svelte/icons/x";
           <Sidebar.GroupContent>
             <Sidebar.Menu>
               {#each sidebarItems as group, groupIndex (group.id)}
-                {#each group.children ?? [] as subItem (subItem.id)}
-                  <Sidebar.MenuItem>
-                    <Sidebar.MenuButton isActive={isActive(subItem.href)}>
-                      {#snippet child({ props })}
-                        <a {...props} href={subItem.href} onclick={(e) => { e.preventDefault(); navigateToSidebarItem(subItem.href); }}>
-                          <span>{subItem.title}</span>
-                          {#if typeof subItem.count === "number" && !(editMode && isCustomList(subItem.id))}
-                            <button
-                              type="button"
-                              class="ml-auto relative inline-flex items-center justify-center overflow-hidden rounded-full border border-transparent bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground transition-colors duration-200"
-                              class:bg-sidebar-accent={isActive(subItem.href) && subItem.href.includes("?")}
-                              class:text-sidebar-accent-foreground={isActive(subItem.href) && subItem.href.includes("?")}
-                              data-active={isActive(subItem.href) && subItem.href.includes("?")}
-                              onclick={(e) => {
-                                if (isActive(subItem.href) && subItem.href.includes("?")) {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  clearSidebarFilter(subItem.href);
-                                }
-                              }}
-                              aria-label={isActive(subItem.href) && subItem.href.includes("?") ? "Снять фильтр" : String(subItem.count)}
-                            >
-                              <span class="badge-count inline-flex items-center transition-opacity duration-200">
-                                {subItem.count}
-                              </span>
-                              <span class="badge-reset-icon absolute inset-0 flex items-center justify-center transition-opacity duration-200 opacity-0">
-                                <XIcon class="h-3 w-3" />
-                              </span>
-                            </button>
-                          {/if}
-                        </a>
-                      {/snippet}
-                    </Sidebar.MenuButton>
-
-                    {#if editMode && group.id === "custom" && isCustomList(subItem.id)}
-                      <div
-                        class="absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 group-data-[collapsible=icon]:hidden"
-                        data-sidebar="menu-action"
-                      >
-                        <button
-                          class="text-muted-foreground hover:text-foreground inline-flex h-5 w-5 items-center justify-center rounded-sm"
-                          title="Переименовать"
-                          onclick={(e) => { e.stopPropagation(); openRename(getListId(subItem.id), subItem.title); }}
-                        >
-                          <PencilIcon class="h-3 w-3" />
-                        </button>
-                        <button
-                          class="text-muted-foreground hover:text-destructive inline-flex h-5 w-5 items-center justify-center rounded-sm"
-                          title="Удалить список"
-                          onclick={(e) => { e.stopPropagation(); openDelete(getListId(subItem.id), subItem.title); }}
-                        >
-                          <Trash2Icon class="h-3 w-3" />
-                        </button>
-                      </div>
-                    {/if}
-                  </Sidebar.MenuItem>
-                {/each}
+                {#if group.id === "system" || group.id === "custom"}
+                  {#if group.children && group.children.length > 0}
+                    <Sortable.Root bind:items={group.children} onDragEnd={() => saveGroupOrder(group.id)}>
+                      {#each group.children as subItem (subItem.id)}
+                        <Sortable.Item id={subItem.id}>
+                          {@render menuItemContent(subItem, group)}
+                        </Sortable.Item>
+                      {/each}
+                    </Sortable.Root>
+                  {/if}
+                {:else}
+                  {#each group.children ?? [] as subItem (subItem.id)}
+                    {@render menuItemContent(subItem, group)}
+                  {/each}
+                {/if}
 
                 {#if groupIndex < sidebarItems.length - 1}
                   <Sidebar.Separator class="my-1" />

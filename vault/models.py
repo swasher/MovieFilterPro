@@ -461,6 +461,20 @@ class UserListMovie(models.Model):
             return f"{self.movie} в {self.user_list}"
 
 
+class SidebarLayout(models.Model):
+    """Порядок пунктов в sidebar. Хранит ключи системных и пользовательских списков раздельно."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='sidebar_layout')
+    system_keys = models.JSONField('Порядок системных списков', default=list, blank=True)
+    custom_keys = models.JSONField('Порядок пользовательских списков', default=list, blank=True)
+
+    class Meta:
+        verbose_name = 'Порядок sidebar'
+        verbose_name_plural = 'Порядок sidebar'
+
+    def __str__(self):
+        return f"SidebarLayout ({self.user.username})"
+
+
 class TMDBSyncQueueItem(models.Model):
         """Запись очереди массовой синхронизации фильма с TMDB."""
         class State(models.TextChoices):
