@@ -364,6 +364,8 @@ class PersonDetailOut(Schema):
     id: int
     name: str
     original_name: str
+    tmdb_id: str | None = None
+    imdb_id: str | None = None
     photo_url: str | None = None
     biography: str
     birth_date: str | None = None
@@ -1154,6 +1156,8 @@ def person_detail(request, person_id: int):
         id=person.id,
         name=person.name,
         original_name=person.original_name,
+        tmdb_id=person.tmdb_id,
+        imdb_id=person.imdb_id,
         photo_url=person.photo_url,
         biography=person.biography or "",
         birth_date=_date_to_iso(person.birth_date),

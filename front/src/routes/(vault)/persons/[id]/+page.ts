@@ -15,6 +15,8 @@ type PersonDetail = {
   id: number;
   name: string;
   original_name: string;
+  tmdb_id: string | null;
+  imdb_id: string | null;
   photo_url: string | null;
   biography: string;
   birth_date: string | null;

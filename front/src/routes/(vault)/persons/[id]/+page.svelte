@@ -118,6 +118,33 @@
             <span class="vd-fact-inline">{person.career_years} career years</span>
           </div>
 
+          <div class="vd-facts-row">
+            <span class="vd-service-badges">
+              {#if person.tmdb_id}
+                <a
+                  href="https://www.themoviedb.org/person/{person.tmdb_id}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="vd-service-badge vd-service-badge--tmdb"
+                  title="Open on TMDB"
+                >
+                  TMDB
+                </a>
+              {/if}
+              {#if person.imdb_id}
+                <a
+                  href="https://www.imdb.com/name/{person.imdb_id}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="vd-service-badge vd-service-badge--imdb"
+                  title="Open on IMDb"
+                >
+                  IMDb
+                </a>
+              {/if}
+            </span>
+          </div>
+
           <div class="vd-facts-grid">
             <dl class="vd-facts-list">
               {#if person.country}
