@@ -32,18 +32,6 @@
 ### Management Commands
 - Run Django management commands via `uv run python manage.py <command>`.
 
-### Search Discipline
-- Use `semble search` (MCP) as the primary tool for codebase search — it provides AST-aware results with exact file paths and line numbers.
-- Use `rg`/`rg --files` for text-based search in any files (logs, configs, templates) so `.rgignore` is respected.
-- Do not run repository-wide recursive listing commands like `Get-ChildItem -Recurse` from the repo root unless the user explicitly asks for it.
-- Use `fd` (program to find entries in your filesystem).
-- Use `sg` (ast-grep, syntax-aware search and rewrite using AST patterns) for refactoring.
-
-### Search Tools
-- Use `fd` for fast file and directory discovery when it is a better fit than `rg --files`.
-- Use `ast-grep` for syntax-aware search/refactoring when regex-based matching is fragile.
-- Use `bat` to read specific files after search; prefer it over plain `type`/`Get-Content` when available.
-
 ### Communication with user
 - Using russian language.
 - Не удалять и не переписывать без явной необходимости существующие фрагменты пользовательского кода, даже если они выглядят избыточными, дублирующими или могут быть заменены более "чистым" вариантом.
@@ -84,11 +72,10 @@
 
 ### 3) Поток Vault (`vault`)
 - Основные модели: `vault/models.py`.
-- Сервис статусов/рейтингов: `vault/services/movie_status_service.py`.
-- Основные страницы: `vault/views.py`, `vault/templates/vault/*`.
-- Роутинг: `vault/urls.py` и также legacy-роуты без префикса в `movie_filter_pro/urls.py`.
-- Новый API-слой для фронта Svelte: `django-ninja` (`vault/api.py`, префикс `/api/vault/`).
-- `vault` сейчас является основным app для поэтапного переноса в новый Svelte frontend.
+- Сервисы статусов/рейтингов/TMDB: `vault/services/*`.
+- API-слой для фронта Svelte: `django-ninja` (`vault/api.py`, префикс `/api/vault/`).
+- UI Vault: `front/src/routes/**`.
+- Legacy-слой (Django-шаблоны): `vault/views.py`, `vault/templates/vault/*`, роуты в `vault/urls.py` и без префикса в `movie_filter_pro/urls.py` — только для обратной совместимости.
 
 ### 4) Импорт данных в Vault
 - Команда: `uv run python manage.py import_kinorium_csv`.
@@ -113,40 +100,22 @@
 - Логика скана/фильтрации новых релизов: `kinozal_scan/parse.py`, `kinozal_scan/checks.py`.
 - Действия в RSS (Hide/Defer/Wait/Download): `moviefilter/htmx_views.py`, `moviefilter/templates/partials/rss-table.html`.
 - Кеш постеров RSS: `moviefilter/image_caching.py`.
-- Статусы/рейтинги/системные списки Vault: `vault/services/movie_status_service.py`, `vault/views.py`.
-- UI Vault: `vault/templates/vault/*`.
+- Статусы/рейтинги/системные списки Vault: `vault/services/movie_status_service.py`.
+- UI Vault (Svelte): `front/src/routes/**`.
+- API Vault: `vault/api.py`.
 
 ## Логи и realtime
 - Файлы логов: `logs/debug.log`, `logs/error.log`, `logs/scan.log`.
 - Websocket-канал логов: `web_logger/*`, endpoint `ws/log/`.
 - Доки: `docs/LOGGING.md`, `docs/WEBSOCKET-LOGGING.md`.
 
-## Известные несоответствия (важно перед правками)
-- Устаревшие команды `moviefilter`:
-  - `get_details_one_movie` и `get_all_movies_from_page` падают из-за ссылок на удаленный `moviefilter.parse`.
-  - `test_parse_detail.py` тоже ссылается на `moviefilter.parse` и ломает `uv run python manage.py test`.
-  - В `vault` есть рассинхрон между моделями и частью шаблонов/admin (в шаблонах местами ожидается `ImageField`-поведение `.url`, а в моделях `poster/photo` это `CharField`).
-  - `vault.models.Person.photo_url` использует `settings.TMDB_IMAGE_SIZE`, но этот ключ сейчас не задан в `settings.py`.
-
-## Текущее состояние миграции Frontend
-- Новый frontend уже поднят в `front/` и подключен к Django backend.
-- Основной паттерн интеграции: `front` -> SvelteKit proxy routes -> `django-ninja` endpoints в `vault/api.py`.
+## Frontend: текущее состояние
+- Основной паттерн интеграции: `front` (SvelteKit) -> SvelteKit proxy routes -> `django-ninja` endpoints (в `vault/api.py`).
 - Для локального single-user сценария глобальный `SSR` в `front` отключен, приложение ведет себя как SPA.
-- Аутентификация для нового Svelte frontend остается на стандартной Django session auth (`django.contrib.auth`).
-- Svelte используется только как UI-слой для login/logout/session state, без отдельной JWT/token-based схемы.
-- В новом frontend и API-слоях использовать реальный `request.user`, а не fallback-пользователя.
-- Не подставлять `User.objects.first()` или аналогичные single-user fallback-механизмы в API.
-- Если endpoint требует пользователя, он должен возвращать `401`, а не молча работать от имени "дефолтного" пользователя.
-- Для текущего self-hosted/single-user сценария предпочитать простую Django session auth реализацию вместо усложненной auth-архитектуры.
-- Перенос `vault` находится в продвинутой стадии: базовый список фильмов, sidebar-фильтры, поиск, сортировка, детальная страница фильма, страница персоны, статусы, рейтинг, пользовательские списки на странице фильма и TMDB sync уже работают в новом frontend.
-- TMDB flow в новом frontend уже поддерживает:
-  - `ok`
-  - `needs_confirmation` (один неуверенный кандидат)
-  - `needs_user_choice` (несколько кандидатов)
-- `tmdb_adapter` — инфраструктурный слой для TMDB:
-  - `tmdb_adapter.client_singleton.get_tmdb_client()` создает и кеширует `TMDbAPIs` клиент с текущими ключами из `UserPreferences`.
-  - `tmdb_adapter.auth` отвечает за TMDB auth / logout flow и сброс singleton-клиента.
-  - Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`, а не в `tmdb_adapter`.
+- Аутентификация — стандартная Django session auth (`django.contrib.auth`), без JWT/token-based схемы.
+- В API использовать реальный `request.user`; если endpoint требует пользователя — возвращать `401`, без `User.objects.first()` и других single-user fallback.
+- `tmdb_adapter` — инфраструктурный слой TMDB (клиент из `UserPreferences`, auth/logout, сброс singleton). Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`.
+- `vault` полностью перенесен в новый frontend (списки, фильтры, поиск, детали, персоны, статусы, рейтинг, пользовательские списки, TMDB sync, сезоны). Django-шаблоны `vault` остаются legacy.
 
 ## Шапки для сервисного слоя
 
