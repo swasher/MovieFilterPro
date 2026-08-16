@@ -29,6 +29,10 @@
     @apply aspect-[3/4] w-full object-cover;
   }
 
+  .vd-photo-fallback {
+    @apply bg-muted text-muted-foreground flex aspect-[3/4] items-center justify-center text-sm;
+  }
+
   .vd-poster-fallback {
     @apply bg-muted text-muted-foreground flex aspect-[2/3] items-center justify-center text-sm;
   }
@@ -328,6 +332,31 @@
 
   .vd-filmography-copy {
     @apply space-y-2 p-2.5;
+  }
+
+  .vd-crew-grid {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fill, 140px);
+  }
+
+  .vd-crew-copy {
+    @apply space-y-1 p-2;
+  }
+
+  .vd-crew-copy--favorite {
+    @apply bg-orange-600/30;
+  }
+
+  .vd-crew-title-row {
+    @apply flex min-w-0 items-center gap-1;
+  }
+
+  .vd-crew-title {
+    @apply truncate min-w-0 text-[13px] font-medium;
+  }
+
+  .vd-crew-subtitle {
+    @apply truncate text-[11px] text-muted-foreground;
   }
 
   .vd-empty {

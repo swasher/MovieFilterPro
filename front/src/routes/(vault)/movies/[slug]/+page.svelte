@@ -9,7 +9,6 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
-  import * as Avatar from "$lib/components/ui/avatar";
   import * as StarRating from "$lib/components/ui/star-rating";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -1150,19 +1149,23 @@
         <CardContent class="vd-card-content">
           <div class="vd-section">
             <p class="vd-section-title">Режиссеры</p>
-            <div class="vd-related-grid">
+            <div class="vd-crew-grid">
               {#if movie.directors.length}
                 {#each movie.directors as person (person.id)}
                   <a href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
-                    <div class="vd-related-card">
-                      <Avatar.Root class="vd-related-avatar">
-                        {#if person.photo_url}
-                          <Avatar.Image src={person.photo_url} alt={person.name} class="object-cover" />
-                        {/if}
-                        <Avatar.Fallback>{initials(person.name)}</Avatar.Fallback>
-                      </Avatar.Root>
-                      <div class="vd-related-copy">
-                        <p class="vd-related-title">{person.name}</p>
+                    <div class="vd-filmography-card">
+                      {#if person.photo_url}
+                        <img src={person.photo_url} alt={person.name} class="vd-photo" />
+                      {:else}
+                        <div class="vd-photo-fallback">{initials(person.name)}</div>
+                      {/if}
+                      <div class="vd-crew-copy {person.is_favorite ? "vd-crew-copy--favorite" : ""}">
+                        <div class="vd-crew-title-row">
+                          {#if person.is_favorite}
+                            <Heart class="size-3 shrink-0 fill-red-500 text-red-500" />
+                          {/if}
+                          <p class="vd-crew-title">{person.name}</p>
+                        </div>
                       </div>
                     </div>
                   </a>
@@ -1175,21 +1178,25 @@
 
           <div class="vd-section">
             <p class="vd-section-title">В ролях</p>
-            <div class="vd-related-grid">
+            <div class="vd-crew-grid">
               {#if movie.actors.length}
                 {#each movie.actors as person (person.id)}
                   <a href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
-                    <div class="vd-related-card">
-                      <Avatar.Root class="vd-related-avatar">
-                        {#if person.photo_url}
-                          <Avatar.Image src={person.photo_url} alt={person.name} class="object-cover" />
-                        {/if}
-                        <Avatar.Fallback>{initials(person.name)}</Avatar.Fallback>
-                      </Avatar.Root>
-                      <div class="vd-related-copy">
-                        <p class="vd-related-title">{person.name}</p>
+                    <div class="vd-filmography-card">
+                      {#if person.photo_url}
+                        <img src={person.photo_url} alt={person.name} class="vd-photo" />
+                      {:else}
+                        <div class="vd-photo-fallback">{initials(person.name)}</div>
+                      {/if}
+                      <div class="vd-crew-copy {person.is_favorite ? "vd-crew-copy--favorite" : ""}">
+                        <div class="vd-crew-title-row">
+                          {#if person.is_favorite}
+                            <Heart class="size-3 shrink-0 fill-red-500 text-red-500" />
+                          {/if}
+                          <p class="vd-crew-title">{person.name}</p>
+                        </div>
                         {#if person.character_name}
-                          <p class="vd-related-subtitle">{person.character_name}</p>
+                          <p class="vd-crew-subtitle">{person.character_name}</p>
                         {/if}
                       </div>
                     </div>

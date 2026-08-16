@@ -47,12 +47,14 @@ type ApiMovieDetail = {
     name: string;
     photo_url: string | null;
     character_name?: string | null;
+    is_favorite?: boolean;
   }>;
   actors: Array<{
     id: number;
     name: string;
     photo_url: string | null;
     character_name?: string | null;
+    is_favorite?: boolean;
   }>;
   seasons: Array<{
     id: number;

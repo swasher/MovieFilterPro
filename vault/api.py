@@ -86,6 +86,7 @@ class PersonCreditOut(Schema):
     name: str
     photo_url: str | None = None
     character_name: str | None = None
+    is_favorite: bool = False
 
 
 class UserStateOut(Schema):
@@ -725,6 +726,12 @@ def movie_detail(request, slug: str):
         raise HttpError(404, "Movie not found")
     user = _resolve_api_user(request)
 
+    favorite_person_ids = set()
+    if user is not None:
+        favorite_person_ids = set(
+            FavoritePerson.objects.filter(user=user).values_list("person_id", flat=True)
+        )
+
     return MovieDetailOut(
         id=movie.id,
         title=movie.title,
@@ -765,6 +772,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 photo_url=item.person.photo_url,
+                is_favorite=item.person.id in favorite_person_ids,
             )
             for item in movie.get_directors().select_related("person")
         ],
@@ -774,6 +782,7 @@ def movie_detail(request, slug: str):
                 name=item.person.name,
                 photo_url=item.person.photo_url,
                 character_name=item.character_name or None,
+                is_favorite=item.person.id in favorite_person_ids,
             )
             for item in movie.get_actors().select_related("person")[:12]
         ],

@@ -147,6 +147,8 @@ class TMDBMovieSyncService:
             all_updates = tuple(updated_fields + relations_updated)
             cast_count = len(list(getattr(details, "cast", None) or []))
             crew_count = len(list(getattr(details, "crew", None) or []))
+            if media_type == "tv":
+                crew_count += len(list(getattr(details, "aggregate_crew", None) or []))
             cls._log_sync_apply(all_updates, cast_count, crew_count)
             cls._log_orphan_cleanup(orphan_deleted_count)
             cls._log_done("ok", "sync completed")
@@ -305,6 +307,17 @@ class TMDBMovieSyncService:
     def _sync_movie_persons(cls, movie: Movie, details, tmdb) -> bool:
         cast_items = list(getattr(details, "cast", None) or [])
         crew_items = list(getattr(details, "crew", None) or [])
+
+        is_tv = movie.tmdb_media_type == "tv" or movie.movie_type in (
+            Movie.MovieType.SERIES,
+            Movie.MovieType.MINISERIES,
+        )
+        if is_tv:
+            # У сериалов режиссёры и другая команда эпизодов живут в aggregate_credits,
+            # в обычных credits на уровне сериала их нет.
+            aggregate_crew = list(getattr(details, "aggregate_crew", None) or [])
+            if aggregate_crew:
+                crew_items = crew_items + aggregate_crew
 
         before_keys = set(
             movie.movie_persons.values_list("person_id", "role", "character_name")
