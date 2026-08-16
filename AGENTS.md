@@ -6,11 +6,6 @@
 
 ## Project Agreements
 
-### Architecture Transition
-- Проект перешел с импользования django-фронтэнда на svelte фронтэнд. 
-- Django фронтенд остается пока в виде legacy.
-- Svelte frontend общается с backend через `django-ninja` API.
-
 ### Frontend Stack Rules
 - Новый frontend: `Svelte 5` с runes only.
 - Использовать только runes-синтаксис (`$state`, `$derived`, `$effect`, `$props`, snippets и т.д.).
@@ -40,20 +35,6 @@
 
 ### Scope Safety
 - Редактировать системные  файлы (корневые файлы проекта) или файлы, не относящиеся к текущему Django app, только по прямому запросу пользователя.
-
-## Быстрый локальный старт
-- Установка зависимостей: `uv sync`
-- Проверка проекта: `uv run python manage.py check`
-- Миграции: `uv run python manage.py migrate`
-- Запуск: `uv run python manage.py runserver`
-- ASGI-вариант (websocket/logging): `uv run python run_daphne_debug.py`
-
-## Переменные окружения (минимум)
-- `SECRET_KEY`
-- `DEBUG`
-- `ENABLE_DEBUG_TOOLBAR`
-- `ENABLE_BROWSER_RELOAD`
-- `DATABASE_URL`
 
 ## Архитектура и потоки данных
 
@@ -92,15 +73,20 @@
 
 ### vault
 - `Movie`: центральная сущность фильмотеки.
-- `Person`, `MoviePerson`: состав и роли.
+- `Person`, `MoviePerson`: состав и роли; `FavoritePerson`: избранные персоны.
 - `UserMovie`: статус просмотра, избранное, рейтинг, заметка.
-- `UserList`, `UserListMovie`: пользовательские списки.
+- `UserList`, `UserListMovie`: пользовательские списки; `SidebarLayout`: порядок в сайдбаре.
+- `Season`, `Episode`, `UserSeason`: сезоны/эпизоды и их статусы.
+- `VaultConnectionEvent`: события Kinozal/Vault связки.
+- `TMDBSyncQueueItem`: очередь TMDB sync.
 
 ## Где править по задачам
 - Логика скана/фильтрации новых релизов: `kinozal_scan/parse.py`, `kinozal_scan/checks.py`.
 - Действия в RSS (Hide/Defer/Wait/Download): `moviefilter/htmx_views.py`, `moviefilter/templates/partials/rss-table.html`.
 - Кеш постеров RSS: `moviefilter/image_caching.py`.
 - Статусы/рейтинги/системные списки Vault: `vault/services/movie_status_service.py`.
+- Сезоны/эпизоды Vault: `vault/services/season_status_service.py`.
+- TMDB поиск/matching/sync/import для Vault: `vault/services/tmdb_*.py`.
 - UI Vault (Svelte): `front/src/routes/**`.
 - API Vault: `vault/api.py`.
 
@@ -116,6 +102,7 @@
 - В API использовать реальный `request.user`; если endpoint требует пользователя — возвращать `401`, без `User.objects.first()` и других single-user fallback.
 - `tmdb_adapter` — инфраструктурный слой TMDB (клиент из `UserPreferences`, auth/logout, сброс singleton). Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`.
 - `vault` полностью перенесен в новый frontend (списки, фильтры, поиск, детали, персоны, статусы, рейтинг, пользовательские списки, TMDB sync, сезоны). Django-шаблоны `vault` остаются legacy.
+- В `front/src/routes/**` есть и другие перенесенные страницы: `kinozal`, `scan`, `plex`, `tmdb`, `tmdb-sync`, `preferences`.
 
 ## Шапки для сервисного слоя
 
