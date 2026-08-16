@@ -360,14 +360,6 @@ class Command(BaseCommand):
         movie_by_full_key[full_key] = movie
         movie_by_title_year[fallback_key] = movie
 
-        # genres
-        for genre_name in (row.get('Genres') or '').split(','):
-            name = genre_name.strip()
-            if not self._is_valid_genre(name):
-                continue
-            genre, _ = Genre.objects.get_or_create(name=name)
-            movie.genres.add(genre)
-
         # countries
         for cn in (row.get('Countries') or '').split(','):
             name = cn.strip()

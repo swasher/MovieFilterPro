@@ -1,6 +1,6 @@
 [project]
 name = "moviefilterpro"
-version = "0.1.150"
+version = "0.1.152"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,7 +25,7 @@ dependencies = [
     "python-slugify>=8.0.4",
     "rapidfuzz>=3.14.5",
     "starlette>=0.47.0",
-    "tmdbapis>=1.2.30",
+    "tmdbapis",
     "whitenoise>=6.8.2",
 ]
 
@@ -35,3 +35,6 @@ dev = [
     "django-debug-toolbar>=6.1.0",
     "django-watchfiles>=1.4.0",
 ]
+
+[tool.uv.sources]
+tmdbapis = { git = "https://github.com/swasher/TMDbAPIs.git" }
