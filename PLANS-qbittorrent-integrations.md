@@ -17,13 +17,14 @@
 
 Реализация:
 
-- есть готовая либа - pip install qbittorrent-api
+- есть готовая либа - uv add qbittorrent-api
 
 Пример:
 
+```python
 from qbittorrentapi import Client
-
 qbt_client = Client(host='http://localhost:8080', username='admin', password='your_password')
+```
 
 # Добавить торрент
 

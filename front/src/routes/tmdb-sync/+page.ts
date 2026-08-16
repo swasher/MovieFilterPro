@@ -32,15 +32,20 @@ type QueueStateResp = {
 export const load: PageLoad = async ({ fetch }) => {
   const [stateResponse, itemsResponse] = await Promise.all([
     fetch("/api/vault/tmdb-sync/state"),
-    fetch("/api/vault/tmdb-sync/items?limit=200"),
+    fetch("/api/vault/tmdb-sync/items?limit=100"),
   ]);
 
   const state = stateResponse.ok
     ? ((await stateResponse.json()) as QueueStateResp)
     : null;
-  const items = itemsResponse.ok
-    ? (((await itemsResponse.json()) as { items: QueueItem[] }).items ?? [])
-    : [];
+  const itemsPayload = itemsResponse.ok
+    ? ((await itemsResponse.json()) as { items: QueueItem[]; total: number })
+    : null;
 
-  return { state, items, apiError: !stateResponse.ok ? stateResponse.status : 0 };
+  return {
+    state,
+    items: itemsPayload?.items ?? [],
+    total: itemsPayload?.total ?? 0,
+    apiError: !stateResponse.ok ? stateResponse.status : 0,
+  };
 };

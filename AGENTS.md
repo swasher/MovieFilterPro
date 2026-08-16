@@ -17,6 +17,7 @@
 ### Vault Data Import
 - Assume Vault tables are empty before import.
 - No data transfer between legacy Vault schemas is required.
+- NEVER change DB data! Ты видишь только тестувую (dev) базу данных, и с данными работать не должен!
 
 ### Deployment Model
 - The app is single-user and self-hosted.

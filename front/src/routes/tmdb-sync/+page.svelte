@@ -22,8 +22,11 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { CheckCheck, ExternalLink, Play, Plus, Square, Trash2 } from "@lucide/svelte";
+  import * as Pagination from "$lib/components/ui/pagination";
 
   let { data } = $props();
+
+  const PAGE_SIZE = 100;
 
   type QueueItem = {
     id: number;
@@ -59,6 +62,8 @@
   let counters = $state<Record<string, number>>(data.state?.counters ?? {});
   let totalUnsynced = $state(data.state?.total_unsynced ?? 0);
   let items = $state<QueueItem[]>(data.items ?? []);
+  let total = $state(data.total ?? 0);
+  let page = $state(1);
   let apiError = $state(data.apiError);
 
   let isAdding = $state(false);
@@ -81,7 +86,9 @@
   const refresh = async () => {
     const [stateResponse, itemsResponse] = await Promise.all([
       fetch("/api/vault/tmdb-sync/state"),
-      fetch("/api/vault/tmdb-sync/items?limit=500")
+      fetch(
+        `/api/vault/tmdb-sync/items?limit=${PAGE_SIZE}&offset=${(page - 1) * PAGE_SIZE}`
+      )
     ]);
 
     if (stateResponse.ok) {
@@ -96,9 +103,12 @@
     }
 
     if (itemsResponse.ok) {
-      items = (((await itemsResponse.json()) as { items: QueueItem[] }).items ?? []).map(
-        (item) => ({ ...item })
-      );
+      const payload = (await itemsResponse.json()) as {
+        items: QueueItem[];
+        total: number;
+      };
+      items = payload.items.map((item) => ({ ...item }));
+      total = payload.total;
     }
   };
 
@@ -128,6 +138,12 @@
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
+  });
+
+  // Смена страницы пагинации — сразу перезагружаем список.
+  $effect(() => {
+    page;
+    refresh();
   });
 
   const addAll = async () => {
@@ -217,6 +233,10 @@
         return;
       }
       items = items.filter((entry) => entry.id !== item.id);
+      total = Math.max(0, total - 1);
+      if (items.length === 0 && page > 1) {
+        page -= 1;
+      }
       toast.success(`Запись «${item.snapshot_title}» удалена из очереди.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось удалить запись из очереди");
@@ -519,6 +539,31 @@
           </TableBody>
         </Table>
       </div>
+      <Pagination.Root count={total} perPage={PAGE_SIZE} bind:page>
+        {#snippet children({ pages, currentPage })}
+          <Pagination.Content>
+            <Pagination.Item>
+              <Pagination.Previous />
+            </Pagination.Item>
+            {#each pages as pg (pg.key)}
+              {#if pg.type === "ellipsis"}
+                <Pagination.Item>
+                  <Pagination.Ellipsis />
+                </Pagination.Item>
+              {:else}
+                <Pagination.Item>
+                  <Pagination.Link page={pg} isActive={currentPage === pg.value}>
+                    {pg.value}
+                  </Pagination.Link>
+                </Pagination.Item>
+              {/if}
+            {/each}
+            <Pagination.Item>
+              <Pagination.Next />
+            </Pagination.Item>
+          </Pagination.Content>
+        {/snippet}
+      </Pagination.Root>
     {/if}
   </div>
 </div>
