@@ -1064,6 +1064,7 @@
                 placeholder="Ваш комментарий к фильму…"
                 onkeydown={onCommentKeydown}
                 aria-label="Комментарий к фильму"
+                class={hasComment ? "border-2 border-orange-500" : undefined}
               />
 
               <div class="vd-comment-buttons">
