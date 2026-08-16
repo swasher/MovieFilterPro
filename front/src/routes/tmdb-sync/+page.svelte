@@ -402,6 +402,7 @@
         <Table class="w-full table-fixed">
           <TableHeader>
             <TableRow>
+              <TableHead class="w-10">№</TableHead>
               <TableHead class="w-40">Статус</TableHead>
               <TableHead>До</TableHead>
               <TableHead>После</TableHead>
@@ -412,8 +413,11 @@
             </TableRow>
           </TableHeader>
           <TableBody>
-            {#each items as item (item.id)}
+            {#each items as item, i (item.id)}
               <TableRow>
+                <TableCell>
+                  <span class="text-xs text-muted-foreground">{i + 1}</span>
+                </TableCell>
                 <TableCell>
                   <Badge variant={stateBadgeVariant(item.state)} class={stateBadgeClass(item.state)}>
                     {stateLabels[item.state] ?? item.state}
