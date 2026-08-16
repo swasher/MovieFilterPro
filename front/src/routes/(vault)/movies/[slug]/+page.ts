@@ -34,7 +34,12 @@ type ApiMovieDetail = {
     in_wont_watch: boolean;
     in_favorites: boolean;
     rating: number | null;
+    rated_at: string | null;
+    status_at: string | null;
+    watched_at: string | null;
     note: string;
+    note_at: string | null;
+    favorited_at: string | null;
   };
   custom_lists: Array<{
     id: number;

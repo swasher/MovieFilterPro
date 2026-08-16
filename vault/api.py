@@ -95,7 +95,12 @@ class UserStateOut(Schema):
     in_wont_watch: bool
     in_favorites: bool
     rating: int | None = None
+    rated_at: str | None = None
+    status_at: str | None = None
+    watched_at: str | None = None
     note: str = ""
+    note_at: str | None = None
+    favorited_at: str | None = None
 
 
 class MovieUserListOut(Schema):
@@ -415,7 +420,12 @@ def _build_user_state(user, movie) -> UserStateOut:
         in_wont_watch=state["in_wont_watch"],
         in_favorites=state["in_favorites"],
         rating=state["rating"],
+        rated_at=_date_to_iso(state["rated_at"]),
+        status_at=_date_to_iso(state["status_at"]),
+        watched_at=_date_to_iso(state["watched_at"]),
         note=state["note"],
+        note_at=_date_to_iso(state["note_at"]),
+        favorited_at=_date_to_iso(state["favorited_at"]),
     )
 
 

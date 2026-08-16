@@ -408,6 +408,10 @@ class UserMovie(models.Model):
         blank=True,
     )
     watched_at = models.DateField('Дата просмотра', null=True, blank=True, db_index=True)
+    rated_at = models.DateField('Дата оценки', null=True, blank=True)
+    status_at = models.DateField('Дата смены статуса', null=True, blank=True)
+    note_at = models.DateField('Дата заметки', null=True, blank=True)
+    favorited_at = models.DateField('Дата добавления в избранное', null=True, blank=True)
     note = models.TextField('Заметка', blank=True)
     created_at = models.DateTimeField('Создано', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлено', auto_now=True)
@@ -419,6 +423,10 @@ class UserMovie(models.Model):
         indexes = [
             models.Index(fields=['user', 'watch_status']),
             models.Index(fields=['user', 'is_favorite']),
+            models.Index(fields=['rated_at'], name='usermovie_rated_at_idx'),
+            models.Index(fields=['status_at'], name='usermovie_status_at_idx'),
+            models.Index(fields=['note_at'], name='usermovie_note_at_idx'),
+            models.Index(fields=['favorited_at'], name='usermovie_favorited_at_idx'),
         ]
 
     def __str__(self):

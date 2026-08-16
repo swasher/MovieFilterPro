@@ -166,8 +166,14 @@ class UserListMovieAdmin(admin.ModelAdmin):
 
 @admin.register(UserMovie)
 class UserMovieAdmin(admin.ModelAdmin):
-    list_display = ['user', 'movie', 'watch_status', 'is_favorite', 'rating', 'watched_at', 'updated_at']
-    list_filter = ['watch_status', 'is_favorite', 'rating', 'watched_at', 'updated_at']
+    list_display = [
+        'user', 'movie', 'watch_status', 'is_favorite', 'rating', 'watched_at',
+        'rated_at', 'status_at', 'note_at', 'favorited_at', 'updated_at',
+    ]
+    list_filter = [
+        'watch_status', 'is_favorite', 'rating', 'watched_at',
+        'rated_at', 'status_at', 'note_at', 'favorited_at', 'updated_at',
+    ]
     search_fields = ['user__username', 'movie__title']
     date_hierarchy = 'updated_at'
 

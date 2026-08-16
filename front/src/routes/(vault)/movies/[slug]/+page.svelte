@@ -63,6 +63,27 @@
     return `${n} сезонов`;
   }
 
+  function formatDate(iso: string | null | undefined): string {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    return date.toLocaleDateString("ru-RU");
+  }
+
+  function statusDateFor(key: string): string | null {
+    switch (key) {
+      case "favorites":
+        return userState.favorited_at;
+      case "watched":
+        return userState.watched_at || userState.status_at;
+      case "will_watch":
+      case "wont_watch":
+        return userState.status_at;
+      default:
+        return null;
+    }
+  }
+
   let isSyncing = $state(false);
   let isConfirmingCandidate = $state(false);
   let isDeletingMovie = $state(false);
@@ -103,7 +124,12 @@
     in_wont_watch: false,
     in_favorites: false,
     rating: null as number | null,
-    note: ""
+    note: "",
+    rated_at: null as string | null,
+    status_at: null as string | null,
+    watched_at: null as string | null,
+    note_at: null as string | null,
+    favorited_at: null as string | null
   });
   let undoRating = $state<number | null>(null);
 
@@ -723,7 +749,10 @@
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Content side="bottom" align="center" class="vd-tooltip">
-                {item.label}
+                <span class="block">{item.label}</span>
+                {#if statusDateFor(item.key)}
+                  <span class="block text-foreground/70">с {formatDate(statusDateFor(item.key))}</span>
+                {/if}
               </Tooltip.Content>
             </Tooltip.Root>
           </Tooltip.Provider>
@@ -733,18 +762,36 @@
       <div class="vd-sidebar-stack">
 {#if !userState.in_will_watch && !userState.in_wont_watch}
           <div class="vd-rating-row vd-rating-row--sidebar">
-            <StarRating.Root
-              value={userState.rating ?? 0}
-              max={10}
-              class="text-orange-400"
-              onValueChange={(value) => setRating(value)}
-            >
-              {#snippet children({ items })}
-                {#each items as item (item.index)}
-                  <StarRating.Star index={item.index} state={item.state} class="size-5 vd-star" />
-                {/each}
-              {/snippet}
-            </StarRating.Root>
+            <Tooltip.Root>
+              <Tooltip.Trigger>
+                <span class="inline-flex items-center gap-1">
+                  <StarRating.Root
+                    value={userState.rating ?? 0}
+                    max={10}
+                    class="text-orange-400"
+                    onValueChange={(value) => setRating(value)}
+                  >
+                    {#snippet children({ items })}
+                      {#each items as item (item.index)}
+                        <StarRating.Star index={item.index} state={item.state} class="size-5 vd-star" />
+                      {/each}
+                    {/snippet}
+                  </StarRating.Root>
+                </span>
+              </Tooltip.Trigger>
+              <Tooltip.Content side="bottom" align="center" class="vd-tooltip">
+                <span class="block">
+                  {#if userState.rating}
+                    Оценка: {userState.rating}
+                  {:else}
+                    Нет оценки
+                  {/if}
+                </span>
+                {#if userState.rated_at}
+                  <span class="block text-foreground/70">поставлена {formatDate(userState.rated_at)}</span>
+                {/if}
+              </Tooltip.Content>
+            </Tooltip.Root>
 
             {#if userState.rating}
               <button
@@ -804,31 +851,41 @@
               return userState.in_wont_watch;
             }) as item (item.key)}
               {@const Icon = item.icon}
-              <span
-                class="vd-list-chip justify-between"
-                transition:fly={{ x: 20, duration: 200 }}
-              >
-                <span class="inline-flex items-center gap-1.5">
+              <Tooltip.Root>
+                <Tooltip.Trigger>
                   <span
-                    class="size-3.5"
-                    class:text-amber-400={item.key === "will_watch"}
-                    class:text-red-500={item.key === "favorites" || item.key === "wont_watch"}
-                    class:text-emerald-500={item.key === "watched"}
+                    class="vd-list-chip justify-between"
+                    transition:fly={{ x: 20, duration: 200 }}
                   >
-                    <Icon class="size-3.5" />
+                    <span class="inline-flex items-center gap-1.5">
+                      <span
+                        class="size-3.5"
+                        class:text-amber-400={item.key === "will_watch"}
+                        class:text-red-500={item.key === "favorites" || item.key === "wont_watch"}
+                        class:text-emerald-500={item.key === "watched"}
+                      >
+                        <Icon class="size-3.5" />
+                      </span>
+                      {item.label}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="size-6 p-0 text-muted-foreground/50 hover:bg-muted hover:text-foreground/70"
+                      onclick={() => toggleStatus(item.key)}
+                      title="Удалить из списка"
+                    >
+                      <Trash class="size-3" />
+                    </Button>
                   </span>
-                  {item.label}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="size-6 p-0 text-muted-foreground/50 hover:bg-muted hover:text-foreground/70"
-                  onclick={() => toggleStatus(item.key)}
-                  title="Удалить из списка"
-                >
-                  <Trash class="size-3" />
-                </Button>
-              </span>
+                </Tooltip.Trigger>
+                <Tooltip.Content side="bottom" align="center" class="vd-tooltip">
+                  <span class="block">{item.label}</span>
+                  {#if statusDateFor(item.key)}
+                    <span class="block text-foreground/70">с {formatDate(statusDateFor(item.key))}</span>
+                  {/if}
+                </Tooltip.Content>
+              </Tooltip.Root>
             {/each}
 
             {#if customLists.some((item) => item.is_in_list)}

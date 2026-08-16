@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 from slugify import slugify
 
 from core.models import Country
@@ -101,9 +102,10 @@ def parse_int(value: str):
 
 
 def parse_date(value: str):
+    """Парсит дату из CSV. Все форматы с временем возвращают только дату (DateField)."""
     if not value or not str(value).strip():
         return None
-    for fmt in ('%Y-%m-%d', '%d.%m.%Y', '%Y/%m/%d'):
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d', '%d.%m.%Y', '%Y/%m/%d'):
         try:
             return datetime.strptime(str(value).strip(), fmt).date()
         except ValueError:
@@ -258,7 +260,7 @@ class Command(BaseCommand):
             return False
         return TRASH_GENRE_RE.fullmatch(genre) is None
 
-    def _append_movie_note(self, user, movie: Movie, text: str):
+    def _append_movie_note(self, user, movie: Movie, text: str, note_at=None):
         value = (text or '').strip()
         if not value:
             return
@@ -266,12 +268,16 @@ class Command(BaseCommand):
         existing = (user_movie.note or '').strip()
         if not existing:
             user_movie.note = value
-            user_movie.save(update_fields=['note', 'updated_at'])
+            if note_at is not None:
+                user_movie.note_at = note_at
+            user_movie.save(update_fields=['note', 'note_at', 'updated_at'])
             return
         if value in existing:
             return
         user_movie.note = f"{existing}\n\n{value}"
-        user_movie.save(update_fields=['note', 'updated_at'])
+        if note_at is not None:
+            user_movie.note_at = note_at
+        user_movie.save(update_fields=['note', 'note_at', 'updated_at'])
 
     def _movie_lookup_keys(self, title: str, original_title: str, year: int | None):
         title_key = (title or '').strip()
@@ -292,31 +298,47 @@ class Command(BaseCommand):
         user_movie, _ = UserMovie.objects.get_or_create(user=user, movie=movie)
         return user_movie
 
-    def _set_watch_status(self, user, movie, watch_status):
+    def _set_watch_status(self, user, movie, watch_status, status_at=None):
         user_movie = self._get_or_create_user_movie(user, movie)
         if user_movie.watch_status != watch_status:
             user_movie.watch_status = watch_status
-            user_movie.save(update_fields=['watch_status', 'updated_at'])
+            if status_at is not None:
+                user_movie.status_at = status_at
+            if (
+                watch_status == UserMovie.WatchStatus.WATCHED
+                and status_at is not None
+                and user_movie.watched_at is None
+            ):
+                user_movie.watched_at = status_at
+            user_movie.save(update_fields=['watch_status', 'status_at', 'watched_at', 'updated_at'])
 
-    def _set_favorite(self, user, movie):
+    def _set_favorite(self, user, movie, favorited_at=None):
         user_movie = self._get_or_create_user_movie(user, movie)
         if not user_movie.is_favorite:
             user_movie.is_favorite = True
-            user_movie.save(update_fields=['is_favorite', 'updated_at'])
+            if favorited_at is not None:
+                user_movie.favorited_at = favorited_at
+            user_movie.save(update_fields=['is_favorite', 'favorited_at', 'updated_at'])
 
-    def _add_to_custom_list(self, user, movie, list_title: str):
+    def _add_to_custom_list(self, user, movie, list_title: str, added_at=None):
         user_list, _ = UserList.objects.get_or_create(user=user, name=list_title)
-        UserListMovie.objects.get_or_create(user_list=user_list, movie=movie)
+        relation, created = UserListMovie.objects.get_or_create(user_list=user_list, movie=movie)
+        if created and added_at is not None:
+            relation.added_at = timezone.make_aware(datetime.combine(added_at, datetime.min.time()))
+            relation.save(update_fields=['added_at'])
 
-    def _set_rating(self, user, movie, rating, watched_at=None):
+    def _set_rating(self, user, movie, rating, watched_at=None, rated_at=None):
         if rating is None or rating < 1 or rating > 10:
             return
         user_movie = self._get_or_create_user_movie(user, movie)
         user_movie.rating = rating
         user_movie.watch_status = UserMovie.WatchStatus.WATCHED
-        if watched_at is not None:
+        # Дату просмотра не затираем, если она уже установлена (например, из movie_list).
+        if watched_at is not None and user_movie.watched_at is None:
             user_movie.watched_at = watched_at
-        user_movie.save(update_fields=['rating', 'watch_status', 'watched_at', 'updated_at'])
+        if rated_at is not None:
+            user_movie.rated_at = rated_at
+        user_movie.save(update_fields=['rating', 'watch_status', 'watched_at', 'rated_at', 'updated_at'])
 
     def _create_or_get_movie(self, row, movie_by_full_key, movie_by_title_year, person_cache, country_cache, unknown_country):
         movie_defaults = self._movie_from_row(row)
@@ -562,23 +584,23 @@ class Command(BaseCommand):
                         stats['movies_matched'] += 1
 
                     # statuses / favorites
+                    date_val = parse_date(row.get('Date'))
                     status_str = (row.get('Status') or '').strip()
                     if status_str in STATUS_TO_WATCH_STATUS:
-                        self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
+                        self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str], status_at=date_val)
                         stats['statuses_set'] += 1
 
                     list_title_str = (row.get('ListTitle') or '').strip()
                     if list_title_str == 'Любимые фильмы':
-                        self._set_favorite(user, movie)
+                        self._set_favorite(user, movie, favorited_at=date_val)
                         stats['favorites_set'] += 1
                     elif list_title_str and list_title_str not in SYSTEM_LIST_TITLES:
-                        self._add_to_custom_list(user, movie, list_title_str)
+                        self._add_to_custom_list(user, movie, list_title_str, added_at=date_val)
                         stats['custom_list_rows'] += 1
 
                     my_rating = parse_int(row.get('My rating'))
                     if my_rating:
-                        watched_at = parse_date(row.get('Date'))
-                        self._set_rating(user, movie, my_rating, watched_at=watched_at)
+                        self._set_rating(user, movie, my_rating, watched_at=date_val, rated_at=date_val)
                         stats['ratings_set_list'] += 1
             except Exception as exc:
                 _register_failure('movie_list', row, exc)
@@ -613,7 +635,8 @@ class Command(BaseCommand):
                     if not movie:
                         stats['votes_skipped'] += 1
                         continue
-                    self._set_rating(user, movie, rating_val)
+                    date_val = parse_date(row.get('Date'))
+                    self._set_rating(user, movie, rating_val, watched_at=date_val, rated_at=date_val)
                     stats['ratings_set_votes'] += 1
             except Exception as exc:
                 _register_failure('votes', row, exc)
@@ -638,13 +661,14 @@ class Command(BaseCommand):
                             stats['movies_created_from_comments'] += 1
                     if not movie:
                         continue
+                    date_val = parse_date(row.get('Date'))
                     comment_text = row.get('Comment')
                     if comment_text:
-                        self._append_movie_note(user, movie, comment_text)
+                        self._append_movie_note(user, movie, comment_text, note_at=date_val)
                         stats['comments_note_applied'] += 1
                     status_str = (row.get('Status') or '').strip()
                     if status_str in STATUS_TO_WATCH_STATUS:
-                        self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str])
+                        self._set_watch_status(user, movie, STATUS_TO_WATCH_STATUS[status_str], status_at=date_val)
                         stats['comments_status_set'] += 1
             except Exception as exc:
                 _register_failure('comments', row, exc)
@@ -669,9 +693,10 @@ class Command(BaseCommand):
                             stats['movies_created_from_notes'] += 1
                     if not movie:
                         continue
+                    date_val = parse_date(row.get('Date'))
                     note_text = row.get('Note')
                     if note_text:
-                        self._append_movie_note(user, movie, note_text)
+                        self._append_movie_note(user, movie, note_text, note_at=date_val)
                         stats['notes_note_applied'] += 1
             except Exception as exc:
                 _register_failure('notes', row, exc)

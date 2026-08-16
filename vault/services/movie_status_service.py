@@ -39,7 +39,12 @@ class MovieStatusService:
             'in_wont_watch': watch_status == UserMovie.WatchStatus.SKIP,
             'in_favorites': bool(user_movie and user_movie.is_favorite),
             'rating': user_movie.rating if user_movie else None,
+            'rated_at': user_movie.rated_at if user_movie else None,
+            'status_at': user_movie.status_at if user_movie else None,
+            'watched_at': user_movie.watched_at if user_movie else None,
             'note': user_movie.note if user_movie else '',
+            'note_at': user_movie.note_at if user_movie else None,
+            'favorited_at': user_movie.favorited_at if user_movie else None,
             'custom_lists': list(UserList.objects.filter(
                 user=user,
                 list_movies__movie=movie
@@ -54,15 +59,20 @@ class MovieStatusService:
 
         if status_key in cls.STATUS_KEY_TO_WATCH_STATUS:
             user_movie.watch_status = cls.STATUS_KEY_TO_WATCH_STATUS[status_key]
+            user_movie.status_at = timezone.localdate()
             if status_key in ('will_watch', 'wont_watch'):
                 user_movie.rating = None
                 user_movie.watched_at = None
-            user_movie.save(update_fields=['watch_status', 'rating', 'watched_at', 'updated_at'])
+                user_movie.rated_at = None
+            user_movie.save(
+                update_fields=['watch_status', 'rating', 'watched_at', 'rated_at', 'status_at', 'updated_at']
+            )
             return user_movie
 
         if status_key == 'favorites':
             user_movie.is_favorite = True
-            user_movie.save(update_fields=['is_favorite', 'updated_at'])
+            user_movie.favorited_at = timezone.localdate()
+            user_movie.save(update_fields=['is_favorite', 'favorited_at', 'updated_at'])
             return user_movie
 
         raise ValidationError(f"Неизвестный статус: {status_key}")
@@ -79,16 +89,20 @@ class MovieStatusService:
         if status_key in cls.STATUS_KEY_TO_WATCH_STATUS:
             if user_movie.watch_status == cls.STATUS_KEY_TO_WATCH_STATUS[status_key]:
                 user_movie.watch_status = None
+                user_movie.status_at = None
                 changed = True
         elif status_key == 'favorites':
             if user_movie.is_favorite:
                 user_movie.is_favorite = False
+                user_movie.favorited_at = None
                 changed = True
         else:
             raise ValidationError(f"Неизвестный статус: {status_key}")
 
         if changed:
-            user_movie.save(update_fields=['watch_status', 'is_favorite', 'updated_at'])
+            user_movie.save(
+                update_fields=['watch_status', 'status_at', 'is_favorite', 'favorited_at', 'updated_at']
+            )
             cls._cleanup_user_movie(user_movie)
 
         return changed
@@ -132,8 +146,10 @@ class MovieStatusService:
         user_movie = cls._get_or_create_user_movie(user, movie)
         user_movie.rating = rating_value
         user_movie.watched_at = timezone.localdate()
+        user_movie.rated_at = timezone.localdate()
         user_movie.watch_status = UserMovie.WatchStatus.WATCHED
-        user_movie.save(update_fields=['rating', 'watched_at', 'watch_status', 'updated_at'])
+        user_movie.status_at = timezone.localdate()
+        user_movie.save(update_fields=['rating', 'watched_at', 'rated_at', 'watch_status', 'status_at', 'updated_at'])
         return user_movie
 
     @classmethod
@@ -149,7 +165,8 @@ class MovieStatusService:
 
         user_movie.rating = None
         user_movie.watched_at = None
-        user_movie.save(update_fields=['rating', 'watched_at', 'updated_at'])
+        user_movie.rated_at = None
+        user_movie.save(update_fields=['rating', 'watched_at', 'rated_at', 'updated_at'])
         cls._cleanup_user_movie(user_movie)
         return True
 
@@ -159,7 +176,9 @@ class MovieStatusService:
         """Сохранить заметку/комментарий пользователя к фильму."""
         user_movie = cls._get_or_create_user_movie(user, movie)
         user_movie.note = (text or "").strip()
-        user_movie.save(update_fields=['note', 'updated_at'])
+        if user_movie.note:
+            user_movie.note_at = timezone.localdate()
+        user_movie.save(update_fields=['note', 'note_at', 'updated_at'])
         if not user_movie.note:
             cls._cleanup_user_movie(user_movie)
         return user_movie
@@ -172,7 +191,8 @@ class MovieStatusService:
         if not user_movie or not user_movie.note:
             return user_movie
         user_movie.note = ""
-        user_movie.save(update_fields=['note', 'updated_at'])
+        user_movie.note_at = None
+        user_movie.save(update_fields=['note', 'note_at', 'updated_at'])
         cls._cleanup_user_movie(user_movie)
         return user_movie
 
