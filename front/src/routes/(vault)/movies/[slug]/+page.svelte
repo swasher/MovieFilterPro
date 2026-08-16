@@ -35,6 +35,7 @@
   } from "@lucide/svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import SeasonStatus from "$lib/components/vault/SeasonStatus.svelte";
+  import PersonCard from "$lib/components/vault/PersonCard.svelte";
 
   let { data } = $props();
   const movie = $derived(data.movie);
@@ -647,14 +648,6 @@
     }
   };
 
-  const initials = (name: string) =>
-    name
-      .split(" ")
-      .map((part) => part[0] ?? "")
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-
   const compactText = (items: Array<{ name: string }>) => items.map((item) => item.name).join(", ") || "Not set";
 
   const setSeasonStatus = async (season: { id: number; user_state: { watch_status: string | null; rating: number | null } }, watched: boolean) => {
@@ -1210,23 +1203,7 @@
             <div class="vd-crew-grid">
               {#if movie.directors.length}
                 {#each movie.directors as person (person.id)}
-                  <a href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
-                    <div class="vd-filmography-card">
-                      {#if person.photo_url}
-                        <img src={person.photo_url} alt={person.name} class="vd-photo" />
-                      {:else}
-                        <div class="vd-photo-fallback">{initials(person.name)}</div>
-                      {/if}
-                      <div class="vd-crew-copy {person.is_favorite ? "vd-crew-copy--favorite" : ""}">
-                        <div class="vd-crew-title-row">
-                          {#if person.is_favorite}
-                            <Heart class="size-3 shrink-0 fill-red-500 text-red-500" />
-                          {/if}
-                          <p class="vd-crew-title">{person.name}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </a>
+                  <PersonCard {person} />
                 {/each}
               {:else}
                 <p class="vd-empty">Нет данных</p>
@@ -1239,26 +1216,7 @@
             <div class="vd-crew-grid">
               {#if movie.actors.length}
                 {#each movie.actors as person (person.id)}
-                  <a href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
-                    <div class="vd-filmography-card">
-                      {#if person.photo_url}
-                        <img src={person.photo_url} alt={person.name} class="vd-photo" />
-                      {:else}
-                        <div class="vd-photo-fallback">{initials(person.name)}</div>
-                      {/if}
-                      <div class="vd-crew-copy {person.is_favorite ? "vd-crew-copy--favorite" : ""}">
-                        <div class="vd-crew-title-row">
-                          {#if person.is_favorite}
-                            <Heart class="size-3 shrink-0 fill-red-500 text-red-500" />
-                          {/if}
-                          <p class="vd-crew-title">{person.name}</p>
-                        </div>
-                        {#if person.character_name}
-                          <p class="vd-crew-subtitle">{person.character_name}</p>
-                        {/if}
-                      </div>
-                    </div>
-                  </a>
+                  <PersonCard {person} />
                 {/each}
               {:else}
                 <p class="vd-empty">Нет данных</p>

@@ -399,7 +399,7 @@
       </div>
     {:else}
       <div class="overflow-x-auto rounded-lg border">
-        <Table class="w-full">
+        <Table class="w-full table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead class="w-40">Статус</TableHead>
@@ -420,9 +420,19 @@
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div class="text-sm font-medium">{item.snapshot_title}</div>
+                  {#if item.movie_slug}
+                    <a
+                      href={`/movies/${item.movie_slug}`}
+                      data-sveltekit-preload-data="hover"
+                      class="truncate text-sm font-medium hover:underline"
+                    >
+                      {item.snapshot_title}
+                    </a>
+                  {:else}
+                    <div class="truncate text-sm font-medium">{item.snapshot_title}</div>
+                  {/if}
                   {#if item.snapshot_original_title && item.snapshot_original_title !== item.snapshot_title}
-                    <div class="text-xs text-muted-foreground">{item.snapshot_original_title}</div>
+                    <div class="truncate text-xs text-muted-foreground">{item.snapshot_original_title}</div>
                   {/if}
                   {#if item.snapshot_year}
                     <div class="text-xs text-muted-foreground">{item.snapshot_year}</div>
@@ -430,9 +440,9 @@
                 </TableCell>
                 <TableCell>
                   {#if item.state === "synced" && item.result_title}
-                    <div class="text-sm">{item.result_title}</div>
+                    <div class="truncate text-sm">{item.result_title}</div>
                     {#if item.result_original_title && item.result_original_title !== item.result_title}
-                      <div class="text-xs text-muted-foreground">{item.result_original_title}</div>
+                      <div class="truncate text-xs text-muted-foreground">{item.result_original_title}</div>
                     {/if}
                     {#if item.result_year}
                       <div class="text-xs text-muted-foreground">{item.result_year}</div>
@@ -449,7 +459,7 @@
                   {:else if item.state === "in_progress"}
                     <span class="text-xs text-amber-600 dark:text-amber-400">Обработка…</span>
                   {:else if item.result_message}
-                    <span class="line-clamp-2 max-w-md text-xs text-muted-foreground" title={item.result_message}>
+                    <span class="line-clamp-2 min-w-0 text-xs text-muted-foreground" title={item.result_message}>
                       {item.result_message}
                     </span>
                   {:else}
