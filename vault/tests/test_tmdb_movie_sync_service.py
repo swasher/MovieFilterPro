@@ -286,3 +286,50 @@ class TMDBMovieSyncServiceTests(TestCase):
         self.assertFalse(Person.objects.filter(pk=orphan.pk).exists())
         self.assertTrue(Person.objects.filter(pk=favorite_orphan.pk).exists())
         self.assertTrue(Person.objects.filter(pk=linked.pk).exists())
+
+    @patch("vault.services.tmdb_movie_sync_service.get_tmdb_client")
+    def test_sync_reuses_favorited_person_matched_by_name(self, get_tmdb_client_mock):
+        """Fetch не должен плодить дубли персон: избранный актёр из CSV-импорта
+        (синтетические tmdb_id/imdb_id) должен переиспользоваться по имени."""
+        fake_tmdb = _FakeTMDBClient(
+            movie_details={321: _movie_details_with_people()},
+            person_details=_person_details(),
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        unknown_country = Country.objects.create(name="Unknown", code="XX")
+        old_person = Person.objects.create(
+            tmdb_id="k000000001",
+            imdb_id="im00000001",
+            name="Мэттью МакКонахи",
+            original_name="Мэттью МакКонахи",
+            country=unknown_country,
+        )
+        movie = Movie.objects.create(
+            title="Интерстеллар",
+            original_title="Interstellar",
+            year=2014,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+        )
+        MoviePerson.objects.create(movie=movie, person=old_person, role="actor", order=0)
+
+        user = User.objects.create_user(username="fav_actor_user", password="x")
+        FavoritePerson.objects.create(user=user, person=old_person)
+
+        result = TMDBMovieSyncService.sync_movie(
+            movie=movie,
+            force_rematch=True,
+            selected_candidate=_candidate(321),
+        )
+
+        self.assertEqual(result.status, "ok")
+        old_person.refresh_from_db()
+        self.assertEqual(old_person.tmdb_id, "1001")
+        self.assertEqual(old_person.imdb_id, "nm0000190")
+        self.assertTrue(
+            FavoritePerson.objects.filter(user=user, person=old_person).exists()
+        )
+        linked = movie.movie_persons.filter(role="actor").first()
+        self.assertIsNotNone(linked)
+        self.assertEqual(linked.person_id, old_person.pk)

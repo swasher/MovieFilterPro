@@ -7,8 +7,13 @@ from typing import Literal
 
 from django.db import transaction
 from django.utils import timezone
+from rapidfuzz import fuzz, process
 
 from core.models import Country as CoreCountry
+from moviefilter.services.favorite_actor_matcher import (
+    DEFAULT_SCORE_CUTOFF,
+    normalize_actor_name,
+)
 from tmdb_adapter.client_singleton import get_tmdb_client
 from vault.models import Genre, Movie, MoviePerson, Episode, Person, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
@@ -31,6 +36,15 @@ class TMDBSyncResult:
     orphan_persons_deleted: int = 0
     selected_candidate: TMDBCandidate | None = None
     candidates: tuple[TMDBCandidate, ...] = field(default_factory=tuple)
+
+
+@dataclass(slots=True)
+class PreviousPersonIndex:
+    """Индекс персон, ранее привязанных к фильму, для матча по имени при синке."""
+
+    exact_by_name: dict[str, Person]
+    fuzzy_names: list[str]
+    fuzzy_persons: list[Person]
 
 
 class TMDBMovieSyncService:
@@ -319,6 +333,11 @@ class TMDBMovieSyncService:
             movie.movie_persons.values_list("person_id", "role", "character_name")
         )
 
+        previous_persons = list(
+            Person.objects.filter(person_movies__movie=movie).distinct()
+        )
+        previous_index = cls._build_previous_person_index(previous_persons)
+
         movie.movie_persons.all().delete()
 
         unknown_country = cls._get_unknown_country()
@@ -333,6 +352,7 @@ class TMDBMovieSyncService:
                 unknown_country=unknown_country,
                 person_cache=person_cache,
                 person_details_cache=person_details_cache,
+                previous_index=previous_index,
             )
             if not person:
                 continue
@@ -359,6 +379,7 @@ class TMDBMovieSyncService:
                 unknown_country=unknown_country,
                 person_cache=person_cache,
                 person_details_cache=person_details_cache,
+                previous_index=previous_index,
             )
             if not person:
                 continue
@@ -388,6 +409,7 @@ class TMDBMovieSyncService:
                 unknown_country=unknown_country,
                 person_cache=person_cache,
                 person_details_cache=person_details_cache,
+                previous_index=previous_index,
             )
             if not person:
                 continue
@@ -410,6 +432,66 @@ class TMDBMovieSyncService:
             movie.movie_persons.values_list("person_id", "role", "character_name")
         )
         return before_keys != after_keys
+
+    @classmethod
+    def _build_previous_person_index(
+        cls, previous_persons: list[Person]
+    ) -> PreviousPersonIndex | None:
+        """
+        Строит индекс персон, ранее привязанных к фильму, для матча по имени.
+
+        Используется как fallback, когда TMDB-персона не нашлась по tmdb_id/imdb_id
+        (например, персона была создана из CSV-импорта с синтетическими ID).
+        Переиспользование той же персоны сохраняет пользовательские данные
+        (FavoritePerson, заметки и т.д.).
+        """
+        exact_by_name: dict[str, Person] = {}
+        fuzzy_names: list[str] = []
+        fuzzy_persons: list[Person] = []
+        for person in previous_persons:
+            for raw in (person.name, person.original_name):
+                clean = normalize_actor_name(raw)
+                if not clean or clean in exact_by_name:
+                    continue
+                exact_by_name[clean] = person
+                fuzzy_names.append(clean)
+                fuzzy_persons.append(person)
+        if not fuzzy_names:
+            return None
+        return PreviousPersonIndex(
+            exact_by_name=exact_by_name,
+            fuzzy_names=fuzzy_names,
+            fuzzy_persons=fuzzy_persons,
+        )
+
+    @classmethod
+    def _match_person_by_name(
+        cls,
+        candidate_names: tuple[str, ...],
+        index: PreviousPersonIndex,
+    ) -> Person | None:
+        """Матч TMDB-персоны по имени среди персон, ранее привязанных к фильму."""
+        for candidate in candidate_names:
+            clean = normalize_actor_name(candidate)
+            if not clean:
+                continue
+            person = index.exact_by_name.get(clean)
+            if person is not None:
+                return person
+
+        for candidate in candidate_names:
+            clean = normalize_actor_name(candidate)
+            if not clean:
+                continue
+            match = process.extractOne(
+                clean,
+                index.fuzzy_names,
+                scorer=fuzz.token_sort_ratio,
+                score_cutoff=DEFAULT_SCORE_CUTOFF,
+            )
+            if match is not None:
+                return index.fuzzy_persons[match[2]]
+        return None
 
     @classmethod
     def _cleanup_orphan_persons(cls) -> int:
@@ -606,6 +688,7 @@ class TMDBMovieSyncService:
         unknown_country: CoreCountry,
         person_cache: dict[int, Person],
         person_details_cache: dict[int, object | None],
+        previous_index: PreviousPersonIndex | None = None,
     ) -> Person | None:
         person_id = cls._safe_int(getattr(credit, "person_id", None))
         if not person_id:
@@ -637,6 +720,19 @@ class TMDBMovieSyncService:
             100,
             name,
         )
+
+        if person is None and previous_index is not None:
+            person = cls._match_person_by_name(
+                candidate_names=(
+                    name,
+                    original_name,
+                    cls._clean_text(getattr(credit, "name", None), 100, ""),
+                    cls._clean_text(getattr(credit, "original_name", None), 100, ""),
+                    cls._clean_text(getattr(details, "name", None), 100, ""),
+                ),
+                index=previous_index,
+            )
+
         photo = cls._first_non_empty(getattr(details, "profile_path", None), getattr(credit, "profile_path", None))
         gender = cls._map_person_gender(
             cls._safe_int(cls._first_non_empty(getattr(details, "gender", None), getattr(credit, "gender", None)))
