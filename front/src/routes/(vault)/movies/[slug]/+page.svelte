@@ -1148,7 +1148,7 @@
         </CardHeader>
         <CardContent class="vd-card-content">
           <div class="vd-section">
-            <p class="vd-section-title">Режиссеры</p>
+            <p class="vd-section-title">{isSeries ? "Создатели" : "Режиссеры"}</p>
             <div class="vd-crew-grid">
               {#if movie.directors.length}
                 {#each movie.directors as person (person.id)}

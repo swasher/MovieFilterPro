@@ -147,8 +147,6 @@ class TMDBMovieSyncService:
             all_updates = tuple(updated_fields + relations_updated)
             cast_count = len(list(getattr(details, "cast", None) or []))
             crew_count = len(list(getattr(details, "crew", None) or []))
-            if media_type == "tv":
-                crew_count += len(list(getattr(details, "aggregate_crew", None) or []))
             cls._log_sync_apply(all_updates, cast_count, crew_count)
             cls._log_orphan_cleanup(orphan_deleted_count)
             cls._log_done("ok", "sync completed")
@@ -308,16 +306,14 @@ class TMDBMovieSyncService:
         cast_items = list(getattr(details, "cast", None) or [])
         crew_items = list(getattr(details, "crew", None) or [])
 
+        # Для сериалов главная фигура за проектом — создатель (created_by) из TMDB.
+        # Режиссёров эпизодов (aggregate_credits) для сериала не берём: они не релевантны
+        # сериалу как целому, в обычных credits на уровне сериала их и так нет.
         is_tv = movie.tmdb_media_type == "tv" or movie.movie_type in (
             Movie.MovieType.SERIES,
             Movie.MovieType.MINISERIES,
         )
-        if is_tv:
-            # У сериалов режиссёры и другая команда эпизодов живут в aggregate_credits,
-            # в обычных credits на уровне сериала их нет.
-            aggregate_crew = list(getattr(details, "aggregate_crew", None) or [])
-            if aggregate_crew:
-                crew_items = crew_items + aggregate_crew
+        director_items = list(getattr(details, "created_by", None) or []) if is_tv else []
 
         before_keys = set(
             movie.movie_persons.values_list("person_id", "role", "character_name")
@@ -353,6 +349,31 @@ class TMDBMovieSyncService:
                 person=person,
                 role="actor",
                 character_name=character_name,
+                order=order,
+            )
+
+        for credit in director_items:
+            person = cls._upsert_person_from_credit(
+                tmdb=tmdb,
+                credit=credit,
+                unknown_country=unknown_country,
+                person_cache=person_cache,
+                person_details_cache=person_details_cache,
+            )
+            if not person:
+                continue
+
+            relation_key = (person.id, "director", "")
+            if relation_key in seen_relations:
+                continue
+
+            seen_relations.add(relation_key)
+            order = cls._safe_int(getattr(credit, "order", None)) or 0
+            MoviePerson.objects.create(
+                movie=movie,
+                person=person,
+                role="director",
+                character_name="",
                 order=order,
             )
 
