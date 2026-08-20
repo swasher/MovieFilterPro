@@ -122,6 +122,8 @@ class TMDBMovieImportService:
             tmdb_id=tmdb_id,
             tmdb_media_type=resolved_media_type,
             poster=getattr(details, "poster_path", None),
+            tmdb_vote_average=cls._safe_float(getattr(details, "vote_average", None)),
+            tmdb_vote_count=cls._safe_int(getattr(details, "vote_count", None)),
         )
 
         candidate = TMDBCandidate(

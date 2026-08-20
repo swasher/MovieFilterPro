@@ -236,6 +236,10 @@ class TMDBMovieSyncService:
         set_field("homepage", getattr(details, "homepage", None) or "")
         set_field("tvdb_id", None)
 
+        # Рейтинги TMDB
+        set_field("tmdb_vote_average", cls._normalize_vote_average(getattr(details, "vote_average", None)))
+        set_field("tmdb_vote_count", cls._safe_int(getattr(details, "vote_count", None)))
+
     @classmethod
     def _apply_tv_payload(cls, movie: Movie, details, set_field):
         first_air_date = getattr(details, "first_air_date", None)
@@ -269,6 +273,10 @@ class TMDBMovieSyncService:
         set_field("imdb_id", cls._clean_text(getattr(details, "imdb_id", None), 15, "") or None)
         set_field("homepage", getattr(details, "homepage", None) or "")
         set_field("tvdb_id", cls._safe_int(getattr(details, "tvdb_id", None)))
+
+        # Рейтинги TMDB
+        set_field("tmdb_vote_average", cls._normalize_vote_average(getattr(details, "vote_average", None)))
+        set_field("tmdb_vote_count", cls._safe_int(getattr(details, "vote_count", None)))
 
         tmdb_type = (getattr(details, "type", None) or "").strip().lower()
         target_type = (
@@ -1052,6 +1060,23 @@ class TMDBMovieSyncService:
         if amount > max_supported:
             return None
         return amount.quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _normalize_vote_average(value) -> Decimal | None:
+        if value is None:
+            return None
+        try:
+            amount = Decimal(str(value))
+        except Exception:
+            return None
+
+        if amount < 0:
+            return None
+
+        # Поле max_digits=3, decimal_places=1 -> максимум 99.9
+        if amount > Decimal("99.9"):
+            return None
+        return amount.quantize(Decimal("0.1"))
 
     @classmethod
     def _log_start(cls, movie: Movie) -> None:

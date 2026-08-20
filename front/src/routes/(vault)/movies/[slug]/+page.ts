@@ -24,6 +24,8 @@ type ApiMovieDetail = {
   tmdb_id: number | null;
   tmdb_linked: boolean;
   tmdb_media_type: string | null;
+  tmdb_vote_average: number | null;
+  tmdb_vote_count: number | null;
   source: string;
   source_display: string;
   genres: Array<{ name: string; slug: string | null }>;

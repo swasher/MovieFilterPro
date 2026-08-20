@@ -1022,6 +1022,15 @@
             {#if movie.imdb_rating}
               <span class="vd-fact-inline">IMDb {movie.imdb_rating}</span>
             {/if}
+            {#if movie.imdb_rating && movie.tmdb_vote_average}
+              <Separator orientation="vertical" class="h-4" />
+            {/if}
+            {#if movie.tmdb_vote_average}
+              <span class="vd-fact-inline" title={movie.tmdb_vote_count ? `${movie.tmdb_vote_count} голосов` : undefined}>
+                TMDB {movie.tmdb_vote_average}
+                {#if movie.tmdb_vote_count}({movie.tmdb_vote_count}){/if}
+              </span>
+            {/if}
           </div>
 
           <div class="vd-facts-grid">
@@ -1232,11 +1241,11 @@
       <div class="vd-service-row">
         <div class="vd-service-actions">
           <Button onclick={() => runTmdbSync(false)} disabled={isSyncing}>
-            {isSyncing ? "Sync..." : "Fetch"}
+            {isSyncing ? "Syncing..." : "Sync using tmdb_id"}
           </Button>
           <Button variant="outline" onclick={() => runTmdbSync(true)} disabled={isSyncing}>
             <RefreshCw class="size-4" />
-            Force data
+            Sync and re-match tmdb_id
           </Button>
           <Button variant="outline" onclick={() => { linkDialogOpen = true; }} disabled={isSyncing || isLinking}>
             <Link class="size-4" />

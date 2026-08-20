@@ -92,7 +92,7 @@ class MovieAdmin(admin.ModelAdmin):
             'fields': ('year', 'release_date', 'duration')
         }),
         ('Рейтинги', {
-            'fields': ('imdb_rating', 'imdb_votes'),
+            'fields': ('imdb_rating', 'imdb_votes', 'tmdb_vote_average', 'tmdb_vote_count'),
             'classes': ('collapse',)
         }),
         ('Финансы', {

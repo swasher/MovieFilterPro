@@ -106,7 +106,7 @@ VAULT
 [x] Разобраться с огромным количеством жанров  
 [ ] использовать  background_path из tmdb  в дизайне страницы  
 [ ] сделать увеличивающийся постер, используя https://more-shadcn.noair.fun/docs/components/image-zoom  
-[ ] скрапить с tmdb дополнительно keywords, budget, homepage, original_language, popularity (что это?), production_companies (надо, не надо?), belongs_to_collection (отображать сразу коллекции?), vote_average (по идее должно сохранятся)  
+[ ] скрапить с tmdb дополнительно keywords, budget, homepage, original_language, production_companies (надо, не надо?), belongs_to_collection (отображать сразу коллекции?), [+]vote_count и [+]vote_average  
 
 Ресурсы
 ----------
