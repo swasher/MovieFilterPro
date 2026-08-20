@@ -99,6 +99,60 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertIn(movie2.id, movies_in_queue)
 
     # ------------------------------------------------------------------ #
+    #                         enqueue_resync                             #
+    # ------------------------------------------------------------------ #
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_enqueue_resync_adds_only_movies_with_tmdb_id(self, sync_mock):
+        synced = self._movie(title="Synced", tmdb_id=321)
+        self._movie(title="Unsynced")
+        self._movie(title="From tmdb no id", source=Movie.Source.TMDB)
+
+        result = TMDBSyncQueueService.enqueue_resync()
+        self.assertEqual(result["added"], 1)
+        self.assertEqual(result["removed"], 0)
+
+        ids = set(TMDBSyncQueueItem.objects.values_list("movie_id", flat=True))
+        self.assertEqual(ids, {synced.id})
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_enqueue_resync_removes_synced_items_first(self, sync_mock):
+        movie = self._movie(title="Synced", tmdb_id=321)
+        synced_item = TMDBSyncQueueItem.objects.create(
+            movie=movie,
+            state=TMDBSyncQueueItem.State.SYNCED,
+            snapshot_title=movie.title,
+            snapshot_movie_type=movie.movie_type,
+        )
+
+        result = TMDBSyncQueueService.enqueue_resync()
+        self.assertEqual(result["removed"], 1)
+        self.assertFalse(TMDBSyncQueueItem.objects.filter(pk=synced_item.id).exists())
+        # у фильма снова ровно одна запись — уже как pending re-sync
+        item = TMDBSyncQueueItem.objects.get(movie=movie)
+        self.assertEqual(item.state, TMDBSyncQueueItem.State.PENDING)
+        self.assertEqual(TMDBSyncQueueItem.objects.filter(movie=movie).count(), 1)
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_enqueue_resync_puts_items_at_front_of_queue(self, sync_mock):
+        movie = self._movie(title="Synced", tmdb_id=321)
+        self._movie(title="Unsynced")
+        TMDBSyncQueueService.enqueue_unsynced()
+        TMDBSyncQueueService.enqueue_resync()
+
+        items = list(TMDBSyncQueueItem.objects.order_by("queued_at", "id"))
+        self.assertEqual(items[0].movie_id, movie.id)  # re-sync обрабатывается первым
+        self.assertEqual(items[0].state, TMDBSyncQueueItem.State.PENDING)
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_enqueue_resync_does_not_create_duplicates(self, sync_mock):
+        movie = self._movie(title="Synced", tmdb_id=321)
+        TMDBSyncQueueService.enqueue_resync()
+        result = TMDBSyncQueueService.enqueue_resync()
+        self.assertEqual(result["added"], 0)
+        self.assertEqual(TMDBSyncQueueItem.objects.filter(movie=movie).count(), 1)
+
+    # ------------------------------------------------------------------ #
     #                        process_one: flow                            #
     # ------------------------------------------------------------------ #
 

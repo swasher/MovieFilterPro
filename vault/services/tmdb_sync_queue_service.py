@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import traceback
+from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import Count
@@ -63,6 +64,61 @@ class TMDBSyncQueueService:
         total_in_queue = TMDBSyncQueueItem.objects.count()
         logger.info(f"ENQUEUE_UNSYNCED | added={added} | total_in_queue={total_in_queue}")
         return {"added": added, "total": total_in_queue}
+
+    @classmethod
+    def enqueue_resync(cls) -> dict:
+        """Кнопка «Re-Sync»: пересинхронизировать уже сопоставленные с TMDB фильмы.
+
+        Сначала удаляются успешно завершённые записи очереди (чтобы у одного фильма
+        не оказалось двух статусов), затем все фильмы с заполненным tmdb_id
+        добавляются в очередь. Новые записи получают queued_at в прошлом,
+        поэтому обрабатываются первыми.
+        """
+        removed = cls.remove_synced()
+
+        target_qs = Movie.objects.filter(tmdb_id__isnull=False)
+        already_queued = set(
+            TMDBSyncQueueItem.objects.values_list("movie_id", flat=True)
+        )
+
+        objects = []
+        for movie in target_qs:
+            if movie.id in already_queued:
+                continue
+            objects.append(
+                TMDBSyncQueueItem(
+                    movie_id=movie.id,
+                    snapshot_title=movie.title or "",
+                    snapshot_original_title=movie.original_title or "",
+                    snapshot_year=movie.year,
+                    snapshot_movie_type=movie.movie_type,
+                    snapshot_imdb_id=movie.imdb_id or "",
+                    snapshot_kinopoisk_id=movie.kinopoisk_id,
+                )
+            )
+
+        if objects:
+            # queued_at имеет auto_now_add и перезапишется при bulk_create,
+            # поэтому сдвигаем время в прошлое отдельным update().
+            min_queued = TMDBSyncQueueItem.objects.order_by("queued_at").values_list(
+                "queued_at", flat=True
+            ).first()
+            backdated = (
+                (min_queued - timedelta(seconds=1))
+                if min_queued is not None
+                else timezone.now() - timedelta(hours=1)
+            )
+            TMDBSyncQueueItem.objects.bulk_create(objects, ignore_conflicts=True)
+            TMDBSyncQueueItem.objects.filter(
+                movie_id__in=[obj.movie_id for obj in objects]
+            ).update(queued_at=backdated)
+
+        added = len(objects)
+        total_in_queue = TMDBSyncQueueItem.objects.count()
+        logger.info(
+            f"ENQUEUE_RESYNC | removed_synced={removed} | added={added} | total_in_queue={total_in_queue}"
+        )
+        return {"added": added, "removed": removed, "total": total_in_queue}
 
     @classmethod
     def start(cls) -> None:

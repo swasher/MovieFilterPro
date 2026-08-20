@@ -103,4 +103,18 @@ VAULT
 [x] Если у фильма заполнено поле Комментарий, его надо выделять цветом, или цветной рамкой.  
 [x] После Fetch актеры теряют статус Favorites  
 [x] Сохраняется ли дата выставления отметки при импорте из csv? Надо сделать ее видимой в UI  
-[x] Разобраться с огромным количеством жанров
+[x] Разобраться с огромным количеством жанров  
+[ ] использовать  background_path из tmdb  в дизайне страницы  
+[ ] сделать увеличивающийся постер, используя https://more-shadcn.noair.fun/docs/components/image-zoom  
+[ ] скрапить с tmdb дополнительно keywords, budget, homepage, original_language, popularity (что это?), production_companies (надо, не надо?), belongs_to_collection (отображать сразу коллекции?), vote_average (по идее должно сохранятся)  
+
+Ресурсы
+----------
+
+- wikiadata
+- Metacritic
+- Rotten Tomatoes
+- Letterboxd
+- TV Tropes
+- rogerebert.com
+- api.mdblist.com

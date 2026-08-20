@@ -21,7 +21,7 @@
   } from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { CheckCheck, ExternalLink, Play, Plus, Square, Trash2 } from "@lucide/svelte";
+  import { CheckCheck, ExternalLink, Play, Plus, RotateCw, Square, Trash2 } from "@lucide/svelte";
   import * as Pagination from "$lib/components/ui/pagination";
 
   let { data } = $props();
@@ -72,8 +72,10 @@
   let isRemoving = $state(false);
   let isRemovingSynced = $state(false);
   let removeDialogOpen = $state(false);
+  let resyncDialogOpen = $state(false);
   let delayInput = $state(String(delaySeconds));
   let isSavingDelay = $state(false);
+  let isResyncing = $state(false);
   let deletingIds = $state<Record<number, boolean>>({});
 
   const handleUnauthorized = async (status: number, message?: string): Promise<boolean> => {
@@ -162,6 +164,34 @@
       toast.error(error instanceof Error ? error.message : "Не удалось добавить фильмы в очередь");
     } finally {
       isAdding = false;
+    }
+  };
+
+  const resyncAll = async () => {
+    if (isResyncing) return;
+    isResyncing = true;
+    try {
+      const response = await fetch("/api/vault/tmdb-sync/resync", { method: "POST" });
+      const payload = (await response.json()) as {
+        added?: number;
+        removed?: number;
+        total?: number;
+        detail?: string;
+      };
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.detail)) return;
+        toast.error(payload.detail ?? `HTTP ${response.status}`);
+        return;
+      }
+      resyncDialogOpen = false;
+      toast.success(
+        `Re-Sync: удалено готовых ${payload.removed ?? 0}, добавлено в начало очереди ${payload.added}.`
+      );
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось выполнить Re-Sync");
+    } finally {
+      isResyncing = false;
     }
   };
 
@@ -346,6 +376,11 @@
       <Button onclick={addAll} disabled={isAdding} class="gap-2">
         <Plus data-icon="inline-start" />
         Добавить все
+      </Button>
+
+      <Button variant="outline" onclick={() => (resyncDialogOpen = true)} disabled={isResyncing} class="gap-2">
+        <RotateCw data-icon="inline-start" />
+        Re-Sync
       </Button>
 
       <Button
@@ -583,6 +618,27 @@
       </Button>
       <Button variant="destructive" onclick={removeAll} disabled={isRemoving}>
         {isRemoving ? "Удаляю…" : "Удалить всё"}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={resyncDialogOpen}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Повторная синхронизация?</Dialog.Title>
+      <Dialog.Description>
+        Будут удалены все успешно завершённые записи очереди, а все фильмы с
+        заполненным TMDB ID добавлены в начало очереди для повторной
+        синхронизации (без повторного подбора, данные просто обновятся из TMDB).
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => (resyncDialogOpen = false)} disabled={isResyncing}>
+        Отмена
+      </Button>
+      <Button onclick={resyncAll} disabled={isResyncing}>
+        {isResyncing ? "Добавляю…" : "Re-Sync"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

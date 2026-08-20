@@ -307,6 +307,7 @@ class TMDBSyncQueueItemsOut(Schema):
 
 class TMDBSyncQueueEnqueueOut(Schema):
     added: int
+    removed: int = 0
     total: int
 
 
@@ -1399,6 +1400,12 @@ def tmdb_sync_state(request):
 def tmdb_sync_enqueue(request):
     _require_api_user(request)
     return TMDBSyncQueueService.enqueue_unsynced()
+
+
+@api.post("/tmdb-sync/resync", response=TMDBSyncQueueEnqueueOut)
+def tmdb_sync_resync(request):
+    _require_api_user(request)
+    return TMDBSyncQueueService.enqueue_resync()
 
 
 @api.delete("/tmdb-sync/queue", response=TMDBSyncQueueDeleteOut)
