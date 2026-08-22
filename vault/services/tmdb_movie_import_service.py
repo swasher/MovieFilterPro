@@ -124,6 +124,7 @@ class TMDBMovieImportService:
             poster=getattr(details, "poster_path", None),
             tmdb_vote_average=cls._safe_float(getattr(details, "vote_average", None)),
             tmdb_vote_count=cls._safe_int(getattr(details, "vote_count", None)),
+            tmdb_original_language=cls._extract_language_code(getattr(details, "original_language", None)),
         )
 
         candidate = TMDBCandidate(
@@ -291,3 +292,21 @@ class TMDBMovieImportService:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _clean_text(value, max_len: int, default: str = "") -> str:
+        text = (value or "").strip()
+        if not text:
+            return default
+        return text[:max_len]
+
+    @staticmethod
+    def _extract_language_code(value) -> str | None:
+        """Извлекает ISO-код языка из объекта tmdbapis.Language или строки."""
+        if value is None:
+            return None
+        if hasattr(value, "iso_639_1"):
+            return getattr(value, "iso_639_1", None)
+        if hasattr(value, "code"):
+            return getattr(value, "code", None)
+        return str(value).strip() if str(value).strip() else None

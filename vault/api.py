@@ -63,10 +63,12 @@ class MovieDetailOut(Schema):
     duration: int | None = None
     age_rating: str | None = None
     trailer_url: str | None = None
+    budget: Decimal | None = None
     tmdb_id: int | None = None
     tmdb_linked: bool
     tmdb_vote_average: float | None = None
     tmdb_vote_count: int | None = None
+    tmdb_original_language: str | None = None
     source: str
     source_display: str
     genres: list["NamedItemOut"]
@@ -768,10 +770,12 @@ def movie_detail(request, slug: str):
         duration=movie.duration,
         age_rating=movie.age_rating or None,
         trailer_url=movie.trailer_url or None,
+        budget=_decimal_to_float(movie.budget),
         tmdb_id=movie.tmdb_id,
         tmdb_linked=bool(movie.tmdb_id),
         tmdb_vote_average=_decimal_to_float(movie.tmdb_vote_average),
         tmdb_vote_count=movie.tmdb_vote_count,
+        tmdb_original_language=movie.tmdb_original_language,
         source=movie.source,
         source_display=movie.get_source_display(),
         genres=[

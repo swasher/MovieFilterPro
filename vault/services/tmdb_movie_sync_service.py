@@ -233,12 +233,19 @@ class TMDBMovieSyncService:
 
         # Внешние ID и официальный сайт
         set_field("imdb_id", cls._clean_text(getattr(details, "imdb_id", None), 15, "") or None)
-        set_field("homepage", getattr(details, "homepage", None) or "")
+        homepage = getattr(details, "homepage", None) or None
+        if not homepage and movie.tmdb_id:
+            homepage = cls._fetch_homepage_fallback(movie.tmdb_id)
+        set_field("homepage", homepage)
         set_field("tvdb_id", None)
 
         # Рейтинги TMDB
         set_field("tmdb_vote_average", cls._normalize_vote_average(getattr(details, "vote_average", None)))
         set_field("tmdb_vote_count", cls._safe_int(getattr(details, "vote_count", None)))
+
+        # Язык TMDB
+        lang_code = cls._extract_language_code(getattr(details, "original_language", None))
+        set_field("tmdb_original_language", cls._clean_text(lang_code, 10, "") or None)
 
     @classmethod
     def _apply_tv_payload(cls, movie: Movie, details, set_field):
@@ -271,12 +278,19 @@ class TMDBMovieSyncService:
 
         # Внешние ID и официальный сайт
         set_field("imdb_id", cls._clean_text(getattr(details, "imdb_id", None), 15, "") or None)
-        set_field("homepage", getattr(details, "homepage", None) or "")
+        homepage = getattr(details, "homepage", None) or None
+        if not homepage and movie.tmdb_id:
+            homepage = cls._fetch_homepage_fallback(movie.tmdb_id)
+        set_field("homepage", homepage)
         set_field("tvdb_id", cls._safe_int(getattr(details, "tvdb_id", None)))
 
         # Рейтинги TMDB
         set_field("tmdb_vote_average", cls._normalize_vote_average(getattr(details, "vote_average", None)))
         set_field("tmdb_vote_count", cls._safe_int(getattr(details, "vote_count", None)))
+
+        # Язык TMDB
+        lang_code = cls._extract_language_code(getattr(details, "original_language", None))
+        set_field("tmdb_original_language", cls._clean_text(lang_code, 10, "") or None)
 
         tmdb_type = (getattr(details, "type", None) or "").strip().lower()
         target_type = (
@@ -1077,6 +1091,43 @@ class TMDBMovieSyncService:
         if amount > Decimal("99.9"):
             return None
         return amount.quantize(Decimal("0.1"))
+
+    @staticmethod
+    def _fetch_homepage_fallback(tmdb_id: int) -> str | None:
+        """TMDB возвращает пустой homepage при ненулевых языках (en-US — исключение).
+
+        Делает один лайтвейт-запрос с ``language=en-US`` только для этого поля.
+        """
+        try:
+            from moviefilter.models import UserPreferences
+            import requests as _req
+
+            api_key = UserPreferences.get().tmdb_api_key
+            if not api_key:
+                return None
+            resp = _req.get(
+                f"https://api.themoviedb.org/3/movie/{tmdb_id}",
+                params={"api_key": api_key, "language": "en-US"},
+                headers={"accept": "application/json"},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                return None
+            return resp.json().get("homepage") or None
+        except Exception:
+            logger.debug("homepage fallback failed for tmdb_id=%s", tmdb_id, exc_info=True)
+            return None
+
+    @staticmethod
+    def _extract_language_code(value) -> str | None:
+        """Извлекает ISO-код языка из объекта tmdbapis.Language или строки."""
+        if value is None:
+            return None
+        if hasattr(value, "iso_639_1"):
+            return getattr(value, "iso_639_1", None)
+        if hasattr(value, "code"):
+            return getattr(value, "code", None)
+        return str(value).strip() if str(value).strip() else None
 
     @classmethod
     def _log_start(cls, movie: Movie) -> None:
