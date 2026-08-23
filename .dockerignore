@@ -51,3 +51,8 @@ front/.svelte-kit
 .vite
 npm-debug.log*
 pnpm-debug.log*
+!/dump.json
+.pnpm-store
+.ruff_cache
+.uv-cache
+backup базы от 22.08.2026\

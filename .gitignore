@@ -11,5 +11,12 @@ api.md
 media/cached_images/
 .make_targets_cache
 *.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
 .lancedb/
 .vscode/
+.ruff_cache/
+.uv-cache/
+.pnpm-store/
+dump.json
+backup базы от 22.08.2026\
