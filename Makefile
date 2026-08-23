@@ -84,13 +84,6 @@ down: ## стоп контейнера
 remove: ## удалить контейнер
 	docker rm -f postgres-mfp
 
-
-ssh:
-	docker exec -it postgres-mfp bash
-
-
-
-
 build-and-push:
 	# build and upload
 	uv version --frozen --bump patch
