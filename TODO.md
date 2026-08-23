@@ -106,7 +106,7 @@ VAULT
 [x] Сохраняется ли дата выставления отметки при импорте из csv? Надо сделать ее видимой в UI  
 [x] Разобраться с огромным количеством жанров  
 [?] использовать  background_path из tmdb  в дизайне страницы. Сделал бекенд, а вписать красиво backdrop в верстку не получилось.  
-[ ] сделать увеличивающийся постер, используя https://more-shadcn.noair.fun/docs/components/image-zoom  
+[x] сделать увеличивающийся постер, используя https://more-shadcn.noair.fun/docs/components/image-zoom  
 [ ] скрапить с tmdb дополнительно keywords, [+]budget, [+]homepage, [+]original_language, production_companies (надо, не надо?), belongs_to_collection (отображать сразу коллекции?), [+]vote_count и [+]vote_average  
 [ ] Проверить, как хранятся фильмы, и сделать словарь "United States of America" -> USA
 [ ] Добавить кадры из фильма

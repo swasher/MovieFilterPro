@@ -34,6 +34,7 @@
     XCircle
   } from "@lucide/svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import * as ImageZoom from "$lib/components/ui/image-zoom";
   import SeasonStatus from "$lib/components/vault/SeasonStatus.svelte";
   import PersonCard from "$lib/components/vault/PersonCard.svelte";
 
@@ -727,7 +728,9 @@
       <Card class="vd-poster-card !gap-0 !py-0">
         <CardContent class="!p-0">
           {#if movie.poster_url}
-            <img src={movie.poster_url} alt={movie.title} class="vd-poster" />
+            <ImageZoom.Root>
+              <ImageZoom.Trigger src={movie.poster_url} alt={movie.title} class="vd-poster" />
+            </ImageZoom.Root>
           {:else}
             <div class="vd-poster-fallback">
               no poster
