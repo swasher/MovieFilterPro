@@ -1094,6 +1094,14 @@
               <dt class="vd-fact-label">Countries</dt>
               <dd class="vd-fact-value">{compactText(movie.countries)}</dd>
             </div>
+            {#if movie.keywords.length > 0}
+              <div class="vd-fact md:col-span-2">
+                <dt class="vd-fact-label">Keywords</dt>
+                <dd class="vd-fact-value vd-keywords">
+                  {movie.keywords.join(", ")}
+                </dd>
+              </div>
+            {/if}
             {#if movie.description}
               <div class="vd-fact md:col-span-2">
                 <dt class="vd-fact-label">Plot</dt>

@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MinValueValidator, MaxValueValidator
 from slugify import slugify
 from django.conf import settings
@@ -179,6 +180,12 @@ class Movie(models.Model):
     tmdb_vote_average = models.DecimalField('TMDB рейтинг', max_digits=3, decimal_places=1, null=True, blank=True)
     tmdb_vote_count = models.PositiveIntegerField('Голосов TMDB', null=True, blank=True)
     tmdb_original_language = models.CharField('Оригинальный язык (TMDB)', max_length=10, blank=True, null=True)
+    keywords = ArrayField(
+        models.CharField('Ключевое слово', max_length=100),
+        verbose_name='Ключевые слова TMDB',
+        blank=True,
+        default=list,
+    )
 
     # Для сериалов:
     seasons_count = models.PositiveIntegerField('Количество сезонов', null=True, blank=True)

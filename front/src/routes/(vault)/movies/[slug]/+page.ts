@@ -32,6 +32,7 @@ type ApiMovieDetail = {
   source_display: string;
   genres: Array<{ name: string; slug: string | null }>;
   countries: Array<{ name: string; slug?: string | null }>;
+  keywords: string[];
   user_state: {
     in_watched: boolean;
     in_will_watch: boolean;

@@ -134,6 +134,8 @@ class TMDBMovieSyncService:
             if trailer_url:
                 set_field("trailer_url", trailer_url)
 
+            cls._apply_keywords(movie, details, set_field)
+
             if updated_fields:
                 movie.save(update_fields=updated_fields)
 
@@ -318,6 +320,20 @@ class TMDBMovieSyncService:
         movie.genres.set(genre_objects)
         genre_ids_after = set(movie.genres.values_list("id", flat=True))
         return genre_ids_before != genre_ids_after
+
+    @classmethod
+    def _apply_keywords(cls, movie: Movie, details, set_field) -> None:
+        raw_keywords = getattr(details, "keywords", None)
+        if raw_keywords is None:
+            return
+
+        new_keywords = sorted(
+            (getattr(k, "name", "") or "").strip()
+            for k in raw_keywords
+            if (getattr(k, "name", None) or "").strip()
+        )
+
+        set_field("keywords", new_keywords)
 
     @classmethod
     def _sync_countries(cls, movie: Movie, countries, origin_countries) -> bool:

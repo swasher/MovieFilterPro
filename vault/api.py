@@ -74,6 +74,7 @@ class MovieDetailOut(Schema):
     source_display: str
     genres: list["NamedItemOut"]
     countries: list["NamedItemOut"]
+    keywords: list[str] = []
     user_state: "UserStateOut"
     custom_lists: list["MovieUserListOut"]
     directors: list["PersonCreditOut"]
@@ -788,6 +789,7 @@ def movie_detail(request, slug: str):
             NamedItemOut(name=country.name)
             for country in movie.countries.all().order_by("name")
         ],
+        keywords=movie.keywords or [],
         user_state=_build_user_state(user, movie),
         custom_lists=_build_movie_user_lists(user, movie),
         directors=[

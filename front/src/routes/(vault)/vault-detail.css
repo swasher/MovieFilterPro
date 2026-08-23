@@ -245,6 +245,10 @@
     @apply inline-flex items-center rounded-full border border-border/70 bg-muted/60 px-2.5 py-1 text-[11px] leading-none text-foreground/80;
   }
 
+  .vd-keywords {
+    @apply font-semibold text-foreground/50 dark:text-foreground/40;
+  }
+
   .vd-service-actions {
     @apply flex flex-wrap gap-2;
   }
