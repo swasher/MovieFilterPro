@@ -7,23 +7,27 @@ set -e
 if [ -n "$POSTGRES_HOST" ]; then
     PGHOST="$POSTGRES_HOST"
     PGPORT="${POSTGRES_PORT:-5432}"
-    PGUSER="$POSTGRES_USER"
-    PGPASSWORD="$POSTGRES_PASSWORD"
-    PGDATABASE="$POSTGRES_DB"
-
-    export PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
 
     MAX_ATTEMPTS=30
     ATTEMPT=0
 
     echo "Waiting for PostgreSQL at $PGHOST:$PGPORT..."
-    until pg_isready -q; do
+    until python -c "
+import socket, sys
+try:
+    s = socket.socket()
+    s.settimeout(2)
+    s.connect(('$PGHOST', $PGPORT))
+    s.close()
+except Exception:
+    sys.exit(1)
+"; do
         ATTEMPT=$((ATTEMPT + 1))
         if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
             echo "ERROR: PostgreSQL did not become ready after $MAX_ATTEMPTS attempts. Exiting."
             exit 1
         fi
-        echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS - PostgreSQL not ready, retrying in 2s..."
+        echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS - not ready, retrying in 2s..."
         sleep 2
     done
     echo "PostgreSQL is ready."

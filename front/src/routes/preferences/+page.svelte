@@ -186,7 +186,7 @@
 
 {#if preferences}
   <div
-    class="mx-auto flex w-full max-w-6xl flex-col gap-6"
+    class="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-8"
     oninput={() => {
       formRevision++;
       hasUnsavedChanges = true;
@@ -222,8 +222,7 @@
       </Card>
     {/if}
 
-    <div class="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-      <div class="space-y-6">
+    <div class="flex flex-col gap-6">
         <Card class="border-border/70">
           <CardHeader>
             <CardTitle class="text-xl">Kinozal</CardTitle>
@@ -341,9 +340,7 @@
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <div class="space-y-6">
         <Card class="border-border/70">
           <CardHeader>
             <CardTitle class="text-xl">Plex</CardTitle>
@@ -409,7 +406,15 @@
             </div>
           </CardContent>
         </Card>
-      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+      <Button variant="outline" onclick={resetForm} disabled={!isDirty || isSaving}>
+        Reset
+      </Button>
+      <Button onclick={save} disabled={isSaving || !isDirty}>
+        {isSaving ? "Saving..." : "Save Preferences"}
+      </Button>
     </div>
   </div>
 {:else}
