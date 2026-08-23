@@ -55,4 +55,5 @@ pnpm-debug.log*
 .pnpm-store
 .ruff_cache
 .uv-cache
-backup базы от 22.08.2026\
+backup базы от 22.08.2026
+*.md

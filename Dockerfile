@@ -76,7 +76,7 @@ COPY . /app
 COPY --from=frontend-builder /app/front/build /app/front/build
 
 # .env.production -> .env
-COPY .env.production /app/.env
+#COPY .env.production /app/.env
 
 # Конфиг supervisord
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
