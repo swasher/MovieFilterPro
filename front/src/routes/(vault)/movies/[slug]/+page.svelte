@@ -283,7 +283,7 @@
 
   let linkDialogOpen = $state(false);
   let linkTmdbIdInput = $state("");
-  let linkCandidate = $state<{
+  let linkCandidates = $state<Array<{
     tmdb_id: number;
     media_type: string;
     title: string;
@@ -292,7 +292,12 @@
     poster_url: string | null;
     popularity: number | null;
     vote_average: number | null;
-  } | null>(null);
+  }>>([]);
+  let selectedLinkCandidateKey = $state<string | null>(null);
+
+  function makeCandidateKey(tmdbId: number, mediaType: string): string {
+    return `${tmdbId}-${mediaType}`;
+  }
   let isLookingUp = $state(false);
   let linkLookupError = $state("");
   let isLinking = $state(false);
@@ -301,48 +306,68 @@
   $effect(() => {
     if (linkDialogOpen) {
       linkTmdbIdInput = "";
-      linkCandidate = null;
+      linkCandidates = [];
+    selectedLinkCandidateKey = null;
       linkLookupError = "";
       isLookingUp = false;
     }
   });
 
   const runTmdbLookup = async () => {
-    const tmdbId = Number(linkTmdbIdInput.trim());
+    const tmdbId = Number(linkTmdbIdInput);
     isLookingUp = true;
     linkLookupError = "";
+    linkCandidates = [];
 
     try {
-      const response = await fetch(`/api/vault/tmdb/lookup?tmdb_id=${tmdbId}`);
+      // Ищем и movie, и tv параллельно
+      const [movieRes, tvRes] = await Promise.all([
+        fetch(`/api/vault/tmdb/lookup?tmdb_id=${tmdbId}&media_type=movie`),
+        fetch(`/api/vault/tmdb/lookup?tmdb_id=${tmdbId}&media_type=tv`),
+      ]);
 
-      let payload: {
-        message?: string;
-        tmdb_id?: number;
-        media_type?: string;
-        title?: string;
-        original_title?: string;
-        year?: number | null;
-        poster_url?: string | null;
-        popularity?: number | null;
-        vote_average?: number | null;
-      } = {};
-      try {
-        payload = await response.json();
-      } catch {
-        linkCandidate = null;
-        linkLookupError = "Сервер вернул неожиданный ответ. Возможно, нужен перезапуск бэкенда.";
-        return;
+      const results: Array<{
+        tmdb_id: number;
+        media_type: string;
+        title: string;
+        original_title: string;
+        year: number | null;
+        poster_url: string | null;
+        popularity: number | null;
+        vote_average: number | null;
+      }> = [];
+
+      for (const res of [movieRes, tvRes]) {
+        if (res.ok) {
+          try {
+            const payload = await res.json();
+            if (payload.tmdb_id) {
+              results.push(payload);
+            }
+          } catch {
+            // игнорируем ошибки парсинга
+          }
+        }
       }
 
-      if (!response.ok) {
-        linkCandidate = null;
-        linkLookupError = payload.message ?? `HTTP ${response.status}`;
-        return;
+      if (results.length === 0) {
+        // Если оба 404, берем сообщение от movie
+        if (!movieRes.ok) {
+          const payload = await movieRes.json().catch(() => ({}));
+          linkLookupError = payload.message ?? `HTTP ${movieRes.status}`;
+        } else if (!tvRes.ok) {
+          const payload = await tvRes.json().catch(() => ({}));
+          linkLookupError = payload.message ?? `HTTP ${tvRes.status}`;
+        } else {
+          linkLookupError = "Ничего не найдено на TMDB";
+        }
+        linkCandidates = [];
+      } else {
+        linkCandidates = results;
+        selectedLinkCandidateKey = results[0] ? makeCandidateKey(results[0].tmdb_id, results[0].media_type) : null;
       }
-
-      linkCandidate = payload as typeof linkCandidate;
     } catch (error) {
-      linkCandidate = null;
+      linkCandidates = [];
       linkLookupError = error instanceof Error ? error.message : "Не удалось найти фильм на TMDB";
     } finally {
       isLookingUp = false;
@@ -355,10 +380,11 @@
       clearTimeout(linkLookupTimer);
       linkLookupTimer = null;
     }
-    linkCandidate = null;
+    linkCandidates = [];
+        selectedLinkCandidateKey = null;
     linkLookupError = "";
 
-    const raw = linkTmdbIdInput.trim();
+    const raw = linkTmdbIdInput;
     const tmdbId = Number(raw);
     if (!raw || !Number.isInteger(tmdbId) || tmdbId <= 0) {
       return;
@@ -370,7 +396,8 @@
   };
 
   const linkTmdb = async () => {
-    if (!linkCandidate) {
+    const candidate = linkCandidates.find(c => makeCandidateKey(c.tmdb_id, c.media_type) === selectedLinkCandidateKey);
+    if (!candidate) {
       return;
     }
 
@@ -381,8 +408,8 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tmdb_id: linkCandidate.tmdb_id,
-          media_type: linkCandidate.media_type
+          tmdb_id: candidate.tmdb_id,
+          media_type: candidate.media_type
         })
       });
 
@@ -403,7 +430,8 @@
       if (payload.status === "ok") {
         linkDialogOpen = false;
         linkTmdbIdInput = "";
-        linkCandidate = null;
+        linkCandidates = [];
+      selectedLinkCandidateKey = null;
         toast.success(payload.message ?? "TMDB sync done.");
         await invalidateAll();
         return;
@@ -1405,40 +1433,52 @@
         <p class="text-muted-foreground text-sm">Ищем на TMDB…</p>
       {:else if linkLookupError}
         <p class="text-destructive text-sm">{linkLookupError}</p>
-      {:else if linkCandidate}
-        <div class="flex items-center gap-3 rounded-xl border p-3">
-          <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
-            {#if linkCandidate.poster_url}
-              <img
-                src={linkCandidate.poster_url}
-                alt={linkCandidate.title}
-                class="h-full w-full object-cover"
-                loading="lazy"
-              />
-            {:else}
-              <span class="text-muted-foreground text-[10px]">no poster</span>
-            {/if}
-          </div>
-          <div class="min-w-0 flex-1 space-y-1">
-            <div class="flex items-center gap-2">
-              <p class="truncate text-sm font-semibold">{linkCandidate.title}</p>
-              {#if linkCandidate.year}
-                <Badge variant="outline" class="shrink-0">{linkCandidate.year}</Badge>
-              {/if}
-            </div>
-            {#if linkCandidate.original_title}
-              <p class="text-muted-foreground truncate text-xs">{linkCandidate.original_title}</p>
-            {/if}
-            <div class="flex flex-wrap gap-2">
-              <Badge variant="secondary">{linkCandidate.media_type}</Badge>
-              <Badge variant="outline">#{linkCandidate.tmdb_id}</Badge>
-              {#if linkCandidate.vote_average}
-                <Badge variant="outline">TMDB {linkCandidate.vote_average.toFixed(1)}</Badge>
-              {/if}
-            </div>
-          </div>
+      {:else if linkCandidates.length > 0}
+        <div class="space-y-2">
+          <p class="text-xs text-muted-foreground">Выбери вариант:</p>
+          {#each linkCandidates as candidate (candidate.tmdb_id + '-' + candidate.media_type)}
+            <button
+              type="button"
+              class={`w-full rounded-xl border p-3 text-left transition ${selectedLinkCandidateKey === makeCandidateKey(candidate.tmdb_id, candidate.media_type) ? "border-primary bg-accent/40" : "border-border/70 bg-card hover:bg-accent/20"}`}
+              onclick={() => { selectedLinkCandidateKey = makeCandidateKey(candidate.tmdb_id, candidate.media_type); }}
+            >
+              <div class="flex gap-3">
+                <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md relative">
+                  {#if candidate.poster_url}
+                    <img
+                      src={candidate.poster_url}
+                      alt={candidate.title}
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  {:else}
+                    <span class="text-muted-foreground text-[10px]">no poster</span>
+                  {/if}
+                  <span class="absolute top-1 right-1 px-1 py-0.5 text-[9px] font-medium rounded bg-black/60 text-white">
+                    {candidate.media_type === 'movie' ? 'movie' : 'tv'}
+                  </span>
+                </div>
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="space-y-1">
+                    <p class="truncate text-sm font-semibold">{candidate.title}</p>
+                    {#if candidate.original_title}
+                      <p class="text-muted-foreground truncate text-xs">{candidate.original_title}</p>
+                    {/if}
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{candidate.year ?? "—"}</Badge>
+                    <Badge variant="outline">#{candidate.tmdb_id}</Badge>
+                    {#if candidate.vote_average}
+                      <Badge variant="outline">TMDB {candidate.vote_average.toFixed(1)}</Badge>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+            </button>
+          {/each}
         </div>
-      {:else if linkTmdbIdInput.trim()}
+      {:else if linkTmdbIdInput}
         <p class="text-muted-foreground text-sm">Введи корректный TMDB ID.</p>
       {/if}
     </div>
@@ -1449,7 +1489,7 @@
       }} disabled={isLinking}>
         Отмена
       </Button>
-      <Button onclick={linkTmdb} disabled={isLinking || !linkCandidate}>
+      <Button onclick={linkTmdb} disabled={isLinking || selectedLinkCandidateKey === null}>
         {isLinking ? "Сохраняю..." : "OK"}
       </Button>
     </Dialog.Footer>

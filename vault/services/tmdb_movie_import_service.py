@@ -68,9 +68,32 @@ class TMDBMovieImportService:
         return tuple(sorted_candidates[:bounded_limit])
 
     @classmethod
-    def lookup_by_id(cls, tmdb_id: int) -> TMDBCandidate | None:
-        """Возвращает кандидата TMDB по id, пробуя movie, затем tv."""
+    def lookup_by_id(cls, tmdb_id: int, media_type: str | None = None) -> TMDBCandidate | None:
+        """Возвращает кандидата TMDB по id. Если media_type указан, ищет только в этом типе."""
         tmdb = get_tmdb_client()
+        
+        # Если media_type указан, используем его
+        if media_type:
+            normalized = cls._normalize_media_type(media_type)
+            if normalized:
+                details, resolved_media_type = cls._load_details(tmdb=tmdb, tmdb_id=tmdb_id, media_type=normalized)
+                if details is None or resolved_media_type is None:
+                    return None
+                
+                return TMDBCandidate(
+                    tmdb_id=tmdb_id,
+                    media_type=resolved_media_type,
+                    title=cls._extract_title(details, resolved_media_type),
+                    original_title=cls._extract_original_title(details, resolved_media_type) or "",
+                    year=cls._extract_year(details, resolved_media_type),
+                    score=0,
+                    score_reasons=("manual_tmdb_id",),
+                    poster_path=getattr(details, "poster_path", None),
+                    popularity=cls._safe_float(getattr(details, "popularity", None)),
+                    vote_average=cls._safe_float(getattr(details, "vote_average", None)),
+                )
+        
+        # Если media_type не указан или не найден, пробуем movie, затем tv (старое поведение)
         details, resolved_media_type = cls._load_details(tmdb=tmdb, tmdb_id=tmdb_id, media_type="movie")
         if details is None or resolved_media_type is None:
             return None

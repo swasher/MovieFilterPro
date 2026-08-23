@@ -1,25 +1,29 @@
 #!/bin/sh
 set -e
 
+# -----------------------------------------------
 # Wait for PostgreSQL to be ready
+# -----------------------------------------------
 if [ -n "$POSTGRES_HOST" ]; then
-    echo "Waiting for PostgreSQL at $POSTGRES_HOST:${POSTGRES_PORT:-5432}..."
-    until python -c "
-import os, sys, time
-import psycopg
-host = os.getenv('POSTGRES_HOST')
-port = int(os.getenv('POSTGRES_PORT', '5432'))
-user = os.getenv('POSTGRES_USER')
-password = os.getenv('POSTGRES_PASSWORD')
-db = os.getenv('POSTGRES_DB')
-try:
-    conn = psycopg.connect(host=host, port=port, user=user, password=password, dbname=db, connect_timeout=3)
-    conn.close()
-    sys.exit(0)
-except Exception as e:
-    print(f'PostgreSQL not ready: {e}', flush=True)
-    sys.exit(1)
-"; do
+    PGHOST="$POSTGRES_HOST"
+    PGPORT="${POSTGRES_PORT:-5432}"
+    PGUSER="$POSTGRES_USER"
+    PGPASSWORD="$POSTGRES_PASSWORD"
+    PGDATABASE="$POSTGRES_DB"
+
+    export PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+
+    MAX_ATTEMPTS=30
+    ATTEMPT=0
+
+    echo "Waiting for PostgreSQL at $PGHOST:$PGPORT..."
+    until pg_isready -q; do
+        ATTEMPT=$((ATTEMPT + 1))
+        if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+            echo "ERROR: PostgreSQL did not become ready after $MAX_ATTEMPTS attempts. Exiting."
+            exit 1
+        fi
+        echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS - PostgreSQL not ready, retrying in 2s..."
         sleep 2
     done
     echo "PostgreSQL is ready."

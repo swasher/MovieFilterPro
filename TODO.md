@@ -108,6 +108,8 @@ VAULT
 [ ] сделать увеличивающийся постер, используя https://more-shadcn.noair.fun/docs/components/image-zoom  
 [ ] скрапить с tmdb дополнительно keywords, [+]budget, [+]homepage, [+]original_language, production_companies (надо, не надо?), belongs_to_collection (отображать сразу коллекции?), [+]vote_count и [+]vote_average  
 [ ] Проверить, как хранятся фильмы, и сделать словарь "United States of America" -> USA
+[ ] Добавить кадры из фильма
+[ ] Добавить награды
 
 Ресурсы
 ----------

@@ -943,11 +943,11 @@ def tmdb_search(request, q: str, limit: int = 10):
 
 
 @api.get("/tmdb/lookup", response=TMDBCandidateOut)
-def tmdb_lookup(request, tmdb_id: int):
+def tmdb_lookup(request, tmdb_id: int, media_type: str | None = None):
     _require_api_user(request)
 
     try:
-        candidate = TMDBMovieImportService.lookup_by_id(tmdb_id)
+        candidate = TMDBMovieImportService.lookup_by_id(tmdb_id, media_type=media_type)
     except Exception as exc:
         raise HttpError(400, str(exc))
 
