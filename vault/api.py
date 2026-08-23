@@ -60,6 +60,7 @@ class MovieDetailOut(Schema):
     tvdb_id: int | None = None
     homepage: str | None = None
     poster_url: str | None = None
+    backdrop_url: str | None = None
     duration: int | None = None
     age_rating: str | None = None
     trailer_url: str | None = None
@@ -767,6 +768,7 @@ def movie_detail(request, slug: str):
         tvdb_id=movie.tvdb_id or None,
         homepage=movie.homepage or None,
         poster_url=movie.poster_url,
+        backdrop_url=movie.backdrop_url,
         duration=movie.duration,
         age_rating=movie.age_rating or None,
         trailer_url=movie.trailer_url or None,

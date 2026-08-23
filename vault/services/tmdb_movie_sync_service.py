@@ -221,6 +221,7 @@ class TMDBMovieSyncService:
         set_field("duration", runtime if runtime and runtime > 0 else None)
 
         set_field("poster", getattr(details, "poster_path", None))
+        set_field("backdrop_path", getattr(details, "backdrop_path", None))
         set_field("is_ongoing", False)
         set_field("year_end", None)
         set_field("seasons_count", None)
@@ -265,6 +266,7 @@ class TMDBMovieSyncService:
         set_field("duration", runtime)
 
         set_field("poster", getattr(details, "poster_path", None))
+        set_field("backdrop_path", getattr(details, "backdrop_path", None))
         in_production = bool(getattr(details, "in_production", False))
         set_field("is_ongoing", in_production)
         set_field("year_end", None if in_production else last_air_year)

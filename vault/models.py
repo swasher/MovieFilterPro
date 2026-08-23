@@ -142,6 +142,7 @@ class Movie(models.Model):
 
     # poster = models.ImageField('Постер', upload_to='posters/', null=True, blank=True)
     poster = models.CharField('Путь к постеру', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
+    backdrop_path = models.CharField('Путь к бэкдропу', max_length=255, blank=True, null=True, help_text='Относительный путь к бэкдропу TMDB (например: /dqZENchTd7lp5zht3S6gWk0pGp.jpg)')
     trailer_url = models.URLField('Ссылка на трейлер', blank=True)
 
     genres = models.ManyToManyField(Genre, verbose_name='Жанры', related_name='movies')
@@ -228,6 +229,13 @@ class Movie(models.Model):
 
     def get_poster_url(self, size='w500'):
         return _build_tmdb_image_url(self.poster, size)
+
+    @property
+    def backdrop_url(self):
+        return _build_tmdb_image_url(self.backdrop_path, 'w1280')
+
+    def get_backdrop_url(self, size='w1280'):
+        return _build_tmdb_image_url(self.backdrop_path, size)
 
     def get_directors(self):
         return self.movie_persons.filter(role='director')

@@ -145,6 +145,7 @@ class TMDBMovieImportService:
             tmdb_id=tmdb_id,
             tmdb_media_type=resolved_media_type,
             poster=getattr(details, "poster_path", None),
+            backdrop_path=getattr(details, "backdrop_path", None),
             tmdb_vote_average=cls._safe_float(getattr(details, "vote_average", None)),
             tmdb_vote_count=cls._safe_int(getattr(details, "vote_count", None)),
             tmdb_original_language=cls._extract_language_code(getattr(details, "original_language", None)),
