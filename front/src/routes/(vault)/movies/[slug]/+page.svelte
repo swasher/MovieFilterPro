@@ -1077,16 +1077,7 @@
                 ${(movie.budget / 1_000_000).toFixed(1)}M
               </span>
             {/if}
-            {#if movie.budget && movie.homepage}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
-            {#if movie.homepage}
-              <a href={movie.homepage} target="_blank" rel="noopener noreferrer" class="vd-fact-inline inline-flex items-center gap-1.5">
-                <Globe class="size-3.5" />
-                Site
-              </a>
-            {/if}
-            {#if (!movie.budget && movie.tmdb_original_language) || (movie.budget && movie.homepage && movie.tmdb_original_language)}
+            {#if (!movie.budget && movie.tmdb_original_language)}
               <Separator orientation="vertical" class="h-4" />
             {/if}
           </div>
