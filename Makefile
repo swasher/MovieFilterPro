@@ -1,7 +1,21 @@
 _GREEN := "\033[32m[%s]\033[0m %s\n" # Green text for "printf"
 _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
 .SILENT:
+.ONESHELL:
 .PHONY: all
+.DEFAULT_GOAL := help
+
+define PRINT_HELP_PYSCRIPT
+import re, sys
+
+for line in sys.stdin:
+	match = re.match(r'^([a-zA-Z_-]+):.*?## (.*)$$', line)
+	if match:
+		target, help = match.groups()
+		print("%-20s %s" % (target, help))
+endef
+export PRINT_HELP_PYSCRIPT
+
 
 # So in short:
 # $  -> makefile variable => use a single dollar sign
@@ -10,8 +24,8 @@ _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
 include .env
 export WATCHTOWER_TOKEN
 
-dummy:
-	echo Do not run without arguments! $(_R)
+help: ## make help to get help!
+	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
 superuser:
 	# this environment variables came from doppler:
@@ -39,106 +53,43 @@ collect:
 flush:
 	python manage.py flush --no-input
 
-TABLES = \
- moviefilter.Country
 
-save_fixtures:
-	read  -p "Are you sure? THIS WILL DELETE ALL EXISTING FIXTURES!!! [y/N] " ans && ans=$${ans:-N} ; \
-    if [ $${ans} = y ] || [ $${ans} = Y ]; then \
-		printf $(_RED) "YES" ; \
-		for table in $(TABLES); do \
-			doppler run -- python -Xutf8 manage.py dumpdata $$table --indent 4 --output fixtures/$$table.json ; \
-		done; \
-		doppler run -- python -Xutf8 manage.py dumpdata auth --natural-foreign --natural-primary -e auth.Permission --indent 4 --output fixtures/auth.Group.json ; \
-    else \
-        printf $(_GREEN) "NO" ; \
-    fi
-	echo 'Complete.'
-
-
-load_fixtures:
-	for table in $(TABLES); do \
-		doppler run -- python manage.py loaddata fixtures/$$table.json; \
-	done
-
-
-flush_and_load_fixtures:
-	# remove all data from tables and reload fixtures; not affect on migrations.
-	python manage.py flush --no-input
-	python manage.py loaddata fixtures/auth.Group.json
-	for table in $(TABLES); do \
-		python manage.py loaddata fixtures/$$table.json; \
-	done
-
-
-
-dropdb:
-	@read  -p "Are you sure? IT WILL DELETE ALL EXISTING DATABASEs!!! [y/N] " ans && ans=$${ans:-N} ; \
-    if [ $${ans} = y ] || [ $${ans} = Y ]; then \
-		printf $(_GREEN) "YES" ; \
-		#rm -rf core/migrations/* ; \
-		#rm -rf orders/migrations/* ; \
-		#rm -rf stanzforms/migrations/* ; \
-		#rm -rf warehouse/migrations/* ; \
-		docker compose down ; \
-		docker volume prune --force ; \
-		docker compose up -d ; \
-		sleep 2 ; \
-		#python manage.py makemigrations --no-input core orders stanzforms warehouse ; \
-		python manage.py migrate ; \
-		#python manage.py loaddata */fixtures/*.json ; \
-		#python manage.py createsuperuser --username=swasher --email=mr.swasher@gmail.com; becouse it's already in fixtures ; \
-    else \
-        printf $(_RED) "NO" ; \
-    fi
-	@echo 'Next steps...'
-
-
-dropdb_and_migrations:
-	@read -p "Are you sure? IT WILL DELETE ALL EXISTING DATABASEs!!! [y/N] " ans && ans=$${ans:-N} ; \
-    if [ $${ans} = y ] || [ $${ans} = Y ]; then \
-		printf $(_RED) "YES" ; \
-		rm -rf core/migrations/* ; \
-		rm -rf orders/migrations/* ; \
-		rm -rf stanzforms/migrations/* ; \
-		rm -rf warehouse/migrations/* ; \
-		docker compose down ; \
-		docker volume prune --force ; \
-		docker compose up -d ; \
-		sleep 2 ; \
-		python manage.py makemigrations --no-input core orders stanzforms warehouse ; \
-		python manage.py migrate ; \
-#		python manage.py loaddata */fixtures/*.json ; \
-    else \
-        printf $(_RED) "NO" ; \
-    fi
-	@echo 'Next steps...'
-
-
+login:
+	docker login
 
 build:
 	doppler run -- docker compose up -d  --build
 
-up:
-	docker compose up -d
+create-volume: ## Содать том для персистентного хранения DB
+	docker volume create moviefilterpro_postgres_data
 
-down:
-	docker compose down
+remove-volume: ## Удалить контейнер со всей dev базой данных!!!
+	docker rm -f postgres-local
 
-freeze:
-	pipenv run pip freeze > requirements.txt
+create-container: ## только для создания контейнера, если он не существует.
+	docker run -d \
+	  --name postgres-mfp \
+	  --restart unless-stopped \
+	  --env-file .env \
+	  -v moviefilterpro_postgres_data:/var/lib/postgresql \
+	  -p 5432:5432 \
+	  postgres:18-alpine
+
+up: ## старт контейнера
+	docker start postgres-mfp
+
+down: ## стоп контейнера
+	docker stop postgres-mfp
+
+remove: ## удалить контейнер
+	docker rm -f postgres-mfp
+
 
 ssh:
-	docker exec -it sandglass_db_1 bash
+	docker exec -it postgres-mfp bash
 
 
-tunnel:
-	# first run `ngrok config add-authtoken <ngrok token>`  - token on page 'your-autotoken', not 'tunnels->autotoken'!!!
-	ngrok http 8000
 
-
-login:
-	docker login
 
 build-and-push:
 	# build and upload
@@ -173,15 +124,17 @@ push-no-cache: build-and-push
 #	rm requirements.txt
 
 
-run:
-	# if you need run, you must build image with x86 compatible settings (not implemented)
-	docker run -p 8000:8000 movie-filter-pro
 
-pack:
-	docker save -o movie-filter-pro.tar movie-filter-pro
 
 huey:
 	uv run python -m huey.bin.huey_consumer movie_filter_pro.huey.HUEY -k thread -w 2 -v -S
+
+
+tunnel:
+	# first run `ngrok config add-authtoken <ngrok token>`  - token on page 'your-autotoken', not 'tunnels->autotoken'!!!
+	ngrok http 8000
+
+
 
 
 #

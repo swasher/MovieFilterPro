@@ -7,7 +7,6 @@ Adopted by SWASHER for using Django 5.1.5.
 
 import os
 import tomllib
-import dj_database_url
 from pathlib import Path
 from decouple import config
 from django.contrib import messages
@@ -137,22 +136,27 @@ WSGI_APPLICATION = 'movie_filter_pro.wsgi.application'
 #
 # Database
 #
-# got DATABASE_URL from environment variable, i.e. Doppler. In case local dev, it's just `sqlite:///db.sqlite3`
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 DATABASES = {
-    # 'default': dj_database_url.config(
-    #     conn_max_age=600,
-    #     conn_health_checks=True,
-    # ),
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.sqlite3',
-    #     'NAME': BASE_DIR / 'db.sqlite3',
-    # }
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL')
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('POSTGRES_DB'),
+        'USER': config('POSTGRES_USER'),
+        'PASSWORD': config('POSTGRES_PASSWORD'),
+        'HOST': config('POSTGRES_HOST'),
+        'PORT': config('POSTGRES_PORT', default='5432'),
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
+    }
 }
+
 # if not os.getenv('IN_DOCKER'):
 #     database_path = config('DATABASE_URL').split('///')[-1]
 #     if not os.path.exists(database_path):

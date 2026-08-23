@@ -1,6 +1,8 @@
 # FTS5 full-text index for Movie (case-insensitive Unicode search).
+# Only created on SQLite. On Postgres, search falls back to ILIKE via FTSMovieSearchService.is_available().
 
 from django.db import migrations
+
 
 FTS_SQL = """
 CREATE VIRTUAL TABLE movie_fts USING fts5(
@@ -41,6 +43,28 @@ DROP TABLE IF EXISTS movie_fts;
 """
 
 
+def create_fts_sqlite(apps, schema_editor):
+    """Create FTS5 virtual table and triggers only on SQLite."""
+    if schema_editor.connection.vendor != 'sqlite':
+        return
+    with schema_editor.connection.cursor() as cursor:
+        for statement in FTS_SQL.strip().split(';'):
+            stmt = statement.strip()
+            if stmt:
+                cursor.execute(stmt)
+
+
+def reverse_fts_sqlite(apps, schema_editor):
+    """Drop FTS5 table and triggers only on SQLite."""
+    if schema_editor.connection.vendor != 'sqlite':
+        return
+    with schema_editor.connection.cursor() as cursor:
+        for statement in REVERSE_SQL.strip().split(';'):
+            stmt = statement.strip()
+            if stmt:
+                cursor.execute(stmt)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -48,8 +72,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql=FTS_SQL,
-            reverse_sql=REVERSE_SQL,
+        migrations.RunPython(
+            code=create_fts_sqlite,
+            reverse_code=reverse_fts_sqlite,
         ),
     ]

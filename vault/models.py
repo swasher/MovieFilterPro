@@ -127,7 +127,7 @@ class Movie(models.Model):
 
     title = models.CharField('Название', max_length=255)
     original_title = models.CharField('Оригинальное название', max_length=255, blank=True, null=True)
-    slug = models.SlugField('URL', unique=True, blank=True)
+    slug = models.SlugField('URL', max_length=255, unique=True, blank=True)
     description = models.TextField('Описание', blank=True)
 
     year = models.PositiveIntegerField('Год выпуска', null=True, blank=True)

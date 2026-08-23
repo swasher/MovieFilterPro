@@ -42,9 +42,9 @@ class MovieRSS(models.Model):
 
     low_priority_deprecated = models.BooleanField(default=False)
     priority = models.PositiveSmallIntegerField(choices=PRIORITY, verbose_name='Priority')
-    kinozal_id = models.PositiveSmallIntegerField()
-    title = models.CharField(max_length=70)
-    original_title = models.CharField(max_length=70)
+    kinozal_id = models.PositiveIntegerField()
+    title = models.CharField(max_length=200)
+    original_title = models.CharField(max_length=200)
     year = models.CharField(max_length=9, help_text='Год может быть представлен как диапазон: 1982-1994')
     date_added = models.DateField()
     dubbed = models.BooleanField(blank=True, null=True, help_text='Раздача имеет дубляж или ПМ. Нужно для передачи этой информации из сканера в чекер.')
@@ -55,16 +55,16 @@ class MovieRSS(models.Model):
     kinopoisk_id = models.PositiveIntegerField(blank=True, null=True)
     kinopoisk_rating = models.FloatField(blank=True, null=True)
 
-    genres = models.CharField(max_length=300)
-    countries = models.CharField(max_length=300)
+    genres = models.TextField(blank=True, null=True)
+    countries = models.TextField(blank=True, null=True)
 
-    director = models.CharField(max_length=300)
-    actors = models.CharField(max_length=300)
-    plot = models.CharField(max_length=1000)
+    director = models.TextField(blank=True, null=True)
+    actors = models.TextField(blank=True, null=True)
+    plot = models.TextField(blank=True, null=True)
     translate = models.CharField(max_length=300, blank=True, null=True)
-    poster = models.CharField(max_length=100)
+    poster = models.CharField(max_length=500)
 
-    kinorium_id = models.PositiveSmallIntegerField(blank=True, null=True, help_text='На данный момент не используется, потому что мы не можем получить ID из Кинориума')
+    kinorium_id = models.PositiveIntegerField(blank=True, null=True, help_text='На данный момент не используется, потому что мы не можем получить ID из Кинориума')
     kinorium_partial_match = models.BooleanField(default=False, blank=True, null=True)
 
     @property
@@ -120,9 +120,9 @@ class Kinorium(models.Model):
         (WILL_WATCH, 'Буду смотреть'),  # значит, уже скачан
         (DECLINED, 'Не буду смотреть'),
     )
-    # ID фильма из Кинориума мы не можем получить
-    title = models.CharField(max_length=50)
-    original_title = models.CharField(max_length=50, blank=True)
+
+    title = models.CharField(max_length=200)
+    original_title = models.CharField(max_length=200, blank=True)
     year = models.PositiveSmallIntegerField()
 
     status = models.PositiveSmallIntegerField(choices=STATUS, verbose_name='Статус', default=UNKNOWN)
