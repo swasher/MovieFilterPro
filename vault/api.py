@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Q, When
+from django.db.models import Count, Exists, OuterRef, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
@@ -20,7 +20,6 @@ from vault.models import (
     UserSeason,
     VaultConnectionEvent,
 )
-from vault.services.fts_movie_search_service import FTSMovieSearchService
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.season_status_service import UNSET, SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
@@ -592,13 +591,6 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
     )
 
 
-def _chunk_id_q(ids: list[int], chunk_size: int = 900) -> Q:
-    q = Q()
-    for start in range(0, len(ids), chunk_size):
-        q |= Q(id__in=ids[start:start + chunk_size])
-    return q
-
-
 @api.get("/movies", response=list[MovieOut])
 def list_movies(
     request,
@@ -619,7 +611,6 @@ def list_movies(
     user = _resolve_api_user(request)
     qs = Movie.objects.all()
 
-    fts_ids: list[int] | None = None
     if genre:
         genre_slugs = [g.strip() for g in genre.split(",") if g.strip()]
         if genre_slugs:
@@ -627,13 +618,10 @@ def list_movies(
     if q:
         query = q.strip()
         if query:
-            if FTSMovieSearchService.is_available():
-                fts_ids = FTSMovieSearchService.search(query, include_plot=search_plot)
-            else:
-                search_q = Q(title__icontains=query) | Q(original_title__icontains=query)
-                if search_plot:
-                    search_q |= Q(description__icontains=query)
-                qs = qs.filter(search_q)
+            search_q = Q(title__icontains=query) | Q(original_title__icontains=query)
+            if search_plot:
+                search_q |= Q(description__icontains=query)
+            qs = qs.filter(search_q)
     if year_from is not None:
         qs = qs.filter(year__gte=year_from)
     if year_to is not None:
@@ -691,23 +679,6 @@ def list_movies(
 
     bounded_limit = max(1, min(limit, 100))
     bounded_offset = max(0, offset)
-
-    if fts_ids is not None:
-        if not fts_ids:
-            return []
-        matched_ids = set(
-            qs.filter(_chunk_id_q(fts_ids)).values_list("id", flat=True)
-        )
-        ranked_ids = [movie_id for movie_id in fts_ids if movie_id in matched_ids]
-        page_ids = ranked_ids[bounded_offset:bounded_offset + bounded_limit]
-        if not page_ids:
-            return []
-        rank_order = Case(
-            *[When(id=movie_id, then=pos) for pos, movie_id in enumerate(page_ids)],
-            output_field=IntegerField(),
-        )
-        movies_qs = Movie.objects.filter(id__in=page_ids).order_by(rank_order).distinct()
-        return [_build_movie_out(movie, user=user) for movie in movies_qs]
 
     qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
     return [_build_movie_out(movie, user=user) for movie in qs]
