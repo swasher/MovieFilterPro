@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import GinIndex, OpClass
+from django.contrib.postgres.search import SearchVector
 from django.core.validators import MinValueValidator, MaxValueValidator
 from slugify import slugify
 from django.conf import settings
@@ -198,6 +200,23 @@ class Movie(models.Model):
         indexes = [
             models.Index(fields=['-year', 'title']),
             models.Index(fields=['status']),
+            # GIN trigram — ускоряет title__icontains / original_title__icontains «на лету»
+            # Требует расширения pg_trgm (миграция 0033)
+            GinIndex(
+                OpClass('title', name='gin_trgm_ops'),
+                name='movie_title_trgm_gin_idx',
+            ),
+            GinIndex(
+                OpClass('original_title', name='gin_trgm_ops'),
+                name='movie_orig_title_trgm_gin_idx',
+            ),
+            # GIN FTS — ускоряет полнотекстовый поиск title + original_title (A) + description (B) со стеммингом russian
+            GinIndex(
+                SearchVector('title', config='russian', weight='A')
+                + SearchVector('original_title', config='russian', weight='A')
+                + SearchVector('description', config='russian', weight='B'),
+                name='movie_fts_ru_gin_idx',
+            ),
         ]
 
     def __str__(self):

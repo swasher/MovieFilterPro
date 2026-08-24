@@ -20,6 +20,7 @@ from vault.models import (
     UserSeason,
     VaultConnectionEvent,
 )
+from vault.services.movie_search_service import MovieSearchService
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.season_status_service import UNSET, SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
@@ -615,13 +616,13 @@ def list_movies(
         genre_slugs = [g.strip() for g in genre.split(",") if g.strip()]
         if genre_slugs:
             qs = qs.filter(genres__slug__in=genre_slugs).distinct()
+    # Гибридный поиск: базовый (title only, без стемминга) / расширенный (title+plot с FTS, стемминг, веса A/B, rank)
+    has_search_rank = False
     if q:
-        query = q.strip()
-        if query:
-            search_q = Q(title__icontains=query) | Q(original_title__icontains=query)
-            if search_plot:
-                search_q |= Q(description__icontains=query)
-            qs = qs.filter(search_q)
+        raw_q = (q or "").strip()
+        if raw_q:
+            has_search_rank = bool(search_plot and MovieSearchService._is_postgres())
+            qs = MovieSearchService.apply_search(qs, raw_q, search_plot)
     if year_from is not None:
         qs = qs.filter(year__gte=year_from)
     if year_to is not None:
@@ -680,7 +681,12 @@ def list_movies(
     bounded_limit = max(1, min(limit, 100))
     bounded_offset = max(0, offset)
 
-    qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
+    # В расширенном режиме (search_plot + FTS) ранжирование по релевантности выше вторичной сортировки
+    # Веса SearchVector: title/original_title = A, description = B => заголовки выше сюжета
+    if has_search_rank:
+        qs = qs.order_by("-rank", *ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
+    else:
+        qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
     return [_build_movie_out(movie, user=user) for movie in qs]
 
 
