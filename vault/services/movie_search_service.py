@@ -53,7 +53,16 @@ class MovieSearchService:
         if not cls._is_postgres():
             return queryset.filter(title_condition | Q(description__icontains=raw))
 
-        # Postgres FTS: веса A для заголовков, B для описания
+        # Защита от тяжелых OR на коротких паттернах:
+        # - pg_trgm GIN эффективен от 3 символов, 1-2 символа дают Seq Scan и низкую селективность
+        # - plainto_tsquery('russian','а') -> '' (стоп-слово), тогда @@ '' false и ts_rank бессмысленен
+        # Для len<2 оставляем только title_condition без дорогого FTS+rank.
+        if len(raw) < 2:
+            return queryset.filter(title_condition)
+
+        # Postgres FTS: веса A для заголовков, B для описания — config единый russian!
+        # Важно: у всех полей одинаковый config, иначе CombinedSearchVector смешает разные словари
+        # (default_text_search_config -> simple/english) и SearchQuery(config='russian') не сматчится.
         vector = (
             SearchVector("title", weight="A", config="russian")
             + SearchVector("original_title", weight="A", config="russian")
@@ -61,6 +70,17 @@ class MovieSearchService:
         )
         # plain — разбивает на лексемы через &, применяет стемминг russian
         ts_query = SearchQuery(raw, config="russian")
+
+        # Если ts_query пустой (стоп-слова вроде 'в','и','на' после стемминга), не аннотируем rank
+        # Проверка через plainto_tsquery, чтобы не делать лишний ts_rank по ''::tsquery
+        try:
+            with connection.cursor() as cur:
+                cur.execute("SELECT plainto_tsquery('russian', %s)::text", [raw])
+                ts_text = (cur.fetchone() or [""])[0]
+                if not ts_text or ts_text.strip() == "":
+                    return queryset.filter(title_condition)
+        except Exception:
+            pass  # при ошибке — fallback к обычному FTS
 
         # Аннотируем и фильтруем объединённым условием; ранжируем — заголовок выше сюжета благодаря весам
         # На Postgres GIN индексы: pg_trgm для icontains и gin для tsvector ускоряют оба условия.

@@ -617,12 +617,16 @@ def list_movies(
         if genre_slugs:
             qs = qs.filter(genres__slug__in=genre_slugs).distinct()
     # Гибридный поиск: базовый (title only, без стемминга) / расширенный (title+plot с FTS, стемминг, веса A/B, rank)
+    # Для коротких паттернов (<2) и стоп-слов MovieSearchService не аннотирует rank — has_search_rank остаётся False
     has_search_rank = False
     if q:
         raw_q = (q or "").strip()
         if raw_q:
-            has_search_rank = bool(search_plot and MovieSearchService._is_postgres())
+            # rank возможен только если search_plot и postgres и длина достаточна для селективного FTS/trigram
+            wants_rank = bool(search_plot and MovieSearchService._is_postgres() and len(raw_q) >= 2)
             qs = MovieSearchService.apply_search(qs, raw_q, search_plot)
+            # Проверяем, действительно ли queryset получил аннотацию rank (стоп-слова -> нет rank)
+            has_search_rank = wants_rank and "rank" in getattr(qs.query, "annotations", {})
     if year_from is not None:
         qs = qs.filter(year__gte=year_from)
     if year_to is not None:
