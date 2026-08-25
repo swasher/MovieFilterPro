@@ -37,6 +37,7 @@
   import * as ImageZoom from "$lib/components/ui/image-zoom";
   import SeasonStatus from "$lib/components/vault/SeasonStatus.svelte";
   import PersonCard from "$lib/components/vault/PersonCard.svelte";
+  import CollectionPartCard from "$lib/components/vault/CollectionPartCard.svelte";
 
   let { data } = $props();
   const movie = $derived(data.movie);
@@ -91,6 +92,14 @@
   let isDeletingMovie = $state(false);
   let candidateDialogOpen = $state(false);
   let deleteDialogOpen = $state(false);
+  let collectionImportDialogOpen = $state(false);
+  let pendingCollectionPart = $state<{
+    tmdb_id: number;
+    title: string;
+    original_title: string | null;
+    year: number | null;
+    poster_url: string | null;
+  } | null>(null);
   let candidateDialogMode = $state<"needs_confirmation" | "needs_user_choice">("needs_user_choice");
   let tmdbCandidates = $state<
     Array<{
@@ -727,6 +736,9 @@
   const handleCollectionPartClick = async (part: {
     tmdb_id: number;
     title: string;
+    original_title?: string | null;
+    year?: number | null;
+    poster_url?: string | null;
     in_vault: boolean;
     vault_slug: string | null;
   }) => {
@@ -734,9 +746,20 @@
       await goto(`/movies/${part.vault_slug}`);
       return;
     }
-    if (!confirm(`Фильма "${part.title}" нет в базе. Добавить из TMDB?`)) {
-      return;
-    }
+    // открываем shadcn диалог вместо браузерного confirm
+    pendingCollectionPart = {
+      tmdb_id: part.tmdb_id,
+      title: part.title,
+      original_title: part.original_title ?? null,
+      year: part.year ?? null,
+      poster_url: part.poster_url ?? null
+    };
+    collectionImportDialogOpen = true;
+  };
+
+  const confirmCollectionImport = async () => {
+    const part = pendingCollectionPart;
+    if (!part) return;
     if (isImportingCollectionPart) return;
     isImportingCollectionPart = true;
     importingPartTmdbId = part.tmdb_id;
@@ -761,6 +784,8 @@
         toast.error(payload.message ?? "Не удалось определить фильм после импорта");
         return;
       }
+      collectionImportDialogOpen = false;
+      pendingCollectionPart = null;
       toast.success(payload.message ?? "Фильм добавлен в Vault");
       await goto(`/movies/${slug}`);
     } catch (error) {
@@ -1309,57 +1334,19 @@
       {/if}
 
       {#if movie.collection}
-        <Card class="vd-card">
-          <CardHeader>
-            <CardTitle class="text-xl">Коллекция — {movie.collection.name}</CardTitle>
-            {#if movie.collection.overview}
-              <CardDescription class="vd-collection-overview">{movie.collection.overview}</CardDescription>
-            {/if}
+        <Card class="vd-card !gap-2 !py-4">
+          <CardHeader class="pb-1 pt-0">
+            <CardTitle class="vd-collection-header">{movie.collection.name}</CardTitle>
           </CardHeader>
-          <CardContent class="vd-card-content">
-            <div class="vd-collection-grid">
+          <CardContent class="pt-0">
+            <div class="vd-collection-grid vd-collection-grid--compact">
               {#each movie.collection.parts as part (part.tmdb_id)}
-                {#if part.in_vault && part.vault_slug}
-                  <a
-                    href={`/movies/${part.vault_slug}`}
-                    class="vd-collection-card vd-collection-card--in-vault"
-                    title={part.title}
-                  >
-                    <div class="vd-collection-poster-wrap">
-                      {#if part.poster_url}
-                        <img src={part.poster_url} alt={part.title} class="vd-collection-poster" loading="lazy" />
-                      {:else}
-                        <div class="vd-collection-poster-fallback">no poster</div>
-                      {/if}
-                      <span class="vd-collection-badge vd-collection-badge--in-vault">В Vault</span>
-                    </div>
-                    <span class="vd-collection-title">{part.title}</span>
-                    <span class="vd-collection-year">{part.year ?? "—"}</span>
-                  </a>
-                {:else}
-                  <button
-                    type="button"
-                    class="vd-collection-card vd-collection-card--missing"
-                    onclick={() => handleCollectionPartClick(part)}
-                    disabled={isImportingCollectionPart && importingPartTmdbId === part.tmdb_id}
-                    title={part.in_vault ? part.title : `${part.title} — нет в Vault, добавить?`}
-                  >
-                    <div class="vd-collection-poster-wrap">
-                      {#if part.poster_url}
-                        <img src={part.poster_url} alt={part.title} class="vd-collection-poster vd-collection-poster--dim" loading="lazy" />
-                      {:else}
-                        <div class="vd-collection-poster-fallback">no poster</div>
-                      {/if}
-                      {#if isImportingCollectionPart && importingPartTmdbId === part.tmdb_id}
-                        <span class="vd-collection-badge vd-collection-badge--loading">Импорт...</span>
-                      {:else}
-                        <span class="vd-collection-badge vd-collection-badge--missing">Нет в Vault</span>
-                      {/if}
-                    </div>
-                    <span class="vd-collection-title">{part.title}</span>
-                    <span class="vd-collection-year">{part.year ?? "—"}</span>
-                  </button>
-                {/if}
+                <CollectionPartCard
+                  {part}
+                  isCurrent={part.tmdb_id === movie.tmdb_id}
+                  isImporting={isImportingCollectionPart && importingPartTmdbId === part.tmdb_id}
+                  onclick={handleCollectionPartClick}
+                />
               {/each}
             </div>
           </CardContent>
@@ -1619,6 +1606,48 @@
       </Button>
       <Button variant="destructive" onclick={deleteMovie} disabled={isDeletingMovie}>
         {isDeletingMovie ? "Удаляю..." : "Удалить"}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={collectionImportDialogOpen}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Добавить фильм?</Dialog.Title>
+      <Dialog.Description>
+        Фильма "{pendingCollectionPart?.title ?? ""}" нет в Vault. Добавить его из TMDB?
+      </Dialog.Description>
+    </Dialog.Header>
+
+    {#if pendingCollectionPart}
+      <div class="flex gap-3 rounded-lg border border-border/50 bg-muted/20 p-3">
+        <div class="flex h-[84px] w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+          {#if pendingCollectionPart.poster_url}
+            <img src={pendingCollectionPart.poster_url} alt={pendingCollectionPart.title} class="h-full w-full object-cover" loading="lazy" />
+          {:else}
+            <span class="text-[10px] text-muted-foreground">no poster</span>
+          {/if}
+        </div>
+        <div class="min-w-0 flex-1 space-y-1">
+          <p class="truncate text-sm font-semibold">{pendingCollectionPart.title}</p>
+          {#if pendingCollectionPart.original_title && pendingCollectionPart.original_title !== pendingCollectionPart.title}
+            <p class="truncate text-xs text-muted-foreground">{pendingCollectionPart.original_title}</p>
+          {/if}
+          {#if pendingCollectionPart.year}
+            <p class="text-xs text-muted-foreground">{pendingCollectionPart.year}</p>
+          {/if}
+          <p class="text-xs text-muted-foreground">TMDB #{pendingCollectionPart.tmdb_id}</p>
+        </div>
+      </div>
+    {/if}
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => { collectionImportDialogOpen = false; }} disabled={isImportingCollectionPart}>
+        Отмена
+      </Button>
+      <Button onclick={confirmCollectionImport} disabled={isImportingCollectionPart || !pendingCollectionPart}>
+        {isImportingCollectionPart ? "Добавляю..." : "Добавить"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
