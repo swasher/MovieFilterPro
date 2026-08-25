@@ -15,7 +15,7 @@ from moviefilter.services.favorite_actor_matcher import (
     normalize_actor_name,
 )
 from tmdb_adapter.client_singleton import get_tmdb_client
-from vault.models import Genre, Movie, MoviePerson, Episode, Person, Season, UserMovie, UserSeason
+from vault.models import Collection, Genre, Movie, MoviePerson, Episode, Person, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
     TMDBCandidate,
     TMDBMovieMatchingService,
@@ -136,10 +136,19 @@ class TMDBMovieSyncService:
 
             cls._apply_keywords(movie, details, set_field)
 
+            # Коллекция TMDB — только для movie (для tv/series не существует)
+            collection_changed = False
+            try:
+                collection_changed = cls._sync_collection(movie, details, media_type)
+            except Exception:
+                logger.warning("collection sync failed for movie_id=%s", movie.id, exc_info=True)
+
             if updated_fields:
                 movie.save(update_fields=updated_fields)
 
             relations_updated: list[str] = []
+            if collection_changed:
+                relations_updated.append("collection")
             if cls._sync_genres(movie, getattr(details, "genres", None)):
                 relations_updated.append("genres")
             if cls._sync_countries(
@@ -302,6 +311,41 @@ class TMDBMovieSyncService:
         )
         if movie.movie_type in (Movie.MovieType.MOVIE, Movie.MovieType.SERIES) and movie.movie_type != target_type:
             set_field("movie_type", target_type)
+
+    @classmethod
+    def _sync_collection(cls, movie: Movie, details, media_type: MediaType) -> bool:
+        """
+        Синхронизация коллекции TMDB (belongs_to_collection) — только для movie.
+        Для tv/series/show в TMDB коллекций нет — сразу выход.
+        Делегирует на CollectionService, не кидает наружу.
+        Возвращает True если FK изменился.
+        """
+        # Collection существует только для фильмов
+        if media_type == "tv":
+            return False
+        if getattr(movie, "movie_type", None) in (Movie.MovieType.SERIES, Movie.MovieType.SHOW):
+            return False
+        if getattr(movie, "tmdb_media_type", None) == "tv":
+            return False
+
+        # Извлекаем belongs_to_collection разными способами
+        raw = getattr(details, "collection", None)
+        if raw is None:
+            raw = getattr(details, "belongs_to_collection", None)
+        if raw is None and isinstance(details, dict):
+            raw = details.get("belongs_to_collection") or details.get("collection")
+
+        # Отвязка (null) или привязка делегируется сервису
+        prev_collection_id = movie.collection_id
+        try:
+            # Lazy import чтобы не было циклической зависимости
+            from vault.services.collection_service import CollectionService
+
+            CollectionService.sync_collection_for_movie(movie, raw)
+        except Exception:
+            logger.warning("_sync_collection failed for movie_id=%s", movie.id, exc_info=True)
+            return False
+        return prev_collection_id != movie.collection_id
 
     @classmethod
     def _sync_genres(cls, movie: Movie, tmdb_genres) -> bool:

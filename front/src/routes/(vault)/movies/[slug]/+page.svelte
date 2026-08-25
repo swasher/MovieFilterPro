@@ -720,6 +720,56 @@
       toast.error("Не удалось установить оценку");
     }
   };
+
+  let isImportingCollectionPart = $state(false);
+  let importingPartTmdbId = $state<number | null>(null);
+
+  const handleCollectionPartClick = async (part: {
+    tmdb_id: number;
+    title: string;
+    in_vault: boolean;
+    vault_slug: string | null;
+  }) => {
+    if (part.in_vault && part.vault_slug) {
+      await goto(`/movies/${part.vault_slug}`);
+      return;
+    }
+    if (!confirm(`Фильма "${part.title}" нет в базе. Добавить из TMDB?`)) {
+      return;
+    }
+    if (isImportingCollectionPart) return;
+    isImportingCollectionPart = true;
+    importingPartTmdbId = part.tmdb_id;
+    try {
+      const response = await fetch("/api/vault/tmdb/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdb_id: part.tmdb_id, media_type: "movie" })
+      });
+      const payload = (await response.json()) as {
+        status?: string;
+        message?: string;
+        movie?: { slug?: string } | null;
+      };
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) return;
+        toast.error(payload.message ?? `HTTP ${response.status}`);
+        return;
+      }
+      const slug = payload.movie?.slug;
+      if (!slug) {
+        toast.error(payload.message ?? "Не удалось определить фильм после импорта");
+        return;
+      }
+      toast.success(payload.message ?? "Фильм добавлен в Vault");
+      await goto(`/movies/${slug}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось импортировать фильм");
+    } finally {
+      isImportingCollectionPart = false;
+      importingPartTmdbId = null;
+    }
+  };
 </script>
 
 <div class="vd-page">
@@ -1258,9 +1308,63 @@
         </Card>
       {/if}
 
-
-
-
+      {#if movie.collection}
+        <Card class="vd-card">
+          <CardHeader>
+            <CardTitle class="text-xl">Коллекция — {movie.collection.name}</CardTitle>
+            {#if movie.collection.overview}
+              <CardDescription class="vd-collection-overview">{movie.collection.overview}</CardDescription>
+            {/if}
+          </CardHeader>
+          <CardContent class="vd-card-content">
+            <div class="vd-collection-grid">
+              {#each movie.collection.parts as part (part.tmdb_id)}
+                {#if part.in_vault && part.vault_slug}
+                  <a
+                    href={`/movies/${part.vault_slug}`}
+                    class="vd-collection-card vd-collection-card--in-vault"
+                    title={part.title}
+                  >
+                    <div class="vd-collection-poster-wrap">
+                      {#if part.poster_url}
+                        <img src={part.poster_url} alt={part.title} class="vd-collection-poster" loading="lazy" />
+                      {:else}
+                        <div class="vd-collection-poster-fallback">no poster</div>
+                      {/if}
+                      <span class="vd-collection-badge vd-collection-badge--in-vault">В Vault</span>
+                    </div>
+                    <span class="vd-collection-title">{part.title}</span>
+                    <span class="vd-collection-year">{part.year ?? "—"}</span>
+                  </a>
+                {:else}
+                  <button
+                    type="button"
+                    class="vd-collection-card vd-collection-card--missing"
+                    onclick={() => handleCollectionPartClick(part)}
+                    disabled={isImportingCollectionPart && importingPartTmdbId === part.tmdb_id}
+                    title={part.in_vault ? part.title : `${part.title} — нет в Vault, добавить?`}
+                  >
+                    <div class="vd-collection-poster-wrap">
+                      {#if part.poster_url}
+                        <img src={part.poster_url} alt={part.title} class="vd-collection-poster vd-collection-poster--dim" loading="lazy" />
+                      {:else}
+                        <div class="vd-collection-poster-fallback">no poster</div>
+                      {/if}
+                      {#if isImportingCollectionPart && importingPartTmdbId === part.tmdb_id}
+                        <span class="vd-collection-badge vd-collection-badge--loading">Импорт...</span>
+                      {:else}
+                        <span class="vd-collection-badge vd-collection-badge--missing">Нет в Vault</span>
+                      {/if}
+                    </div>
+                    <span class="vd-collection-title">{part.title}</span>
+                    <span class="vd-collection-year">{part.year ?? "—"}</span>
+                  </button>
+                {/if}
+              {/each}
+            </div>
+          </CardContent>
+        </Card>
+      {/if}
 
       <Card class="vd-card">
         <CardHeader>

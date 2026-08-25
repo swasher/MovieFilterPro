@@ -1,6 +1,6 @@
 # План: Коллекции TMDB (`belongs_to_collection`)
 
-> Идея пользователя: при первичной синхронизации фильма с TMDB, если `belongs_to_collection != null`, делаем дополнительный запрос `collections_get_details(collection_id)`, кэшируем название + постер коллекции локально. На странице фильма показываем блок коллекции. При клике на фильм из коллекции: есть локально — переход на `/movies/{slug}`, нет — алерт "фильма нет в базе, добавить?" с импортом.
+> Идея пользователя: при первичной синхронизации фильма с TMDB, если `belongs_to_collection != null`, делаем дополнительный запрос `collections_get_details(collection_id)`, сохраняем снапшот названия + постера коллекции и списка её фильмов локально в одном `JSONField`. На странице фильма показываем блок коллекции. При клике на фильм из коллекции: есть локально — переход на `/movies/{slug}`, нет — алерт "фильма нет в базе, добавить?" с импортом.
 
 Пример JSON TMDB (коллекция 528 — Terminator):
 ```json
@@ -11,8 +11,8 @@
   "poster_path": "/kpZxdNsAV7qTdTLwKM5NLqa7GEo.jpg",
   "backdrop_path": "/sCnBEw2Yu6foEjs4Xb4eMddYHRo.jpg",
   "parts": [
-    { "id": 218, "title": "The Terminator", "poster_path": "/qvkt...", "release_date": "1984-10-26", "media_type": "movie" },
-    { "id": 280, "title": "Terminator 2: Judgment Day", "poster_path": "/jFTV...", "release_date": "1991-07-03", "media_type": "movie" }
+    { "id": 218, "title": "The Terminator", "original_title": "The Terminator", "poster_path": "/qvkt...", "release_date": "1984-10-26", "media_type": "movie" },
+    { "id": 280, "title": "Terminator 2: Judgment Day", "original_title": "Terminator 2: Judgment Day", "poster_path": "/jFTV...", "release_date": "1991-07-03", "media_type": "movie" }
   ]
 }
 ```
@@ -97,15 +97,15 @@ class MovieDetailOut(Schema):
 
 ## 2. Подводные камни
 
-1. **Отсутствующие фильмы коллекции** — главный камень. В коллекции 5-10 фильмов TMDB, в Vault может быть 1-2. Решение: кэшируем `parts` локально (см. модель), при отдаче метим `in_vault` + `vault_slug`.
+1. **Отсутствующие фильмы коллекции** — главный камень. В коллекции 5-10 фильмов TMDB, в Vault может быть 1-2. Решение: сохраняем снапшот `parts` локально в `Collection.parts_data` (`JSONField`) — по одному объекту на фильм коллекции с полями `title`/`original_title`/`year`/`poster_path`/`tmdb_id`/`release_date`/`order`; при отдаче вычисляем `in_vault` + `vault_slug` на лету по `Movie.tmdb_id` (не храним флаг в JSON — иначе протухнет после импорта).
 2. **Атомарность sync** — `sync_movie` уже `@transaction.atomic` (`tmdb_movie_sync_service.py:54`). Добавление коллекции не должно ломать транзакцию при ошибке TMDB (fallback: логируем, не падуем sync).
-3. **TV vs Movie** — `belongs_to_collection` бывает и у `tv` (редко). Поддержать только `movie` на первом этапе, для `tv` — пропускать или логировать.
+3. **Collection — только для Movie** — в архитектуре TMDB `Collection` существует исключительно для фильмов. У TV-шоу `belongs_to_collection` нет и API `TV Collection` не существует. Для `tv`/`series` игнорируем коллекцию полностью (не запрашиваем, не создаём `Collection`).
 4. **Отвязка** — если TMDB вернул `belongs_to_collection = null`, надо отвязать `movie.collection = None` (но не удалять `Collection` — на неё могут ссылаться другие фильмы).
-5. **Orphan-коллекции** — `Collection` без `Movie` можно хранить (дешёво) или чистить кроном. Предпочтение: хранить, чистить опционально.
-6. **Порядок в коллекции** — TMDB `parts` не всегда отсортированы по дате. Сортировать по `release_date` или сохранять `order` как в `parts`.
+5. **Orphan-коллекции** — `Collection` без `Movie` храним бессрочно, не чистим (решение зафиксировано). Удаление только ручное из админки при необходимости.
+6. **Порядок в коллекции** — TMDB `parts` не всегда отсортированы по дате. Сохранять `order` как в массиве `parts` из TMDB (индекс), при отдаче уже отсортировано.
 7. **Постер коллекции может быть null** — fallback на placeholder как у `movie.poster_url`.
 8. **Rate limit TMDB** — один доп. запрос на фильм при sync — ок. Не делать N запросов за раз в очереди.
-9. **Re-sync** — при повторном sync коллекция может смениться (фильм переехал в другую коллекцию). Обновлять FK и метаданные.
+9. **Re-sync** — при повторном sync коллекция может смениться (фильм переехал в другую коллекцию). Обновлять FK и `parts_data`.
 
 ---
 
@@ -122,7 +122,11 @@ class Collection(models.Model):
     overview = models.TextField("Описание", blank=True, default="")
     poster_path = models.CharField("Путь к постеру", max_length=500, blank=True, null=True)
     backdrop_path = models.CharField("Путь к бэкдропу", max_length=500, blank=True, null=True)
-    # опционально: original_name, original_language — не нужно для MVP
+    # Снапшот TMDB parts — денормализация для отображения отсутствующих фильмов без N запросов.
+    # Не HTTP-кэш/redis, а локальное хранение.
+    # Структура элемента: {"tmdb_id": 218, "title": "...", "original_title": "...", "year": 1984, "poster_path": "/qvkt...", "release_date": "1984-10-26", "order": 0}
+    # in_vault / vault_slug НЕ храним — вычисляем при сериализации по Movie.tmdb_id
+    parts_data = models.JSONField("Фильмы коллекции (снапшот TMDB)", default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -136,23 +140,6 @@ class Collection(models.Model):
         verbose_name = "Коллекция"
         verbose_name_plural = "Коллекции"
         ordering = ["name"]
-
-class CollectionPart(models.Model):
-    """Кэшированный элемент коллекции из TMDB parts (для отображения отсутствующих)."""
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="parts")
-    tmdb_id = models.PositiveIntegerField("TMDB ID фильма")
-    title = models.CharField(max_length=500)
-    original_title = models.CharField(max_length=500, blank=True, default="")
-    poster_path = models.CharField(max_length=500, blank=True, null=True)
-    release_date = models.DateField(null=True, blank=True)
-    order = models.PositiveSmallIntegerField(default=0)  # позиция в parts
-
-    @property
-    def poster_url(self): return _build_tmdb_image_url(self.poster_path, 'w500')
-
-    class Meta:
-        unique_together = [("collection", "tmdb_id")]
-        ordering = ["order", "release_date", "title"]
 ```
 
 На `Movie` добавить:
@@ -163,7 +150,7 @@ collection = models.ForeignKey(Collection, null=True, blank=True, on_delete=mode
 
 Миграция: `uv run python manage.py makemigrations vault` + `migrate`.
 
-**Альтернатива без `CollectionPart`:** хранить `parts` как `JSONField` на `Collection`. Проще, но хуже для запросов. Рекомендуется отдельная таблица (как выше) — дёшево и явно.
+**Отклонённая альтернатива:** отдельная таблица `CollectionPart` (`collection FK`, `tmdb_id`, `title`, `poster_path`...). Дёшево и явно, но для 5-10 элементов на коллекцию и `single-user self-hosted` — избыточный `JOIN`/`DELETE+INSERT` на каждый sync. Выбран `JSONField` — 1 строка = 1 коллекция, атомарное обновление.
 
 ### Этап 2 — Сервис коллекций
 
@@ -173,24 +160,25 @@ collection = models.ForeignKey(Collection, null=True, blank=True, on_delete=mode
 class CollectionService:
     @classmethod
     def sync_collection_for_movie(cls, movie: Movie, tmdb_collection_obj) -> Collection | None:
-        """Создаёт/обновляет Collection + CollectionPart из tmdb_collection_obj (belongs_to_collection)."""
+        """Создаёт/обновляет Collection + parts_data из tmdb_collection_obj (belongs_to_collection)."""
         # 1. get_or_create Collection по tmdb_id
         # 2. обновить name/overview/poster_path/backdrop_path если изменились
-        # 3. вызвать _sync_parts(collection) — см. ниже
+        # 3. вызвать _sync_parts_data(collection) — см. ниже
         # 4. привязать movie.collection = collection
         # Возвращает Collection или None если tmdb_collection_obj is None (тогда movie.collection = None)
 
     @classmethod
-    def _sync_parts(cls, collection: Collection) -> bool:
-        """Делает tmdb.collections_get_details(collection.tmdb_id), синхронизирует CollectionPart.
+    def _sync_parts_data(cls, collection: Collection) -> bool:
+        """Делает tmdb.collections_get_details(collection.tmdb_id), собирает снапшот parts_data.
         Возвращает True если были изменения. Логирует, не кидает наружу."""
         # tmdb = get_tmdb_client()
         # details = tmdb.collections_get_details(collection.tmdb_id)  # или tmdb.collection(...)
         # parts = getattr(details, "parts", None) or getattr(details, "movies", None) or []
-        # upsert CollectionPart по (collection, tmdb_id), удалить orphaned, обновить order
+        # собрать list[dict] с ключами tmdb_id/title/original_title/year/poster_path/release_date/order
+        # сравнить с collection.parts_data, если отличается — сохранить
 ```
 
-Логика `_sync_parts`: удалить `CollectionPart` которых нет в новом `parts`, upsert остальных, сохранить `order` по индексу в массиве.
+Логика `_sync_parts_data`: собрать новый `list[dict]` с `order` по индексу массива `parts`, сравнить с текущим `parts_data` (по `tmdb_id`/`title`/`poster_path`...), при отличии — `collection.parts_data = new_parts; collection.save(update_fields=["parts_data", "updated_at"])`.
 
 **Интеграция в sync:**
 
@@ -201,6 +189,9 @@ class CollectionService:
   ```python
   @classmethod
   def _sync_collection(cls, movie: Movie, details) -> bool:
+      # Collection в TMDB — только для movie; для tv сразу выход
+      if getattr(movie, "movie_type", None) in ("series", "show") or getattr(movie, "tmdb_media_type", None) == "tv":
+          return False
       raw = getattr(details, "collection", None)  # или belongs_to_collection
       if raw is None:
           # raw может быть dict или Collection
@@ -211,7 +202,7 @@ class CollectionService:
       # если объект — делегировать CollectionService.sync_collection_for_movie
       # обернуть в try/except, логировать, не падать
   ```
-- Учесть `media_type == "tv"` — пока пропускать (или тоже синкать, но флаг `is_tv_collection`).
+- Для `tv`/`series`/`show` (`tmdb_media_type == "tv"`) коллекцию не обрабатываем — в TMDB её не существует.
 
 ### Этап 3 — API
 
@@ -223,6 +214,7 @@ class CollectionService:
 class CollectionPartOut(Schema):
     tmdb_id: int
     title: str
+    original_title: str | None = None
     year: int | None = None
     poster_url: str | None = None
     in_vault: bool
@@ -249,9 +241,10 @@ collection: CollectionBriefOut | None = None
 collection_out = None
 if movie.collection_id:
     coll = movie.collection
-    # parts из CollectionPart, отсортированные по order
-    # для каждого part: in_vault = Movie.objects.filter(tmdb_id=part.tmdb_id).exists()
-    # vault_slug — из того же запроса (prefetch)
+    # parts = coll.parts_data (уже отсортированы по order)
+    # vault_map = {m.tmdb_id: m.slug for m in Movie.objects.filter(tmdb_id__in=[p["tmdb_id"] for p in parts])}
+    # для каждого part: in_vault = part["tmdb_id"] in vault_map; vault_slug = vault_map.get(...)
+    # poster_url = _build_tmdb_image_url(part["poster_path"], "w500") или _tmdb_image_url
     # собрать CollectionBriefOut
 ```
 
@@ -259,9 +252,9 @@ if movie.collection_id:
 
 **Импорт отсутствующего фильма:**
 
-Переиспользовать существующий `POST /api/vault/tmdb/import` (`vault/api.py:971`, `TMDBMovieImportService.import_movie`). Отдельный endpoint для коллекции не нужен. Фронт просто вызовет `POST /api/vault/tmdb/import` с `{tmdb_id, media_type: "movie"}`.
+Переиспользовать существующий `POST /api/vault/tmdb/import` (`vault/api.py:971`, `TMDBMovieImportService.import_movie`). Отдельный endpoint для коллекции не нужен. Фронт просто вызовет `POST /api/vault/tmdb/import` с `{tmdb_id, media_type: "movie"}`. После импорта `in_vault` для этого `tmdb_id` начнёт вычисляться как `True` без обновления JSON.
 
-Опционально: `POST /api/vault/collections/{tmdb_id}/refresh` — форсированный рефреш метаданных коллекции (для админа).
+Опционально: `POST /api/vault/collections/{tmdb_id}/refresh` — форсированный рефреш `parts_data` (для админа).
 
 ### Этап 4 — Frontend
 
@@ -272,7 +265,7 @@ if movie.collection_id:
   collection: {
     tmdb_id: number; name: string; overview: string | null;
     poster_url: string | null; backdrop_url: string | null;
-    parts: Array<{ tmdb_id: number; title: string; year: number | null; poster_url: string | null; in_vault: boolean; vault_slug: string | null }>;
+    parts: Array<{ tmdb_id: number; title: string; original_title: string | null; year: number | null; poster_url: string | null; in_vault: boolean; vault_slug: string | null }>;
   } | null;
   ```
 
@@ -331,7 +324,8 @@ if movie.collection_id:
 
 ### Этап 5 — Миграция данных / backfill
 
-- Для существующих `Movie` с `tmdb_id` — команда `uv run python manage.py sync_collections --all` или реюз `tmdb-sync` очереди: при следующем `sync_movie` коллекция подтянется автоматически.
+- Для существующих `Movie` с `tmdb_id` (синхронизированных **до** введения коллекций) коллекция появится при **любой повторной синхронизации** — `sync_movie()` каждый раз заново читает `belongs_to_collection` из TMDB и вызывает `_sync_collection()` → `CollectionService.sync_collection_for_movie()`. Т.е. ответ: **да, появится** при `force_rematch`, ручном `TMDB Sync` на странице, массовом sync очереди или команде ниже.
+- Плановый backfill для всех старых фильмов — команда `uv run python manage.py sync_collections --all` (реюз существующей логики `sync_movie`, без дублирования).
 - Команда:
   ```python
   # vault/management/commands/sync_collections.py
@@ -344,18 +338,18 @@ if movie.collection_id:
 
 ### Этап 6 — Тесты
 
-- `vault/tests/test_collection_service.py` — юнит на `sync_collection_for_movie` (создание, обновление, отвязка, parts sync).
+- `vault/tests/test_collection_service.py` — юнит на `sync_collection_for_movie` (создание, обновление, отвязка, `parts_data` sync).
 - `vault/tests/test_tmdb_movie_sync_service.py` — мок `tmdb.movie()` с `belongs_to_collection`, проверить что `movie.collection` сетится.
-- `vault/tests/test_api_collection.py` — `GET /api/vault/movies/{slug}` отдаёт `collection`.
+- `vault/tests/test_api_collection.py` — `GET /api/vault/movies/{slug}` отдаёт `collection` с `in_vault`/`vault_slug` из `parts_data`.
 
 ---
 
 ## 4. Порядок работ (чеклист для агента)
 
-- [ ] 1. Создать модели `Collection` + `CollectionPart`, FK на `Movie`, миграция.
-- [ ] 2. Создать `vault/services/collection_service.py` (`sync_collection_for_movie`, `_sync_parts`).
+- [ ] 1. Создать модель `Collection` с `parts_data JSONField`, FK `Movie.collection`, миграция.
+- [ ] 2. Создать `vault/services/collection_service.py` (`sync_collection_for_movie`, `_sync_parts_data`).
 - [ ] 3. Интегрировать в `TMDBMovieSyncService.sync_movie` → `_sync_collection` (try/except, не ломать основной sync).
-- [ ] 4. Расширить `vault/api.py` — схемы `CollectionBriefOut`/`CollectionPartOut`, поле `collection` в `MovieDetailOut`, хелпер `_build_collection_out`.
+- [ ] 4. Расширить `vault/api.py` — схемы `CollectionBriefOut`/`CollectionPartOut`, поле `collection` в `MovieDetailOut`, хелпер `_build_collection_out` (вычисляет `in_vault`/`vault_slug` из `parts_data` на лету).
 - [ ] 5. Расширить `front/src/routes/(vault)/movies/[slug]/+page.ts` (тип) + `+page.svelte` (UI блок, `handleMissingClick` с `POST /api/vault/tmdb/import`).
 - [ ] 6. Стили в `vault-detail.css`.
 - [ ] 7. Ручная проверка: синхронизировать фильм из коллекции (например Terminator 218), открыть страницу, кликнуть на отсутствующий → алерт → импорт → переход.
@@ -366,6 +360,8 @@ if movie.collection_id:
 
 ## 5. Что НЕ делать
 
+- Не создавать отдельную таблицу `CollectionPart` — используем `JSONField` на `Collection` (см. Этап 1).
+- Не хранить `in_vault`/`vault_slug` в JSON — вычисляем при отдаче.
 - Не создавать отдельную страницу `/collections/{id}` в MVP.
 - Не менять `Movie` поля кроме `collection` FK.
 - Не трогать `front/` вне `movies/[slug]` без запроса.
@@ -374,8 +370,8 @@ if movie.collection_id:
 
 ---
 
-## 6. Открытые вопросы (решить перед стартом или в процессе)
+## 6. Открытые вопросы — все закрыты
 
-1. Нужен ли `backdrop_path` коллекции на бэке? (TMDB отдаёт — хранить, но не показывать в MVP.)
-2. Чистить ли orphan `Collection` (0 фильмов)? Предложение: не чистить.
-3. Поддерживать ли TV-коллекции? Предложение: MVP — только `movie`, для `tv` пропускать.
+1. ~~Нужен ли `backdrop_path` коллекции на бэке?~~ — **Решено:** да, храним `Collection.backdrop_path` (+ `poster_path`), но в MVP не показываем в UI (как у `Movie.backdrop_path`).
+2. ~~Чистить ли orphan `Collection` (0 фильмов)?~~ — **Решено:** нет, не чистим. Храним бессрочно.
+3. ~~Поддерживать ли TV-коллекции?~~ — **Решено:** нет, в TMDB `Collection` только для `movie`, для `tv`/`series`/`show` не существует — игнорируем.

@@ -6,6 +6,7 @@ from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
 from vault.models import (
+    Collection,
     FavoritePerson,
     Genre,
     Movie,
@@ -80,6 +81,26 @@ class MovieDetailOut(Schema):
     directors: list["PersonCreditOut"]
     actors: list["PersonCreditOut"]
     seasons: list["SeasonOut"] = []
+    collection: "CollectionBriefOut | None" = None
+
+
+class CollectionPartOut(Schema):
+    tmdb_id: int
+    title: str
+    original_title: str | None = None
+    year: int | None = None
+    poster_url: str | None = None
+    in_vault: bool
+    vault_slug: str | None = None
+
+
+class CollectionBriefOut(Schema):
+    tmdb_id: int
+    name: str
+    overview: str | None = None
+    poster_url: str | None = None
+    backdrop_url: str | None = None
+    parts: list[CollectionPartOut] = []
 
 
 class NamedItemOut(Schema):
@@ -592,6 +613,63 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
     )
 
 
+def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
+    """Собирает CollectionBriefOut из movie.collection + parts_data. in_vault вычисляется на лету."""
+    coll: Collection | None = getattr(movie, "collection", None)
+    # Если relation не загружен — пробуем по FK
+    if coll is None and getattr(movie, "collection_id", None):
+        try:
+            coll = Collection.objects.filter(id=movie.collection_id).first()
+        except Exception:
+            coll = None
+    if coll is None:
+        return None
+
+    parts_raw: list[dict] = list(coll.parts_data or [])
+    # Собираем карту tmdb_id -> Movie (slug) одним запросом
+    tmdb_ids = [p.get("tmdb_id") for p in parts_raw if p.get("tmdb_id") is not None]
+    vault_map: dict[int, str] = {}
+    if tmdb_ids:
+        try:
+            # Фильтруем только те tmdb_id что в parts, чтобы не тянуть всё
+            for m in Movie.objects.filter(tmdb_id__in=tmdb_ids).values("tmdb_id", "slug"):
+                try:
+                    vault_map[int(m["tmdb_id"])] = m["slug"]
+                except Exception:
+                    continue
+        except Exception:
+            vault_map = {}
+
+    parts_out: list[CollectionPartOut] = []
+    for p in parts_raw:
+        try:
+            tmdb_id = int(p.get("tmdb_id"))
+        except Exception:
+            continue
+        slug = vault_map.get(tmdb_id)
+        poster_url = _tmdb_image_url(p.get("poster_path"), size="w342") if p.get("poster_path") else None
+        parts_out.append(
+            CollectionPartOut(
+                tmdb_id=tmdb_id,
+                title=str(p.get("title") or "").strip() or f"TMDB {tmdb_id}",
+                original_title=str(p.get("original_title") or "").strip() or None,
+                year=p.get("year"),
+                poster_url=poster_url,
+                in_vault=tmdb_id in vault_map,
+                vault_slug=slug,
+            )
+        )
+
+    return CollectionBriefOut(
+        tmdb_id=coll.tmdb_id,
+        name=coll.name,
+        overview=coll.overview or None,
+        poster_url=_tmdb_image_url(coll.poster_path, size="w342") if coll.poster_path else None,
+        backdrop_url=_tmdb_image_url(coll.backdrop_path, size="w780") if coll.backdrop_path else None,
+        parts=parts_out,
+    )
+
+
 @api.get("/movies", response=list[MovieOut])
 def list_movies(
     request,
@@ -721,7 +799,7 @@ def user_lists(request):
 
 @api.get("/movies/{slug}", response=MovieDetailOut)
 def movie_detail(request, slug: str):
-    movie = Movie.objects.filter(slug=slug).first()
+    movie = Movie.objects.select_related("collection").filter(slug=slug).first()
     if movie is None:
         raise HttpError(404, "Movie not found")
     user = _resolve_api_user(request)
@@ -796,6 +874,7 @@ def movie_detail(request, slug: str):
             _build_season_out(season, user=user)
             for season in movie.seasons.all().order_by("season_number")
         ],
+        collection=_build_collection_out(movie),
     )
 
 
@@ -1467,3 +1546,51 @@ def tmdb_sync_items(request, state: str | None = None, offset: int = 0, limit: i
         items=[_build_tmdb_sync_queue_item_out(item) for item in items],
         total=total,
     )
+
+
+@api.post("/collections/{tmdb_id}/refresh", response=CollectionBriefOut)
+def collection_refresh(request, tmdb_id: int):
+    _require_api_user(request)
+    coll = Collection.objects.filter(tmdb_id=tmdb_id).first()
+    if coll is None:
+        raise HttpError(404, "Collection not found")
+    try:
+        from vault.services.collection_service import CollectionService
+
+        CollectionService._sync_parts_data(coll)
+        coll.refresh_from_db()
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+    # Найти любой фильм этой коллекции для сериализации (нужен movie для _build_collection_out)
+    movie = Movie.objects.filter(collection=coll).first()
+    if movie is None:
+        # fallback — собрать вручную
+        parts_out: list[CollectionPartOut] = []
+        for p in list(coll.parts_data or []):
+            try:
+                pid = int(p.get("tmdb_id"))
+            except Exception:
+                continue
+            parts_out.append(
+                CollectionPartOut(
+                    tmdb_id=pid,
+                    title=str(p.get("title") or "").strip() or f"TMDB {pid}",
+                    original_title=str(p.get("original_title") or "").strip() or None,
+                    year=p.get("year"),
+                    poster_url=_tmdb_image_url(p.get("poster_path"), size="w342") if p.get("poster_path") else None,
+                    in_vault=False,
+                    vault_slug=None,
+                )
+            )
+        return CollectionBriefOut(
+            tmdb_id=coll.tmdb_id,
+            name=coll.name,
+            overview=coll.overview or None,
+            poster_url=_tmdb_image_url(coll.poster_path, size="w342") if coll.poster_path else None,
+            backdrop_url=_tmdb_image_url(coll.backdrop_path, size="w780") if coll.backdrop_path else None,
+            parts=parts_out,
+        )
+    out = _build_collection_out(movie)
+    if out is None:
+        raise HttpError(400, "Failed to build collection")
+    return out

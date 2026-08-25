@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
-    Movie, Person, Genre, MoviePerson,
+    Collection, Movie, Person, Genre, MoviePerson,
     UserList, UserListMovie, UserMovie
 )
 from core.models import Country
@@ -118,6 +118,23 @@ class MovieAdmin(admin.ModelAdmin):
             from slugify import slugify
             obj.slug = slugify(obj.title)
         super().save_model(request, obj, form, change)
+
+
+@admin.register(Collection)
+class CollectionAdmin(admin.ModelAdmin):
+    list_display = ["name", "tmdb_id", "movies_count", "parts_count", "updated_at"]
+    search_fields = ["name", "tmdb_id"]
+    readonly_fields = ["created_at", "updated_at"]
+
+    def movies_count(self, obj):
+        return obj.movies.count()
+
+    movies_count.short_description = "Фильмов в Vault"
+
+    def parts_count(self, obj):
+        return len(obj.parts_data or [])
+
+    parts_count.short_description = "Частей (TMDB)"
 
 
 @admin.register(MoviePerson)

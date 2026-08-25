@@ -415,6 +415,67 @@
     @apply bg-muted text-muted-foreground;
   }
 
+  .vd-collection-overview {
+    @apply text-sm leading-6 text-muted-foreground;
+  }
+
+  .vd-collection-grid {
+    @apply flex gap-4 overflow-x-auto pb-2;
+    scrollbar-width: thin;
+  }
+
+  .vd-collection-card {
+    @apply flex w-[160px] shrink-0 flex-col gap-2 rounded-xl border border-border/50 bg-background/70 p-2 text-left transition-colors hover:bg-muted/30;
+  }
+
+  .vd-collection-card--missing {
+    @apply border-dashed opacity-80 hover:opacity-100 hover:bg-muted/40;
+  }
+
+  .vd-collection-card--in-vault {
+    @apply hover:border-primary/30;
+  }
+
+  .vd-collection-poster-wrap {
+    @apply relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-muted flex items-center justify-center;
+  }
+
+  .vd-collection-poster {
+    @apply h-full w-full object-cover;
+  }
+
+  .vd-collection-poster--dim {
+    @apply opacity-70;
+  }
+
+  .vd-collection-poster-fallback {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .vd-collection-badge {
+    @apply absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none;
+  }
+
+  .vd-collection-badge--in-vault {
+    @apply bg-emerald-500/90 text-white;
+  }
+
+  .vd-collection-badge--missing {
+    @apply bg-muted/90 text-muted-foreground border border-border/50;
+  }
+
+  .vd-collection-badge--loading {
+    @apply bg-amber-500/90 text-white;
+  }
+
+  .vd-collection-title {
+    @apply line-clamp-2 text-[12px] font-medium leading-tight;
+  }
+
+  .vd-collection-year {
+    @apply text-[11px] text-muted-foreground;
+  }
+
 
 @media (min-width: 768px) {
 

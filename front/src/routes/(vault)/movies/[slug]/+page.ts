@@ -80,6 +80,22 @@ type ApiMovieDetail = {
       rating: number | null;
     };
   }>;
+  collection: {
+    tmdb_id: number;
+    name: string;
+    overview: string | null;
+    poster_url: string | null;
+    backdrop_url: string | null;
+    parts: Array<{
+      tmdb_id: number;
+      title: string;
+      original_title: string | null;
+      year: number | null;
+      poster_url: string | null;
+      in_vault: boolean;
+      vault_slug: string | null;
+    }>;
+  } | null;
 };
 
 export const load: PageLoad = async ({ fetch, params }) => {

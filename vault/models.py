@@ -101,6 +101,41 @@ class Genre(models.Model):
 
 
 
+class Collection(models.Model):
+    """Коллекция TMDB (belongs_to_collection). Снапшот parts в JSONField."""
+
+    tmdb_id = models.PositiveIntegerField("TMDB ID", unique=True, db_index=True)
+    name = models.CharField("Название", max_length=500)
+    overview = models.TextField("Описание", blank=True, default="")
+    poster_path = models.CharField("Путь к постеру", max_length=500, blank=True, null=True)
+    backdrop_path = models.CharField("Путь к бэкдропу", max_length=500, blank=True, null=True)
+    # Не HTTP-кэш/redis, а локальная денормализация TMDB parts для отображения отсутствующих фильмов.
+    # Элемент: {"tmdb_id": 218, "title": "...", "original_title": "...", "year": 1984, "poster_path": "/qvkt...", "release_date": "1984-10-26", "order": 0}
+    # in_vault/vault_slug НЕ храним — вычисляем при сериализации
+    parts_data = models.JSONField("Фильмы коллекции (снапшот TMDB)", default=list, blank=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "Коллекция"
+        verbose_name_plural = "Коллекции"
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.tmdb_id})"
+
+    @property
+    def poster_url(self):
+        return _build_tmdb_image_url(self.poster_path, getattr(settings, "TMDB_IMAGE_SIZE", "w500"))
+
+    def get_poster_url(self, size="w500"):
+        return _build_tmdb_image_url(self.poster_path, size)
+
+    @property
+    def backdrop_url(self):
+        return _build_tmdb_image_url(self.backdrop_path, "w1280")
+
+
 class Movie(models.Model):
     """Основная модель фильма"""
     class Status(models.TextChoices):
@@ -187,6 +222,15 @@ class Movie(models.Model):
         verbose_name='Ключевые слова TMDB',
         blank=True,
         default=list,
+    )
+
+    collection = models.ForeignKey(
+        "Collection",
+        verbose_name="Коллекция",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="movies",
     )
 
     # Для сериалов:
