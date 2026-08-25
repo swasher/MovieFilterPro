@@ -486,10 +486,10 @@ type TmdbSearchResult = {
             oninput={onSearchInput}
           />
           <div class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5 bg-background px-1">
-            <Switch id="exact-match" checked={exactSearch} onCheckedChange={onExactSearchToggle} />
+            <Switch id="exact-match" checked={!exactSearch} onCheckedChange={(v) => onExactSearchToggle(!v)} />
             <Label
               for="exact-match"
-              class="cursor-pointer select-none font-mono text-[10px] transition-colors duration-150 {exactSearch ? 'text-primary font-bold' : 'text-muted-foreground/50'}"
+              class="cursor-pointer select-none font-mono text-[10px] transition-colors duration-150 {!exactSearch ? 'text-primary font-bold' : 'text-muted-foreground/50'}"
             >
               {exactSearch ? "TITLE ONLY" : "WITH PLOT"}
             </Label>
