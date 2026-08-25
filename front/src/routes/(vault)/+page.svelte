@@ -53,7 +53,7 @@ type TmdbSearchResult = {
   let tooltipX = $state(0);
   let tooltipY = $state(0);
   let searchQuery = $state("");
-  let exactSearch = $state(false);
+  let exactSearch = $state(true);
   let searchDebounceHandle = $state<ReturnType<typeof setTimeout> | null>(null);
   let lastSubmittedSearchQuery = "";
   let activeOrder = $state("-year");
@@ -258,8 +258,8 @@ type TmdbSearchResult = {
       params.delete("q");
     }
 
-    if (exactSearch) {
-      params.set("search_plot", "false");
+    if (!exactSearch) {
+      params.set("search_plot", "true");
     } else {
       params.delete("search_plot");
     }

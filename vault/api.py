@@ -601,7 +601,7 @@ def list_movies(
     status: str | None = None,
     list: int | None = None,
     q: str | None = None,
-    search_plot: bool = True,
+    search_plot: bool = False,
     order: str = "-year",
     year_from: int | None = None,
     year_to: int | None = None,
