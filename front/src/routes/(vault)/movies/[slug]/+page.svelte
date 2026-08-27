@@ -1120,22 +1120,13 @@
                 {movie.age_rating}
               </span>
             {/if}
-            {#if movie.age_rating && movie.imdb_rating}
+            {#if (movie.duration || movie.age_rating) && movie.imdb_rating}
               <Separator orientation="vertical" class="h-4" />
             {/if}
             {#if movie.imdb_rating}
               <span class="vd-fact-inline">IMDb {movie.imdb_rating}</span>
             {/if}
-            {#if movie.imdb_rating && movie.tmdb_vote_average}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
-            {#if movie.tmdb_vote_average}
-              <span class="vd-fact-inline" title={movie.tmdb_vote_count ? `${movie.tmdb_vote_count} голосов` : undefined}>
-                TMDB {movie.tmdb_vote_average}
-                {#if movie.tmdb_vote_count}({movie.tmdb_vote_count}){/if}
-              </span>
-            {/if}
-            {#if movie.tmdb_vote_average && movie.tmdb_original_language}
+            {#if movie.imdb_rating && movie.tmdb_original_language}
               <Separator orientation="vertical" class="h-4" />
             {/if}
             {#if movie.tmdb_original_language}
@@ -1158,28 +1149,36 @@
             {/if}
           </div>
 
-          {#if movie.omdb_imdb_rating !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
-            <div class="vd-omdb-row">
-              <span class="vd-omdb-label">OMDB:</span>
-              {#if movie.omdb_imdb_rating !== null}
-                <span class="vd-omdb-badge vd-omdb-badge--imdb" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
-                  IMDb {movie.omdb_imdb_rating.toFixed(1)}/10
-                </span>
-              {/if}
-              {#if movie.omdb_rotten_tomatoes !== null}
-                <span class="vd-omdb-badge vd-omdb-badge--rt" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
-                  🍅 {movie.omdb_rotten_tomatoes}%
-                </span>
-              {/if}
-              {#if movie.omdb_metacritic !== null}
-                <span class="vd-omdb-badge vd-omdb-badge--meta" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
-                  Metacritic {movie.omdb_metacritic}/100
-                </span>
-              {/if}
-            </div>
-          {/if}
-
           <div class="vd-facts-grid">
+            {#if movie.tmdb_vote_average !== null || movie.omdb_imdb_rating !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
+              <div class="vd-fact md:col-span-2">
+                <dt class="vd-fact-label">Ratings</dt>
+                <dd class="vd-fact-value">
+                  <div class="flex flex-wrap gap-2">
+                    {#if movie.tmdb_vote_average !== null}
+                      <span class="vd-omdb-badge vd-omdb-badge--tmdb" title={movie.tmdb_vote_count ? `${movie.tmdb_vote_count} голосов` : undefined}>
+                        TMDB {movie.tmdb_vote_average}{#if movie.tmdb_vote_count}<span class="opacity-60">&nbsp;({movie.tmdb_vote_count})</span>{/if}
+                      </span>
+                    {/if}
+                    {#if movie.omdb_imdb_rating !== null}
+                      <span class="vd-omdb-badge vd-omdb-badge--imdb" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                        IMDb {movie.omdb_imdb_rating.toFixed(1)}/10
+                      </span>
+                    {/if}
+                    {#if movie.omdb_rotten_tomatoes !== null}
+                      <span class="vd-omdb-badge vd-omdb-badge--rt" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                        🍅 {movie.omdb_rotten_tomatoes}%
+                      </span>
+                    {/if}
+                    {#if movie.omdb_metacritic !== null}
+                      <span class="vd-omdb-badge vd-omdb-badge--meta" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                        Metacritic {movie.omdb_metacritic}/100
+                      </span>
+                    {/if}
+                  </div>
+                </dd>
+              </div>
+            {/if}
             <div class="vd-fact md:col-span-2">
               <dt class="vd-fact-label">Genres</dt>
               <dd class="vd-fact-value">{compactText(movie.genres)}</dd>
