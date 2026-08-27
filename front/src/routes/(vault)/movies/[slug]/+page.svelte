@@ -43,7 +43,7 @@
   const movie = $derived(data.movie);
 
   const isSeries = $derived(movie.movie_type === "series" || movie.movie_type === "miniseries");
-  const crewCards = $derived(
+  const crewCardsRaw = $derived(
     isSeries
       ? (movie.showrunners ?? []).map((p) => ({ ...p, _roleLabel: "Создатель" }))
       : [
@@ -53,6 +53,22 @@
           ...(movie.writers ?? []).map((p) => ({ ...p, _roleLabel: "Сценарист" }))
         ]
   );
+  // Дедупликация: один человек — одна карточка, должности объединяем "Режиссер · Продюсер"
+  const crewCards = $derived.by(() => {
+    const byId = new Map<number, typeof crewCardsRaw[number] & { _roleLabels: string[] }>();
+    for (const p of crewCardsRaw) {
+      const existing = byId.get(p.id);
+      if (!existing) {
+        byId.set(p.id, { ...p, _roleLabels: [p._roleLabel] } as typeof byId extends Map<any, infer V> ? V : never);
+      } else if (!existing._roleLabels.includes(p._roleLabel)) {
+        existing._roleLabels.push(p._roleLabel);
+      }
+    }
+    return Array.from(byId.values()).map((p) => ({
+      ...p,
+      _roleLabelCombined: p._roleLabels.join(" · ")
+    }));
+  });
   const isSeriesFinished = $derived(
     isSeries && ["completed", "cancelled"].includes(movie.status)
   );
@@ -1130,13 +1146,7 @@
                 {movie.age_rating}
               </span>
             {/if}
-            {#if (movie.duration || movie.age_rating) && movie.imdb_rating}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
-            {#if movie.imdb_rating}
-              <span class="vd-fact-inline">IMDb {movie.imdb_rating}</span>
-            {/if}
-            {#if movie.imdb_rating && movie.tmdb_original_language}
+            {#if (movie.duration || movie.age_rating) && movie.tmdb_original_language}
               <Separator orientation="vertical" class="h-4" />
             {/if}
             {#if movie.tmdb_original_language}
@@ -1154,10 +1164,7 @@
                 ${(movie.budget / 1_000_000).toFixed(1)}M
               </span>
             {/if}
-            {#if (!movie.budget && movie.tmdb_original_language)}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
-          </div>
+           </div>
 
           <div class="vd-facts-grid">
             {#if movie.tmdb_vote_average !== null || movie.omdb_imdb_rating !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
@@ -1387,8 +1394,8 @@
             <p class="vd-section-title">{isSeries ? "Создатели" : "Crew / Съемочная группа"}</p>
             {#if crewCards.length}
               <div class="vd-crew-grid">
-                {#each crewCards as person, idx (person.id + '-' + person._roleLabel + '-' + idx)}
-                  <PersonCard person={{ ...person, character_name: person._roleLabel }} />
+                {#each crewCards as person (person.id)}
+                  <PersonCard person={{ ...person, character_name: person._roleLabelCombined }} />
                 {/each}
               </div>
             {:else}
