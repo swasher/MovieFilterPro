@@ -21,6 +21,7 @@ from vault.services.tmdb_movie_matching_service import (
     TMDBMovieMatchingService,
 )
 from vault.services.season_status_service import SeasonStatusService
+from vault.services.omdb_service import OMDBService
 
 
 SyncStatus = Literal["ok", "needs_confirmation", "needs_user_choice", "error"]
@@ -135,6 +136,14 @@ class TMDBMovieSyncService:
                 set_field("trailer_url", trailer_url)
 
             cls._apply_keywords(movie, details, set_field)
+
+            # OMDB рейтинги — по imdb_id который только что установили из TMDB payload
+            try:
+                omdb_updated = cls._sync_omdb(movie, set_field)
+                if omdb_updated:
+                    cls._emit_log(f"OMDB_SYNC | imdb_id={movie.imdb_id} | updated={','.join(omdb_updated) if omdb_updated else '-'}")
+            except Exception:
+                logger.warning("OMDB sync failed for movie_id=%s imdb_id=%s", movie.id, movie.imdb_id, exc_info=True)
 
             # Коллекция TMDB — только для movie (для tv/series не существует)
             collection_changed = False
@@ -378,6 +387,73 @@ class TMDBMovieSyncService:
         )
 
         set_field("keywords", new_keywords)
+
+    @classmethod
+    def _sync_omdb(cls, movie: Movie, set_field) -> list[str]:
+        """Синхронизация OMDB рейтингов по imdb_id.
+
+        Читает массив Ratings, сохраняет omdb_imdb_rating / rotten_tomatoes / metacritic.
+        Возвращает список полей которые были изменены (для логирования).
+        Не кидает исключений — все ошибки логируются, возвращается [].
+        """
+        imdb_id = (getattr(movie, "imdb_id", None) or "").strip()
+        if not imdb_id:
+            # Если TMDB не дал imdb_id — очищаем старые OMDB данные если они были
+            changed: list[str] = []
+            try:
+                updated_fields_ref = None
+                if set_field.__closure__:
+                    for cell in set_field.__closure__:
+                        val = cell.cell_contents
+                        if isinstance(val, list):
+                            updated_fields_ref = val
+                            break
+                    before_len = len(updated_fields_ref) if updated_fields_ref is not None else 0
+                else:
+                    before_len = 0
+            except Exception:
+                before_len = 0
+                updated_fields_ref = None
+            set_field("omdb_imdb_rating", None)
+            set_field("omdb_rotten_tomatoes", None)
+            set_field("omdb_metacritic", None)
+            set_field("omdb_last_synced_at", None)
+            if updated_fields_ref is not None:
+                changed = updated_fields_ref[before_len:]
+            return changed
+
+        try:
+            result = OMDBService.fetch_ratings(imdb_id)
+        except Exception:
+            logger.warning("OMDB fetch exception for imdb_id=%s", imdb_id, exc_info=True)
+            return []
+
+        if result is None:
+            return []
+
+        changed: list[str] = []
+        # Достаём updated_fields из замыкания set_field для подсчёта добавленных ключей
+        try:
+            updated_fields_ref = None
+            if set_field.__closure__:
+                for cell in set_field.__closure__:
+                    val = cell.cell_contents
+                    if isinstance(val, list):
+                        updated_fields_ref = val
+                        break
+            before_len = len(updated_fields_ref) if updated_fields_ref is not None else 0
+        except Exception:
+            before_len = 0
+            updated_fields_ref = None
+
+        set_field("omdb_imdb_rating", result.get("imdb_rating"))
+        set_field("omdb_rotten_tomatoes", result.get("rotten_tomatoes"))
+        set_field("omdb_metacritic", result.get("metacritic"))
+        set_field("omdb_last_synced_at", timezone.now())
+
+        if updated_fields_ref is not None:
+            changed = updated_fields_ref[before_len:]
+        return changed
 
     @classmethod
     def _sync_countries(cls, movie: Movie, countries, origin_countries) -> bool:

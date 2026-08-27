@@ -951,7 +951,7 @@
             }) as item (item.key)}
               {@const Icon = item.icon}
               <Tooltip.Root>
-                <Tooltip.Trigger>
+                <Tooltip.Trigger class="block w-full">
                   <span
                     class="vd-list-chip justify-between"
                     transition:fly={{ x: 20, duration: 200 }}
@@ -1002,8 +1002,6 @@
                   </Button>
                 </div>
               {/each}
-            {:else}
-              <p class="vd-sidebar-note mt-1">Фильм пока не добавлен в пользовательские списки.</p>
             {/if}
           </div>
         </div>
@@ -1159,6 +1157,27 @@
               <Separator orientation="vertical" class="h-4" />
             {/if}
           </div>
+
+          {#if movie.omdb_imdb_rating !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
+            <div class="vd-omdb-row">
+              <span class="vd-omdb-label">OMDB:</span>
+              {#if movie.omdb_imdb_rating !== null}
+                <span class="vd-omdb-badge vd-omdb-badge--imdb" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                  IMDb {movie.omdb_imdb_rating.toFixed(1)}/10
+                </span>
+              {/if}
+              {#if movie.omdb_rotten_tomatoes !== null}
+                <span class="vd-omdb-badge vd-omdb-badge--rt" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                  🍅 {movie.omdb_rotten_tomatoes}%
+                </span>
+              {/if}
+              {#if movie.omdb_metacritic !== null}
+                <span class="vd-omdb-badge vd-omdb-badge--meta" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                  Metacritic {movie.omdb_metacritic}/100
+                </span>
+              {/if}
+            </div>
+          {/if}
 
           <div class="vd-facts-grid">
             <div class="vd-fact md:col-span-2">

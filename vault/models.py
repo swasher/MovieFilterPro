@@ -217,6 +217,11 @@ class Movie(models.Model):
     tmdb_vote_average = models.DecimalField('TMDB рейтинг', max_digits=3, decimal_places=1, null=True, blank=True)
     tmdb_vote_count = models.PositiveIntegerField('Голосов TMDB', null=True, blank=True)
     tmdb_original_language = models.CharField('Оригинальный язык (TMDB)', max_length=10, blank=True, null=True)
+    # OMDB ratings (синхронизируются вместе с TMDB sync по imdb_id)
+    omdb_imdb_rating = models.DecimalField('OMDB IMDb рейтинг', max_digits=3, decimal_places=1, null=True, blank=True)
+    omdb_rotten_tomatoes = models.PositiveSmallIntegerField('OMDB Rotten Tomatoes %', null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    omdb_metacritic = models.PositiveSmallIntegerField('OMDB Metacritic /100', null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    omdb_last_synced_at = models.DateTimeField('Последняя синхронизация OMDB', null=True, blank=True)
     keywords = ArrayField(
         models.CharField('Ключевое слово', max_length=100),
         verbose_name='Ключевые слова TMDB',

@@ -27,6 +27,10 @@ type ApiMovieDetail = {
   tmdb_vote_average: number | null;
   tmdb_vote_count: number | null;
   tmdb_original_language: string | null;
+  omdb_imdb_rating: number | null;
+  omdb_rotten_tomatoes: number | null;
+  omdb_metacritic: number | null;
+  omdb_last_synced_at: string | null;
   budget: number | null;
   source: string;
   source_display: string;
