@@ -480,14 +480,15 @@ class TMDBMovieSyncService:
         cast_items = list(getattr(details, "cast", None) or [])
         crew_items = list(getattr(details, "crew", None) or [])
 
-        # Для сериалов главная фигура за проектом — создатель (created_by) из TMDB.
+        # Для сериалов главная фигура за проектом — создатель (created_by) из TMDB -> showrunner.
         # Режиссёров эпизодов (aggregate_credits) для сериала не берём: они не релевантны
         # сериалу как целому, в обычных credits на уровне сериала их и так нет.
+        # Для tv остальные crew (Producer/Writer) не нужны — только showrunner + actors.
         is_tv = movie.tmdb_media_type == "tv" or movie.movie_type in (
             Movie.MovieType.SERIES,
             Movie.MovieType.MINISERIES,
         )
-        director_items = list(getattr(details, "created_by", None) or []) if is_tv else []
+        showrunner_items = list(getattr(details, "created_by", None) or []) if is_tv else []
 
         before_keys = set(
             movie.movie_persons.values_list("person_id", "role", "character_name")
@@ -524,15 +525,19 @@ class TMDBMovieSyncService:
 
             seen_relations.add(relation_key)
             order = cls._safe_int(getattr(credit, "order", None)) or 0
+            popularity = cls._safe_float(getattr(credit, "popularity", None))
+            if popularity is None:
+                popularity = getattr(person, "popularity", None)
             MoviePerson.objects.create(
                 movie=movie,
                 person=person,
                 role="actor",
                 character_name=character_name,
                 order=order,
+                popularity=popularity,
             )
 
-        for credit in director_items:
+        for credit in showrunner_items:
             person = cls._upsert_person_from_credit(
                 tmdb=tmdb,
                 credit=credit,
@@ -544,19 +549,30 @@ class TMDBMovieSyncService:
             if not person:
                 continue
 
-            relation_key = (person.id, "director", "")
+            relation_key = (person.id, "showrunner", "")
             if relation_key in seen_relations:
                 continue
 
             seen_relations.add(relation_key)
             order = cls._safe_int(getattr(credit, "order", None)) or 0
+            popularity = cls._safe_float(getattr(credit, "popularity", None))
+            if popularity is None:
+                popularity = getattr(person, "popularity", None)
             MoviePerson.objects.create(
                 movie=movie,
                 person=person,
-                role="director",
+                role="showrunner",
                 character_name="",
                 order=order,
+                popularity=popularity,
             )
+
+        # Для tv crew не синхронизируем — только showrunner + actors
+        if is_tv:
+            after_keys = set(
+                movie.movie_persons.values_list("person_id", "role", "character_name")
+            )
+            return before_keys != after_keys
 
         for credit in crew_items:
             role = cls._map_crew_role(getattr(credit, "job", None))
@@ -580,12 +596,16 @@ class TMDBMovieSyncService:
 
             seen_relations.add(relation_key)
             order = cls._safe_int(getattr(credit, "order", None)) or 0
+            popularity = cls._safe_float(getattr(credit, "popularity", None))
+            if popularity is None:
+                popularity = getattr(person, "popularity", None)
             MoviePerson.objects.create(
                 movie=movie,
                 person=person,
                 role=role,
                 character_name="",
                 order=order,
+                popularity=popularity,
             )
 
         after_keys = set(
@@ -900,6 +920,9 @@ class TMDBMovieSyncService:
         birth_date = getattr(details, "birthday", None)
         death_date = getattr(details, "deathday", None)
         biography = getattr(details, "biography", None) if details is not None else None
+        popularity = cls._safe_float(
+            cls._first_non_empty(getattr(credit, "popularity", None), getattr(details, "popularity", None))
+        )
 
         if person is None:
             imdb_id = cls._ensure_unique_imdb_id(imdb_id)
@@ -914,6 +937,7 @@ class TMDBMovieSyncService:
                 photo=photo,
                 biography=biography or "",
                 country=unknown_country,
+                popularity=popularity,
             )
             person_cache[person_id] = person
             return person
@@ -961,6 +985,10 @@ class TMDBMovieSyncService:
             person.country = unknown_country
             update_fields.append("country")
 
+        if popularity is not None and person.popularity != popularity:
+            person.popularity = popularity
+            update_fields.append("popularity")
+
         if update_fields:
             person.save(update_fields=update_fields)
 
@@ -988,9 +1016,11 @@ class TMDBMovieSyncService:
 
         if normalized == "director":
             return "director"
-        if normalized in {"producer", "executive producer"}:
+        if normalized == "producer":
             return "producer"
-        if normalized in {"writer", "screenplay", "story"}:
+        if normalized == "screenplay":
+            return "screenplay"
+        if normalized == "writer":
             return "writer"
         if normalized == "original music composer":
             return "composer"
@@ -1192,6 +1222,15 @@ class TMDBMovieSyncService:
             if value is None:
                 return None
             return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _safe_float(value) -> float | None:
+        try:
+            if value is None:
+                return None
+            return float(value)
         except (TypeError, ValueError):
             return None
 

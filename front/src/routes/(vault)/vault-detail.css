@@ -375,6 +375,22 @@
     grid-template-columns: repeat(auto-fill, 140px);
   }
 
+  .vd-crew-inline {
+    @apply flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm leading-6;
+  }
+
+  .vd-crew-inline-link {
+    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-muted hover:text-foreground underline-offset-4 hover:underline;
+  }
+
+  .vd-crew-inline-link--favorite {
+    @apply text-orange-600 dark:text-orange-400;
+  }
+
+  .vd-crew-inline-sep {
+    @apply text-muted-foreground/40 select-none;
+  }
+
   .vd-crew-copy {
     @apply space-y-1 p-2;
   }

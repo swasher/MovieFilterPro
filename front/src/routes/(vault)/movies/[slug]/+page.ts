@@ -63,6 +63,34 @@ type ApiMovieDetail = {
     character_name?: string | null;
     is_favorite?: boolean;
   }>;
+  producers: Array<{
+    id: number;
+    name: string;
+    photo_url: string | null;
+    character_name?: string | null;
+    is_favorite?: boolean;
+  }>;
+  screenplays: Array<{
+    id: number;
+    name: string;
+    photo_url: string | null;
+    character_name?: string | null;
+    is_favorite?: boolean;
+  }>;
+  writers: Array<{
+    id: number;
+    name: string;
+    photo_url: string | null;
+    character_name?: string | null;
+    is_favorite?: boolean;
+  }>;
+  showrunners: Array<{
+    id: number;
+    name: string;
+    photo_url: string | null;
+    character_name?: string | null;
+    is_favorite?: boolean;
+  }>;
   actors: Array<{
     id: number;
     name: string;

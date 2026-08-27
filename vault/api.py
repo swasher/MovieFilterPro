@@ -83,6 +83,10 @@ class MovieDetailOut(Schema):
     user_state: "UserStateOut"
     custom_lists: list["MovieUserListOut"]
     directors: list["PersonCreditOut"]
+    producers: list["PersonCreditOut"] = []
+    screenplays: list["PersonCreditOut"] = []
+    writers: list["PersonCreditOut"] = []
+    showrunners: list["PersonCreditOut"] = []
     actors: list["PersonCreditOut"]
     seasons: list["SeasonOut"] = []
     collection: "CollectionBriefOut | None" = None
@@ -412,6 +416,9 @@ class PersonDetailOut(Schema):
     actor_count: int
     director_count: int
     producer_count: int
+    screenplay_count: int
+    writer_count: int
+    showrunner_count: int
     is_favorite: bool
 
 
@@ -868,6 +875,42 @@ def movie_detail(request, slug: str):
             )
             for item in movie.get_directors().select_related("person")
         ],
+        producers=[
+            PersonCreditOut(
+                id=item.person.id,
+                name=item.person.name,
+                photo_url=item.person.photo_url,
+                is_favorite=item.person.id in favorite_person_ids,
+            )
+            for item in movie.get_producers().select_related("person")
+        ],
+        screenplays=[
+            PersonCreditOut(
+                id=item.person.id,
+                name=item.person.name,
+                photo_url=item.person.photo_url,
+                is_favorite=item.person.id in favorite_person_ids,
+            )
+            for item in movie.get_screenplays().select_related("person")
+        ],
+        writers=[
+            PersonCreditOut(
+                id=item.person.id,
+                name=item.person.name,
+                photo_url=item.person.photo_url,
+                is_favorite=item.person.id in favorite_person_ids,
+            )
+            for item in movie.get_writers().select_related("person")
+        ],
+        showrunners=[
+            PersonCreditOut(
+                id=item.person.id,
+                name=item.person.name,
+                photo_url=item.person.photo_url,
+                is_favorite=item.person.id in favorite_person_ids,
+            )
+            for item in movie.get_showrunners().select_related("person")
+        ],
         actors=[
             PersonCreditOut(
                 id=item.person.id,
@@ -1253,6 +1296,9 @@ def person_detail(request, person_id: int):
         actor_count=filmography_qs.filter(role="actor").count(),
         director_count=filmography_qs.filter(role="director").count(),
         producer_count=filmography_qs.filter(role="producer").count(),
+        screenplay_count=filmography_qs.filter(role="screenplay").count(),
+        writer_count=filmography_qs.filter(role="writer").count(),
+        showrunner_count=filmography_qs.filter(role="showrunner").count(),
         is_favorite=is_favorite,
     )
 

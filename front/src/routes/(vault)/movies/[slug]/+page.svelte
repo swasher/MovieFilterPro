@@ -43,6 +43,16 @@
   const movie = $derived(data.movie);
 
   const isSeries = $derived(movie.movie_type === "series" || movie.movie_type === "miniseries");
+  const crewCards = $derived(
+    isSeries
+      ? (movie.showrunners ?? []).map((p) => ({ ...p, _roleLabel: "Создатель" }))
+      : [
+          ...(movie.directors ?? []).map((p) => ({ ...p, _roleLabel: "Режиссер" })),
+          ...(movie.producers ?? []).map((p) => ({ ...p, _roleLabel: "Продюсер" })),
+          ...(movie.screenplays ?? []).map((p) => ({ ...p, _roleLabel: "Сценарист" })),
+          ...(movie.writers ?? []).map((p) => ({ ...p, _roleLabel: "Сценарист" }))
+        ]
+  );
   const isSeriesFinished = $derived(
     isSeries && ["completed", "cancelled"].includes(movie.status)
   );
@@ -1372,21 +1382,18 @@
       {/if}
 
       <Card class="vd-card">
-        <CardHeader>
-          <CardTitle class="text-xl">Съемочная группа</CardTitle>
-        </CardHeader>
         <CardContent class="vd-card-content">
           <div class="vd-section">
-            <p class="vd-section-title">{isSeries ? "Создатели" : "Режиссеры"}</p>
-            <div class="vd-crew-grid">
-              {#if movie.directors.length}
-                {#each movie.directors as person (person.id)}
-                  <PersonCard {person} />
+            <p class="vd-section-title">{isSeries ? "Создатели" : "Crew / Съемочная группа"}</p>
+            {#if crewCards.length}
+              <div class="vd-crew-grid">
+                {#each crewCards as person, idx (person.id + '-' + person._roleLabel + '-' + idx)}
+                  <PersonCard person={{ ...person, character_name: person._roleLabel }} />
                 {/each}
-              {:else}
-                <p class="vd-empty">Нет данных</p>
-              {/if}
-            </div>
+              </div>
+            {:else}
+              <p class="vd-empty">Нет данных</p>
+            {/if}
           </div>
 
           <div class="vd-section">

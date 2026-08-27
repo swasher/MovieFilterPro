@@ -59,6 +59,7 @@ class Person(models.Model):
     # photo = models.ImageField('Фото', upload_to='persons/', null=True, blank=True)
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
+    popularity = models.FloatField('Популярность TMDB', null=True, blank=True, db_index=True)
     # country = models.CharField('Страна', max_length=100, blank=True)
     country = models.ForeignKey('core.Country', on_delete=models.RESTRICT)
 
@@ -313,10 +314,22 @@ class Movie(models.Model):
         return _build_tmdb_image_url(self.backdrop_path, size)
 
     def get_directors(self):
-        return self.movie_persons.filter(role='director')
+        return self.movie_persons.filter(role='director').order_by('-popularity', 'order', 'id')
 
     def get_actors(self):
-        return self.movie_persons.filter(role='actor')
+        return self.movie_persons.filter(role='actor').order_by('-popularity', 'order', 'id')
+
+    def get_producers(self):
+        return self.movie_persons.filter(role='producer').order_by('-popularity', 'order', 'id')
+
+    def get_screenplays(self):
+        return self.movie_persons.filter(role='screenplay').order_by('-popularity', 'order', 'id')
+
+    def get_writers(self):
+        return self.movie_persons.filter(role='writer').order_by('-popularity', 'order', 'id')
+
+    def get_showrunners(self):
+        return self.movie_persons.filter(role='showrunner').order_by('-popularity', 'order', 'id')
 
 
 class VaultConnectionEvent(models.Model):
@@ -431,7 +444,9 @@ class MoviePerson(models.Model):
         ('actor', 'Актер'),
         ('director', 'Режиссер'),
         ('producer', 'Продюсер'),
-        ('writer', 'Сценарист'),
+        ('writer', 'Сценарист (Writer)'),
+        ('screenplay', 'Сценарист (Screenplay)'),
+        ('showrunner', 'Создатель (Showrunner)'),
         ('composer', 'Композитор'),
         ('operator', 'Оператор'),
         ('editor', 'Монтажер'),
@@ -442,6 +457,7 @@ class MoviePerson(models.Model):
     role = models.CharField('Роль', max_length=20, choices=ROLE_CHOICES)
     character_name = models.CharField('Имя персонажа', max_length=255, blank=True)
     order = models.PositiveIntegerField('Порядок', default=0)
+    popularity = models.FloatField('Популярность TMDB (снапшот)', null=True, blank=True, db_index=True)
 
     class Meta:
         verbose_name = 'Участие в фильме'
