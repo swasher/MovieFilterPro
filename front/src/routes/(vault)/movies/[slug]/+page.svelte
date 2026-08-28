@@ -1231,77 +1231,89 @@
               <p class="vd-section-title">Комментарий</p>
             </div>
 
-            <div class="vd-comment-row">
-              <Textarea
-                bind:value={commentDraft}
-                bind:ref={commentTextarea}
-                rows={4}
-                disabled={!isEditingComment}
-                placeholder="Ваш комментарий к фильму…"
-                onkeydown={onCommentKeydown}
-                aria-label="Комментарий к фильму"
-                class={hasComment ? "border-2 border-orange-500" : undefined}
-              />
+            {#if !hasComment && !isEditingComment}
+              <Button
+                variant="outline"
+                size="sm"
+                class="w-fit border-dashed font-normal text-muted-foreground hover:text-foreground"
+                onclick={() => {
+                  isEditingComment = true;
+                }}
+              >
+                <span class="inline-flex items-center gap-1.5">
+                  <Plus class="size-3.5" />
+                  Добавить комментарий
+                </span>
+              </Button>
+            {:else}
+              <div class="vd-comment-row">
+                <Textarea
+                  bind:value={commentDraft}
+                  bind:ref={commentTextarea}
+                  rows={4}
+                  disabled={!isEditingComment}
+                  placeholder="Ваш комментарий к фильму…"
+                  onkeydown={onCommentKeydown}
+                  aria-label="Комментарий к фильму"
+                  class={hasComment ? "border-2 border-orange-500" : undefined}
+                />
 
-              <div class="vd-comment-buttons">
-                {#if isEditingComment}
-                  <Tooltip.Provider>
-                    <Tooltip.Root>
-                      <Tooltip.Trigger>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onclick={saveComment}
-                          disabled={isSavingComment || !canSaveComment}
-                          aria-label="Сохранить комментарий"
-                        >
-                          <Check class="size-3.5" />
-                        </Button>
-                      </Tooltip.Trigger>
-                      <Tooltip.Content side="left">
-                        {isSavingComment ? "Сохраняю..." : "Сохранить"}
-                      </Tooltip.Content>
-                    </Tooltip.Root>
-                  </Tooltip.Provider>
+                <div class="vd-comment-buttons">
+                  {#if isEditingComment}
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onclick={saveComment}
+                            disabled={isSavingComment || !canSaveComment}
+                            aria-label="Сохранить комментарий"
+                          >
+                            <Check class="size-3.5" />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="left">
+                          {isSavingComment ? "Сохраняю..." : "Сохранить"}
+                        </Tooltip.Content>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
 
-                  <Tooltip.Provider>
-                    <Tooltip.Root>
-                      <Tooltip.Trigger>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onclick={cancelCommentEdit}
-                          disabled={isSavingComment}
-                          aria-label="Отменить редактирование"
-                        >
-                          <X class="size-3.5" />
-                        </Button>
-                      </Tooltip.Trigger>
-                      <Tooltip.Content side="left">Отмена</Tooltip.Content>
-                    </Tooltip.Root>
-                  </Tooltip.Provider>
-                {:else}
-                  <Tooltip.Provider>
-                    <Tooltip.Root>
-                      <Tooltip.Trigger>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onclick={() => {
-                            isEditingComment = true;
-                          }}
-                          aria-label={hasComment ? "Редактировать комментарий" : "Добавить комментарий"}
-                        >
-                          <Pencil class="size-3.5" />
-                        </Button>
-                      </Tooltip.Trigger>
-                      <Tooltip.Content side="left">
-                        {hasComment ? "Редактировать" : "Добавить"}
-                      </Tooltip.Content>
-                    </Tooltip.Root>
-                  </Tooltip.Provider>
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onclick={cancelCommentEdit}
+                            disabled={isSavingComment}
+                            aria-label="Отменить редактирование"
+                          >
+                            <X class="size-3.5" />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="left">Отмена</Tooltip.Content>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  {:else}
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onclick={() => {
+                              isEditingComment = true;
+                            }}
+                            aria-label="Редактировать комментарий"
+                          >
+                            <Pencil class="size-3.5" />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="left">Редактировать</Tooltip.Content>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
 
-                  {#if hasComment}
                     <Tooltip.Provider>
                       <Tooltip.Root>
                         <Tooltip.Trigger>
@@ -1319,9 +1331,9 @@
                       </Tooltip.Root>
                     </Tooltip.Provider>
                   {/if}
-                {/if}
+                </div>
               </div>
-            </div>
+            {/if}
           </div>
       </Card>
 
