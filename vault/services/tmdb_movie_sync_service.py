@@ -415,6 +415,7 @@ class TMDBMovieSyncService:
                 before_len = 0
                 updated_fields_ref = None
             set_field("omdb_imdb_rating", None)
+            set_field("omdb_imdb_votes", None)
             set_field("omdb_rotten_tomatoes", None)
             set_field("omdb_metacritic", None)
             set_field("omdb_last_synced_at", None)
@@ -447,6 +448,7 @@ class TMDBMovieSyncService:
             updated_fields_ref = None
 
         set_field("omdb_imdb_rating", result.get("imdb_rating"))
+        set_field("omdb_imdb_votes", result.get("imdb_votes"))
         set_field("omdb_rotten_tomatoes", result.get("rotten_tomatoes"))
         set_field("omdb_metacritic", result.get("metacritic"))
         set_field("omdb_last_synced_at", timezone.now())

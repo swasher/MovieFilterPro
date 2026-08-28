@@ -72,6 +72,7 @@ class MovieDetailOut(Schema):
     tmdb_vote_count: int | None = None
     tmdb_original_language: str | None = None
     omdb_imdb_rating: float | None = None
+    omdb_imdb_votes: int | None = None
     omdb_rotten_tomatoes: int | None = None
     omdb_metacritic: int | None = None
     omdb_last_synced_at: str | None = None
@@ -850,6 +851,7 @@ def movie_detail(request, slug: str):
         tmdb_vote_count=movie.tmdb_vote_count,
         tmdb_original_language=movie.tmdb_original_language,
         omdb_imdb_rating=_decimal_to_float(movie.omdb_imdb_rating),
+        omdb_imdb_votes=movie.omdb_imdb_votes,
         omdb_rotten_tomatoes=movie.omdb_rotten_tomatoes,
         omdb_metacritic=movie.omdb_metacritic,
         omdb_last_synced_at=_datetime_to_iso(movie.omdb_last_synced_at),

@@ -1167,7 +1167,7 @@
            </div>
 
           <div class="vd-facts-grid">
-            {#if movie.tmdb_vote_average !== null || movie.omdb_imdb_rating !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
+            {#if movie.tmdb_vote_average !== null || movie.omdb_imdb_rating !== null || movie.omdb_imdb_votes !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
               <div class="vd-fact md:col-span-2">
                 <dt class="vd-fact-label">Ratings</dt>
                 <dd class="vd-fact-value">
@@ -1179,7 +1179,11 @@
                     {/if}
                     {#if movie.omdb_imdb_rating !== null}
                       <span class="vd-omdb-badge vd-omdb-badge--imdb" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
-                        IMDb {movie.omdb_imdb_rating.toFixed(1)}/10
+                        IMDb {movie.omdb_imdb_rating.toFixed(1)}/10{#if movie.omdb_imdb_votes !== null}<span class="opacity-60">&nbsp;({movie.omdb_imdb_votes.toLocaleString('ru-RU')})</span>{/if}
+                      </span>
+                    {:else if movie.omdb_imdb_votes !== null}
+                      <span class="vd-omdb-badge vd-omdb-badge--imdb" title={movie.omdb_last_synced_at ? `OMDB sync: ${formatDate(movie.omdb_last_synced_at)}` : undefined}>
+                        IMDb {movie.omdb_imdb_votes.toLocaleString('ru-RU')} голосов
                       </span>
                     {/if}
                     {#if movie.omdb_rotten_tomatoes !== null}

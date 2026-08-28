@@ -12,6 +12,7 @@ logger = logging.getLogger("vault.omdb_sync")
 
 class OMDBRatings(TypedDict, total=False):
     imdb_rating: Decimal | None
+    imdb_votes: int | None
     rotten_tomatoes: int | None
     metacritic: int | None
     raw: dict
@@ -69,11 +70,13 @@ class OMDBService:
 
         ratings_raw = data.get("Ratings") or []
         parsed = cls._parse_ratings_array(ratings_raw)
+        parsed["imdb_votes"] = cls._parse_imdb_votes(data.get("imdbVotes"))
         parsed["raw"] = data
         logger.info(
-            "OMDB fetched %s: imdb=%s rt=%s meta=%s",
+            "OMDB fetched %s: imdb=%s votes=%s rt=%s meta=%s",
             imdb_id,
             parsed.get("imdb_rating"),
+            parsed.get("imdb_votes"),
             parsed.get("rotten_tomatoes"),
             parsed.get("metacritic"),
         )
@@ -130,6 +133,22 @@ class OMDBService:
                 return None
             return dec.quantize(Decimal("0.1"))
         except (InvalidOperation, ValueError, AttributeError):
+            return None
+
+    @staticmethod
+    def _parse_imdb_votes(value: str | None) -> int | None:
+        """'124,409' -> 124409, 'N/A' -> None"""
+        try:
+            if value is None:
+                return None
+            cleaned = str(value).strip().replace(",", "").strip()
+            if not cleaned or cleaned.upper() == "N/A":
+                return None
+            iv = int(cleaned)
+            if iv < 0:
+                return None
+            return iv
+        except (ValueError, AttributeError):
             return None
 
     @staticmethod
