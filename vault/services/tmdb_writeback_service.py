@@ -221,6 +221,22 @@ class TmdbWritebackService:
             logger.exception("writeback skip_list failed: %s", exc)
             results.append(WritebackResult(success=False, action="skip_list", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
 
+        # user custom lists
+        should_lists, lists_reason = cls._should_writeback_lists()
+        if should_lists:
+            try:
+                from vault.models import UserListMovie
+
+                for lm in UserListMovie.objects.filter(movie=movie).select_related("user_list"):
+                    r = cls.sync_list_item_added(lm)
+                    if r:
+                        results.append(r)
+            except Exception as exc:
+                logger.exception("writeback user_lists failed: %s", exc)
+                results.append(WritebackResult(success=False, action="user_lists", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        else:
+            logger.debug("writeback user_lists skipped: %s", lists_reason)
+
         # --- persistent queue handling (forever, 10m) ---
         failed = [r for r in results if not r.success and r.action != "skipped"]
         if failed:
