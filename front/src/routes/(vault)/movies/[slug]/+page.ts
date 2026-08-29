@@ -63,6 +63,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    popularity?: number | null;
   }>;
   producers: Array<{
     id: number;
@@ -70,6 +71,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    popularity?: number | null;
   }>;
   screenplays: Array<{
     id: number;
@@ -77,6 +79,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    popularity?: number | null;
   }>;
   writers: Array<{
     id: number;
@@ -84,6 +87,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    popularity?: number | null;
   }>;
   showrunners: Array<{
     id: number;
@@ -91,6 +95,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    popularity?: number | null;
   }>;
   actors: Array<{
     id: number;
@@ -98,6 +103,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    popularity?: number | null;
   }>;
   seasons: Array<{
     id: number;

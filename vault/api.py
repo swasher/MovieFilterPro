@@ -134,6 +134,7 @@ class PersonCreditOut(Schema):
     photo_url: str | None = None
     character_name: str | None = None
     is_favorite: bool = False
+    popularity: float | None = None
 
 
 class UserStateOut(Schema):
@@ -900,6 +901,7 @@ def movie_detail(request, slug: str):
                 name=item.person.name,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                popularity=item.popularity,
             )
             for item in movie.get_directors().select_related("person")
         ],
@@ -909,6 +911,7 @@ def movie_detail(request, slug: str):
                 name=item.person.name,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                popularity=item.popularity,
             )
             for item in movie.get_producers().select_related("person")
         ],
@@ -918,6 +921,7 @@ def movie_detail(request, slug: str):
                 name=item.person.name,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                popularity=item.popularity,
             )
             for item in movie.get_screenplays().select_related("person")
         ],
@@ -927,6 +931,7 @@ def movie_detail(request, slug: str):
                 name=item.person.name,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                popularity=item.popularity,
             )
             for item in movie.get_writers().select_related("person")
         ],
@@ -936,6 +941,7 @@ def movie_detail(request, slug: str):
                 name=item.person.name,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                popularity=item.popularity,
             )
             for item in movie.get_showrunners().select_related("person")
         ],
@@ -946,6 +952,7 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 character_name=item.character_name or None,
                 is_favorite=item.person.id in favorite_person_ids,
+                popularity=item.popularity,
             )
             for item in movie.get_actors().select_related("person")[:12]
         ],

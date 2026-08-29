@@ -44,16 +44,19 @@
   const wb = $derived(movie.writeback);
 
   const isSeries = $derived(movie.movie_type === "series" || movie.movie_type === "miniseries");
-  const crewCardsRaw = $derived(
-    isSeries
-      ? (movie.showrunners ?? []).map((p) => ({ ...p, _roleLabel: "Создатель" }))
-      : [
-          ...(movie.directors ?? []).map((p) => ({ ...p, _roleLabel: "Режиссер" })),
-          ...(movie.producers ?? []).map((p) => ({ ...p, _roleLabel: "Продюсер" })),
-          ...(movie.screenplays ?? []).map((p) => ({ ...p, _roleLabel: "Сценарист" })),
-          ...(movie.writers ?? []).map((p) => ({ ...p, _roleLabel: "Сценарист" }))
-        ]
-  );
+  const crewCardsRaw = $derived.by(() => {
+    if (isSeries) {
+      return (movie.showrunners ?? []).slice(0, 3).map((p) => ({ ...p, _roleLabel: "Создатель" }));
+    }
+    const topDirectors = (movie.directors ?? []).slice(0, 3).map((p) => ({ ...p, _roleLabel: "Режиссер" }));
+    const topProducers = (movie.producers ?? []).slice(0, 3).map((p) => ({ ...p, _roleLabel: "Продюсер" }));
+    // Screenplay + Writer объединяем в общий пул "Сценарист", топ-3 по popularity
+    const writersPool = [...(movie.screenplays ?? []), ...(movie.writers ?? [])]
+      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+      .slice(0, 3)
+      .map((p) => ({ ...p, _roleLabel: "Сценарист" }));
+    return [...topDirectors, ...topProducers, ...writersPool];
+  });
   // Дедупликация: один человек — одна карточка, должности объединяем "Режиссер · Продюсер"
   const crewCards = $derived.by(() => {
     const byId = new Map<number, typeof crewCardsRaw[number] & { _roleLabels: string[] }>();
