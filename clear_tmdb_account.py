@@ -156,7 +156,10 @@ def _handle_rate_limit(resp: requests.Response) -> None:
         time.sleep(delay)
 
 
-def delete_user_lists(headers: dict, v4_id: str | None, dry_run: bool = False) -> int:
+DEFAULT_DELAY = 0.5  # TMDB лимит 40 req/10s (=4 req/s); 0.5s = 2 req/s — безопасно с запасом. 1.0s — очень консервативно, в 2x медленнее.
+
+
+def delete_user_lists(headers: dict, v4_id: str | None, dry_run: bool = False, delay: float = DEFAULT_DELAY) -> int:
     """Удаление всех пользовательских списков (API v4). Возвращает кол-во удаленных."""
     print("\n--- Очистка пользовательских списков (V4) ---")
     if not v4_id:
@@ -204,7 +207,7 @@ def delete_user_lists(headers: dict, v4_id: str | None, dry_run: bool = False) -
                 deleted += 1
             else:
                 print(f"[ERROR] Не удалось удалить список ID: {list_id} ({name}) -> {del_res.status_code} {del_res.text[:200]}")
-            time.sleep(0.25)  # мягкий throttling для TMDB
+            time.sleep(delay)
 
         if page >= res.get("total_pages", 1):
             break
@@ -214,7 +217,7 @@ def delete_user_lists(headers: dict, v4_id: str | None, dry_run: bool = False) -
     return deleted
 
 
-def clear_ratings(headers: dict, v3_id: int | str | None, media_type: str = "movie", dry_run: bool = False) -> int:
+def clear_ratings(headers: dict, v3_id: int | str | None, media_type: str = "movie", dry_run: bool = False, delay: float = DEFAULT_DELAY) -> int:
     """Удаление всех оценок для фильмов или сериалов. Возвращает кол-во."""
     print(f"\n--- Очистка оценок ({media_type}) ---")
     if not v3_id:
@@ -259,7 +262,7 @@ def clear_ratings(headers: dict, v3_id: int | str | None, media_type: str = "mov
                 deleted += 1
             else:
                 print(f"[ERROR] Не удалось удалить оценку {media_type} ID: {media_id} -> {del_res.status_code} {del_res.text[:200]}")
-            time.sleep(0.25)
+            time.sleep(delay)
 
         # после удаления структура смещается — снова page=1, цикл сам завершится когда results пустой
 
@@ -267,7 +270,7 @@ def clear_ratings(headers: dict, v3_id: int | str | None, media_type: str = "mov
     return deleted
 
 
-def clear_account_states(headers: dict, v3_id: int | str | None, list_type: str = "watchlist", media_type: str = "movie", dry_run: bool = False) -> int:
+def clear_account_states(headers: dict, v3_id: int | str | None, list_type: str = "watchlist", media_type: str = "movie", dry_run: bool = False, delay: float = DEFAULT_DELAY) -> int:
     """Удаление элементов из Watchlist или Favorites."""
     print(f"\n--- Очистка {list_type} ({media_type}) ---")
     if not v3_id:
@@ -317,7 +320,7 @@ def clear_account_states(headers: dict, v3_id: int | str | None, list_type: str 
                 deleted += 1
             else:
                 print(f"[ERROR] Не удалось удалить {media_type} ID: {media_id} из {list_type} -> {post_res.status_code} {post_res.text[:300]}")
-            time.sleep(0.25)
+            time.sleep(delay)
 
     print(f"  Итого {list_type} {media_type} удалено (или dry-run): {deleted}")
     return deleted
@@ -332,6 +335,7 @@ def main():
                         help="Что чистить: all | lists,ratings,watchlist,favorite (через запятую). Пример: --only lists,ratings")
     parser.add_argument("--v4-id", type=str, default=None, help="Переопределить V4 account_id (иначе авто)")
     parser.add_argument("--v3-id", type=str, default=None, help="Переопределить V3 account_id (иначе авто)")
+    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Задержка между DELETE/POST в секундах (default {DEFAULT_DELAY}, TMDB лимит 40/10s)")
     args = parser.parse_args()
 
     token, source = get_token(args.v4_token)
@@ -376,18 +380,20 @@ def main():
             print("Отменено.")
             sys.exit(0)
 
+    print(f"[INFO] delay={args.delay}s между запросами")
+
     total = 0
     if do_lists:
-        total += delete_user_lists(headers, v4_id, dry_run=args.dry_run)
+        total += delete_user_lists(headers, v4_id, dry_run=args.dry_run, delay=args.delay)
     if do_ratings:
-        total += clear_ratings(headers, v3_id, media_type="movie", dry_run=args.dry_run)
-        total += clear_ratings(headers, v3_id, media_type="tv", dry_run=args.dry_run)
+        total += clear_ratings(headers, v3_id, media_type="movie", dry_run=args.dry_run, delay=args.delay)
+        total += clear_ratings(headers, v3_id, media_type="tv", dry_run=args.dry_run, delay=args.delay)
     if do_watchlist:
-        total += clear_account_states(headers, v3_id, list_type="watchlist", media_type="movie", dry_run=args.dry_run)
-        total += clear_account_states(headers, v3_id, list_type="watchlist", media_type="tv", dry_run=args.dry_run)
+        total += clear_account_states(headers, v3_id, list_type="watchlist", media_type="movie", dry_run=args.dry_run, delay=args.delay)
+        total += clear_account_states(headers, v3_id, list_type="watchlist", media_type="tv", dry_run=args.dry_run, delay=args.delay)
     if do_favorite:
-        total += clear_account_states(headers, v3_id, list_type="favorite", media_type="movie", dry_run=args.dry_run)
-        total += clear_account_states(headers, v3_id, list_type="favorite", media_type="tv", dry_run=args.dry_run)
+        total += clear_account_states(headers, v3_id, list_type="favorite", media_type="movie", dry_run=args.dry_run, delay=args.delay)
+        total += clear_account_states(headers, v3_id, list_type="favorite", media_type="tv", dry_run=args.dry_run, delay=args.delay)
 
     if args.dry_run:
         print(f"\n[DRY-RUN] Всего кандидатов на удаление: {total}")
