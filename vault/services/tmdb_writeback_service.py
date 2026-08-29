@@ -624,35 +624,66 @@ class TmdbWritebackService:
 
     @classmethod
     def init_all_user_lists(cls) -> dict:
-        """Одноразовая инициализация: создать все локальные UserList на TMDB где tmdb_list_id is None. Ставит флаг."""
+        """Одноразовая инициализация + восстановление удалённых на TMDB списков. Ставит флаг."""
         from moviefilter.models import UserPreferences
         from vault.models import UserList
 
         prefs = UserPreferences.get()
-        if prefs.tmdb_lists_initialized:
-            return {"created": 0, "skipped": UserList.objects.filter(tmdb_list_id__isnull=False).count(), "reason": "already initialized"}
-
         should, reason = cls._should_writeback_lists()
         if not should:
             return {"created": 0, "error": reason}
 
-        qs = UserList.objects.filter(tmdb_list_id__isnull=True)
+        # берём все локальные списки, проверяем каждый
+        all_lists = list(UserList.objects.all())
+        to_create = []
+        for ul in all_lists:
+            if not ul.tmdb_list_id:
+                to_create.append(ul)
+                continue
+            # есть tmdb_id — проверяем жив ли он на TMDB (пользователь мог удалить вручную)
+            try:
+                from tmdb_adapter.client_singleton import get_tmdb_client
+
+                tmdb = get_tmdb_client()
+                api4 = tmdb._api4
+                if api4 is None:
+                    continue
+                api4.list_get_list(list_id=int(ul.tmdb_list_id))
+            except Exception as exc:
+                msg = str(exc)
+                # 404 / NotFound → список удалён на TMDB, надо пересоздать
+                if "404" in msg or "NotFound" in type(exc).__name__ or "not found" in msg.lower():
+                    logger.warning("writeback lists init: TMDB list %s missing for UserList %s (%s), will recreate", ul.tmdb_list_id, ul.id, ul.name)
+                    # сбросим локально и добавим в создание
+                    UserList.objects.filter(pk=ul.pk).update(tmdb_list_id=None)
+                    ul.tmdb_list_id = None
+                    to_create.append(ul)
+                else:
+                    logger.warning("writeback lists init check failed for %s: %s", ul.id, exc)
+
         created = 0
         errors = []
-        for ul in qs:
-            res = cls.create_tmdb_list(ul)
+        for ul in to_create:
+            # перечитать свежий объект (tmdb_list_id мог уже быть сброшен)
+            try:
+                fresh = UserList.objects.get(pk=ul.pk)
+            except Exception:
+                fresh = ul
+            res = cls.create_tmdb_list(fresh)
             if res.success:
                 created += 1
             else:
-                errors.append(f"{ul.id}:{res.error}")
+                errors.append(f"{fresh.id}:{fresh.name}:{res.error}")
+            # пауза чтобы не триггерить spam-фильтр TMDB при массовой создании
+            import time
 
-        # ставим флаг даже при частичном успехе — spam-листы не должны блокировать новые списки
-        # (ошибки типа 18 spam — не ретраятся, нужно переименовать)
+            time.sleep(1.5)
+
         prefs.tmdb_lists_initialized = True
         prefs.save(update_fields=["tmdb_lists_initialized"])
         if errors:
-            logger.warning("writeback lists init partial created=%s errors=%s", created, errors)
+            logger.warning("writeback lists init done created=%s errors=%s", created, errors)
         else:
-            logger.info("writeback lists init done created=%s", created)
+            logger.info("writeback lists init done created=%s total_checked=%s", created, len(all_lists))
 
-        return {"created": created, "errors": errors, "total": qs.count()}
+        return {"created": created, "errors": errors, "total": len(all_lists), "to_create": len(to_create)}

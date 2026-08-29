@@ -1960,12 +1960,12 @@ def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
     except Exception:
         pass
 
-    # одноразовая инициализация всех локальных списков на TMDB (без кнопки, §20) — чистый Huey
+    # инициализация/восстановление списков на TMDB (чистый Huey, без блокировки ответа)
     try:
         from moviefilter.models import UserPreferences as UP2
 
         p2 = UP2.get()
-        if not p2.tmdb_lists_initialized and p2.tmdb_writeback_enabled:
+        if p2.tmdb_writeback_enabled and p2.tmdb_v4_authenticated_access_token:
             from vault.tasks import tmdb_lists_init
 
             tmdb_lists_init.schedule(delay=2)
