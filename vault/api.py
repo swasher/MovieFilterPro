@@ -1,9 +1,12 @@
+import logging
 from decimal import Decimal
 
 from django.conf import settings
 from django.db.models import Count, Exists, OuterRef, Q
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
+
+logger = logging.getLogger("vault.tmdb_writeback")
 
 from vault.models import (
     Collection,
@@ -1045,8 +1048,8 @@ def movie_fetch_tmdb(request, slug: str, payload: TMDBSyncIn):
                     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
                     TmdbWritebackService.sync_user_movie_to_tmdb(um)
-        except Exception:
-            pass  # write-back не должен ломать основной READ-ответ
+        except Exception as exc:
+            logger.warning("Writeback post-fetch failed for movie %s: %s", movie.slug, exc, exc_info=True)
 
     return _build_tmdb_sync_out(result)
 
@@ -1094,8 +1097,8 @@ def movie_fetch_tmdb_confirm(request, slug: str, payload: TMDBCandidateConfirmIn
                     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
                     TmdbWritebackService.sync_user_movie_to_tmdb(um)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Writeback post-fetch-confirm failed for movie %s: %s", movie.slug, exc, exc_info=True)
 
     return _build_tmdb_sync_out(result)
 
@@ -1897,12 +1900,6 @@ def tmdb_auth_start(request):
         raise HttpError(400, f"TMDB error: {data}")
 
     request_token = data["request_token"]
-    # храним в сессии для approve (Svelte fetch через proxy шлёт cookies)
-    try:
-        request.session["tmdb_request_token"] = request_token
-        request.session.save()
-    except Exception:
-        pass
     approve_url = f"https://www.themoviedb.org/auth/access?request_token={request_token}"
     return TmdbAuthStartOut(approve_url=approve_url, request_token=request_token)
 
@@ -1921,10 +1918,9 @@ def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
     if not prefs.tmdb_v4_read_access_token:
         raise HttpError(400, "Нет read access token")
 
-    # берём из payload или из сессии (старый flow)
-    request_token = (payload.request_token or "").strip() or request.session.get("tmdb_request_token")  # type: ignore
+    request_token = (payload.request_token or "").strip()
     if not request_token:
-        raise HttpError(400, "Нет request_token — сначала нажми Start auth")
+        raise HttpError(400, "Нет request_token — передай его из Start auth")
 
     headers = {
         "Authorization": f"Bearer {prefs.tmdb_v4_read_access_token}",
@@ -1947,13 +1943,6 @@ def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
     access_token = data["access_token"]
     prefs.tmdb_v4_authenticated_access_token = access_token
     prefs.save(update_fields=["tmdb_v4_authenticated_access_token"])
-    # очищаем session
-    try:
-        if "tmdb_request_token" in request.session:
-            del request.session["tmdb_request_token"]
-            request.session.save()
-    except Exception:
-        pass
     # сбрасываем синглтон клиента (важно для write-back)
     try:
         import tmdb_adapter.client_singleton as cs
@@ -2003,12 +1992,6 @@ def tmdb_auth_logout(request):
             pass
     prefs.tmdb_v4_authenticated_access_token = None
     prefs.save(update_fields=["tmdb_v4_authenticated_access_token"])
-    try:
-        if "tmdb_request_token" in request.session:
-            del request.session["tmdb_request_token"]
-            request.session.save()
-    except Exception:
-        pass
     return {"success": True}
 
 

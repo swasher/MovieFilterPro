@@ -702,6 +702,8 @@
         const reason = results[0]?.error ?? "пропущено (нет tmdb_id/токена/выключено)";
         toast.warning(`Write-back пропущен: ${reason}`);
       }
+      // обновляем бейдж wb.status (pending/error → synced)
+      await invalidateAll();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {

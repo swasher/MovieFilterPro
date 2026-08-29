@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
 
+from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger("vault.tmdb_writeback")
@@ -548,21 +549,29 @@ class TmdbWritebackService:
             return WritebackResult(success=False, action="list_create_skipped", error=reason)
         try:
             from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.models import UserList as UL
 
-            tmdb = get_tmdb_client()
-            result = tmdb.create_list(name=user_list.name, iso_639_1="ru", description=user_list.description or "", public=bool(user_list.is_public))
-            new_id = getattr(result, "id", None)
-            if new_id is None and isinstance(result, int):
-                new_id = result
-            if new_id:
-                # use QuerySet update to avoid triggering post_save signal loop
-                from vault.models import UserList as UL
-
-                UL.objects.filter(pk=user_list.pk).update(tmdb_list_id=int(new_id))
+            # §1.2 race: лочим строку перед внешним API, чтобы не создать дубликаты
+            with transaction.atomic():
+                locked = UL.objects.select_for_update().get(pk=user_list.pk)
+                if locked.tmdb_list_id:
+                    # уже создал параллельный поток
+                    user_list.tmdb_list_id = locked.tmdb_list_id
+                    return WritebackResult(success=True, action="list_create", tmdb_id=int(locked.tmdb_list_id), media_type="list")
+                tmdb = get_tmdb_client()
+                result = tmdb.create_list(name=locked.name, iso_639_1="ru", description=locked.description or "", public=bool(locked.is_public))
+                new_id = getattr(result, "id", None)
+                if new_id is None and isinstance(result, int):
+                    new_id = result
+                if not new_id:
+                    return WritebackResult(success=False, action="list_create", error=f"unexpected result {result}")
+                UL.objects.filter(pk=locked.pk).update(tmdb_list_id=int(new_id))
                 user_list.tmdb_list_id = int(new_id)
-                logger.info("writeback list_create id=%s tmdb_list=%s", user_list.id, new_id)
+                locked.tmdb_list_id = int(new_id)
+                logger.info("writeback list_create id=%s tmdb_list=%s", locked.id, new_id)
                 return WritebackResult(success=True, action="list_create", tmdb_id=int(new_id), media_type="list")
-            return WritebackResult(success=False, action="list_create", error=f"unexpected result {result}")
+        except UL.DoesNotExist:
+            return WritebackResult(success=False, action="list_create", error="UserList not found")
         except Exception as exc:
             logger.warning("writeback list_create failed: %s", exc)
             return WritebackResult(success=False, action="list_create", error=str(exc))
