@@ -542,6 +542,12 @@ class UserList(models.Model):
     name = models.CharField('Название', max_length=255)
     description = models.TextField('Описание', blank=True)
     is_public = models.BooleanField('Публичный', default=False)
+    tmdb_list_id = models.PositiveIntegerField(
+        'TMDB List ID',
+        null=True,
+        blank=True,
+        help_text='ID соответствующего списка на TMDB',
+    )
 
     created_at = models.DateTimeField('Создан', auto_now_add=True)
     updated_at = models.DateTimeField('Обновлен', auto_now=True)
@@ -632,3 +638,37 @@ class TMDBSyncQueueItem(models.Model):
 
         def __str__(self):
             return f"TMDBSync #{self.pk} {self.snapshot_title} ({self.state})"
+
+
+class TMDBWritebackQueueItem(models.Model):
+    """Постоянная очередь write-back Vault -> TMDB (forever, до success)."""
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Ожидает"
+        ERROR = "error", "Ошибка"
+
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="tmdb_writeback_items")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tmdb_writeback_queue", null=True, blank=True)
+
+    state = models.CharField("Состояние", max_length=20, choices=State, default=State.PENDING, db_index=True)
+    attempts = models.PositiveIntegerField("Попыток", default=0)
+    last_error = models.TextField("Последняя ошибка", blank=True, default="")
+    next_retry_at = models.DateTimeField("Следующая попытка", null=True, blank=True, db_index=True)
+
+    created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "Запись очереди TMDB write-back"
+        verbose_name_plural = "Записи очереди TMDB write-back"
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["movie", "state"]),
+            models.Index(fields=["next_retry_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["movie"], name="uniq_writeback_movie", condition=models.Q(user__isnull=True)),
+        ]
+
+    def __str__(self):
+        return f"TMDBWriteback #{self.pk} {self.movie_id} ({self.state})"

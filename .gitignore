@@ -19,3 +19,4 @@ media/cached_images/
 .uv-cache/
 .pnpm-store/
 dump.json
+nul

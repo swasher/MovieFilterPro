@@ -1,5 +1,40 @@
 # План: Двусторонняя синхронизация Vault <-> TMDB
 
+## 0. Замечания ревью (2026-08-28) — ВНЕСЕНО, реализация не начата
+
+> Этот раздел добавлен по результатам ревью плана перед стартом. Ниже — уточнения/риски, которые будут учтены при реализации. Пункты плана 1–18 не менялись по сути, только дополнены.
+
+### R1. `transaction.on_commit` + lambda-захват (критично)
+- **Проблема:** в плане §F примеры `lambda: TmdbWritebackService.sync_user_movie_to_tmdb(instance)` захватывают `instance` по позднему связыванию. В цикле/сигнале это приводит к гонке — на момент `on_commit` `instance` может уже указывать на другой объект.
+- **Решение:** захватывать `pk` по значению: `lambda pk=instance.pk: TmdbWritebackService.sync_by_id(pk)` или передавать `user_movie_id`. Все write-back методы должны принимать `id`, а не ORM-объект, и делать `select_related('movie')` внутри.
+
+### R2. Флаг bulk-import — не потокобезопасен (критично)
+- **Проблема:** в плане §12.2 / §3.4 предлагается `TmdbWritebackService._bulk_import_in_progress = True` как class-var. Это глобально для процесса и не работает корректно с HUEY-воркером (отдельный процесс) и конкурентными запросами.
+- **Решение:** заменить на комбинацию:
+  1. `threading.local()` / `contextvars.ContextVar` для подавления сигналов в текущем треде management-команды;
+  2. явный `bulk_import` параметр/контекст-менеджер `with writeback_suppressed():` вокруг `import_kinorium_csv` вместо глобального флага;
+  3. для HUEY — отдельный флаг в БД/кэше не нужен, достаточно не ставить сигналы в очередь во время импорта (сигналы просто `return`).
+
+### R3. Дедупликация быстрых изменений одного UserMovie
+- **Проблема:** §12.3 предлагает batch-дедупликацию в HUEY, но без конкретики. Если пользователь 3 раза за 5с переключает статус, сейчас уйдёт 3 запроса в TMDB → риск 429.
+- **Решение:** в `tmdb_writeback_queue.py` делать `schedule(delay=2–3с)` + ключ дедупликации `user_movie_id`. Перед постановкой задачи проверять наличие уже запланированной задачи или перезаписывать. На первом этапе допустимо без дедупликации, но с `delay` и обработкой 429.
+
+### R4. Обработка 429 / 401 — уточнение исключений
+- **Проблема:** в §D импортируются `TMDbAPIs429Exception`/`Authentication`, но в `tmdbapis` реальные классы — `tmdbapis.exceptions.TMDbAPIsException` + подклассы с другими именами (проверить в `venv` перед кодом).
+- **Решение:** перед реализацией §5.3/6.1 уточнить точные имена (`grep` по `tmdbapis/exceptions.py`), добавить fallback на `status_code == 429/401`. Логику 401 — только нотификация + `web_logger`, без авто-ретрая.
+
+### R5. Идемпотентность и отсутствие `tmdb_id`
+- **Уточнение:** все write-back вызовы должны сначала проверять `movie.tmdb_id is not None` и `tmdb_media_type in ('movie','tv')` → `skipped`. Это уже в §5.3, но вынести в единый guard `_should_writeback(user_movie)` с проверкой `tmdb_writeback_enabled` + токена.
+
+### R6. Использование `tmdb` и `tmdb_adapter` — границы
+- **Решение:** `tmdb_adapter` — инфраструктурный слой (единственный источник `get_tmdb_client()` / `reset_tmdb_client()` / OAuth V4 flow `tmdb_adapter/auth.py`). Вся прикладная write-back логика остаётся в `vault/services/tmdb_writeback_service.py`. Приложение `tmdb` (legacy: `tmdb/views.py` — `tmdb_section`, `search_movies_*`, `list_*`) НЕ трогать и НЕ дублировать; при необходимости работы со списками TMDB использовать `tmdb.create_list` / `tmdb._api4` через клиент из `tmdb_adapter`.
+
+### R7. Сигналы vs прямое внедрение (выбор §4)
+- **Подтверждение:** гибрид §4.3 остаётся рекомендуемым. Вариант A (post_save) + `on_commit` покрывает все 14 точек (§A1–A5). Важно: `post_delete` для `UserMovie` получает `instance` без `pk` после удаления — поэтому в handler передавать сохранённые `tmdb_id/media_type` до удаления или работать по `pre_delete`.
+
+### R8. Миграции и порядок
+- **Уточнение:** поля `UserPreferences.tmdb_writeback_enabled` и `UserList.tmdb_list_id` — две отдельные миграции (`moviefilter` и `vault`). Делать в Фазе 1 до создания `signals.py`, чтобы импорты не падали.
+
 ## 1. Контекст и текущее состояние
 
 ### Что есть сейчас (только READ из TMDB)
@@ -492,19 +527,15 @@ def tmdb_writeback_settings(request, payload: WritebackSettingsIn):
 - Кнопка "Force TMDB write-back"
 - Отображение ошибок write-back
 
-### 10.3 Страница списков
+### 10.3 Страница списков — УДАЛЕНО (2026-08-28)
 
-Добавить:
-- Кнопка "Sync list to TMDB" для каждого UserList
-- Отображение TMDB List ID
-- Индикатор синхронизации
+Отдельной страницы/ручной кнопки `Sync list to TMDB` нет и не будет. Списки синхронизируются **автоматически вместе с фильмом** при `UserListMovie post_save/delete` (см. §20.6 — auto-create `tmdb_list_id` на лету). Ручной триггер не нужен.
 
 ### 10.4 Preferences (`front/src/routes/preferences/+page.svelte`)
 
 Добавить:
-- Toggle `tmdb_writeback_enabled`
-- Toggle `tmdb_writeback_lists_enabled`
-- Статистика write-back (сколько синхронизировано, ошибок)
+- **Один** toggle `TMDB Write-back ON/OFF` (`tmdb_writeback_enabled`; `tmdb_writeback_lists_enabled` следует за ним, отдельный toggle выпилен 2026-08-28)
+- Статистика write-back (total/with tmdb_id, pending queue размер — без `Sync all`)
 
 ---
 
@@ -524,35 +555,35 @@ def tmdb_writeback_settings(request, payload: WritebackSettingsIn):
 
 ### Фаза 2: Core write-back (3-4 дня)
 
-| # | Задача | Файлы |
-|---|--------|-------|
-| 2.1 | Реализовать `sync_user_movie_to_tmdb` — главный метод | `vault/services/tmdb_writeback_service.py` |
-| 2.2 | Реализовать `sync_user_movie_deleted` — cleanup при удалении | `vault/services/tmdb_writeback_service.py` |
-| 2.3 | Реализовать `create_tmdb_list`, `delete_tmdb_list` | `vault/services/tmdb_writeback_service.py` |
-| 2.4 | Реализовать `sync_user_list_add`, `sync_user_list_remove` | `vault/services/tmdb_writeback_service.py` |
-| 2.5 | Обработка 429 rate limit с exponential backoff | `vault/services/tmdb_writeback_service.py` |
-| 2.6 | Обработка 401 token expired | `vault/services/tmdb_writeback_service.py` |
-| 2.7 | Интеграция с HUEY для фоновых задач | `vault/services/tmdb_writeback_queue.py` |
+| # | Задача | Файлы | Статус |
+|---|--------|-------|--------|
+| 2.1 | Реализовать `sync_user_movie_to_tmdb` — главный метод | `vault/services/tmdb_writeback_service.py` | ✅ |
+| 2.2 | Реализовать `sync_user_movie_deleted` — cleanup при удалении | `vault/services/tmdb_writeback_service.py` | ✅ |
+| 2.3 | Реализовать `create_tmdb_list`, `delete_tmdb_list` | `vault/services/tmdb_writeback_service.py` | ✅ |
+| 2.4 | Реализовать `sync_user_list_add`, `sync_user_list_remove` | `vault/services/tmdb_writeback_service.py` | ✅ |
+| 2.5 | Обработка 429 rate limit с exponential backoff | `vault/services/tmdb_writeback_service.py` | ✅ |
+| 2.6 | Обработка 401 token expired | `vault/services/tmdb_writeback_service.py` | ✅ |
+| 2.7 | HUEY только для retry 429 (bulk выпилен) | `vault/tasks.py` | ✅ (урезано) |
 
 ### Фаза 3: Точки мутации (2-3 дня)
 
-| # | Задача | Файлы |
-|---|--------|-------|
-| 3.1 | Подключить signals к UserMovie (post_save, post_delete) | `vault/signals.py` |
-| 3.2 | Подключить signals к UserListMovie (post_save, post_delete) | `vault/signals.py` |
-| 3.3 | Добавить `transaction.on_commit` для безопасности | `vault/signals.py` |
-| 3.4 | Исключить management commands из write-back (import_kinorium_csv) | `vault/services/tmdb_writeback_service.py` |
-| 3.5 | Добавить флаг `_in_bulk_import` для подавления write-back | `vault/services/tmdb_writeback_service.py` |
+| # | Задача | Файлы | Статус |
+|---|--------|-------|--------|
+| 3.1 | Подключить signals к UserMovie (post_save, post_delete) | `vault/signals.py` | ✅ |
+| 3.2 | Подключить signals к UserListMovie (post_save, post_delete) | `vault/signals.py` | ✅ |
+| 3.3 | Добавить `transaction.on_commit` для безопасности | `vault/signals.py` | ✅ |
+| 3.4 | ~~Исключить management commands из write-back~~ — УДАЛЕНО, не нужно (фильмы без tmdb_id) | — | ❌ выпилено 2026-08-28 |
+| 3.5 | ~~Флаг `_in_bulk_import`~~ — УДАЛЕНО | — | ❌ выпилено |
 
 ### Фаза 4: API + Фронтенд (2-3 дня)
 
-| # | Задача | Файлы |
-|---|--------|-------|
-| 4.1 | Добавить API эндпоинты write-back | `vault/api.py` |
-| 4.2 | Обновить страницу TMDB Auth (write token status) | `front/src/routes/tmdb/+page.svelte` |
-| 4.3 | Обновить страницу фильма (sync indicator) | `front/src/routes/(vault)/movies/[slug]/+page.svelte` |
-| 4.4 | Обновить Preferences (writeback toggles) | `front/src/routes/preferences/+page.svelte` |
-| 4.5 | Добавить страницу статуса write-back | `front/src/routes/tmdb-writeback/+page.svelte` |
+| # | Задача | Файлы | Статус |
+|---|--------|-------|--------|
+| 4.1 | API write-back (`/movies/{slug}/tmdb-writeback`, `/tmdb-writeback/status|settings` — `sync-all` выпилен) | `vault/api.py` | ✅ |
+| 4.2 | TMDB Auth страница (write token status) | `front/src/routes/tmdb/+page.svelte` | ⏳ |
+| 4.3 | Страница фильма — кнопка Push to TMDB (индикатор V1/бадж — уточнено в §20.4) | `front/src/routes/(vault)/movies/[slug]/+page.svelte` | ✅ част. |
+| 4.4 | Preferences toggles (Switch + описание) | `front/src/routes/preferences/+page.svelte` | ✅ част. (требует UX правки §20.3) |
+| 4.5 | ~~Отдельная страница `/tmdb-writeback`~~ — отложена (§20.5) | `front/src/routes/tmdb-writeback/+page.svelte` | ⏳ P2 |
 
 ### Фаза 5: Тестирование (2-3 дня)
 
@@ -577,28 +608,13 @@ def tmdb_writeback_settings(request, payload: WritebackSettingsIn):
 - При ошибке сети/429 — **асинхронный retry** через HUEY
 - Bulk операции (import) — **только асинхронно** через HUEY
 
-### Решение 2: Куда девать bulk import
+### Решение 2: Куда девать bulk import — УДАЛЕНО (2026-08-28, §20)
 
-**Выбор: Глобальный флаг `_bulk_import_in_progress`.**
+Было: глобальный флаг `_bulk_import_in_progress` / `ContextVar` для подавления write-back во время `import_kinorium_csv`.
 
-```python
-class TmdbWritebackService:
-    _bulk_import_in_progress = False
+Причина удаления: первый CSV-импорт создаёт фильмы без `tmdb_id` → guard `_should_writeback` и так скипает всё; массовые точечные обновления — редки и всегда должны уходить в TMDB. Bulk `sync_all` выпилен (см. §20.2).
 
-    @classmethod
-    def sync_user_movie_to_tmdb(cls, user_movie):
-        if cls._bulk_import_in_progress:
-            return WritebackResult(success=False, action="skipped", ...)
-        # ...
-```
-
-Import-команда устанавливает флаг:
-```python
-TmdbWritebackService._bulk_import_in_progress = True
-# ... import ...
-TmdbWritebackService._bulk_import_in_progress = False
-# ... или drain queue ...
-```
+Текущее: suppression полностью выпилен из `vault/services/tmdb_writeback_service.py` и `vault/signals.py` и `vault/management/commands/import_kinorium_csv.py`. `12.2` оставлен для истории.
 
 ### Решение 3: Concurrency (множественные вызовы)
 
@@ -608,13 +624,15 @@ TmdbWritebackService._bulk_import_in_progress = False
 - Если UserMovie A изменяется 3 раза за 5 секунд → только 1 write-back
 - Реализация через `TaskLock` или `delay` в HUEY
 
-### Решение 4: Offline / TMDB недоступен
+### Решение 4: Offline / TMDB недоступен — ОБНОВЛЕНО 2026-08-28 (feedback)
 
-**Выбор: Retry queue + manual sync.**
+**Выбор: Persistent HUEY queue forever + ручной разбор.**
 
-- Если TMDB недоступен → задача ставится в retry queue (до 24 часов)
-- На UI показывается "Pending sync" индикатор
-- Кнопка "Force sync all" для ручного триггера
+- Если TMDB недоступен / 429 / сеть упала → задача ставится в **persistent HUEY/Sqlite queue навсегда**, без TTL 24ч, не удаляется до `success`.
+- Ретрай **каждые 10 минут** (не 5 сек) — `HUEY.task().schedule(delay=600)` + exponential backoff capped 600s. Долбить каждые 5с не нужно.
+- Очередь видна пользователю: отдельный список/страница (см. §10.5/§14.2 `pending_retry`) — можно зайти, увидеть фильмы не прошедшие синхронизацию, вручную решить (re-auth, retry, skip).
+- Никакого авто-удаления; только `success` снимает задачу. `Force sync all` как кнопки нет — вместо неё поштучный `Push to TMDB` / retry из очереди.
+- Реализация: новая модель `TMDBWritebackQueueItem` (аналог `TMDBSyncQueueItem`) или легковесная таблица `movie_id + attempt + last_error + next_retry_at`, воркер `HUEY.periodic_task` раз в 1-2 мин перебирает `next_retry_at <= now()`.
 
 ---
 
@@ -651,10 +669,10 @@ TmdbWritebackService._bulk_import_in_progress = False
 |------|--------|------------|
 | Rate limit TMDB (429) | Write-back блокируется | Exponential backoff, batch queue |
 | Token expiry (401) | Write-back невозможен | Auto-detect + notification + re-auth flow |
-| Сеть недоступна | Write-back не проходит | Retry queue (24h), manual sync |
-| Bulk import затмевает write-back | UI фризит | Bulk flag + async processing |
+| Сеть недоступна | Write-back не проходит | **Forever queue, retry 10m**, manual разбор (§12.4) |
+| Bulk import затмевает write-back | ~~UI фризит~~ — УДАЛЕНО (§20) | — |
 | Двойная запись (Vault + TMDB одновременно) | Race condition | Single-user assumption = нет concurrency |
-| TMDB API downtime | Write-back queued | HUEY retry, persistent queue |
+| TMDB API downtime | Write-back queued | **Persistent HUEY queue forever**, retry 10m |
 
 ---
 
@@ -694,6 +712,111 @@ TmdbWritebackService._bulk_import_in_progress = False
 3. **P2 (Medium):** bulk sync all + UI статус
 4. **P3 (Low):** рейтинги сезонов/эпизодов
 5. **P4 (Future):** pull from TMDB (read changes made directly on TMDB website)
+
+---
+
+## 19. Статус реализации на 2026-08-28 (факт)
+
+### Выполнено (Фазы 1-3 + часть 4)
+
+| Фаза | Задача | Статус | Комментарий |
+|------|--------|--------|-------------|
+| 1.1 | Поля `tmdb_writeback_enabled / lists` в UserPreferences | ✅ | `moviefilter/models.py:179`, миграция `0037` |
+| 1.2-1.4 | `tmdb_writeback_service.py`, `tmdb_list_id` в UserList, миграции | ✅ | `vault/models.py:543`, миграция `0039` |
+| 1.5-1.6 | `vault/signals.py` + `vault/apps.py:10 ready()` | ✅ | `post_save/post_delete` + `pre_delete` кэш, `transaction.on_commit(pk=pk)` |
+| 1.7 | Логирование `vault.tmdb_writeback` → `debug_log+console` | ✅ | `movie_filter_pro/settings.py:355` |
+| 2.1-2.4 | `sync_user_movie_to_tmdb`, `sync_user_movie_deleted`, `create_tmdb_list/delete`, `sync_list_item_*` | ✅ | `vault/services/tmdb_writeback_service.py:65` |
+| 2.5-2.7 | 429 retry (HUEY delay 5s), 401 detection, HUEY задачи | ✅ | `vault/tasks.py:71` `tmdb_writeback_user_movie`, `tmdb_writeback_queue.py:1` |
+| 3.1-3.5 | Signals + `suppress_writeback()` для `import_kinorium_csv.py:484` | ✅ | ContextVar, не class-var |
+| 4.1 | API: `POST /movies/{slug}/tmdb-writeback`, `POST /tmdb-writeback/sync-all`, `GET /tmdb-writeback/status`, `PATCH /tmdb-writeback/settings` | ✅ | `vault/api.py:1620` |
+| 4.4 | Preferences toggles (Switch) | ✅ част. | `front/src/routes/preferences/+page.svelte:1` — работает, но UX требует доработки (см. §20.3) |
+| 4.3 | Кнопка Push to TMDB на странице фильма | ✅ част. | `front/src/routes/(vault)/movies/[slug]/+page.svelte:116` — оставлена |
+
+### Не сделано / требует доработки
+
+| # | Задача из плана | Статус | Причина / следующий шаг |
+|---|-----------------|--------|-------------------------|
+| 4.2 | TMDB Auth страница (token status / re-auth) | ⏳ | `front/src/routes/tmdb/+page.svelte` — сейчас UnderConstruction |
+| 4.3 | Индикатор synced/pending/error на странице фильма | ⏳ | Требует уточнения (§20.4) |
+| 4.5 | Отдельная страница `/tmdb-writeback` со статистикой | ⏳ | Обсуждается как P2, см. §20.5 |
+| 5.x | Тесты (unit/integration, 429, bulk) | ⏳ | Отложено |
+
+---
+
+## 20. Обратная связь v1 (2026-08-28) — уточнения без кода
+
+### 20.1 Кнопка Push to TMDB + интеграция в `Sync using tmdb_id`
+
+**Запрос:** `Push to TMDB` оставить, но и `Sync using tmdb_id` должен пушить уже имеющиеся локальные данные сразу после первичной синхронизации.
+
+**Решение (план):**
+- `vault/api.py::movie_fetch_tmdb` (POST `/movies/{slug}/fetch-tmdb`) сейчас делает только READ (`TMDBMovieSyncService.sync_movie`). После успешного `status=ok` и после `fetch-tmdb-confirm` вызывать `TmdbWritebackService.sync_user_movie_to_tmdb(user_movie)` (или `by_id`) внутри того же запроса, **после** коммита основной sync-транзакции.
+- Использовать `transaction.on_commit` внутри `TMDBMovieSyncService` нельзя — поэтому вызов делать в `vault/api.py` после `result.status == "ok"`, с проверкой `movie.tmdb_id`.
+- Логика: `fetch-tmdb` → обновили метаданные из TMDB → сразу запушили локальный `UserMovie` (watchlist/favorite/rating) обратно. Это делает данные актуальными без отдельного `Push`. Кнопка `Push` остаётся как ручной retry/force.
+- Добавить в §11 Фаза 4 как `4.3b`: «интеграция write-back в fetch-tmdb flow».
+
+### 20.2 `Sync all` не нужен
+
+**Запрос:** `Sync all` запускает длительный процесс, непонятно зачем; данные должны быть всегда актуальны (сигналы).
+
+**Решение:**
+- Убрать кнопку `Sync all → TMDB` из `front/src/routes/preferences/+page.svelte` (оставить только `Refresh status`). Эндпоинт `POST /tmdb-writeback/sync-all` оставить в `vault/api.py` как скрытый admin/дебаг (не показывать в UI), либо перенести на будущую страницу `/tmdb-writeback` если она появится.
+- В §11 убрать `4.5 bulk sync all + UI`, заменить на «bulk ручной sync — только через скрытый API, не в Preferences».
+- Причина: при сигналах bulk не нужен; для first-time миграции достаточно `import_kinorium_csv` с suppression + поштучный write-back.
+
+### 20.3 Настройки — непонятный UX (два Switch)
+
+**Запрос:** два пункта «Обратная синхронизация» и «Списки → TMDB Lists» — непонятно что это, справа индикатор вместо checkbox.
+
+**Решение (план UI):**
+- Заменить текущие `Switch` с `Label` на явные `Checkbox` + `CardDescription` с help-текстом. Хотя `Switch` — норм паттерн для toggles, проблема — отсутствие описания и то что справа выглядит как статус-лампа.
+- Предлагаемый текст (утвердить):
+  - **«Синхронизировать статусы в TMDB»** — `tmdb_writeback_enabled` — описание: «При изменении «Буду смотреть / Просмотрено / Избранное / Оценка» автоматически обновлять watchlist/favorite/rating на TMDB. Требует write-token.»
+  - **«Синхронизировать пользовательские списки»** — `tmdb_writeback_lists_enabled` — описание: «При добавлении фильма в локальный список добавлять его в соответствующий TMDB List (создаётся на лету, см. §20.6).»
+- Добавить рядом бейдж `Требует TMDB auth` если `write_token_present == false` (серый disabled + ссылка на `/tmdb`).
+- В §10.4 и §4.4 плана уточнить дизайн: не `Toggle`, а `Switch + Label + Description + Badge`.
+
+### 20.4 Пункт 4.3 — про какой индикатор речь?
+
+**Исходный план §10.2/4.3:** «Индикатор синхронизации с TMDB (synced / pending / error) + кнопка Force write-back».
+
+**Уточнение:**
+- Идея: на `movies/[slug]` показывать badge рядом с `TMDB linked #id`: `✓ Synced`, `… Pending` (HUEY retry), `⚠ Error` + tooltip с последним `error`.
+- Для этого нужен персистентный статуc — сейчас его нет (результаты пишутся только в лог). Варианты:
+  - **V1 (лёгкий):** без БД — статус вычисляется на лету: если `tmdb_id` есть и `write_token_present` и `writeback_enabled` → `synced`, иначе `disabled`. Ошибки показывать только после ручного `Push` (toast).
+  - **V2 (полный):** добавить модель `TMDBWritebackStatus` или поля `last_writeback_at / last_error` на `UserMovie`. Это P2, не делаем сейчас.
+- Предложение: в текущем плане зафиксировать **V1**, а `synced/pending/error` badge вынести в `4.5` статистику. Кнопка `Push to TMDB` уже покрывает `Force`.
+
+### 20.5 Статистика write-back
+
+**Запрос:** нужно или записать в план.
+
+**Решение:**
+- Оставить как **P2** на страницу `front/src/routes/tmdb-writeback/+page.svelte` (§4.5), но не реализовывать сейчас. В план добавить в §14.2: `GET /tmdb-writeback/status` уже есть (total/with/without), расширить позже полями `last_sync_at`, `pending_retry`, `last_errors` если появится модель статуса.
+- Сейчас в Preferences уже есть `Refresh status` (total/with). Этого достаточно для V1.
+
+### 20.6 Автосоздание TMDB List на лету
+
+**Запрос:** если фильм локально в списке, а `tmdb_list_id` пуст — создавать список на TMDB автоматически.
+
+**Текущее:** `sync_list_item_added` в `vault/services/tmdb_writeback_service.py:329` просто скипает `no tmdb_list_id`.
+
+**Решение (план):**
+- Изменить guard: если `user_list.tmdb_list_id is None` → вызвать `create_tmdb_list(user_list)` внутри `sync_list_item_added`, затем `list_add_items`.
+- `create_tmdb_list` уже реализован (`tmdb.create_list`), но нужно обработать race (два параллельных add) — `select_for_update` или повторная проверка после создания.
+- Добавить в §2.4 плана условие «auto-create if missing» и в §3.2 сигнал для `UserList` (post_save при создании списка — опционально сразу создавать на TMDB).
+
+### 20.7 Системный статус `SKIP` → отдельный TMDB List
+
+**Запрос:** фильмы со статусом `Не буду смотреть` (`SKIP`) писать в пользовательский список на TMDB с таким же названием.
+
+**Текущий маппинг §2.1:** `SKIP → remove_from_watchlist`.
+
+**Решение (план):**
+- Расширить §2.1: `SKIP` остаётся `remove_from_watchlist`, **плюс** доп. действие: найти/создать TMDB List с именем `Не буду смотреть` (или `Won't Watch`, согласовать) и добавить туда фильм. При снятии `SKIP` — удалить из этого списка.
+- Реализация: в `TmdbWritebackService.sync_watch_status` после `remove_from_watchlist` проверить `watch_status == SKIP` → `ensure_skip_list(user)` → `list_add_items`. Для хранения ID skip-листа — либо спец. `UserList` с флагом `is_skip_mirror` + `tmdb_list_id`, либо отдельное поле `UserPreferences.tmdb_skip_list_id` (проще — первое, чтобы переиспользовать `UserList`).
+- Альтернатива: не создавать отдельный список, а использовать существующий пользовательский список если пользователь сам создал с таким именем — auto-match по `UserList.name == "Не буду смотреть"`.
+- Зафиксировать в плане как **P1** изменение §2.1 + новая задача `2.8` «SKIP → TMDB List».
 
 ---
 

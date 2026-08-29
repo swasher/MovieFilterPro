@@ -346,6 +346,16 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'vault.tmdb_writeback': {
+            'handlers': ['debug_log', 'console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'vault.tmdb_sync': {
+            'handlers': ['debug_log', 'console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }
 

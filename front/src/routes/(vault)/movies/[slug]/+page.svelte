@@ -41,6 +41,7 @@
 
   let { data } = $props();
   const movie = $derived(data.movie);
+  const wb = $derived(movie.writeback);
 
   const isSeries = $derived(movie.movie_type === "series" || movie.movie_type === "miniseries");
   const crewCardsRaw = $derived(
@@ -114,6 +115,7 @@
   }
 
   let isSyncing = $state(false);
+  let isWritebacking = $state(false);
   let isConfirmingCandidate = $state(false);
   let isDeletingMovie = $state(false);
   let candidateDialogOpen = $state(false);
@@ -675,6 +677,35 @@
 
     if (payload.custom_lists) {
       customLists = payload.custom_lists.map((item) => ({ ...item }));
+    }
+  };
+
+  const runWriteback = async () => {
+    isWritebacking = true;
+    try {
+      const res = await fetch(`/api/vault/movies/${movie.slug}/tmdb-writeback`, { method: "POST" });
+      const payload = await res.json();
+      if (!res.ok) {
+        if (await handleUnauthorized(res.status, payload.message)) return;
+        toast.error(payload.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      const results = Array.isArray(payload) ? payload : [];
+      const ok = results.filter((r) => r.success).length;
+      const fail = results.filter((r) => !r.success && r.action !== "skipped").length;
+      if (fail) {
+        const err = results.find((r) => r.error)?.error ?? "частично";
+        toast.warning(`Write-back: ok ${ok}, fail ${fail} — ${err}`);
+      } else if (ok) {
+        toast.success(`TMDB write-back: ${results.map((r) => r.action).join(", ")}`);
+      } else {
+        const reason = results[0]?.error ?? "пропущено (нет tmdb_id/токена/выключено)";
+        toast.warning(`Write-back пропущен: ${reason}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      isWritebacking = false;
     }
   };
 
@@ -1450,6 +1481,10 @@
             <Link class="size-4" />
             Link TMDB
           </Button>
+          <Button variant="outline" onclick={runWriteback} disabled={isWritebacking || !movie.tmdb_id}>
+            <RefreshCw class={`size-4 ${isWritebacking ? "animate-spin" : ""}`} />
+            {isWritebacking ? "Pushing..." : "Push to TMDB"}
+          </Button>
           <Button variant="destructive" onclick={() => {
             deleteDialogOpen = true;
           }} disabled={isDeletingMovie}>
@@ -1463,6 +1498,28 @@
             {movie.tmdb_linked ? `TMDB linked #${movie.tmdb_id}` : "TMDB not linked"}
           </span>
           <span class="vd-status-pill vd-status-pill--secondary">source: {movie.source_display}</span>
+          {#if wb && wb.status !== "synced"}
+            {#if wb.status === "error"}
+              <Tooltip.Provider>
+                <Tooltip.Root>
+                  <Tooltip.Trigger>
+                    <span class="vd-status-pill border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300" title={wb.last_error ?? ""}>
+                      TMDB error
+                    </span>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="max-w-[320px] whitespace-pre-wrap">{wb.last_error ?? wb.reason ?? "Unknown error"}</Tooltip.Content>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            {:else if wb.status === "pending"}
+              <span class="vd-status-pill border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" title={wb.last_error ?? ""}>
+                Pending{wb.next_retry_at ? ` → ${new Date(wb.next_retry_at).toLocaleTimeString("ru-RU")}` : ""}
+              </span>
+            {:else if wb.status === "disabled"}
+              <span class="vd-status-pill vd-status-pill--secondary" title={wb.reason ?? ""}>Write-back disabled</span>
+            {:else if wb.status === "no_tmdb_id"}
+              <span class="vd-status-pill vd-status-pill--secondary">No TMDB</span>
+            {/if}
+          {/if}
         </div>
       </div>
     </div>

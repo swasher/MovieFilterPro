@@ -181,6 +181,22 @@ class UserPreferences(models.Model):
         default=60,
     )
 
+    tmdb_writeback_enabled = models.BooleanField(
+        'Обратная синхронизация в TMDB',
+        default=True,
+        help_text='Автоматически записывать изменения статуса/оценки/избранного в TMDB',
+    )
+    tmdb_writeback_lists_enabled = models.BooleanField(
+        'Синхронизация списков с TMDB',
+        default=True,
+        help_text='Синхронизировать пользовательские списки с TMDB Lists',
+    )
+    tmdb_lists_initialized = models.BooleanField(
+        'TMDB списки инициализированы',
+        default=False,
+        help_text='Созданы ли все локальные UserList на TMDB (одноразово)',
+    )
+
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью
         super().save(*args, **kwargs)

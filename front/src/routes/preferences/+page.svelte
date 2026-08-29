@@ -5,6 +5,8 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Separator } from "$lib/components/ui/separator";
+  import { Switch } from "$lib/components/ui/switch";
+  import { Label } from "$lib/components/ui/label";
   import {
     emptyPreferences,
     type PreferencesApiErrorPayload,
@@ -114,6 +116,57 @@
   let formRevision = $state(0);
   let initialSnapshot = $state(payloadSnapshot(emptyFormState));
 
+  // --- TMDB write-back status ---
+  let wbEnabled = $state(true);
+  let wbListsEnabled = $state(true);
+  let wbTokenPresent = $state(false);
+  let wbTotal = $state(0);
+  let wbWithTmdb = $state(0);
+  let wbLoading = $state(false);
+  let wbError = $state("");
+
+  const loadWritebackStatus = async () => {
+    wbLoading = true;
+    wbError = "";
+    try {
+      const res = await fetch("/api/vault/tmdb-writeback/status");
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message ?? `HTTP ${res.status}`);
+      wbEnabled = payload.writeback_enabled;
+      wbListsEnabled = payload.lists_writeback_enabled;
+      wbTokenPresent = payload.write_token_present;
+      wbTotal = payload.total_user_movies;
+      wbWithTmdb = payload.total_with_tmdb;
+    } catch (e) {
+      wbError = e instanceof Error ? e.message : String(e);
+    } finally {
+      wbLoading = false;
+    }
+  };
+
+  const patchWriteback = async (patch: { writeback_enabled?: boolean }) => {
+    // optimistic
+    if (patch.writeback_enabled !== undefined) wbEnabled = patch.writeback_enabled;
+    try {
+      const res = await fetch("/api/vault/tmdb-writeback/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch)
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message ?? `HTTP ${res.status}`);
+      wbEnabled = payload.writeback_enabled;
+      wbListsEnabled = payload.lists_writeback_enabled;
+      toast.success(wbEnabled ? "TMDB write-back включён." : "TMDB write-back выключен.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+      // revert on error
+      await loadWritebackStatus();
+    }
+  };
+
+
+
   $effect(() => {
     preferences = data.preferences ?? null;
     loadError = data.apiError ?? "";
@@ -124,6 +177,7 @@
     form = nextFormState;
     hasUnsavedChanges = false;
     initialSnapshot = payloadSnapshot(nextFormState);
+    void loadWritebackStatus();
   });
 
   const currentSnapshot = $derived.by(() => {
@@ -378,6 +432,29 @@
             </div>
             <div class="flex gap-3 pt-2">
               <Button variant="outline" href="/tmdb">Open TMDB</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
+            <CardTitle class="text-xl">TMDB Write-back</CardTitle>
+            <CardDescription>Обратная синхронизация Vault → TMDB (watchlist/favorite/rating). Работает через tmdb_adapter.</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4 text-sm">
+            {#if wbError}
+              <div class="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">{wbError}</div>
+            {/if}
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <div class="space-y-1">
+                <Label for="wb-enabled" class="text-sm font-medium">TMDB Write-back</Label>
+                <div class="text-xs text-muted-foreground">Вкл — статусы, оценки и списки уходят в TMDB (создаются на лету). Выкл — всё локально.</div>
+              </div>
+              <Switch id="wb-enabled" bind:checked={wbEnabled} onCheckedChange={(v) => { patchWriteback({ writeback_enabled: v }); return v; }} />
+            </div>
+            <div class="flex gap-3 pt-1">
+              <Button variant="outline" href="/tmdb-auth">TMDB Auth</Button>
+              <Button variant="outline" href="/tmdb-writeback">Очередь и статистика →</Button>
             </div>
           </CardContent>
         </Card>

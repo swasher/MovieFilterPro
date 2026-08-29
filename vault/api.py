@@ -43,6 +43,13 @@ class MovieOut(Schema):
     in_favorites: bool = False
 
 
+class WritebackPerMovieOut(Schema):
+    status: str  # synced|pending|error|disabled|no_tmdb_id
+    last_error: str | None = None
+    next_retry_at: str | None = None
+    reason: str | None = None
+
+
 class MovieDetailOut(Schema):
     id: int
     title: str
@@ -91,6 +98,7 @@ class MovieDetailOut(Schema):
     actors: list["PersonCreditOut"]
     seasons: list["SeasonOut"] = []
     collection: "CollectionBriefOut | None" = None
+    writeback: WritebackPerMovieOut | None = None
 
 
 class CollectionPartOut(Schema):
@@ -682,6 +690,21 @@ def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
     )
 
 
+def _build_writeback_out(movie: Movie) -> WritebackPerMovieOut | None:
+    try:
+        from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+        data = TmdbWritebackService.get_writeback_status(movie)
+        return WritebackPerMovieOut(
+            status=data.get("status", "unknown"),
+            last_error=data.get("last_error"),
+            next_retry_at=data.get("next_retry_at"),
+            reason=data.get("reason"),
+        )
+    except Exception:
+        return None
+
+
 @api.get("/movies", response=list[MovieOut])
 def list_movies(
     request,
@@ -928,6 +951,7 @@ def movie_detail(request, slug: str):
             for season in movie.seasons.all().order_by("season_number")
         ],
         collection=_build_collection_out(movie),
+        writeback=_build_writeback_out(movie),
     )
 
 
@@ -1009,6 +1033,21 @@ def movie_fetch_tmdb(request, slug: str, payload: TMDBSyncIn):
     except Exception as exc:
         raise HttpError(400, str(exc))
 
+    # §20.1: после успешного READ-синка сразу пушим локальные статусы в TMDB (точечно, без bulk)
+    if getattr(result, "status", None) == "ok":
+        try:
+            user = _resolve_api_user(request)
+            if user and movie.tmdb_id:
+                # movie мог обновиться внутри sync_movie — перечитать tmdb_id на всякий
+                movie.refresh_from_db(fields=["tmdb_id", "tmdb_media_type"])
+                um = UserMovie.objects.filter(user=user, movie=movie).first()
+                if um:
+                    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+                    TmdbWritebackService.sync_user_movie_to_tmdb(um)
+        except Exception:
+            pass  # write-back не должен ломать основной READ-ответ
+
     return _build_tmdb_sync_out(result)
 
 
@@ -1043,6 +1082,20 @@ def movie_fetch_tmdb_confirm(request, slug: str, payload: TMDBCandidateConfirmIn
         )
     except Exception as exc:
         raise HttpError(400, str(exc))
+
+    # §20.1: confirm также пушит
+    if getattr(result, "status", None) == "ok":
+        try:
+            user = _resolve_api_user(request)
+            if user and movie.tmdb_id:
+                movie.refresh_from_db(fields=["tmdb_id", "tmdb_media_type"])
+                um = UserMovie.objects.filter(user=user, movie=movie).first()
+                if um:
+                    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+                    TmdbWritebackService.sync_user_movie_to_tmdb(um)
+        except Exception:
+            pass
 
     return _build_tmdb_sync_out(result)
 
@@ -1602,6 +1655,361 @@ def tmdb_sync_items(request, state: str | None = None, offset: int = 0, limit: i
         items=[_build_tmdb_sync_queue_item_out(item) for item in items],
         total=total,
     )
+
+
+class WritebackResultOut(Schema):
+    success: bool
+    action: str
+    tmdb_id: int | None = None
+    media_type: str | None = None
+    error: str | None = None
+    retry_after: int | None = None
+
+
+class WritebackStatusOut(Schema):
+    writeback_enabled: bool
+    lists_writeback_enabled: bool
+    write_token_present: bool
+    total_user_movies: int
+    total_with_tmdb: int
+    total_without_tmdb: int
+
+
+class WritebackSettingsIn(Schema):
+    writeback_enabled: bool | None = None
+    lists_writeback_enabled: bool | None = None
+
+
+class WritebackSettingsOut(Schema):
+    writeback_enabled: bool
+    lists_writeback_enabled: bool
+
+
+@api.post("/movies/{slug}/tmdb-writeback", response=list[WritebackResultOut])
+def movie_tmdb_writeback(request, slug: str):
+    """Принудительно синхронизировать фильм с TMDB (write-back)."""
+    movie = Movie.objects.filter(slug=slug).first()
+    if movie is None:
+        raise HttpError(404, "Movie not found")
+    user = _require_api_user(request)
+    um = UserMovie.objects.filter(user=user, movie=movie).first()
+    if um is None:
+        raise HttpError(404, "No user movie data")
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    results = TmdbWritebackService.sync_user_movie_to_tmdb(um)
+    return [
+        WritebackResultOut(
+            success=r.success,
+            action=r.action,
+            tmdb_id=r.tmdb_id,
+            media_type=r.media_type,
+            error=r.error,
+            retry_after=r.retry_after,
+        )
+        for r in results
+    ]
+
+
+@api.get("/tmdb-writeback/status", response=WritebackStatusOut)
+def tmdb_writeback_status(request):
+    _require_api_user(request)
+    from moviefilter.models import UserPreferences
+
+    prefs = UserPreferences.get()
+    total = UserMovie.objects.filter(user=_resolve_api_user(request)).count() if _resolve_api_user(request) else 0
+    total_with = (
+        UserMovie.objects.filter(user=_resolve_api_user(request), movie__tmdb_id__isnull=False).count()
+        if _resolve_api_user(request)
+        else 0
+    )
+    return WritebackStatusOut(
+        writeback_enabled=bool(prefs.tmdb_writeback_enabled),
+        lists_writeback_enabled=bool(prefs.tmdb_writeback_lists_enabled),
+        write_token_present=bool(prefs.tmdb_v4_authenticated_access_token),
+        total_user_movies=total,
+        total_with_tmdb=total_with,
+        total_without_tmdb=total - total_with,
+    )
+
+
+class WritebackQueueItemOut(Schema):
+    id: int
+    movie_id: int
+    movie_title: str
+    movie_slug: str
+    state: str
+    last_error: str
+    attempts: int
+    next_retry_at: str | None = None
+    created_at: str
+
+
+class WritebackQueueOut(Schema):
+    items: list[WritebackQueueItemOut]
+    total: int
+
+
+def _build_writeback_queue_out(item) -> WritebackQueueItemOut:
+    movie = getattr(item, "movie", None)
+    return WritebackQueueItemOut(
+        id=item.id,
+        movie_id=item.movie_id,
+        movie_title=movie.title if movie else f"#{item.movie_id}",
+        movie_slug=movie.slug if movie else "",
+        state=item.state,
+        last_error=item.last_error or "",
+        attempts=item.attempts,
+        next_retry_at=_datetime_to_iso(item.next_retry_at),
+        created_at=_datetime_to_iso(item.created_at) or "",
+    )
+
+
+@api.patch("/tmdb-writeback/settings", response=WritebackSettingsOut)
+def tmdb_writeback_settings(request, payload: WritebackSettingsIn):
+    _require_api_user(request)
+    from moviefilter.models import UserPreferences
+
+    prefs = UserPreferences.get()
+    if payload.writeback_enabled is not None:
+        prefs.tmdb_writeback_enabled = bool(payload.writeback_enabled)
+        # single toggle: keep lists in sync with main (unless explicitly overridden)
+        if payload.lists_writeback_enabled is None:
+            prefs.tmdb_writeback_lists_enabled = bool(payload.writeback_enabled)
+    if payload.lists_writeback_enabled is not None:
+        prefs.tmdb_writeback_lists_enabled = bool(payload.lists_writeback_enabled)
+    prefs.save(update_fields=["tmdb_writeback_enabled", "tmdb_writeback_lists_enabled"])
+    return WritebackSettingsOut(
+        writeback_enabled=bool(prefs.tmdb_writeback_enabled),
+        lists_writeback_enabled=bool(prefs.tmdb_writeback_lists_enabled),
+    )
+
+
+@api.get("/tmdb-writeback/queue", response=WritebackQueueOut)
+def tmdb_writeback_queue_list(request):
+    _require_api_user(request)
+    from vault.models import TMDBWritebackQueueItem
+
+    qs = TMDBWritebackQueueItem.objects.select_related("movie").order_by("-created_at")
+    items = list(qs[:200])
+    return WritebackQueueOut(items=[_build_writeback_queue_out(i) for i in items], total=qs.count())
+
+
+@api.delete("/tmdb-writeback/queue/{item_id}", response=dict)
+def tmdb_writeback_queue_delete(request, item_id: int):
+    _require_api_user(request)
+    from vault.models import TMDBWritebackQueueItem
+
+    deleted, _ = TMDBWritebackQueueItem.objects.filter(id=item_id).delete()
+    if not deleted:
+        raise HttpError(404, "Queue item not found")
+    return {"deleted": deleted}
+
+
+@api.post("/tmdb-writeback/queue/{item_id}/retry", response=WritebackQueueItemOut)
+def tmdb_writeback_queue_retry(request, item_id: int):
+    _require_api_user(request)
+    from vault.models import TMDBWritebackQueueItem, UserMovie
+
+    item = TMDBWritebackQueueItem.objects.select_related("movie").filter(id=item_id).first()
+    if not item:
+        raise HttpError(404, "Queue item not found")
+    um = UserMovie.objects.filter(movie=item.movie).first()
+    if not um:
+        raise HttpError(404, "UserMovie not found for queued movie")
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    TmdbWritebackService.sync_user_movie_to_tmdb(um)
+    # reload item (может быть удалён при success)
+    fresh = TMDBWritebackQueueItem.objects.filter(id=item_id).first()
+    if fresh:
+        return _build_writeback_queue_out(fresh)
+    # success — возвращаем старую запись как удалённую (но клиент поймёт что очищено)
+    return _build_writeback_queue_out(item)
+
+
+# --- TMDB Auth (Svelte) ---
+
+class TmdbAuthStatusOut(Schema):
+    api_key_present: bool
+    api_key_preview: str | None = None
+    read_token_present: bool
+    read_token_preview: str | None = None
+    write_token_present: bool
+    write_token_preview: str | None = None
+
+
+class TmdbAuthStartOut(Schema):
+    approve_url: str
+    request_token: str
+
+
+class TmdbAuthApproveOut(Schema):
+    success: bool
+    write_token: str | None = None
+    message: str | None = None
+
+
+def _preview_token(token: str | None, keep: int = 8) -> str | None:
+    if not token:
+        return None
+    t = str(token).strip()
+    if len(t) <= keep * 2:
+        return t[:4] + "…" + t[-4:]
+    return t[:keep] + "…" + t[-keep:]
+
+
+@api.get("/tmdb-auth/status", response=TmdbAuthStatusOut)
+def tmdb_auth_status(request):
+    _require_api_user(request)
+    from moviefilter.models import UserPreferences
+
+    prefs = UserPreferences.get()
+    return TmdbAuthStatusOut(
+        api_key_present=bool(prefs.tmdb_api_key),
+        api_key_preview=_preview_token(prefs.tmdb_api_key, 6),
+        read_token_present=bool(prefs.tmdb_v4_read_access_token),
+        read_token_preview=_preview_token(prefs.tmdb_v4_read_access_token),
+        write_token_present=bool(prefs.tmdb_v4_authenticated_access_token),
+        write_token_preview=_preview_token(prefs.tmdb_v4_authenticated_access_token),
+    )
+
+
+@api.post("/tmdb-auth/start", response=TmdbAuthStartOut)
+def tmdb_auth_start(request):
+    _require_api_user(request)
+    from moviefilter.models import UserPreferences
+    import requests as req_lib
+
+    prefs = UserPreferences.get()
+    if not prefs.tmdb_v4_read_access_token:
+        raise HttpError(400, "Сначала заполни TMDB v4 read access token в Preferences")
+    headers = {
+        "Authorization": f"Bearer {prefs.tmdb_v4_read_access_token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        r = req_lib.post("https://api.themoviedb.org/4/auth/request_token", headers=headers, json={}, timeout=15)
+        data = r.json()
+    except Exception as exc:
+        raise HttpError(502, f"TMDB request_token failed: {exc}")
+    if "request_token" not in data:
+        raise HttpError(400, f"TMDB error: {data}")
+
+    request_token = data["request_token"]
+    # храним в сессии для approve (Svelte fetch через proxy шлёт cookies)
+    try:
+        request.session["tmdb_request_token"] = request_token
+        request.session.save()
+    except Exception:
+        pass
+    approve_url = f"https://www.themoviedb.org/auth/access?request_token={request_token}"
+    return TmdbAuthStartOut(approve_url=approve_url, request_token=request_token)
+
+
+class TmdbAuthApproveIn(Schema):
+    request_token: str | None = None
+
+
+@api.post("/tmdb-auth/approve", response=TmdbAuthApproveOut)
+def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
+    _require_api_user(request)
+    from moviefilter.models import UserPreferences
+    import requests as req_lib
+
+    prefs = UserPreferences.get()
+    if not prefs.tmdb_v4_read_access_token:
+        raise HttpError(400, "Нет read access token")
+
+    # берём из payload или из сессии (старый flow)
+    request_token = (payload.request_token or "").strip() or request.session.get("tmdb_request_token")  # type: ignore
+    if not request_token:
+        raise HttpError(400, "Нет request_token — сначала нажми Start auth")
+
+    headers = {
+        "Authorization": f"Bearer {prefs.tmdb_v4_read_access_token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        r = req_lib.post(
+            "https://api.themoviedb.org/4/auth/access_token",
+            json={"request_token": request_token},
+            headers=headers,
+            timeout=15,
+        )
+        data = r.json()
+    except Exception as exc:
+        raise HttpError(502, f"TMDB access_token failed: {exc}")
+
+    if "access_token" not in data:
+        raise HttpError(400, f"TMDB error: {data}")
+
+    access_token = data["access_token"]
+    prefs.tmdb_v4_authenticated_access_token = access_token
+    prefs.save(update_fields=["tmdb_v4_authenticated_access_token"])
+    # очищаем session
+    try:
+        if "tmdb_request_token" in request.session:
+            del request.session["tmdb_request_token"]
+            request.session.save()
+    except Exception:
+        pass
+    # сбрасываем синглтон клиента (важно для write-back)
+    try:
+        import tmdb_adapter.client_singleton as cs
+
+        cs._tmdb_instance = None
+        cs._last_token = None
+        cs._last_key = None
+    except Exception:
+        pass
+
+    # одноразовая инициализация всех локальных списков на TMDB (без кнопки, §20) — чистый Huey
+    try:
+        from moviefilter.models import UserPreferences as UP2
+
+        p2 = UP2.get()
+        if not p2.tmdb_lists_initialized and p2.tmdb_writeback_enabled:
+            from vault.tasks import tmdb_lists_init
+
+            tmdb_lists_init.schedule(delay=2)
+    except Exception:
+        pass
+
+    return TmdbAuthApproveOut(success=True, write_token=access_token, message="Write token сохранён")
+
+
+@api.post("/tmdb-auth/logout", response=dict)
+def tmdb_auth_logout(request):
+    _require_api_user(request)
+    from moviefilter.models import UserPreferences
+
+    prefs = UserPreferences.get()
+    if prefs.tmdb_v4_authenticated_access_token:
+        try:
+            from tmdb_adapter.client_singleton import get_tmdb_client
+
+            tmdb = get_tmdb_client()
+            tmdb.logout()
+        except Exception:
+            pass
+        try:
+            import tmdb_adapter.client_singleton as cs
+
+            cs._tmdb_instance = None
+            cs._last_token = None
+            cs._last_key = None
+        except Exception:
+            pass
+    prefs.tmdb_v4_authenticated_access_token = None
+    prefs.save(update_fields=["tmdb_v4_authenticated_access_token"])
+    try:
+        if "tmdb_request_token" in request.session:
+            del request.session["tmdb_request_token"]
+            request.session.save()
+    except Exception:
+        pass
+    return {"success": True}
 
 
 @api.post("/collections/{tmdb_id}/refresh", response=CollectionBriefOut)

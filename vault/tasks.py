@@ -69,6 +69,49 @@ def process_kinozal_download_import(
 
 
 @HUEY.task()
+def tmdb_writeback_user_movie(user_movie_id: int):
+    """Фоновая write-back retry для 429."""
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    return TmdbWritebackService.sync_user_movie_to_tmdb_by_id(user_movie_id)
+
+
+@HUEY.periodic_task(crontab(minute="*/10"))
+def tmdb_writeback_retry_tick():
+    """Forever queue: каждые 10м ретрает pending write-back (до success)."""
+    from django.utils import timezone
+    from vault.models import TMDBWritebackQueueItem
+
+    now = timezone.now()
+    qs = TMDBWritebackQueueItem.objects.filter(next_retry_at__lte=now, state="pending").select_related("movie")[:20]
+    retried = 0
+    for item in qs:
+        try:
+            from vault.models import UserMovie
+
+            um = UserMovie.objects.filter(movie=item.movie).first()
+            if not um:
+                # если UserMovie удалён — чистим очередь (delete уже успешна или не нужна)
+                item.delete()
+                continue
+            from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+            TmdbWritebackService.sync_user_movie_to_tmdb(um)
+            retried += 1
+        except Exception:
+            continue
+    return {"retried": retried}
+
+
+@HUEY.task()
+def tmdb_lists_init():
+    """Одноразовая инициализация всех локальных UserList на TMDB."""
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    return TmdbWritebackService.init_all_user_lists()
+
+
+@HUEY.task()
 def process_kinozal_hide_action(
     operation_id: str,
     movie_rss_id: int,

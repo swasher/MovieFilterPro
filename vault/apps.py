@@ -7,10 +7,14 @@ class VaultConfig(AppConfig):
 
     verbose_name = 'Фильмотека'
 
-    # Я пока не стал использовать сигналы
-    # def ready(self):
-    #     """
-    #     Импортируем сигналы при инициализации приложения.
-    #     Это необходимо для автоматического создания системных списков.
-    #     """
-    #     import vault.signals  # noqa: F401
+    def ready(self):
+        import vault.signals  # noqa: F401
+
+        # одноразовая инициализация списков TMDB — без кнопки, без entrypoint.sh
+        # не лезем в БД тут (migrate!), просто шедулим задачу — она сама проверит флаг/токен
+        try:
+            from vault.tasks import tmdb_lists_init
+
+            tmdb_lists_init.schedule(delay=10)
+        except Exception:
+            pass

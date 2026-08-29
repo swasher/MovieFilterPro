@@ -129,6 +129,12 @@ type ApiMovieDetail = {
       vault_slug: string | null;
     }>;
   } | null;
+  writeback?: {
+    status: string;
+    last_error: string | null;
+    next_retry_at: string | null;
+    reason: string | null;
+  } | null;
 };
 
 export const load: PageLoad = async ({ fetch, params }) => {
