@@ -692,7 +692,7 @@ type TmdbSearchResult = {
                   {#if movie.in_wont_watch && data.activeStatus !== "wont_watch"}
                     <span
                       class="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm"
-                      title="Не буду смотреть"
+                      title={data.systemLabels.wont_watch ?? "Не интересует"}
                     >
                       <X class="size-3.5" />
                     </span>

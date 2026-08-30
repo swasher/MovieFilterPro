@@ -41,6 +41,7 @@
 
   let { data } = $props();
   const movie = $derived(data.movie);
+  const systemLabels = $derived(data.systemLabels ?? {});
   const wb = $derived(movie.writeback);
 
   const isSeries = $derived(movie.movie_type === "series" || movie.movie_type === "miniseries");
@@ -179,12 +180,12 @@
   const canSaveComment = $derived(commentDraft.trim() !== userState.note);
   let seasonsRevision = $state(0);
 
-  const statusButtons = [
-    { key: "favorites", label: "Избранное", icon: Heart },
-    { key: "will_watch", label: "Буду смотреть", icon: Bookmark },
-    { key: "watched", label: "Просмотрено", icon: CheckCheck },
-    { key: "wont_watch", label: "Не буду смотреть", icon: XCircle }
-  ] as const;
+  const statusButtons = $derived([
+    { key: "favorites", label: systemLabels.favorites ?? "Избранное", icon: Heart },
+    { key: "will_watch", label: systemLabels.will_watch ?? "Буду смотреть", icon: Bookmark },
+    { key: "watched", label: systemLabels.watched ?? "Просмотрено", icon: CheckCheck },
+    { key: "wont_watch", label: systemLabels.wont_watch ?? "Не интересует", icon: XCircle }
+  ]);
 
   $effect(() => {
     userState = { ...movie.user_state };

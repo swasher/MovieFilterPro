@@ -26,7 +26,7 @@ export const defaultSidebarItems: SidebarItem[] = [
     children: [
       { id: "watched", title: "Просмотрено", href: "/?status=watched", count: 0 },
       { id: "will_watch", title: "Буду смотреть", href: "/?status=will_watch", count: 0 },
-      { id: "wont_watch", title: "Не буду смотреть", href: "/?status=wont_watch", count: 0 },
+      { id: "wont_watch", title: "Не интересует", href: "/?status=wont_watch", count: 0 },
       { id: "favorites", title: "Избранное", href: "/?status=favorites", count: 0 }
     ]
   },

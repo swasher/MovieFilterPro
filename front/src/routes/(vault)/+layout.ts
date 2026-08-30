@@ -15,12 +15,15 @@ type ApiSidebarGroup = {
   children: ApiSidebarItem[];
 };
 
+export type SystemLabels = Record<string, string>;
+
 export const load: LayoutLoad = async ({ fetch }) => {
   try {
     const response = await fetch("/api/vault/sidebar");
     if (!response.ok) {
       return {
-        sidebarItems: defaultSidebarItems satisfies SidebarItem[]
+        sidebarItems: defaultSidebarItems satisfies SidebarItem[],
+        systemLabels: {} as SystemLabels
       };
     }
 
@@ -37,10 +40,20 @@ export const load: LayoutLoad = async ({ fetch }) => {
       }))
     }));
 
-    return { sidebarItems };
+    const systemLabels: SystemLabels = {};
+    for (const group of data) {
+      for (const item of group.children) {
+        if (["watched", "will_watch", "wont_watch", "favorites"].includes(item.id)) {
+          systemLabels[item.id] = item.title;
+        }
+      }
+    }
+
+    return { sidebarItems, systemLabels };
   } catch {
     return {
-      sidebarItems: defaultSidebarItems satisfies SidebarItem[]
+      sidebarItems: defaultSidebarItems satisfies SidebarItem[],
+      systemLabels: {} as SystemLabels
     };
   }
 };
