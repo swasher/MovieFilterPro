@@ -12,6 +12,7 @@ from vault.services.movie_status_service import MovieStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService, TMDBMatchingResult
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
+from vault.constants import WONT_WATCH_LABEL
 
 
 ImportStatus = Literal["created", "reused", "not_found", "ambiguous", "error"]
@@ -504,7 +505,7 @@ class KinozalDownloadImportService:
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.SUCCESS,
             event_type="wont_watch_applied",
-            message="Статус 'Не буду смотреть' выставлен",
+            message=f"Статус '{WONT_WATCH_LABEL}' выставлен",
             torrent_id=0,
             movie_rss=movie_rss,
             vault_movie=movie,
@@ -513,7 +514,7 @@ class KinozalDownloadImportService:
         )
 
         final_status: ImportStatus = "created" if candidate is not None and movie.source == Movie.Source.TMDB else "reused"
-        final_message = "Фильм обработан и статус 'Не буду смотреть' выставлен"
+        final_message = f"Фильм обработан и статус '{WONT_WATCH_LABEL}' выставлен"
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.SUCCESS,

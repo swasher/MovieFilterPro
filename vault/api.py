@@ -31,6 +31,7 @@ from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
 from vault.services.tmdb_sync_queue_service import TMDBSyncQueueService
+from vault.constants import SYSTEM_LIST_LABELS
 
 
 class MovieOut(Schema):
@@ -1383,13 +1384,11 @@ def person_toggle_favorite(request, person_id: int):
     return TogglePersonFavoriteOut(is_favorite=created)
 
 
-SYSTEM_SIDEBAR_KEYS = ["watched", "will_watch", "wont_watch", "favorites"]
+SYSTEM_SIDEBAR_KEYS = list(SYSTEM_LIST_LABELS.keys())
 
 SYSTEM_SIDEBAR_ITEMS = [
-    SidebarItemOut(id="watched", title="Просмотрено", href="/?status=watched", count=0),
-    SidebarItemOut(id="will_watch", title="Буду смотреть", href="/?status=will_watch", count=0),
-    SidebarItemOut(id="wont_watch", title="Не буду смотреть", href="/?status=wont_watch", count=0),
-    SidebarItemOut(id="favorites", title="Избранное", href="/?status=favorites", count=0),
+    SidebarItemOut(id=key, title=label, href=f"/?status={key}", count=0)
+    for key, label in SYSTEM_LIST_LABELS.items()
 ]
 
 

@@ -162,6 +162,10 @@ def on_userlist_saved(sender, instance, created, **kwargs):
     should, _ = TmdbWritebackService._should_writeback_lists()
     if not should:
         return
+    # skip-лист («Не интересует») создаётся на TMDB с тем же именем,
+    # это делает sync_skip_list, здесь не дублируем
+    if instance.name == TmdbWritebackService.SKIP_LIST_NAME:
+        return
     ul_id = instance.pk
 
     def _do(ul_id=ul_id):

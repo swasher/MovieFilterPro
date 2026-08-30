@@ -6,6 +6,11 @@
 
 ## Project Agreements
 
+### Line Endings
+- Все файлы в репозитории хранятся с LF (`\n`), не CRLF.
+- При создании/редактировании файлов всегда использовать LF.
+- `core.autocrlf=false`, правила задаются через `.gitattributes`.
+
 ### Frontend Stack Rules
 - Новый frontend: `Svelte 5` с runes only.
 - Использовать только runes-синтаксис (`$state`, `$derived`, `$effect`, `$props`, snippets и т.д.).
@@ -18,6 +23,12 @@
 - Assume Vault tables are empty before import.
 - No data transfer between legacy Vault schemas is required.
 - NEVER change DB data! Ты видишь только тестувую (dev) базу данных, и с данными работать не должен!
+
+### Local DB Data — AI Must Not Touch
+- Все данные в локальной БД — это ТЕСТОВЫЕ данные разработчика.
+- AI НЕ ДОЛЖНА "приводить в порядок" эту БД, потому что это тестовые а не реальные данные.
+- Считать все строки в таблицах валидными для текущей задачи.
+- Но нужно думать о том, что миграции и изменения должны корректно "лечь" на production db.
 
 ### Deployment Model
 - The app is single-user and self-hosted.

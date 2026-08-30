@@ -18,14 +18,10 @@ from .models import (
 from .services.movie_status_service import MovieStatusService
 from .services.tmdb_movie_matching_service import TMDBCandidate
 from .services.tmdb_movie_sync_service import TMDBMovieSyncService
+from .constants import SYSTEM_LIST_LABELS
 
 
-SYSTEM_LIST_CONFIG = {
-    'watched': {'name': 'Просмотрено'},
-    'will_watch': {'name': 'Буду смотреть'},
-    'wont_watch': {'name': 'Не буду смотреть'},
-    'favorites': {'name': 'Избранное'},
-}
+SYSTEM_LIST_CONFIG = {key: {'name': label} for key, label in SYSTEM_LIST_LABELS.items()}
 
 
 def _render_rating_controls(movie_id: int, rating_value: int | None = None) -> str:
@@ -313,6 +309,7 @@ class MovieDetailView(DetailView):
             context['user_note'] = ''
 
         context['rating_values'] = range(1, 11)
+        context['system_list_labels'] = SYSTEM_LIST_LABELS
 
         return context
 
@@ -707,9 +704,7 @@ def toggle_movie_status(request):
             else:
                 btn_class = button_class.replace('btn-', 'btn-outline-')
 
-            label = 'Буду смотреть' if status_key == 'will_watch' else \
-                'Избранное' if status_key == 'favorites' else \
-                    'Просмотрено' if status_key == 'watched' else 'Не буду смотреть'
+            label = SYSTEM_LIST_LABELS.get(status_key, status_key)
 
             html = f'''
             <button type="button" class="btn {btn_class}" 

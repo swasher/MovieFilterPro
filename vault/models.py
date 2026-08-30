@@ -10,6 +10,8 @@ import uuid
 
 import core
 
+from .constants import WATCHED_LABEL, WILL_WATCH_LABEL, WONT_WATCH_LABEL
+
 
 def _build_unique_slug(model_class, raw_value: str | None, fallback: str, current_pk: int | None = None) -> str:
     base_slug = slugify(raw_value or "") or fallback
@@ -409,9 +411,9 @@ class Episode(models.Model):
 class UserSeason(models.Model):
     """Пользовательский статус сезона: статус просмотра и оценка"""
     class WatchStatus(models.IntegerChoices):
-        WATCHED = 1, 'Просмотрено'
-        PLAN = 2, 'Буду смотреть'
-        SKIP = 3, 'Не буду смотреть'
+        WATCHED = 1, WATCHED_LABEL
+        PLAN = 2, WILL_WATCH_LABEL
+        SKIP = 3, WONT_WATCH_LABEL
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_seasons')
     season = models.ForeignKey('Season', on_delete=models.CASCADE, related_name='user_seasons')
@@ -490,9 +492,9 @@ class UserMovie(models.Model):
     """Пользовательский статус фильма: статус просмотра, избранное и оценка"""
 
     class WatchStatus(models.IntegerChoices):
-        WATCHED = 1, 'Просмотрено'
-        PLAN = 2, 'Буду смотреть'
-        SKIP = 3, 'Не буду смотреть'
+        WATCHED = 1, WATCHED_LABEL
+        PLAN = 2, WILL_WATCH_LABEL
+        SKIP = 3, WONT_WATCH_LABEL
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_movies')
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='user_movies')

@@ -25,22 +25,17 @@ from vault.models import (
     UserListMovie,
     UserMovie,
 )
+from vault.constants import (
+    WONT_WATCH_LABEL,
+    SYSTEM_LIST_TITLES,
+    CSV_LIST_TITLE_TO_WATCH_STATUS,
+)
 
 
 logger = logging.getLogger('debug_logger')
 
 
-STATUS_TO_WATCH_STATUS = {
-    'Буду смотреть': UserMovie.WatchStatus.PLAN,
-    'Просмотрен': UserMovie.WatchStatus.WATCHED,
-    'Не буду смотреть': UserMovie.WatchStatus.SKIP,
-}
-
-SYSTEM_LIST_TITLES = {
-    'Просмотрено',
-    'Буду смотреть',
-    'Не буду смотреть',
-}
+STATUS_TO_WATCH_STATUS = CSV_LIST_TITLE_TO_WATCH_STATUS
 
 TYPE_TO_MOVIE_TYPE = {
     'Фильм': Movie.MovieType.MOVIE,
@@ -471,7 +466,7 @@ class Command(BaseCommand):
                 watch_status=UserMovie.WatchStatus.SKIP,
             )
             created += 1
-            logger.info(f"[Kinozal-HIDE] created in Vault as 'Не буду смотреть': {rss.title} ({year})")
+            logger.info(f"[Kinozal-HIDE] created in Vault as '{WONT_WATCH_LABEL}': {rss.title} ({year})")
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -693,7 +688,7 @@ class Command(BaseCommand):
             except Exception as exc:
                 _register_failure('notes', row, exc)
 
-        # 6. Kinozal HIDE movies (priority=SKIP) -> Vault as 'Не буду смотреть'
+        # 6. Kinozal HIDE movies (priority=SKIP) -> Vault as 'Не интересует'
         self._import_hidden_movies(user)
 
         self.stdout.write("\n" + "=" * 52)

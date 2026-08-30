@@ -163,7 +163,7 @@
                                         hx-vals='{"movie_id": "{{ movie.id }}", "status_key": "wont_watch"}'
                                         hx-swap="outerHTML">
                                     <i class="bi bi-x-circle{% if movie_status.in_wont_watch %}-fill{% endif %}"></i>
-                                    Не буду смотреть
+                                    {{ system_list_labels.wont_watch }}
                                 </button>
                             </div>
 

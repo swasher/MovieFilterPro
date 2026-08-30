@@ -196,6 +196,12 @@ class UserPreferences(models.Model):
         default=False,
         help_text='Созданы ли все локальные UserList на TMDB (одноразово)',
     )
+    tmdb_skip_list_id = models.PositiveIntegerField(
+        'TMDB Skip List ID',
+        null=True,
+        blank=True,
+        help_text='ID TMDB-листа "Не интересует" (зеркало системного статуса SKIP)',
+    )
 
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью

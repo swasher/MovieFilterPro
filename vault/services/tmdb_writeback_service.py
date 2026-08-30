@@ -8,6 +8,8 @@ from typing import Optional
 from django.db import transaction
 from django.utils import timezone
 
+from vault.constants import SKIP_LIST_NAME as _SKIP_LIST_NAME
+
 logger = logging.getLogger("vault.tmdb_writeback")
 
 # ------------------------------------ #
@@ -28,7 +30,9 @@ class WritebackResult:
 class TmdbWritebackService:
     """Сервис обратной записи данных Vault в TMDB. Инфраструктура — через tmdb_adapter."""
 
-    SKIP_LIST_NAME = "Не буду смотреть"
+    # Локальный системный зеркальный список "Не интересует" зеркально
+    # синхронизируется в TMDB-лист с таким же именем.
+    SKIP_LIST_NAME = _SKIP_LIST_NAME
 
     # --- error classification ---
 
@@ -329,14 +333,24 @@ class TmdbWritebackService:
                 else:
                     logger.warning("writeback delete delete_rating failed tmdb_id=%s: %s", movie.tmdb_id, exc)
                     results.append(WritebackResult(success=False, action="unrate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg))
-            # skip list cleanup (§20.7): удалить из зеркального списка если был
+            # skip list cleanup: удалить из TMDB skip list если был
             try:
-                from vault.models import UserList, UserListMovie
+                from moviefilter.models import UserPreferences
 
-                skip_lists = UserList.objects.filter(name=cls.SKIP_LIST_NAME)
-                del_cnt, _ = UserListMovie.objects.filter(user_list__in=skip_lists, movie=movie).delete()
-                if del_cnt:
-                    logger.info("writeback skip_list cleanup delete movie=%s deleted=%s", movie.id, del_cnt)
+                prefs = UserPreferences.get()
+                if prefs.tmdb_skip_list_id:
+                    media_type = getattr(movie, "tmdb_media_type", None) or "movie"
+                    movie_tmdb_id = getattr(movie, "tmdb_id", None)
+                    if movie_tmdb_id:
+                        from tmdb_adapter.client_singleton import get_tmdb_client
+                        tmdb = get_tmdb_client()
+                        api4 = tmdb._api4
+                        if api4:
+                            api4.list_remove_items(
+                                list_id=int(prefs.tmdb_skip_list_id),
+                                items=[{"media_type": media_type, "media_id": int(movie_tmdb_id)}],
+                            )
+                            logger.info("writeback skip_list cleanup movie=%s tmdb_id=%s", movie.id, movie_tmdb_id)
             except Exception as exc:
                 logger.warning("writeback skip_list cleanup failed: %s", exc)
         except Exception as exc:
@@ -439,40 +453,136 @@ class TmdbWritebackService:
                 logger.warning("writeback rating failed tmdb_id=%s rating=%s: %s", movie.tmdb_id, rating, exc)
             return WritebackResult(success=False, action="rate" if rating is not None else "unrate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg, retry_after=5 if cls._is_rate_limited(exc) else None)
 
+    # --- skip list (TMDB mirror, без локального UserList) ---
+
+    @classmethod
+    def _ensure_skip_list_tmdb_id(cls) -> int:
+        """Вернуть TMDB list ID для 'Не интересует'.
+        1. Кэш в preferences → проверяем что список жив на TMDB.
+        2. Если нет — ищем по имени среди account lists.
+        3. Если нет — создаём.
+        Бросает исключение если TMDB API недоступен."""
+        from moviefilter.models import UserPreferences
+
+        prefs = UserPreferences.get()
+        from tmdb_adapter.client_singleton import get_tmdb_client
+
+        tmdb = get_tmdb_client()
+        api4 = tmdb._api4
+        if api4 is None:
+            raise RuntimeError("TMDB v4 client not available")
+
+        def _list_exists(list_id: int) -> bool:
+            try:
+                api4.list_get_list(list_id=list_id)
+                return True
+            except Exception:
+                return False
+
+        # 1. Кэш — проверяем что жив
+        if prefs.tmdb_skip_list_id:
+            if _list_exists(int(prefs.tmdb_skip_list_id)):
+                return int(prefs.tmdb_skip_list_id)
+            # удалён на TMDB — сбрасываем
+            prefs.tmdb_skip_list_id = None
+            prefs.save(update_fields=["tmdb_skip_list_id"])
+
+        # 2. Ищем по имени (api4 возвращает dict)
+        target_name = cls.SKIP_LIST_NAME
+        page = 1
+        while True:
+            try:
+                result = api4.account_get_lists(page=page)
+            except Exception:
+                break
+            if not isinstance(result, dict):
+                break
+            for item in result.get("results", []):
+                if item.get("name") == target_name:
+                    list_id = int(item["id"])
+                    prefs.tmdb_skip_list_id = list_id
+                    prefs.save(update_fields=["tmdb_skip_list_id"])
+                    return list_id
+            if page >= result.get("total_pages", 1):
+                break
+            page += 1
+
+        # 3. Создаём (api4.list_create_list возвращает dict)
+        result = api4.list_create_list(
+            name=target_name,
+            iso_639_1="ru",
+            description="Зеркало системного статуса 'Не интересует'",
+            public=False,
+        )
+        new_id = result.get("id") if isinstance(result, dict) else None
+        if not new_id:
+            raise RuntimeError(f"TMDB list_create_list returned unexpected: {result}")
+        new_id = int(new_id)
+        prefs.tmdb_skip_list_id = new_id
+        prefs.save(update_fields=["tmdb_skip_list_id"])
+        return new_id
+
     @classmethod
     def sync_skip_list(cls, user_movie) -> Optional[WritebackResult]:
-        """SKIP (Не буду смотреть) ↔ TMDB List 'Не буду смотреть' (UserList). §20.7"""
-        from vault.models import UserMovie as UM, UserList, UserListMovie
+        """SKIP (Не интересует) ↔ TMDB List 'Не интересует'.
 
-        user = getattr(user_movie, "user", None)
+        Архитектура:
+        - Локально: системный список = UserMovie.watch_status=SKIP. Никакого UserList.
+        - На TMDB: отдельный список, ID хранится в UserPreferences.tmdb_skip_list_id.
+        - Метод идемпотентен: добавляет/убирает фильм из TMDB-листа."""
+        from vault.models import UserMovie as UM
+
         movie = getattr(user_movie, "movie", None)
-        if not user or not movie:
+        if not movie:
             return None
-        # guard: нужен tmdb_id чтобы синк имел смысл, иначе только локально
-        has_tmdb = bool(getattr(movie, "tmdb_id", None))
         watch_status = getattr(user_movie, "watch_status", None)
-        # найти/создать системный зеркальный список (локально)
-        skip_list, _ = UserList.objects.get_or_create(
-            user=user, name=cls.SKIP_LIST_NAME, defaults={"description": "Авто: зеркало статуса 'Не буду смотреть' → TMDB"}
-        )
+        movie_tmdb_id = getattr(movie, "tmdb_id", None)
+        if not movie_tmdb_id:
+            return None
+
         try:
-            if watch_status == UM.WatchStatus.SKIP:
-                # добавить в зеркальный список (локально) → сигнал UserListMovie займётся TMDB (auto-create)
-                obj, created = UserListMovie.objects.get_or_create(user_list=skip_list, movie=movie)
-                if created:
-                    logger.info("writeback skip_list add movie=%s list=%s", movie.id, skip_list.id)
-                # если уже есть — ничего, TMDB синк уже был при создании
-                return WritebackResult(success=True, action="skip_list_add", tmdb_id=getattr(movie, "tmdb_id", None), media_type=getattr(movie, "tmdb_media_type", None))
-            else:
-                # убрать из зеркального списка если был
-                deleted, _ = UserListMovie.objects.filter(user_list=skip_list, movie=movie).delete()
-                if deleted:
-                    logger.info("writeback skip_list remove movie=%s list=%s", movie.id, skip_list.id)
-                    return WritebackResult(success=True, action="skip_list_remove", tmdb_id=getattr(movie, "tmdb_id", None), media_type=getattr(movie, "tmdb_media_type", None))
-                return None
+            list_tmdb_id = cls._ensure_skip_list_tmdb_id()
         except Exception as exc:
+            logger.warning("writeback skip_list: cannot get/create TMDB list: %s", exc)
+            return WritebackResult(success=False, action="skip_list", tmdb_id=movie_tmdb_id, error=str(exc))
+
+        media_type = getattr(movie, "tmdb_media_type", None) or "movie"
+
+        try:
+            from tmdb_adapter.client_singleton import get_tmdb_client
+
+            tmdb = get_tmdb_client()
+            api4 = tmdb._api4
+            if api4 is None:
+                return WritebackResult(success=False, action="skip_list", tmdb_id=movie_tmdb_id, error="no v4 client")
+
+            if watch_status == UM.WatchStatus.SKIP:
+                api4.list_add_items(
+                    list_id=list_tmdb_id,
+                    items=[{"media_type": media_type, "media_id": int(movie_tmdb_id)}],
+                )
+                logger.info("writeback skip_list add movie=%s tmdb_id=%s list=%s", movie.id, movie_tmdb_id, list_tmdb_id)
+                return WritebackResult(success=True, action="skip_list_add", tmdb_id=movie_tmdb_id, media_type=media_type)
+            else:
+                api4.list_remove_items(
+                    list_id=list_tmdb_id,
+                    items=[{"media_type": media_type, "media_id": int(movie_tmdb_id)}],
+                )
+                logger.info("writeback skip_list remove movie=%s tmdb_id=%s list=%s", movie.id, movie_tmdb_id, list_tmdb_id)
+                return WritebackResult(success=True, action="skip_list_remove", tmdb_id=movie_tmdb_id, media_type=media_type)
+        except Exception as exc:
+            # Если список был удалён на TMDB — сбросить кэш и пробрасывать ошибку
+            msg = str(exc)
+            if "404" in msg or "not found" in msg.lower():
+                from moviefilter.models import UserPreferences
+                UserPreferences.objects.filter(pk=1).update(tmdb_skip_list_id=None)
             logger.warning("writeback skip_list failed movie=%s: %s", getattr(movie, "id", "?"), exc)
-            return WritebackResult(success=False, action="skip_list_add" if watch_status == UM.WatchStatus.SKIP else "skip_list_remove", tmdb_id=getattr(movie, "tmdb_id", None), error=str(exc))
+            return WritebackResult(
+                success=False,
+                action="skip_list_add" if watch_status == UM.WatchStatus.SKIP else "skip_list_remove",
+                tmdb_id=movie_tmdb_id,
+                error=msg,
+            )
 
     # --- lists ---
 
@@ -559,7 +669,10 @@ class TmdbWritebackService:
             return WritebackResult(success=False, action="list_remove", tmdb_id=getattr(movie, "tmdb_id", None), error=str(exc))
 
     @classmethod
-    def create_tmdb_list(cls, user_list) -> WritebackResult:
+    def create_tmdb_list(cls, user_list, tmdb_name: str | None = None) -> WritebackResult:
+        """Создать TMDB List для UserList.
+        tmdb_name — имя для TMDB-листа (по умолчанию берётся локальное name).
+        """
         should, reason = cls._should_writeback_lists()
         if not should:
             return WritebackResult(success=False, action="list_create_skipped", error=reason)
@@ -575,7 +688,8 @@ class TmdbWritebackService:
                     user_list.tmdb_list_id = locked.tmdb_list_id
                     return WritebackResult(success=True, action="list_create", tmdb_id=int(locked.tmdb_list_id), media_type="list")
                 tmdb = get_tmdb_client()
-                result = tmdb.create_list(name=locked.name, iso_639_1="ru", description=locked.description or "", public=bool(locked.is_public))
+                list_name = tmdb_name or locked.name
+                result = tmdb.create_list(name=list_name, iso_639_1="ru", description=locked.description or "", public=bool(locked.is_public))
                 new_id = getattr(result, "id", None)
                 if new_id is None and isinstance(result, int):
                     new_id = result
@@ -584,7 +698,7 @@ class TmdbWritebackService:
                 UL.objects.filter(pk=locked.pk).update(tmdb_list_id=int(new_id))
                 user_list.tmdb_list_id = int(new_id)
                 locked.tmdb_list_id = int(new_id)
-                logger.info("writeback list_create id=%s tmdb_list=%s", locked.id, new_id)
+                logger.info("writeback list_create id=%s tmdb_list=%s tmdb_name=%s", locked.id, new_id, list_name)
                 return WritebackResult(success=True, action="list_create", tmdb_id=int(new_id), media_type="list")
         except UL.DoesNotExist:
             return WritebackResult(success=False, action="list_create", error="UserList not found")
@@ -648,6 +762,12 @@ class TmdbWritebackService:
         should, reason = cls._should_writeback_lists()
         if not should:
             return {"created": 0, "error": reason}
+
+        # инициализируем TMDB skip list ID (если ещё нет)
+        try:
+            cls._ensure_skip_list_tmdb_id()
+        except Exception as exc:
+            logger.warning("writeback lists init: skip list init failed: %s", exc)
 
         # берём все локальные списки, проверяем каждый
         all_lists = list(UserList.objects.all())
