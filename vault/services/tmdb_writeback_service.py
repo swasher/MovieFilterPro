@@ -12,6 +12,21 @@ from django.utils import timezone
 
 from vault.constants import SKIP_LIST_NAME as _SKIP_LIST_NAME
 
+# Классы tmdbapis, поднимаемые на HTTP 401 (см. tmdbapis/api3.py::_request).
+# Приоритетная классификация auth-ошибок по типу; строка — fallback для
+# случаев, когда исключение обёрнуто/засериализовано в WritebackResult.error.
+try:
+    from tmdbapis.exceptions import (  # noqa: E402
+        Authentication as _TmdbAuthentication,
+        PrivateResource as _TmdbPrivateResource,
+        Unauthorized as _TmdbUnauthorized,
+        WritePermission as _TmdbWritePermission,
+    )
+
+    _TMDB_AUTH_ERRORS = (_TmdbAuthentication, _TmdbUnauthorized, _TmdbWritePermission, _TmdbPrivateResource)
+except ImportError:  # pragma: no cover — tmdbapis обязательная зависимость
+    _TMDB_AUTH_ERRORS = ()
+
 logger = logging.getLogger("vault.tmdb_writeback")
 
 # ------------------------------------ #
@@ -52,11 +67,19 @@ class TmdbWritebackService:
 
     @staticmethod
     def _is_auth_error(exc: Exception) -> bool:
+        # Приоритет — конкретные типы tmdbapis (401): WritePermission, PrivateResource,
+        # Unauthorized, Authentication. "Authentication" as строковый маркер оставлен
+        # как fallback для обёрнутых исключений (см. _TMDB_AUTH_ERRORS выше).
+        if isinstance(exc, _TMDB_AUTH_ERRORS):
+            return True
         msg = str(exc)
+        status = getattr(exc, "status_code", None)
+        if status == 401:
+            return True
         name = type(exc).__name__
         return (
             "401" in msg
-            or name in ("Authentication", "Unauthorized", "WritePermission")
+            or name in ("Authentication", "Unauthorized", "WritePermission", "PrivateResource")
             or "Invalid API key" in msg
             or "Authentication" in msg
         )
@@ -129,11 +152,17 @@ class TmdbWritebackService:
     # --- guards ---
 
     @classmethod
-    def _should_writeback(cls, movie) -> tuple[bool, str]:
-        """Общий guard: токен, настройки, tmdb_id."""
+    def _prefs_snapshot(cls):
+        """Один SELECT на UserPreferences за операцию (singleton pk=1)."""
         from moviefilter.models import UserPreferences
 
-        prefs = UserPreferences.get()
+        return UserPreferences.get()
+
+    @classmethod
+    def _should_writeback(cls, movie, *, prefs=None) -> tuple[bool, str]:
+        """Общий guard: токен, настройки, tmdb_id."""
+        if prefs is None:
+            prefs = cls._prefs_snapshot()
         if not prefs.tmdb_writeback_enabled:
             return False, "writeback disabled in preferences"
         if not prefs.tmdb_v4_authenticated_access_token:
@@ -178,7 +207,9 @@ class TmdbWritebackService:
                 logger.warning("writeback: cannot load movie for user_movie %s: %s", getattr(user_movie, "pk", "?"), exc)
                 return [WritebackResult(success=False, action="load", error=str(exc))]
 
-        should, reason = cls._should_writeback(movie)
+        # Один SELECT на UserPreferences за операцию (singleton pk=1).
+        prefs = cls._prefs_snapshot()
+        should, reason = cls._should_writeback(movie, prefs=prefs)
         if not should:
             logger.debug("writeback skipped movie=%s tmdb_id=%s reason=%s", getattr(movie, "id", "?"), getattr(movie, "tmdb_id", None), reason)
             return [WritebackResult(success=False, action="skipped", tmdb_id=getattr(movie, "tmdb_id", None), media_type=getattr(movie, "tmdb_media_type", None), error=reason)]
@@ -221,7 +252,7 @@ class TmdbWritebackService:
             results.append(WritebackResult(success=False, action="skip_list", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
 
         # user custom lists
-        should_lists, lists_reason = cls._should_writeback_lists()
+        should_lists, lists_reason = cls._should_writeback_lists(prefs=prefs)
         if should_lists:
             try:
                 from vault.models import UserListMovie
@@ -275,7 +306,9 @@ class TmdbWritebackService:
             # попытка достать из снапшота полей — без movie ничего не сделать
             logger.debug("writeback delete: no movie for user_movie %s", getattr(user_movie, "pk", "?"))
             return []
-        should, reason = cls._should_writeback(movie)
+        # Один SELECT на UserPreferences за операцию (singleton pk=1).
+        prefs = cls._prefs_snapshot()
+        should, reason = cls._should_writeback(movie, prefs=prefs)
         if not should:
             return [WritebackResult(success=False, action="skipped", tmdb_id=getattr(movie, "tmdb_id", None), media_type=getattr(movie, "tmdb_media_type", None), error=reason)]
 
@@ -322,9 +355,6 @@ class TmdbWritebackService:
                     results.append(WritebackResult(success=False, action="unrate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg))
             # skip list cleanup: удалить из TMDB skip list если был
             try:
-                from moviefilter.models import UserPreferences
-
-                prefs = UserPreferences.get()
                 if prefs.tmdb_skip_list_id:
                     media_type = getattr(movie, "tmdb_media_type", None) or "movie"
                     movie_tmdb_id = getattr(movie, "tmdb_id", None)
@@ -530,6 +560,8 @@ class TmdbWritebackService:
             return None
         watch_status = getattr(user_movie, "watch_status", None)
         movie_tmdb_id = getattr(movie, "tmdb_id", None)
+        # Ожидается вызов только после прохождения _should_writeback (гарантирует tmdb_id).
+        # Если метод вызван напрямую без guard — просто пропускаем, чтобы не упасть.
         if not movie_tmdb_id:
             return None
 
@@ -580,11 +612,10 @@ class TmdbWritebackService:
     # --- lists ---
 
     @classmethod
-    def _should_writeback_lists(cls) -> tuple[bool, str]:
-        from moviefilter.models import UserPreferences
-
-        prefs = UserPreferences.get()
+    def _should_writeback_lists(cls, *, prefs=None) -> tuple[bool, str]:
         # Single toggle: lists follow main writeback (tmdb_writeback_lists_enabled kept for compat but ignored)
+        if prefs is None:
+            prefs = cls._prefs_snapshot()
         if not prefs.tmdb_writeback_enabled:
             return False, "writeback disabled"
         if not prefs.tmdb_v4_authenticated_access_token:
@@ -754,11 +785,10 @@ class TmdbWritebackService:
     @classmethod
     def init_all_user_lists(cls) -> dict:
         """Одноразовая инициализация + восстановление удалённых на TMDB списков. Ставит флаг."""
-        from moviefilter.models import UserPreferences
         from vault.models import UserList
 
-        prefs = UserPreferences.get()
-        should, reason = cls._should_writeback_lists()
+        prefs = cls._prefs_snapshot()
+        should, reason = cls._should_writeback_lists(prefs=prefs)
         if not should:
             return {"created": 0, "error": reason}
 

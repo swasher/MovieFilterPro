@@ -12,7 +12,7 @@
   - [#2 Race на `_upsert_queue_item.attempts` (потеря инкрементов)](#2-race-на-_upsert_queue_itemattempts-потеря-инкрементов)
   - [#3 Race в `_ensure_skip_list_tmdb_id` (двойное создание списка «Не интересует»)](#3-race-в-_ensure_skip_list_tmdb_id-двойное-создание-списка-не-интересует)
 - [P1 — Архитектурные долги, важно для расширяемости](#p1--архитектурные-долги-важно-для-расширяемости)
-  - [#4 Шаблонный try/except в `sync_user_movie_to_tmdb` (много boilerplate)](#4-шаблонный-tryexcept-в-sync_user_movie_to_tmdb-много-boilerplate)
+  - [#4 Шаблонный try/except в `sync_user_movie_to_tmdb` (не нужно)](#4-шаблонный-tryexcept-в-sync_user_movie_to_tmdb-много-boilerplate)
   - [#5 `_should_writeback` × N — лишние запросы к БД и дублирование](#5-_should_writeback--n--лишние-запросы-к-бд-и-дублирование)
   - [#6 Удалить мёртвый код: `vault/services/tmdb_writeback_queue.py`](#6-удалить-мёртвый-код-vaultservicestmdb_writeback_queuepy)
   - [#7 `sync_list_item_added` без автосоздания TMDB-листа (TODO §20.6)](#7-sync_list_item_added-без-автосоздания-tmdb-листа-todo-§206)
@@ -264,7 +264,11 @@ def _ensure_skip_list_tmdb_id(cls) -> int:
 
 ## P1 — Архитектурные долги, важно для расширяемости
 
-### #4 Шаблонный try/except в `sync_user_movie_to_tmdb` (много boilerplate)
+### #4 Шаблонный try/except в `sync_user_movie_to_tmdb` (много boilerplate) [#НЕ НУЖНО]
+
+> **Статус:** решение пользователя — не делать. Введение helper-метода `_run_sub_sync`
+> уменьшило бы повторы, но делает код менее явным/линейным. Текущие 5 субсинков
+> читаются последовательно и предсказуемо. Оставлено как есть.
 
 **Файл:** `vault/services/tmdb_writeback_service.py:191-243`
 
@@ -347,7 +351,7 @@ else:
 
 ---
 
-### #5 `_should_writeback` × N — лишние запросы к БД и дублирование
+### #5 `_should_writeback` × N — лишние запросы к БД и дублирование [#ВЫПОЛНЕНО]
 
 **Файл:** `vault/services/tmdb_writeback_service.py:137-153, 590-599`
 
@@ -414,7 +418,7 @@ def _should_writeback_lists(cls, *, prefs=None) -> tuple[bool, str]:
 
 ---
 
-### #6 Удалить мёртвый код: `vault/services/tmdb_writeback_queue.py`
+### #6 Удалить мёртвый код: `vault/services/tmdb_writeback_queue.py` [#ВЫПОЛНЕНО]
 
 **Файл:** `vault/services/tmdb_writeback_queue.py` (45 строк, целиком)
 
@@ -503,7 +507,14 @@ if not getattr(movie, "tmdb_id", None):
 
 ## P2 — Мелкие архитектурные улучшения
 
-### #8 Избыточные кэши `_pending_delete_cache` / `_pending_list_delete`
+### #8 Избыточные кэши `_pending_delete_cache` / `_pending_list_delete` [#НЕ ПРИМЕНИМО — кэши функционально необходимы]
+
+> **Статус:** перепроверено на актуальном коде (после перехода на HUEY, v-signals rewrite).
+> Задача предлагала «оставить только fallback в post_delete через БД и убрать глобальные словари».
+> Это основано на **устаревшем коде**: в текущей реализации
+> - `post_delete` для `UserListMovie` НЕ может восстановить relations из БД (каскадный delete уже удалил строки), а `sync_list_item_removed` ждёт снапшот с `user_list`/`movie` (`tmdb_writeback_service.py:662-677`);
+> - `_pending_delete_cache`/`_pending_list_delete` — единственный источник tmdb_id/media_type для отложенной HUEY-задачи удаления (снапшот формируется в `pre_delete`, где объект ещё жив).
+> Убирать кэши нельзя без потери данных о delete-writeback. Оставляем как есть.
 
 **Файлы:**
 - `vault/signals.py:45` — `_pending_delete_cache: dict[int, tuple[...]]`
@@ -570,7 +581,7 @@ def on_user_movie_deleted(sender, instance, **kwargs):
 
 ---
 
-### #9 «Жадная» проверка `_is_auth_error` по подстроке
+### #9 «Жадная» проверка `_is_auth_error` по подстроке [#ВЫПОЛНЕНО]
 
 **Файл:** `vault/services/tmdb_writeback_service.py:46-55`
 
@@ -648,7 +659,7 @@ if failed:
 
 ---
 
-### #10 Переиспользовать `reset_tmdb_client()` вместо прямого сброса модуля
+### #10 Переиспользовать `reset_tmdb_client()` вместо прямого сброса модуля [⏳ не в scope]
 
 **Файл:** `vault/api.py:1953-1960, 1991-1998`
 
@@ -713,7 +724,7 @@ except Exception:
 
 ---
 
-### #11 `init_all_user_lists` без защиты от двойного запуска
+### #11 `init_all_user_lists` без защиты от двойного запуска [#ВЫПОЛНЕНО]
 
 **Файл:** `vault/services/tmdb_writeback_service.py:756-824`
 
@@ -763,7 +774,11 @@ def tmdb_lists_init():
 
 ---
 
-### #12 Долгий sync при переименовании списка (TODO.md:139)
+### #12 Долгий sync при переименовании списка (TODO.md:139) [⏳ не в scope — уже async через dispatch]
+
+> **Статус:** перепроверено. В ходе перехода на HUEY rename списка уже переведён на
+> `schedule_list_sync` (HUEY, delay=2) — UI не блокируется. Прямых синхронных
+> вызовов `update_tmdb_list` из сигналов больше нет. Отдельная доработка не требуется.
 
 **Файл:** `vault/signals.py:158-186`
 
@@ -835,7 +850,7 @@ def on_userlist_saved(sender, instance, created, **kwargs):
 
 ## P3 — Косметика / отложенное
 
-### #13 Логирование `_is_auth_error` имеет дубль-логику в `sync_user_movie_to_tmdb`
+### #13 Логирование `_is_auth_error` имеет дубль-логику в `sync_user_movie_to_tmdb` [#ВЫПОЛНЕНО — закрыто вместе с #1/#9]
 
 **Файл:** `vault/services/tmdb_writeback_service.py:247-253`
 
@@ -856,7 +871,9 @@ if any("401" in (r.error or "") or "Invalid API key" in (r.error or "") for r in
 
 ---
 
-### #14 Лишняя проверка `movie_tmdb_id` в `sync_skip_list`
+### #14 Лишняя проверка `movie_tmdb_id` в `sync_skip_list` [#НЕ ПРИМЕНИМО — guard валиден]
+
+> **Статус:** перепроверено. Дата планирования считала ветку `if not movie_tmdb_id: return None` мёртвой, т.к. `sync_skip_list` вызывается только после `_should_writeback`. Но `sync_skip_list` — публичный метод (тот же, что `sync_watch_status`/`sync_favorite`/`sync_rating`), и прямой вызов без tmdb_id уронил бы `_ensure_skip_list_tmdb_id`/`_get_tmdb_obj` ниже. Guard НЕ мёртвый — это валидная defensive-защита. Добавлен комментарий, объясняющий намерение; код оставлен.
 
 **Файл:** `vault/services/tmdb_writeback_service.py:526-585`
 

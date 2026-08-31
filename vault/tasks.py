@@ -196,8 +196,15 @@ def tmdb_writeback_retry_tick():
 
 
 @HUEY.task()
+@HUEY.lock_task("tmdb_lists_init")
 def tmdb_lists_init():
-    """Одноразовая инициализация всех локальных UserList на TMDB."""
+    """Одноразовая инициализация всех локальных UserList на TMDB.
+
+    lock_task — статический глобальный лок: не даёт двум запускам
+    (например, повторный auth-approve) параллельно создавать дубликаты
+    списков на TMDB. Здесь статический лок уместен — задача глобальная,
+    а не per-argument.
+    """
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
     return TmdbWritebackService.init_all_user_lists()
