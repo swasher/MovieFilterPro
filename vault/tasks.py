@@ -70,10 +70,99 @@ def process_kinozal_download_import(
 
 @HUEY.task()
 def tmdb_writeback_user_movie(user_movie_id: int):
-    """Фоновая write-back retry для 429."""
+    """Фоновая write-back синхронизация одного UserMovie (статус/избранное/рейтинг)."""
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
     return TmdbWritebackService.sync_user_movie_to_tmdb_by_id(user_movie_id)
+
+
+@HUEY.task()
+def tmdb_writeback_user_movie_delete(movie_id: int, tmdb_id, media_type):
+    """Фоновая очистка write-back при удалении UserMovie (снапшот tmdb_id/media_type)."""
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    # Лёгкий снапшот как в старых сигналах — метод принимает объект с .movie
+    class _MovieSnap:
+        def __init__(self, id_, tid, mt):
+            self.id = id_
+            self.tmdb_id = tid
+            self.tmdb_media_type = mt
+
+    class _UMSnap:
+        def __init__(self, pk_, movie):
+            self.pk = pk_
+            self.movie = movie
+
+    snap = _UMSnap(movie_id, _MovieSnap(movie_id, tmdb_id, media_type))
+    return TmdbWritebackService.sync_user_movie_deleted(snap)
+
+
+@HUEY.task()
+def tmdb_writeback_list_item_added(user_list_movie_id: int):
+    """Фоновая запись: фильм добавлен в локальный список → в TMDB list."""
+    from vault.models import UserListMovie
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    try:
+        obj = UserListMovie.objects.select_related("user_list", "movie").get(pk=user_list_movie_id)
+    except UserListMovie.DoesNotExist:
+        return None
+    return TmdbWritebackService.sync_list_item_added(obj)
+
+
+@HUEY.task()
+def tmdb_writeback_list_item_removed(tmdb_list_id, tmdb_id, media_type):
+    """Фоновая запись: фильм удалён из локального списка → из TMDB list."""
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    # Снапшот для sync_list_item_removed (в post_delete объекта уже нет).
+    class _ListSnap:
+        def __init__(self, lid):
+            self.id = 0
+            self.tmdb_list_id = lid
+
+    class _MovieSnap:
+        def __init__(self, tid, mt):
+            self.id = 0
+            self.tmdb_id = tid
+            self.tmdb_media_type = mt
+
+    class _ListMovieSnap:
+        def __init__(self, lst, mv):
+            self.pk = 0
+            self.user_list = lst
+            self.movie = mv
+
+    return TmdbWritebackService.sync_list_item_removed(
+        _ListMovieSnap(_ListSnap(tmdb_list_id), _MovieSnap(tmdb_id, media_type))
+    )
+
+
+@HUEY.task()
+def tmdb_writeback_list_sync(user_list_id: int):
+    """Фоновая запись: локальный список создан/переименован → создать/обновить TMDB list."""
+    from vault.models import UserList
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    try:
+        ul = UserList.objects.get(pk=user_list_id)
+    except UserList.DoesNotExist:
+        return None
+    if not ul.tmdb_list_id:
+        return TmdbWritebackService.create_tmdb_list(ul)
+    return TmdbWritebackService.update_tmdb_list(ul)
+
+
+@HUEY.task()
+def tmdb_writeback_list_delete(tmdb_list_id):
+    """Фоновая запись: локальный список удалён → delete TMDB list."""
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    class _Snap:
+        tmdb_list_id = tmdb_list_id
+        id = 0
+
+    return TmdbWritebackService.delete_tmdb_list(_Snap())
 
 
 @HUEY.periodic_task(crontab(minute="*/10"))

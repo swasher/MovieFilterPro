@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from vault.constants import SKIP_LIST_NAME as _SKIP_LIST_NAME
@@ -34,6 +36,11 @@ class TmdbWritebackService:
     # синхронизируется в TMDB-лист с таким же именем.
     SKIP_LIST_NAME = _SKIP_LIST_NAME
 
+    # Процесс-лок для сериализации _ensure_skip_list_tmdb_id.
+    # На sqlite select_for_update — no-op, поэтому дополнительно используем
+    # threading.Lock (по образцу tmdb_adapter/client_singleton.py).
+    _skip_list_lock = threading.Lock()
+
     # --- error classification ---
 
     @staticmethod
@@ -53,19 +60,6 @@ class TmdbWritebackService:
             or "Invalid API key" in msg
             or "Authentication" in msg
         )
-
-    @classmethod
-    def _schedule_retry(cls, user_movie_id: int, delay: int = 600):
-        """Legacy HUEY retry (теперь persistent queue, delay 10m)."""
-        try:
-            from vault.tasks import tmdb_writeback_user_movie
-
-            tmdb_writeback_user_movie.schedule(args=(user_movie_id,), delay=delay)
-            logger.warning("writeback scheduled retry user_movie=%s delay=%ss", user_movie_id, delay)
-            return True
-        except Exception as exc:
-            logger.warning("writeback schedule retry failed user_movie=%s: %s", user_movie_id, exc)
-            return False
 
     # --- persistent queue (forever) ---
 
@@ -90,8 +84,9 @@ class TmdbWritebackService:
                     "next_retry_at": next_retry,
                 },
             )
-            # increment attempts
-            TMDBWritebackQueueItem.objects.filter(pk=obj.pk).update(attempts=obj.attempts + 1)
+            # Атомарный инкремент через F() — не теряем попытки при конкурентных
+            # вызовах (два periodic tick'а, rapid-fire сигналы и т.п.).
+            TMDBWritebackQueueItem.objects.filter(pk=obj.pk).update(attempts=F("attempts") + 1)
             logger.warning("writeback queue upsert movie=%s state=%s next_retry=%s err=%s", movie_id, state, next_retry, error[:200])
             return obj
         except Exception as exc:
@@ -242,24 +237,16 @@ class TmdbWritebackService:
             logger.debug("writeback user_lists skipped: %s", lists_reason)
 
         # --- persistent queue handling (forever, 10m) ---
+        # Ретрай обеспечивается periodic task `tmdb_writeback_retry_tick`
+        # (vault/tasks.py), который раз в 10 минут подбирает записи из
+        # TMDBWritebackQueueItem и вызывает sync_user_movie_to_tmdb.
+        # Дополнительный HUEY-schedule здесь не нужен — иначе на один failed
+        # write-back приходят два независимых триггера и дублируют запросы.
         failed = [r for r in results if not r.success and r.action != "skipped"]
         if failed:
-            # берём первую ошибку для очереди
             err_msg = failed[0].error or "unknown"
-            is_auth = any("401" in (r.error or "") or "Authentication" in (r.error or "") or "Unauthorized" in (r.error or "") for r in failed) or any(cls._is_auth_error(Exception(r.error)) for r in failed if r.error)
-            # точнее: проверяем failed error strings
-            if any("401" in (r.error or "") or "Invalid API key" in (r.error or "") for r in failed):
-                is_auth = True
+            is_auth = any(cls._is_auth_error(Exception(r.error)) for r in failed if r.error)
             cls._upsert_queue_item(movie, err_msg, is_auth=is_auth)
-            # также HUEY retry для 429/сети (10m)
-            if not is_auth:
-                # schedule HUEY as secondary trigger (periodic task и так подхватит)
-                try:
-                    from vault.tasks import tmdb_writeback_user_movie
-
-                    tmdb_writeback_user_movie.schedule(args=(user_movie.pk,), delay=600)
-                except Exception:
-                    pass
         else:
             cls._clear_queue_item(movie)
 
@@ -394,7 +381,7 @@ class TmdbWritebackService:
                 logger.error("writeback 401 token expired watchlist tmdb_id=%s: %s", movie.tmdb_id, exc)
             elif cls._is_rate_limited(exc):
                 logger.warning("writeback 429 rate-limited watchlist tmdb_id=%s: %s", movie.tmdb_id, exc)
-                cls._schedule_retry(getattr(user_movie, "pk", None) or getattr(user_movie, "id", 0), delay=5)
+                # Ретрай 429 обеспечивает persistent queue (sync_user_movie_to_tmdb -> TMDBWritebackQueueItem)
             else:
                 logger.warning("writeback watchlist failed tmdb_id=%s: %s", movie.tmdb_id, exc)
             return WritebackResult(success=False, action="watchlist_add" if watch_status == UM.WatchStatus.PLAN else "watchlist_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg, retry_after=5 if cls._is_rate_limited(exc) else None)
@@ -419,7 +406,7 @@ class TmdbWritebackService:
                 logger.error("writeback 401 token expired favorite tmdb_id=%s: %s", movie.tmdb_id, exc)
             elif cls._is_rate_limited(exc):
                 logger.warning("writeback 429 rate-limited favorite tmdb_id=%s: %s", movie.tmdb_id, exc)
-                cls._schedule_retry(getattr(user_movie, "pk", None) or getattr(user_movie, "id", 0), delay=5)
+                # Ретрай 429 обеспечивает persistent queue
             else:
                 logger.warning("writeback favorite failed tmdb_id=%s is_fav=%s: %s", movie.tmdb_id, is_fav, exc)
             return WritebackResult(success=False, action="favorite_add" if is_fav else "favorite_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg, retry_after=5 if cls._is_rate_limited(exc) else None)
@@ -448,7 +435,7 @@ class TmdbWritebackService:
                 logger.error("writeback 401 token expired rating tmdb_id=%s: %s", movie.tmdb_id, exc)
             elif cls._is_rate_limited(exc):
                 logger.warning("writeback 429 rate-limited rating tmdb_id=%s: %s", movie.tmdb_id, exc)
-                cls._schedule_retry(getattr(user_movie, "pk", None) or getattr(user_movie, "id", 0), delay=5)
+                # Ретрай 429 обеспечивает persistent queue
             else:
                 logger.warning("writeback rating failed tmdb_id=%s rating=%s: %s", movie.tmdb_id, rating, exc)
             return WritebackResult(success=False, action="rate" if rating is not None else "unrate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg, retry_after=5 if cls._is_rate_limited(exc) else None)
@@ -463,8 +450,6 @@ class TmdbWritebackService:
         3. Если нет — создаём.
         Бросает исключение если TMDB API недоступен."""
         from moviefilter.models import UserPreferences
-
-        prefs = UserPreferences.get()
         from tmdb_adapter.client_singleton import get_tmdb_client
 
         tmdb = get_tmdb_client()
@@ -479,48 +464,56 @@ class TmdbWritebackService:
             except Exception:
                 return False
 
-        # 1. Кэш — проверяем что жив
-        if prefs.tmdb_skip_list_id:
-            if _list_exists(int(prefs.tmdb_skip_list_id)):
-                return int(prefs.tmdb_skip_list_id)
-            # удалён на TMDB — сбрасываем
-            prefs.tmdb_skip_list_id = None
-            prefs.save(update_fields=["tmdb_skip_list_id"])
+        # Сериализуем параллельные вызовы: одновременный вход двух сигналов
+        # без блокировки создаст два одинаковых TMDB-листа «Не интересует».
+        # threading.Lock покрывает single-process + multi-thread (dev runserver),
+        # select_for_update — multi-process (postgres).
+        with cls._skip_list_lock:
+            with transaction.atomic():
+                prefs = UserPreferences.objects.select_for_update().get(pk=1)
 
-        # 2. Ищем по имени (api4 возвращает dict)
-        target_name = cls.SKIP_LIST_NAME
-        page = 1
-        while True:
-            try:
-                result = api4.account_get_lists(page=page)
-            except Exception:
-                break
-            if not isinstance(result, dict):
-                break
-            for item in result.get("results", []):
-                if item.get("name") == target_name:
-                    list_id = int(item["id"])
-                    prefs.tmdb_skip_list_id = list_id
+                # 1. Кэш — проверяем что жив
+                if prefs.tmdb_skip_list_id:
+                    if _list_exists(int(prefs.tmdb_skip_list_id)):
+                        return int(prefs.tmdb_skip_list_id)
+                    # удалён на TMDB — сбрасываем
+                    prefs.tmdb_skip_list_id = None
                     prefs.save(update_fields=["tmdb_skip_list_id"])
-                    return list_id
-            if page >= result.get("total_pages", 1):
-                break
-            page += 1
 
-        # 3. Создаём (api4.list_create_list возвращает dict)
-        result = api4.list_create_list(
-            name=target_name,
-            iso_639_1="ru",
-            description="Зеркало системного статуса 'Не интересует'",
-            public=False,
-        )
-        new_id = result.get("id") if isinstance(result, dict) else None
-        if not new_id:
-            raise RuntimeError(f"TMDB list_create_list returned unexpected: {result}")
-        new_id = int(new_id)
-        prefs.tmdb_skip_list_id = new_id
-        prefs.save(update_fields=["tmdb_skip_list_id"])
-        return new_id
+                # 2. Ищем по имени (api4 возвращает dict)
+                target_name = cls.SKIP_LIST_NAME
+                page = 1
+                while True:
+                    try:
+                        result = api4.account_get_lists(page=page)
+                    except Exception:
+                        break
+                    if not isinstance(result, dict):
+                        break
+                    for item in result.get("results", []):
+                        if item.get("name") == target_name:
+                            list_id = int(item["id"])
+                            prefs.tmdb_skip_list_id = list_id
+                            prefs.save(update_fields=["tmdb_skip_list_id"])
+                            return list_id
+                    if page >= result.get("total_pages", 1):
+                        break
+                    page += 1
+
+                # 3. Создаём (api4.list_create_list возвращает dict)
+                result = api4.list_create_list(
+                    name=target_name,
+                    iso_639_1="ru",
+                    description="Зеркало системного статуса 'Не интересует'",
+                    public=False,
+                )
+                new_id = result.get("id") if isinstance(result, dict) else None
+                if not new_id:
+                    raise RuntimeError(f"TMDB list_create_list returned unexpected: {result}")
+                new_id = int(new_id)
+                prefs.tmdb_skip_list_id = new_id
+                prefs.save(update_fields=["tmdb_skip_list_id"])
+                return new_id
 
     @classmethod
     def sync_skip_list(cls, user_movie) -> Optional[WritebackResult]:
