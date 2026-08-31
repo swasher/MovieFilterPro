@@ -444,7 +444,7 @@ def _should_writeback_lists(cls, *, prefs=None) -> tuple[bool, str]:
 
 ---
 
-### #7 `sync_list_item_added` без автосоздания TMDB-листа (TODO §20.6)
+### #7 `sync_list_item_added` без автосоздания TMDB-листа (TODO §20.6) [#ВЫПОЛНЕНО]
 
 **Файл:** `vault/services/tmdb_writeback_service.py:601-637`
 

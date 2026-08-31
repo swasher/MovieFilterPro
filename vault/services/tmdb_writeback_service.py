@@ -612,8 +612,14 @@ class TmdbWritebackService:
         if not getattr(movie, "tmdb_id", None):
             return WritebackResult(success=False, action="list_add", error="movie has no tmdb_id")
         if not getattr(user_list, "tmdb_list_id", None):
-            logger.debug("list_add skipped: UserList %s has no tmdb_list_id (need init)", user_list.id)
-            return WritebackResult(success=False, action="list_add_skipped", error="no tmdb_list_id — need lists init")
+            # §20.6: создаём TMDB-лист на лету, если ещё нет.
+            # Это снимает race между list_sync и list_item_added при async-HUEY:
+            # если добавление фильма обработалось раньше, чем список был создан,
+            # здесь он создаётся сам (защита от дублей — select_for_update в create_tmdb_list).
+            create_result = cls.create_tmdb_list(user_list)
+            if not create_result.success:
+                return WritebackResult(success=False, action="list_add_skipped", error=f"auto-create failed: {create_result.error}")
+            user_list.refresh_from_db(fields=["tmdb_list_id"])
         try:
             from tmdb_adapter.client_singleton import get_tmdb_client
 
