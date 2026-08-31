@@ -102,6 +102,15 @@
 - UI Vault (Svelte): `front/src/routes/**`.
 - API Vault: `vault/api.py`.
 
+## Write-back (Vault → TMDB)
+
+Если задача затрагивает **обратную синхронизацию Vault в TMDB** (watchlist,
+favorites, rating, списки, TMDB Lists, очередь writeback, асинхронный конвейер),
+сначала прочитай `docs/WRITEBACK_IMPLEMENTATION.md` — там описание архитектуры и
+места правок. Краткий список: сигналы → `vault/signals.py`, диспетчер HUEY →
+`vault/services/tmdb_writeback_dispatch.py`, фоновые задачи → `vault/tasks.py`,
+вся прикладная логика → `vault/services/tmdb_writeback_service.py`.
+
 ## Логи и realtime
 - Файлы логов: `logs/debug.log`, `logs/error.log`, `logs/scan.log`.
 - Websocket-канал логов: `web_logger/*`, endpoint `ws/log/`.
