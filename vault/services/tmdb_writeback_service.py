@@ -244,7 +244,7 @@ class TmdbWritebackService:
 
         # skip mirror list (§20.7)
         try:
-            r = cls.sync_skip_list(user_movie)
+            r = cls.sync_skip_list(user_movie, prefs=prefs)
             if r:
                 results.append(r)
         except Exception as exc:
@@ -473,12 +473,16 @@ class TmdbWritebackService:
     # --- skip list (TMDB mirror, без локального UserList) ---
 
     @classmethod
-    def _ensure_skip_list_tmdb_id(cls) -> int:
+    def _ensure_skip_list_tmdb_id(cls, prefs=None) -> int:
         """Вернуть TMDB list ID для 'Не интересует'.
-        1. Кэш в preferences → проверяем что список жив на TMDB.
-        2. Если нет — ищем по имени среди account lists.
-        3. Если нет — создаём.
-        Бросает исключение если TMDB API недоступен."""
+
+        Fast-path: кэшированный id из prefs используем напрямую (0 API-вызовов).
+        Живость списка на TMDB в горячем пути НЕ проверяем — если лист удалён,
+        list_add/remove вернёт 404, и sync_skip_list сбросит кэш, пересоздаст
+        и повторит операцию.
+
+        Slow-path (только когда id пуст): ищем по имени среди account lists,
+        если нет — создаём. Бросает исключение если TMDB API недоступен."""
         from moviefilter.models import UserPreferences
         from tmdb_adapter.client_singleton import get_tmdb_client
 
@@ -487,31 +491,26 @@ class TmdbWritebackService:
         if api4 is None:
             raise RuntimeError("TMDB v4 client not available")
 
-        def _list_exists(list_id: int) -> bool:
-            try:
-                api4.list_get_list(list_id=list_id)
-                return True
-            except Exception:
-                return False
+        target_name = cls.SKIP_LIST_NAME
 
-        # Сериализуем параллельные вызовы: одновременный вход двух сигналов
-        # без блокировки создаст два одинаковых TMDB-листа «Не интересует».
+        # Fast-path: только чтение, без лока/транзакции.
+        source = prefs if prefs is not None else UserPreferences.get()
+        cached_id = getattr(source, "tmdb_skip_list_id", None)
+        if cached_id:
+            return int(cached_id)
+
+        # Slow-path: сериализуем параллельное создание списка.
         # threading.Lock покрывает single-process + multi-thread (dev runserver),
         # select_for_update — multi-process (postgres).
         with cls._skip_list_lock:
             with transaction.atomic():
                 prefs = UserPreferences.objects.select_for_update().get(pk=1)
 
-                # 1. Кэш — проверяем что жив
+                # повторная проверка под локом — другой тред мог успеть создать
                 if prefs.tmdb_skip_list_id:
-                    if _list_exists(int(prefs.tmdb_skip_list_id)):
-                        return int(prefs.tmdb_skip_list_id)
-                    # удалён на TMDB — сбрасываем
-                    prefs.tmdb_skip_list_id = None
-                    prefs.save(update_fields=["tmdb_skip_list_id"])
+                    return int(prefs.tmdb_skip_list_id)
 
-                # 2. Ищем по имени (api4 возвращает dict)
-                target_name = cls.SKIP_LIST_NAME
+                # 1. Ищем по имени (api4 возвращает dict)
                 page = 1
                 while True:
                     try:
@@ -530,7 +529,7 @@ class TmdbWritebackService:
                         break
                     page += 1
 
-                # 3. Создаём (api4.list_create_list возвращает dict)
+                # 2. Создаём (api4.list_create_list возвращает dict)
                 result = api4.list_create_list(
                     name=target_name,
                     iso_639_1="ru",
@@ -546,13 +545,17 @@ class TmdbWritebackService:
                 return new_id
 
     @classmethod
-    def sync_skip_list(cls, user_movie) -> Optional[WritebackResult]:
+    def sync_skip_list(cls, user_movie, prefs=None) -> Optional[WritebackResult]:
         """SKIP (Не интересует) ↔ TMDB List 'Не интересует'.
 
         Архитектура:
         - Локально: системный список = UserMovie.watch_status=SKIP. Никакого UserList.
         - На TMDB: отдельный список, ID хранится в UserPreferences.tmdb_skip_list_id.
-        - Метод идемпотентен: добавляет/убирает фильм из TMDB-листа."""
+        - Метод идемпотентен: добавляет/убирает фильм из TMDB-листа.
+
+        Fast-path: _ensure использует кэшированный id напрямую (без list_get_list).
+        Если лист удалён на TMDB, list_add/remove вернёт 404 → кэш сбрасывается,
+        список пересоздаётся и операция повторяется один раз."""
         from vault.models import UserMovie as UM
 
         movie = getattr(user_movie, "movie", None)
@@ -565,21 +568,16 @@ class TmdbWritebackService:
         if not movie_tmdb_id:
             return None
 
-        try:
-            list_tmdb_id = cls._ensure_skip_list_tmdb_id()
-        except Exception as exc:
-            logger.warning("writeback skip_list: cannot get/create TMDB list: %s", exc)
-            return WritebackResult(success=False, action="skip_list", tmdb_id=movie_tmdb_id, error=str(exc))
-
         media_type = getattr(movie, "tmdb_media_type", None) or "movie"
+        failure_action = "skip_list_add" if watch_status == UM.WatchStatus.SKIP else "skip_list_remove"
 
-        try:
+        def _apply(list_tmdb_id: int) -> WritebackResult:
             from tmdb_adapter.client_singleton import get_tmdb_client
 
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
-                return WritebackResult(success=False, action="skip_list", tmdb_id=movie_tmdb_id, error="no v4 client")
+                return WritebackResult(success=False, action="skip_list", tmdb_id=movie_tmdb_id, media_type=media_type, error="no v4 client")
 
             if watch_status == UM.WatchStatus.SKIP:
                 api4.list_add_items(
@@ -595,17 +593,36 @@ class TmdbWritebackService:
                 )
                 logger.info("writeback skip_list remove movie=%s tmdb_id=%s list=%s", movie.id, movie_tmdb_id, list_tmdb_id)
                 return WritebackResult(success=True, action="skip_list_remove", tmdb_id=movie_tmdb_id, media_type=media_type)
+
+        try:
+            list_tmdb_id = cls._ensure_skip_list_tmdb_id(prefs=prefs)
+            return _apply(list_tmdb_id)
         except Exception as exc:
-            # Если список был удалён на TMDB — сбросить кэш и пробрасывать ошибку
             msg = str(exc)
+            # Список был удалён на TMDB — сбросить кэш, пересоздать и повторить один раз.
             if "404" in msg or "not found" in msg.lower():
                 from moviefilter.models import UserPreferences
+
                 UserPreferences.objects.filter(pk=1).update(tmdb_skip_list_id=None)
+                try:
+                    list_tmdb_id = cls._ensure_skip_list_tmdb_id(prefs=prefs)
+                    return _apply(list_tmdb_id)
+                except Exception as exc2:
+                    msg2 = str(exc2)
+                    logger.warning("writeback skip_list recreate failed movie=%s: %s", getattr(movie, "id", "?"), exc2)
+                    return WritebackResult(
+                        success=False,
+                        action=failure_action,
+                        tmdb_id=movie_tmdb_id,
+                        media_type=media_type,
+                        error=msg2,
+                    )
             logger.warning("writeback skip_list failed movie=%s: %s", getattr(movie, "id", "?"), exc)
             return WritebackResult(
                 success=False,
-                action="skip_list_add" if watch_status == UM.WatchStatus.SKIP else "skip_list_remove",
+                action=failure_action,
                 tmdb_id=movie_tmdb_id,
+                media_type=media_type,
                 error=msg,
             )
 
@@ -794,7 +811,7 @@ class TmdbWritebackService:
 
         # инициализируем TMDB skip list ID (если ещё нет)
         try:
-            cls._ensure_skip_list_tmdb_id()
+            cls._ensure_skip_list_tmdb_id(prefs=prefs)
         except Exception as exc:
             logger.warning("writeback lists init: skip list init failed: %s", exc)
 

@@ -178,8 +178,10 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
 - `sync_list_item_added(list_movie)`, `sync_list_item_removed(list_movie)`.
 - `create_tmdb_list`, `update_tmdb_list`, `delete_tmdb_list`.
 - `init_all_user_lists()` — инициализация/восстановление всех листов на TMDB.
-- `_ensure_skip_list_tmdb_id()` — find-or-create skip list (под `_skip_list_lock` +
-  `select_for_update`, защита от дублей).
+- `_ensure_skip_list_tmdb_id(prefs=None)` — find-or-create skip list. **Fast-path:**
+  если `prefs.tmdb_skip_list_id` заполнен — возвращается напрямую (0 API-вызовов,
+  без `list_get_list`). Slow-path (только когда id пуст) — поиск по имени среди
+  account lists / создание, под `_skip_list_lock` + `select_for_update` (защита от дублей).
 
 ### 6.5 Важные решения в коде (не ломать)
 
@@ -192,6 +194,11 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
   `list_item_added` при async-HUEY). Защита от дублей — `select_for_update`.
 - `sync_skip_list` имеет defensive-guard `if not movie_tmdb_id: return None` — он
   валиден (публичный метод), не убирать.
+- **Skip-list fast-path (без проверки живости):** `_ensure_skip_list_tmdb_id` НЕ
+  вызывает `list_get_list` для кэшированного `tmdb_skip_list_id` в горячем пути.
+  Если список удалён на TMDB, `list_add_items`/`list_remove_items` вернёт 404 —
+  `sync_skip_list` сбрасывает кэш, пересоздаёт список и повторяет операцию один раз.
+  Не возвращать верификацию через `list_get_list` — это лишний API-вызов на фильм.
 
 ## 7. Сигналы (`vault/signals.py`)
 
