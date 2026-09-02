@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from django.contrib.auth import get_user_model
+from django.db import close_old_connections
 from huey import crontab
 
 from movie_filter_pro.huey import HUEY
@@ -15,6 +16,7 @@ from vault.services.tmdb_sync_queue_service import TMDBSyncQueueService
 def tmdb_sync_tick():
     """Один такт массовой синхронизации: обрабатывает один фильм и
     само-перепланирует следующий тик через delay_seconds."""
+    close_old_connections()
     return TMDBSyncQueueService.process_one()
 
 
@@ -22,6 +24,7 @@ def tmdb_sync_tick():
 def tmdb_sync_watchdog():
     """Подстраховка: раз в минуту перезапускает цепочку тиков,
     если она заглохла (например, после рестарта воркера)."""
+    close_old_connections()
     return TMDBSyncQueueService.watchdog_run()
 
 
@@ -33,6 +36,7 @@ def process_kinozal_download_import(
     user_id: int | None,
     saved_to: str,
 ):
+    close_old_connections()
     operation_uuid = UUID(operation_id)
     user = None
     if user_id is not None:
@@ -69,16 +73,21 @@ def process_kinozal_download_import(
 
 
 @HUEY.task()
-def tmdb_writeback_user_movie(user_movie_id: int):
-    """Фоновая write-back синхронизация одного UserMovie (статус/избранное/рейтинг)."""
+def tmdb_writeback_user_movie(user_movie_id: int, changed_fields: list[str] | None = None):
+    """Фоновая write-back синхронизация одного UserMovie (статус/избранное/рейтинг).
+
+    R1 Δ-sync: `changed_fields` — union накопленных изменений, None = full sync.
+    """
+    close_old_connections()
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
-    return TmdbWritebackService.sync_user_movie_to_tmdb_by_id(user_movie_id)
+    return TmdbWritebackService.sync_user_movie_to_tmdb_by_id(user_movie_id, changed_fields=changed_fields)
 
 
 @HUEY.task()
 def tmdb_writeback_user_movie_delete(movie_id: int, tmdb_id, media_type):
     """Фоновая очистка write-back при удалении UserMovie (снапшот tmdb_id/media_type)."""
+    close_old_connections()
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
     # Лёгкий снапшот как в старых сигналах — метод принимает объект с .movie
@@ -100,6 +109,7 @@ def tmdb_writeback_user_movie_delete(movie_id: int, tmdb_id, media_type):
 @HUEY.task()
 def tmdb_writeback_list_item_added(user_list_movie_id: int):
     """Фоновая запись: фильм добавлен в локальный список → в TMDB list."""
+    close_old_connections()
     from vault.models import UserListMovie
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
@@ -113,6 +123,7 @@ def tmdb_writeback_list_item_added(user_list_movie_id: int):
 @HUEY.task()
 def tmdb_writeback_list_item_removed(tmdb_list_id, tmdb_id, media_type):
     """Фоновая запись: фильм удалён из локального списка → из TMDB list."""
+    close_old_connections()
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
     # Снапшот для sync_list_item_removed (в post_delete объекта уже нет).
@@ -141,6 +152,7 @@ def tmdb_writeback_list_item_removed(tmdb_list_id, tmdb_id, media_type):
 @HUEY.task()
 def tmdb_writeback_list_sync(user_list_id: int):
     """Фоновая запись: локальный список создан/переименован → создать/обновить TMDB list."""
+    close_old_connections()
     from vault.models import UserList
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
@@ -156,6 +168,7 @@ def tmdb_writeback_list_sync(user_list_id: int):
 @HUEY.task()
 def tmdb_writeback_list_delete(tmdb_list_id):
     """Фоновая запись: локальный список удалён → delete TMDB list."""
+    close_old_connections()
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
     class _Snap:
@@ -168,6 +181,7 @@ def tmdb_writeback_list_delete(tmdb_list_id):
 @HUEY.periodic_task(crontab(minute="*/10"))
 def tmdb_writeback_retry_tick():
     """Forever queue: каждые 10м ретрает pending write-back (до success)."""
+    close_old_connections()
     from django.utils import timezone
     from vault.models import TMDBWritebackQueueItem
 
@@ -204,7 +218,9 @@ def tmdb_lists_init():
     (например, повторный auth-approve) параллельно создавать дубликаты
     списков на TMDB. Здесь статический лок уместен — задача глобальная,
     а не per-argument.
+
     """
+    close_old_connections()
     from vault.services.tmdb_writeback_service import TmdbWritebackService
 
     return TmdbWritebackService.init_all_user_lists()
@@ -216,6 +232,7 @@ def process_kinozal_hide_action(
     movie_rss_id: int,
     user_id: int | None,
 ):
+    close_old_connections()
     operation_uuid = UUID(operation_id)
     user = None
     if user_id is not None:

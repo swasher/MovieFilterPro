@@ -78,77 +78,9 @@ def sync_user_movie_to_tmdb(user_movie, changed_fields=None):
 
 ---
 
-## R2. Батчинг list_add_items / list_remove_items по `tmdb_list_id`
+## R2. Батчинг list_add_items / list_remove_items — ОТМЕНЁН
 
-**Проблема**: Каждое `sync_list_item_added()` делает отдельный `list_add_items()` API-вызов. Если фильм в 5 пользовательских списках — 5 вызовов. Если синхронизируется 1000 фильмов в один список — 1000 вызовов. TMDB API v4 поддерживает передачу массива items в одном вызове (`list_add_items(list_id, items=[...])`), но мы не используем эту возможность.
-
-**Текущий flow**:
-```
-Movie A → List1 → list_add_items(List1, [A])    ← API #1
-Movie A → List2 → list_add_items(List2, [A])    ← API #2
-Movie B → List1 → list_add_items(List1, [B])    ← API #3
-Movie B → List2 → list_add_items(List2, [B])    ← API #4
-```
-
-**Предлагаемое**: двухфазный подход — **сбор + исполнение**.
-
-**Фаза 1 — Аккумуляция**: сигналы пишут операции в аккумулятор вместо немедленного выполнения.
-
-**Фаза 2 — Flush**: по завершении batch (или по таймеру) выполняются сгруппированные вызовы:
-
-```
-list_add_items(List1, [A, B])    ← 1 API-вызов
-list_add_items(List2, [A, B])    ← 1 API-вызов
-```
-
-```python
-class TmdbWritebackListBatcher:
-    """Аккумулятор операций с списками для последующего батчевого исполнения."""
-    
-    _additions: dict[int, list[dict]] = defaultdict(list)
-    _removals: dict[int, list[dict]] = defaultdict(list)
-    
-    @classmethod
-    def queue_add(cls, tmdb_list_id: int, media_type: str, media_id: int):
-        cls._additions[tmdb_list_id].append({
-            "media_type": media_type,
-            "media_id": media_id,
-        })
-    
-    @classmethod
-    def queue_remove(cls, tmdb_list_id: int, media_type: str, media_id: int):
-        cls._removals[tmdb_list_id].append({
-            "media_type": media_type,
-            "media_id": media_id,
-        })
-    
-    @classmethod
-    def flush(cls) -> list[WritebackResult]:
-        results = []
-        for list_id, items in cls._additions.items():
-            tmdb.list_add_items(list_id=list_id, items=items)
-            results.append(WritebackResult(success=True, action="list_add", ...))
-        for list_id, items in cls._removals.items():
-            tmdb.list_remove_items(list_id=list_id, items=items)
-            results.append(WritebackResult(success=True, action="list_remove", ...))
-        cls._additions.clear()
-        cls._removals.clear()
-        return results
-```
-
-**Интеграция**:
-- `sync_list_item_added()` перестаёт делать API-вызов и вместо этого делает `Batcher.queue_add(list_id, media_type, media_id)`.
-- `sync_list_item_removed()` → `Batcher.queue_remove(...)`.
-- Flush вызывается по завершении batch-обработки или через периодический HUEY-тик.
-
-**Экономия**: 1000 фильмов × 5 списков = 5000 вызовов → 500 вызовов (1 на каждый список × число уникальных списков).
-
-**Нюансы**:
-- Нужен механизм flush'а: при завершении batch, по таймеру (например, каждые 30 сек), или при достижении порога (например, 500 накопленных операций).
-- Обработка ошибок: если batch частично провалился — нужно логировать какие items не удалось добавить (TMDB возвращает массив с `success` для каждого item).
-- Удаление `UserListMovie` (post_delete) — тут аккумулятор может не помочь, т.к. это поштучные события. Но можно и сюда добавить аккумуляцию.
-
-**Файлы**: новый файл `vault/services/tmdb_writeback_batcher.py` (или встроить в `tmdb_writeback_service.py`), `vault/services/tmdb_writeback_dispatch.py`, `vault/tasks.py`.
+> **Отменён по решению 2026-09-01:** оставляем 1 API-вызов на 1 фильм. Батчинг даёт экономию, но усложняет отладку: при частичном фейле батча X фильмов из 10K окажутся рассинхронизированы и непонятно какие. Требует межпроцессного аккумулятора (web vs HUEY worker) и логики flush. Принцип "1 фильм = 1 понятный запрос" надёжнее.
 
 ---
 
@@ -403,8 +335,6 @@ for batch_start in range(0, total_movies, BATCH_SIZE):
 |----------|--------|--------------------|
 | «Добавить в watchlist» | 4-5 API вызовов | **1 вызов** (R1) |
 | «Включить heart» | 4-5 API вызовов | **1 вызов** (R1) |
-| 1000 фильмов → 1 список | 1000+ вызовов | **1 вызов** (R2) |
-| 1000 фильмов × 5 списков | 5000+ вызовов | **500 вызовов** (R2) |
 | `init_all_user_lists` 100 списков | 100 вызовов | **0** (R4) |
 | Базовый read-sync 10K фильмов | cast + crew + seasons | **только основные** (R5) |
 | Rate limit violations | 429 → 10 мин ретрай | **backoff 10-300 сек** (R6) |
@@ -416,6 +346,6 @@ for batch_start in range(0, total_movies, BATCH_SIZE):
 1. **R1** (Δ-writeback) — самый простой и даёт максимальный эффект. Начать здесь.
 2. **R3** (pre-fetch list IDs) — просто, устраняет лишние DB/API запросы.
 3. **R4** (убрать list_get_list) — одна правка, сразу N вызовов экономии.
-4. **R2** (batch lists) — сложнее, но самый большой выигрыш при массовом sync'е.
-5. **R5** (read-sync basic mode) — для первичной загрузки 10K фильмов.
-6. **R6** (rate limiter + backoff) — инфраструктура, нужно до запуска массовой синхронизации.
+4. **R5** (read-sync basic mode) — для первичной загрузки 10K фильмов.
+5. **R6** (rate limiter + backoff) — инфраструктура, нужно до запуска массовой синхронизации.
+6. **R2** — отменён (см. выше).

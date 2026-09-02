@@ -1,6 +1,6 @@
 import logging
 from django.db import transaction
-from django.db.models.signals import post_save, post_delete, pre_delete
+from django.db.models.signals import post_save, post_delete, pre_delete, pre_save
 from django.dispatch import receiver
 
 from vault.models import UserList, UserListMovie, UserMovie
@@ -11,11 +11,51 @@ logger = logging.getLogger("vault.tmdb_writeback")
 
 # --- UserMovie ---
 
+# R1: pre_save снапшот для Δ-синхронизации. post_save уже содержит новые значения,
+# поэтому UserMovie.objects.get() в post_save не дал бы diff.
+_pending_user_movie_snapshot: dict[int, dict[str, object]] = {}
+
+
+@receiver(pre_save, sender=UserMovie)
+def _cache_user_movie_snapshot(sender, instance, **kwargs):
+    if instance.pk is None:
+        return
+    try:
+        old = UserMovie.objects.get(pk=instance.pk)
+        _pending_user_movie_snapshot[instance.pk] = {
+            "watch_status": old.watch_status,
+            "is_favorite": old.is_favorite,
+            "rating": old.rating,
+        }
+    except UserMovie.DoesNotExist:
+        pass
+
 
 @receiver(post_save, sender=UserMovie)
 def on_user_movie_saved(sender, instance, created, **kwargs):
     pk = instance.pk  # захват по значению для on_commit (R1)
-    transaction.on_commit(lambda pk=pk: TmdbWritebackDispatch.schedule_user_movie_writeback(pk))
+    if created:
+        # новая запись — все writeback-поля считаем изменёнными
+        changed_fields = ["watch_status", "is_favorite", "rating"]
+    else:
+        old = _pending_user_movie_snapshot.pop(instance.pk, None)
+        if old is None:
+            # fallback: pre_save не сработал (bulk_update, loaddata и т.п.) — полный sync
+            changed_fields = None  # type: ignore[assignment]
+        else:
+            changed_fields = []
+            if old.get("watch_status") != instance.watch_status:
+                changed_fields.append("watch_status")
+            if old.get("is_favorite") != instance.is_favorite:
+                changed_fields.append("is_favorite")
+            if old.get("rating") != instance.rating:
+                changed_fields.append("rating")
+            if not changed_fields:
+                # релевантные поля не менялись (например, только note) — не шедулим
+                return
+    # on_commit сохраняет changed_fields по значению (копия списка)
+    cf_copy = list(changed_fields) if changed_fields is not None else None
+    transaction.on_commit(lambda pk=pk, cf=cf_copy: TmdbWritebackDispatch.schedule_user_movie_writeback(pk, changed_fields=cf))
 
 
 # Снапшот для pre_delete -> post_delete (tmdb_id/media_type исчезают после каскада movie delete)

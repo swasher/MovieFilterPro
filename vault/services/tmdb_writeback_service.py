@@ -190,10 +190,13 @@ class TmdbWritebackService:
     # --- public: single UserMovie sync ---
 
     @classmethod
-    def sync_user_movie_to_tmdb(cls, user_movie) -> list[WritebackResult]:
+    def sync_user_movie_to_tmdb(cls, user_movie, changed_fields: list[str] | None = None) -> list[WritebackResult]:
         """
         Синхронизировать ОДИН UserMovie с TMDB (watchlist + favorite + rating).
         Вызывается из signals post_save. Идемпотентно — выставляет конечное состояние.
+
+        R1 Δ-sync: если `changed_fields` задан — вызываются только sub-sync'и
+        для реально изменённых полей. None = полный sync (fallback/ретрай).
         """
         movie = getattr(user_movie, "movie", None)
         # если movie не загружен — подгружаем
@@ -214,58 +217,80 @@ class TmdbWritebackService:
             logger.debug("writeback skipped movie=%s tmdb_id=%s reason=%s", getattr(movie, "id", "?"), getattr(movie, "tmdb_id", None), reason)
             return [WritebackResult(success=False, action="skipped", tmdb_id=getattr(movie, "tmdb_id", None), media_type=getattr(movie, "tmdb_media_type", None), error=reason)]
 
+        # R1: Δ-sync — фильтр по changed_fields (None = full)
+        def _should_run(field: str) -> bool:
+            return changed_fields is None or field in changed_fields
+
         results: list[WritebackResult] = []
-        # watch_status -> watchlist
-        try:
-            r = cls.sync_watch_status(user_movie)
-            if r:
-                results.append(r)
-        except Exception as exc:
-            logger.exception("writeback watch_status failed: %s", exc)
-            results.append(WritebackResult(success=False, action="watchlist", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        # watch_status -> watchlist (и skip_list — производное от watch_status)
+        if _should_run("watch_status"):
+            try:
+                r = cls.sync_watch_status(user_movie)
+                if r:
+                    results.append(r)
+            except Exception as exc:
+                logger.exception("writeback watch_status failed: %s", exc)
+                results.append(WritebackResult(success=False, action="watchlist", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        else:
+            logger.debug("writeback watch_status skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
 
         # favorite
-        try:
-            r = cls.sync_favorite(user_movie)
-            if r:
-                results.append(r)
-        except Exception as exc:
-            logger.exception("writeback favorite failed: %s", exc)
-            results.append(WritebackResult(success=False, action="favorite", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        if _should_run("is_favorite"):
+            try:
+                r = cls.sync_favorite(user_movie)
+                if r:
+                    results.append(r)
+            except Exception as exc:
+                logger.exception("writeback favorite failed: %s", exc)
+                results.append(WritebackResult(success=False, action="favorite", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        else:
+            logger.debug("writeback favorite skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
 
         # rating
-        try:
-            r = cls.sync_rating(user_movie)
-            if r:
-                results.append(r)
-        except Exception as exc:
-            logger.exception("writeback rating failed: %s", exc)
-            results.append(WritebackResult(success=False, action="rate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
-
-        # skip mirror list (§20.7)
-        try:
-            r = cls.sync_skip_list(user_movie, prefs=prefs)
-            if r:
-                results.append(r)
-        except Exception as exc:
-            logger.exception("writeback skip_list failed: %s", exc)
-            results.append(WritebackResult(success=False, action="skip_list", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
-
-        # user custom lists
-        should_lists, lists_reason = cls._should_writeback_lists(prefs=prefs)
-        if should_lists:
+        if _should_run("rating"):
             try:
-                from vault.models import UserListMovie
-
-                for lm in UserListMovie.objects.filter(movie=movie).select_related("user_list"):
-                    r = cls.sync_list_item_added(lm)
-                    if r:
-                        results.append(r)
+                r = cls.sync_rating(user_movie)
+                if r:
+                    results.append(r)
             except Exception as exc:
-                logger.exception("writeback user_lists failed: %s", exc)
-                results.append(WritebackResult(success=False, action="user_lists", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+                logger.exception("writeback rating failed: %s", exc)
+                results.append(WritebackResult(success=False, action="rate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
         else:
-            logger.debug("writeback user_lists skipped: %s", lists_reason)
+            logger.debug("writeback rating skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
+
+        # skip mirror list (§20.7) — производное от watch_status, поэтому завязано на него
+        if _should_run("watch_status"):
+            try:
+                r = cls.sync_skip_list(user_movie, prefs=prefs)
+                if r:
+                    results.append(r)
+            except Exception as exc:
+                logger.exception("writeback skip_list failed: %s", exc)
+                results.append(WritebackResult(success=False, action="skip_list", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        else:
+            logger.debug("writeback skip_list skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
+
+        # user custom lists — через отдельный сигнал UserListMovie; здесь только для full-sync/ретрая
+        # Чистая архитектура: списки синхронизируются через UserListMovie post_save/post_delete,
+        # а не через UserMovie save. Оставляем блок только для full-sync (changed_fields is None)
+        # или явного "lists" (совместимость).
+        if _should_run("lists"):
+            should_lists, lists_reason = cls._should_writeback_lists(prefs=prefs)
+            if should_lists:
+                try:
+                    from vault.models import UserListMovie
+
+                    for lm in UserListMovie.objects.filter(movie=movie).select_related("user_list"):
+                        r = cls.sync_list_item_added(lm)
+                        if r:
+                            results.append(r)
+                except Exception as exc:
+                    logger.exception("writeback user_lists failed: %s", exc)
+                    results.append(WritebackResult(success=False, action="user_lists", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+            else:
+                logger.debug("writeback user_lists skipped: %s", lists_reason)
+        else:
+            logger.debug("writeback user_lists skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
 
         # --- persistent queue handling (forever, 10m) ---
         # Ретрай обеспечивается periodic task `tmdb_writeback_retry_tick`
@@ -284,7 +309,7 @@ class TmdbWritebackService:
         return results
 
     @classmethod
-    def sync_user_movie_to_tmdb_by_id(cls, user_movie_id: int) -> list[WritebackResult]:
+    def sync_user_movie_to_tmdb_by_id(cls, user_movie_id: int, changed_fields: list[str] | None = None) -> list[WritebackResult]:
         """Helper для HUEY / on_commit — загрузка по id."""
         from vault.models import UserMovie
 
@@ -293,7 +318,7 @@ class TmdbWritebackService:
         except UserMovie.DoesNotExist:
             logger.warning("writeback: UserMovie %s not found", user_movie_id)
             return [WritebackResult(success=False, action="not_found", error=f"UserMovie {user_movie_id} not found")]
-        return cls.sync_user_movie_to_tmdb(um)
+        return cls.sync_user_movie_to_tmdb(um, changed_fields=changed_fields)
 
     @classmethod
     def sync_user_movie_deleted(cls, user_movie) -> list[WritebackResult]:
