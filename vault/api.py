@@ -316,13 +316,8 @@ class TMDBImportOut(Schema):
     movie: MovieOut | None = None
 
 
-class TMDBSyncQueueStateIn(Schema):
-    delay_seconds: int
-
-
 class TMDBSyncQueueStateOut(Schema):
     enabled: bool
-    delay_seconds: int
     counters: dict[str, int]  # pending, in_progress, synced, confirm, not_found, error
     total_unsynced: int  # сколько в базе вообще несинхронизированных (source=KINORIUM, tmdb_id IS NULL)
 
@@ -1635,16 +1630,6 @@ def tmdb_sync_start(request):
 def tmdb_sync_stop(request):
     _require_api_user(request)
     TMDBSyncQueueService.stop()
-    return TMDBSyncQueueService.get_state()
-
-
-@api.patch("/tmdb-sync/state", response=TMDBSyncQueueStateOut)
-def tmdb_sync_update_state(request, payload: TMDBSyncQueueStateIn):
-    _require_api_user(request)
-    try:
-        TMDBSyncQueueService.set_delay(payload.delay_seconds)
-    except ValueError as exc:
-        raise HttpError(400, str(exc))
     return TMDBSyncQueueService.get_state()
 
 

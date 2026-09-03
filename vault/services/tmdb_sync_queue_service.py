@@ -202,16 +202,6 @@ class TMDBSyncQueueService:
         return item
 
     @classmethod
-    def set_delay(cls, seconds: int) -> int:
-        seconds = int(seconds)
-        if not 1 <= seconds <= 3600:
-            raise ValueError("delay_seconds должен быть в диапазоне 1..3600")
-        prefs = UserPreferences.get()
-        prefs.tmdb_sync_delay_seconds = seconds
-        prefs.save(update_fields=["tmdb_sync_delay_seconds"])
-        return seconds
-
-    @classmethod
     def get_state(cls) -> dict:
         prefs = UserPreferences.get()
         counters = {key: 0 for key in cls.STATE_KEYS}
@@ -220,7 +210,6 @@ class TMDBSyncQueueService:
 
         return {
             "enabled": prefs.tmdb_sync_enabled,
-            "delay_seconds": prefs.tmdb_sync_delay_seconds,
             "counters": counters,
             "total_unsynced": cls._unsynced_count(),
         }
@@ -337,12 +326,13 @@ class TMDBSyncQueueService:
                 logger.warning("writeback schedule after sync failed movie=%s: %s", movie.id, exc)
 
         # Само-перепланирование следующего тика (проверяем enabled ещё раз после возможного stop)
+        # Лимитер 0.5 сек уже душит TMDB, дополнительный ручной темп не нужен — фиксированно 1 сек
         prefs = UserPreferences.get()
         if (
             prefs.tmdb_sync_enabled
             and TMDBSyncQueueItem.objects.filter(state=TMDBSyncQueueItem.State.PENDING).exists()
         ):
-            cls._schedule_tick(delay=prefs.tmdb_sync_delay_seconds)
+            cls._schedule_tick(delay=1)
 
         return {
             "state": item.state,

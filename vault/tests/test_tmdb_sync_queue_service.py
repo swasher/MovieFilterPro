@@ -246,9 +246,9 @@ class TMDBSyncQueueServiceTests(TestCase):
         movie2_item = TMDBSyncQueueItem.objects.get(movie=movie2)
         self.assertEqual(movie2_item.state, TMDBSyncQueueItem.State.PENDING)
 
-        # второй вызов _schedule_tick — с текущим темпом
+        # второй вызов _schedule_tick — с фиксированным темпом 1 сек (лимитер 0.5 сек)
         self.assertEqual(self.mock_schedule_tick.call_count, 2)
-        self.assertEqual(self.mock_schedule_tick.call_args.kwargs["delay"], 60)
+        self.assertEqual(self.mock_schedule_tick.call_args.kwargs["delay"], 1)
 
         # после обработки последнего pending перепланирования нет
         TMDBSyncQueueService.process_one()

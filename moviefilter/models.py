@@ -176,10 +176,6 @@ class UserPreferences(models.Model):
     tmdb_v4_authenticated_access_token = models.CharField(max_length=400, blank=True, null=True)
 
     tmdb_sync_enabled = models.BooleanField('Обработка очереди TMDB включена', default=False)
-    tmdb_sync_delay_seconds = models.PositiveSmallIntegerField(
-        'Секунд на фильм при массовой синхронизации',
-        default=60,
-    )
 
     tmdb_writeback_enabled = models.BooleanField(
         'Обратная синхронизация в TMDB',

@@ -52,13 +52,11 @@
 
   type QueueState = {
     enabled: boolean;
-    delay_seconds: number;
     counters: Record<string, number>;
     total_unsynced: number;
   };
 
   let enabled = $state(data.state?.enabled ?? false);
-  let delaySeconds = $state(data.state?.delay_seconds ?? 60);
   let counters = $state<Record<string, number>>(data.state?.counters ?? {});
   let totalUnsynced = $state(data.state?.total_unsynced ?? 0);
   let items = $state<QueueItem[]>(data.items ?? []);
@@ -73,8 +71,6 @@
   let isRemovingSynced = $state(false);
   let removeDialogOpen = $state(false);
   let resyncDialogOpen = $state(false);
-  let delayInput = $state(String(delaySeconds));
-  let isSavingDelay = $state(false);
   let isResyncing = $state(false);
   let deletingIds = $state<Record<number, boolean>>({});
 
@@ -96,7 +92,6 @@
     if (stateResponse.ok) {
       const payload = (await stateResponse.json()) as QueueState;
       enabled = payload.enabled;
-      delaySeconds = payload.delay_seconds;
       counters = payload.counters;
       totalUnsynced = payload.total_unsynced;
     } else if (stateResponse.status === 401) {
@@ -295,33 +290,7 @@
     }
   };
 
-  const saveDelay = async () => {
-    const parsed = parseInt(delayInput, 10);
-    if (isNaN(parsed) || parsed < 1 || parsed > 3600) {
-      delayInput = String(delaySeconds);
-      toast.error("Темп должен быть в диапазоне 1..3600 секунд");
-      return;
-    }
-    isSavingDelay = true;
-    try {
-      const response = await fetch("/api/vault/tmdb-sync/state", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ delay_seconds: parsed })
-      });
-      if (!response.ok) {
-        if (await handleUnauthorized(response.status)) return;
-        toast.error(`HTTP ${response.status}`);
-        return;
-      }
-      delaySeconds = parsed;
-      toast.success(`Темп: 1 фильм в ${parsed} сек.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить темп");
-    } finally {
-      isSavingDelay = false;
-    }
-  };
+
 
   const stateLabels: Record<string, string> = {
     pending: "В очереди",
@@ -367,9 +336,9 @@
     <CardHeader>
       <CardTitle class="text-lg">TMDB Sync Queue</CardTitle>
       <CardDescription>
-        Массовая синхронизация фильмотеки с TMDB: 1 фильм за проход, темп
-        задаётся полем ниже. Очередь: {counters.pending ?? 0} записей
-        из {totalUnsynced} несинхронизированных.
+        Массовая синхронизация фильмотеки с TMDB: 1 фильм за проход. Очередь:
+        {counters.pending ?? 0} записей из {totalUnsynced} несинхронизированных.
+        Скорость ограничена лимитером TMDB (2 зап/сек).
       </CardDescription>
     </CardHeader>
     <CardContent class="flex flex-wrap items-center gap-3">
@@ -416,21 +385,6 @@
         <Trash2 data-icon="inline-start" />
         Remove all
       </Button>
-
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-muted-foreground">Темп:</span>
-        <div class="w-20">
-          <Input
-            type="number"
-            min={1}
-            max={3600}
-            bind:value={delayInput}
-            onblur={saveDelay}
-            disabled={isSavingDelay}
-          />
-        </div>
-        <span class="text-sm text-muted-foreground">сек / фильм</span>
-      </div>
 
       <Badge
         variant={enabled ? "default" : "secondary"}

@@ -24,7 +24,6 @@ type QueueItem = {
 
 type QueueStateResp = {
   enabled: boolean;
-  delay_seconds: number;
   counters: Record<string, number>;
   total_unsynced: number;
 };
