@@ -29,6 +29,40 @@ except ImportError:  # pragma: no cover — tmdbapis обязательная з
 
 logger = logging.getLogger("vault.tmdb_writeback")
 
+# R3: простой dict-кэш UserList.id -> tmdb_list_id (процесс-лок, без класса).
+# Собирается один раз при старте bulk-sync и валиден пока sync не завершится
+# (single-user, других действий во время sync нет — см. PLAN R3).
+# None = не прогрет, {} = прогрет но списков нет.
+_USER_LIST_TMDB_ID_CACHE: dict[int, int | None] | None = None
+
+
+def warm_user_list_id_cache(*, force: bool = False) -> dict[int, int | None]:
+    """Прогреть dict-кэш: один SELECT всех UserList (R3)."""
+    global _USER_LIST_TMDB_ID_CACHE
+    if _USER_LIST_TMDB_ID_CACHE is not None and not force:
+        return _USER_LIST_TMDB_ID_CACHE
+    try:
+        from vault.models import UserList as _UL
+
+        _USER_LIST_TMDB_ID_CACHE = {ul.id: ul.tmdb_list_id for ul in _UL.objects.all()}
+    except Exception as exc:
+        logger.warning("warm_user_list_id_cache failed: %s", exc)
+        if _USER_LIST_TMDB_ID_CACHE is None:
+            _USER_LIST_TMDB_ID_CACHE = {}
+    return _USER_LIST_TMDB_ID_CACHE  # type: ignore[return-value]
+
+
+def _invalidate_user_list_cache(user_list_id: int | None = None) -> None:
+    """Инвалидировать кэш полностью или для одного списка."""
+    global _USER_LIST_TMDB_ID_CACHE
+    if _USER_LIST_TMDB_ID_CACHE is None:
+        return
+    if user_list_id is None:
+        _USER_LIST_TMDB_ID_CACHE = None
+    else:
+        _USER_LIST_TMDB_ID_CACHE.pop(user_list_id, None)
+
+
 # ------------------------------------ #
 #          APPLICATION LAYER           #
 # ------------------------------------ #
@@ -684,6 +718,19 @@ class TmdbWritebackService:
                 return WritebackResult(success=False, action="list_add", error=str(exc))
         if not getattr(movie, "tmdb_id", None):
             return WritebackResult(success=False, action="list_add", error="movie has no tmdb_id")
+        # R3: lazy warm dict-кэша в воркере (WEB греет при Start, воркер — при первом вызове)
+        if _USER_LIST_TMDB_ID_CACHE is None:
+            try:
+                warm_user_list_id_cache()
+            except Exception:
+                pass
+        if _USER_LIST_TMDB_ID_CACHE is not None and user_list is not None:
+            try:
+                cached_id = _USER_LIST_TMDB_ID_CACHE.get(user_list.id)
+                if cached_id:
+                    user_list.tmdb_list_id = cached_id
+            except Exception:
+                pass
         if not getattr(user_list, "tmdb_list_id", None):
             # §20.6: создаём TMDB-лист на лету, если ещё нет.
             # Это снимает race между list_sync и list_item_added при async-HUEY:
@@ -693,20 +740,55 @@ class TmdbWritebackService:
             if not create_result.success:
                 return WritebackResult(success=False, action="list_add_skipped", error=f"auto-create failed: {create_result.error}")
             user_list.refresh_from_db(fields=["tmdb_list_id"])
-        try:
+        def _do_add(list_id: int) -> None:
             from tmdb_adapter.client_singleton import get_tmdb_client
 
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
-                return WritebackResult(success=False, action="list_add", error="no v4 client")
+                raise RuntimeError("no v4 client")
             media_type = movie.tmdb_media_type or "movie"
-            api4.list_add_items(list_id=int(user_list.tmdb_list_id), items=[{"media_type": media_type, "media_id": int(movie.tmdb_id)}])
+            api4.list_add_items(list_id=list_id, items=[{"media_type": media_type, "media_id": int(movie.tmdb_id)}])
+
+        try:
+            _do_add(int(user_list.tmdb_list_id))
             logger.info("writeback list_add list=%s tmdb_list=%s movie tmdb_id=%s", user_list.id, user_list.tmdb_list_id, movie.tmdb_id)
-            return WritebackResult(success=True, action="list_add", tmdb_id=movie.tmdb_id, media_type=media_type)
+            return WritebackResult(success=True, action="list_add", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type or "movie")
         except Exception as exc:
+            msg = str(exc)
+            # R4: если список удалён на TMDB — сбросить кэш, пересоздать и повторить один раз
+            is_404 = "404" in msg or "not found" in msg.lower() or "NotFound" in type(exc).__name__
+            if is_404:
+                logger.warning("writeback list_add 404 for list %s (%s), will recreate: %s", user_list.id, user_list.tmdb_list_id, exc)
+                try:
+                    from vault.models import UserList as UL
+
+                    UL.objects.filter(pk=user_list.pk).update(tmdb_list_id=None)
+                    user_list.tmdb_list_id = None
+                    # сбросим dict-кэш если он прогрет (R3)
+                    try:
+                        if _USER_LIST_TMDB_ID_CACHE is not None and user_list.id in _USER_LIST_TMDB_ID_CACHE:
+                            _USER_LIST_TMDB_ID_CACHE.pop(user_list.id, None)
+                    except Exception:
+                        pass
+                    create_result = cls.create_tmdb_list(user_list)
+                    if not create_result.success:
+                        return WritebackResult(success=False, action="list_add", tmdb_id=getattr(movie, "tmdb_id", None), error=f"recreate failed after 404: {create_result.error}")
+                    user_list.refresh_from_db(fields=["tmdb_list_id"])
+                    # обновим кэш
+                    try:
+                        if _USER_LIST_TMDB_ID_CACHE is not None:
+                            _USER_LIST_TMDB_ID_CACHE[user_list.id] = int(user_list.tmdb_list_id) if user_list.tmdb_list_id else None  # type: ignore[assignment]
+                    except Exception:
+                        pass
+                    _do_add(int(user_list.tmdb_list_id))
+                    logger.info("writeback list_add retry success list=%s tmdb_list=%s movie tmdb_id=%s", user_list.id, user_list.tmdb_list_id, movie.tmdb_id)
+                    return WritebackResult(success=True, action="list_add", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type or "movie")
+                except Exception as exc2:
+                    logger.warning("writeback list_add retry failed: %s", exc2)
+                    return WritebackResult(success=False, action="list_add", tmdb_id=getattr(movie, "tmdb_id", None), error=str(exc2))
             logger.warning("writeback list_add failed: %s", exc)
-            return WritebackResult(success=False, action="list_add", tmdb_id=getattr(movie, "tmdb_id", None), error=str(exc))
+            return WritebackResult(success=False, action="list_add", tmdb_id=getattr(movie, "tmdb_id", None), error=msg)
 
     @classmethod
     def sync_list_item_removed(cls, list_movie) -> Optional[WritebackResult]:
@@ -721,24 +803,63 @@ class TmdbWritebackService:
         if user_list is None or movie is None:
             logger.debug("list_remove: missing relation for list_movie %s", getattr(list_movie, "pk", "?"))
             return WritebackResult(success=False, action="list_remove", error="missing relation")
+        # R3: кэш может содержать более свежий tmdb_list_id чем снапшот из pre_delete
+        if _USER_LIST_TMDB_ID_CACHE is None:
+            try:
+                warm_user_list_id_cache()
+            except Exception:
+                pass
+        if _USER_LIST_TMDB_ID_CACHE is not None and user_list is not None:
+            try:
+                cached_id = _USER_LIST_TMDB_ID_CACHE.get(user_list.id)
+                if cached_id:
+                    user_list.tmdb_list_id = cached_id
+            except Exception:
+                pass
         if not getattr(user_list, "tmdb_list_id", None):
             return WritebackResult(success=False, action="list_remove_skipped", error="no tmdb_list_id")
         if not getattr(movie, "tmdb_id", None):
             return WritebackResult(success=False, action="list_remove", error="no tmdb_id")
-        try:
+        def _do_remove(list_id: int) -> None:
             from tmdb_adapter.client_singleton import get_tmdb_client
 
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
-                return WritebackResult(success=False, action="list_remove", error="no v4 client")
+                raise RuntimeError("no v4 client")
             media_type = movie.tmdb_media_type or "movie"
-            api4.list_remove_items(list_id=int(user_list.tmdb_list_id), items=[{"media_type": media_type, "media_id": int(movie.tmdb_id)}])
+            api4.list_remove_items(list_id=list_id, items=[{"media_type": media_type, "media_id": int(movie.tmdb_id)}])
+
+        try:
+            _do_remove(int(user_list.tmdb_list_id))
             logger.info("writeback list_remove list=%s tmdb_list=%s tmdb_id=%s", user_list.id, user_list.tmdb_list_id, movie.tmdb_id)
-            return WritebackResult(success=True, action="list_remove", tmdb_id=movie.tmdb_id, media_type=media_type)
+            return WritebackResult(success=True, action="list_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type or "movie")
         except Exception as exc:
+            msg = str(exc)
+            is_404 = "404" in msg or "not found" in msg.lower() or "NotFound" in type(exc).__name__
+            if is_404:
+                logger.warning("writeback list_remove 404 for list %s (%s), will recreate: %s", user_list.id, user_list.tmdb_list_id, exc)
+                try:
+                    from vault.models import UserList as UL
+
+                    UL.objects.filter(pk=user_list.pk).update(tmdb_list_id=None)
+                    user_list.tmdb_list_id = None
+                    try:
+                        if _USER_LIST_TMDB_ID_CACHE is not None and user_list.id in _USER_LIST_TMDB_ID_CACHE:
+                            _USER_LIST_TMDB_ID_CACHE.pop(user_list.id, None)
+                    except Exception:
+                        pass
+                    create_result = cls.create_tmdb_list(user_list)
+                    if not create_result.success:
+                        return WritebackResult(success=False, action="list_remove", tmdb_id=getattr(movie, "tmdb_id", None), error=f"recreate failed after 404: {create_result.error}")
+                    # удаление после пересоздания не нужно — список уже пустой
+                    logger.info("writeback list_remove recreated list=%s new_tmdb_list=%s (remove skipped, list was missing)", user_list.id, user_list.tmdb_list_id)
+                    return WritebackResult(success=True, action="list_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type or "movie")
+                except Exception as exc2:
+                    logger.warning("writeback list_remove recreate failed: %s", exc2)
+                    return WritebackResult(success=False, action="list_remove", tmdb_id=getattr(movie, "tmdb_id", None), error=str(exc2))
             logger.warning("writeback list_remove failed: %s", exc)
-            return WritebackResult(success=False, action="list_remove", tmdb_id=getattr(movie, "tmdb_id", None), error=str(exc))
+            return WritebackResult(success=False, action="list_remove", tmdb_id=getattr(movie, "tmdb_id", None), error=msg)
 
     @classmethod
     def create_tmdb_list(cls, user_list, tmdb_name: str | None = None) -> WritebackResult:
@@ -756,8 +877,13 @@ class TmdbWritebackService:
             with transaction.atomic():
                 locked = UL.objects.select_for_update().get(pk=user_list.pk)
                 if locked.tmdb_list_id:
-                    # уже создал параллельный поток
+                    # уже создал параллельный поток — подхватим и кэш
                     user_list.tmdb_list_id = locked.tmdb_list_id
+                    try:
+                        if _USER_LIST_TMDB_ID_CACHE is not None:
+                            _USER_LIST_TMDB_ID_CACHE[locked.id] = int(locked.tmdb_list_id)
+                    except Exception:
+                        pass
                     return WritebackResult(success=True, action="list_create", tmdb_id=int(locked.tmdb_list_id), media_type="list")
                 tmdb = get_tmdb_client()
                 list_name = tmdb_name or locked.name
@@ -770,6 +896,12 @@ class TmdbWritebackService:
                 UL.objects.filter(pk=locked.pk).update(tmdb_list_id=int(new_id))
                 user_list.tmdb_list_id = int(new_id)
                 locked.tmdb_list_id = int(new_id)
+                # R3: обновим dict-кэш
+                try:
+                    if _USER_LIST_TMDB_ID_CACHE is not None:
+                        _USER_LIST_TMDB_ID_CACHE[locked.id] = int(new_id)
+                except Exception:
+                    pass
                 logger.info("writeback list_create id=%s tmdb_list=%s tmdb_name=%s", locked.id, new_id, list_name)
                 return WritebackResult(success=True, action="list_create", tmdb_id=int(new_id), media_type="list")
         except UL.DoesNotExist:
@@ -840,33 +972,12 @@ class TmdbWritebackService:
         except Exception as exc:
             logger.warning("writeback lists init: skip list init failed: %s", exc)
 
-        # берём все локальные списки, проверяем каждый
+        # берём все локальные списки — живыми считаем все с tmdb_list_id (R4).
+        # Проверку list_get_list убрали: N API-вызовов → 0. Если список удалён на
+        # TMDB вручную — поймаем 404 при реальном list_add/remove и пересоздадим
+        # (паттерн как у skip-листа — см. sync_list_item_added/removed).
         all_lists = list(UserList.objects.all())
-        to_create = []
-        for ul in all_lists:
-            if not ul.tmdb_list_id:
-                to_create.append(ul)
-                continue
-            # есть tmdb_id — проверяем жив ли он на TMDB (пользователь мог удалить вручную)
-            try:
-                from tmdb_adapter.client_singleton import get_tmdb_client
-
-                tmdb = get_tmdb_client()
-                api4 = tmdb._api4
-                if api4 is None:
-                    continue
-                api4.list_get_list(list_id=int(ul.tmdb_list_id))
-            except Exception as exc:
-                msg = str(exc)
-                # 404 / NotFound → список удалён на TMDB, надо пересоздать
-                if "404" in msg or "NotFound" in type(exc).__name__ or "not found" in msg.lower():
-                    logger.warning("writeback lists init: TMDB list %s missing for UserList %s (%s), will recreate", ul.tmdb_list_id, ul.id, ul.name)
-                    # сбросим локально и добавим в создание
-                    UserList.objects.filter(pk=ul.pk).update(tmdb_list_id=None)
-                    ul.tmdb_list_id = None
-                    to_create.append(ul)
-                else:
-                    logger.warning("writeback lists init check failed for %s: %s", ul.id, exc)
+        to_create = [ul for ul in all_lists if not ul.tmdb_list_id]
 
         created = 0
         errors = []
@@ -888,6 +999,11 @@ class TmdbWritebackService:
 
         prefs.tmdb_lists_initialized = True
         prefs.save(update_fields=["tmdb_lists_initialized"])
+        # R3: прогреть dict-кэш — после создания списков он актуален на весь bulk-sync
+        try:
+            warm_user_list_id_cache(force=True)
+        except Exception:
+            pass
         if errors:
             logger.warning("writeback lists init done created=%s errors=%s", created, errors)
         else:

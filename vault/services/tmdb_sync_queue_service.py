@@ -126,6 +126,21 @@ class TMDBSyncQueueService:
         if not prefs.tmdb_sync_enabled:
             prefs.tmdb_sync_enabled = True
             prefs.save(update_fields=["tmdb_sync_enabled"])
+        # R3/R4: прогрев dict-кэша списков + создание недостающих TMDB-листов заранее.
+        # WEB-прогрев (один SELECT) — дёшево; воркер прогреется лениво в sync_list_item_added
+        # или фоновой задачей tmdb_lists_init (та же память воркера, но отдельный таск — страховка).
+        try:
+            from vault.services.tmdb_writeback_service import warm_user_list_id_cache
+
+            warm_user_list_id_cache()
+        except Exception:
+            pass
+        try:
+            from vault.tasks import tmdb_lists_init
+
+            tmdb_lists_init.schedule(delay=2)
+        except Exception as exc:
+            logger.warning(f"TMDB_SYNC_START lists_init schedule failed: {exc}")
         cls._schedule_tick(delay=1)
 
     @classmethod
