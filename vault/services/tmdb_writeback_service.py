@@ -131,18 +131,33 @@ class TmdbWritebackService:
 
     @classmethod
     def _upsert_queue_item(cls, movie, error: str, *, is_auth: bool = False):
-        """Создать/обновить запись forever-очереди. Auth → next_retry=None, 429 → backoff 10-300с."""
+        """Создать/обновить запись forever-очереди. Auth → next_retry=None, 429 → backoff 10-300с, 5 попыток лимит."""
         try:
             from vault.models import TMDBWritebackQueueItem
 
             now = timezone.now()
             # 6b: rate-limit backoff по количеству попыток
             is_rate = not is_auth and ("429" in (error or "") or "Rate limit" in (error or ""))
+            # Транзиентная (5xx/timeout) — лимит 5 попыток, потом ERROR без ретрая
+            is_transient = not is_auth and not is_rate and (
+                "500" in (error or "") or "502" in (error or "") or "503" in (error or "") or "504" in (error or "") or "timeout" in (error or "").lower() or "connection" in (error or "").lower() or "500" in type(Exception(error)).__name__
+            )
+            # Для прочих (не rate, не auth) считаем транзиентной если не бизнес-ошибка — лимит 5
+            # Бизнес not_found не попадает в writeback queue (skip), так что безопасно лимитить.
             state = TMDBWritebackQueueItem.State.ERROR if is_auth else TMDBWritebackQueueItem.State.PENDING
             # need movie_id for snap support
             movie_id = getattr(movie, "id", None) or getattr(movie, "pk", None)
             if not movie_id:
                 return None
+            # Стоп обеих очередей на критичной 401 — сразу (ТЗ 6d)
+            if is_auth:
+                try:
+                    from moviefilter.models import UserPreferences as _UP
+
+                    _UP.objects.filter(pk=1).update(tmdb_sync_enabled=False)
+                    logger.critical("BULK_STOP | writeback critical 401 movie=%s — sync stopped", movie_id)
+                except Exception:
+                    pass
             # Атомарно считаем попытки через select_for_update, чтобы backoff был точным
             # (F() не даёт нам значение для вычисления задержки).
             with transaction.atomic():
@@ -151,35 +166,58 @@ class TmdbWritebackService:
                     new_attempts = (existing.attempts or 0) + 1
                     if is_auth:
                         next_retry = None
-                    else:
-                        delay = cls._get_retry_delay(new_attempts, is_rate_limited=is_rate)
+                        final_state = TMDBWritebackQueueItem.State.ERROR
+                    elif is_rate:
+                        delay = cls._get_retry_delay(new_attempts, is_rate_limited=True)
                         next_retry = now + timedelta(seconds=delay) if delay is not None else None
-                    existing.state = state
+                        final_state = TMDBWritebackQueueItem.State.PENDING
+                    else:
+                        # Транзиентная — 5 попыток лимит (ТЗ 6d)
+                        if new_attempts >= 5:
+                            next_retry = None
+                            final_state = TMDBWritebackQueueItem.State.ERROR
+                        else:
+                            delay = 600
+                            next_retry = now + timedelta(seconds=delay)
+                            final_state = TMDBWritebackQueueItem.State.PENDING
+                    existing.state = final_state
                     existing.last_error = (error or "")[:2000]
                     existing.next_retry_at = next_retry
                     existing.attempts = new_attempts
                     existing.save(update_fields=["state", "last_error", "next_retry_at", "attempts", "updated_at"])
                     obj = existing
+                    final_state_logged = final_state
                     created = False
                 except TMDBWritebackQueueItem.DoesNotExist:
                     new_attempts = 1
                     if is_auth:
                         next_retry = None
-                    else:
-                        delay = cls._get_retry_delay(new_attempts, is_rate_limited=is_rate)
+                        final_state = TMDBWritebackQueueItem.State.ERROR
+                    elif is_rate:
+                        delay = cls._get_retry_delay(new_attempts, is_rate_limited=True)
                         next_retry = now + timedelta(seconds=delay) if delay is not None else None
+                        final_state = TMDBWritebackQueueItem.State.PENDING
+                    else:
+                        if new_attempts >= 5:
+                            next_retry = None
+                            final_state = TMDBWritebackQueueItem.State.ERROR
+                        else:
+                            delay = 600
+                            next_retry = now + timedelta(seconds=delay)
+                            final_state = TMDBWritebackQueueItem.State.PENDING
                     obj = TMDBWritebackQueueItem.objects.create(
                         movie_id=movie_id,
-                        state=state,
+                        state=final_state,
                         last_error=(error or "")[:2000],
                         next_retry_at=next_retry,
                         attempts=new_attempts,
                     )
+                    final_state_logged = final_state
                     created = True
             logger.warning(
                 "writeback queue upsert movie=%s state=%s next_retry=%s attempts=%s err=%s",
                 movie_id,
-                state,
+                final_state_logged,
                 next_retry,
                 new_attempts,
                 (error or "")[:200],

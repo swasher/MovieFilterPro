@@ -29,6 +29,19 @@ class TMDBSyncQueueService:
 
     STATE_KEYS = ("pending", "in_progress", "synced", "confirm", "not_found", "error")
 
+    # ТЗ 6d: стоп-кран — 3 подряд фейла, bulk_stats каждые 100
+    _consecutive_failures: int = 0
+    _bulk_stats: dict[str, int] = {
+        "success": 0,
+        "not_found": 0,
+        "confirm": 0,
+        "error": 0,
+        "rate_limited": 0,
+        "critical": 0,
+    }
+    _last_errors: list[str] = []
+    _processed_count: int = 0
+
     # ------------------------------------------------------------------ #
     #                  Управление очередью (UI-кнопки)                    #
     # ------------------------------------------------------------------ #
@@ -126,6 +139,11 @@ class TMDBSyncQueueService:
         if not prefs.tmdb_sync_enabled:
             prefs.tmdb_sync_enabled = True
             prefs.save(update_fields=["tmdb_sync_enabled"])
+        # ТЗ 6d: сброс стоп-крана и статистики bulk
+        cls._consecutive_failures = 0
+        cls._last_errors = []
+        cls._processed_count = 0
+        cls._bulk_stats = {k: 0 for k in cls._bulk_stats}
         # R3/R4: прогрев dict-кэша списков + создание недостающих TMDB-листов заранее.
         # WEB-прогрев (один SELECT) — дёшево; воркер прогреется лениво в sync_list_item_added
         # или фоновой задачей tmdb_lists_init (та же память воркера, но отдельный таск — страховка).
@@ -243,7 +261,66 @@ class TMDBSyncQueueService:
             f'| state={item.state} | msg="{item.result_message}"'
         )
 
-        # Само-перепланирование следующего тика
+        # ТЗ 6d: bulk_stats + стоп-кран 3 подряд + лог каждые 100
+        cls._processed_count += 1
+        cls._update_bulk_stats(item.state, outcome)
+        if cls._is_critical_outcome(outcome):
+            cls._bulk_stats["critical"] = cls._bulk_stats.get("critical", 0) + 1
+            cls._last_errors.append(f"critical movie={movie.id} msg={item.result_message[:200]}")
+            cls._last_errors = cls._last_errors[-5:]
+            logger.critical("BULK_STOP | reason=critical_401 | movie=%s msg=%s", movie.id, item.result_message[:300])
+            cls.stop()
+            # стоп обеих очередей: writeback тоже
+            try:
+                from moviefilter.models import UserPreferences as _UP
+
+                # writeback критичный уже в ERROR без ретрая, но на всякий — лог
+                logger.critical("BULK_STOP | writeback also stopped due to critical auth")
+            except Exception:
+                pass
+            return {
+                "state": item.state,
+                "movie_id": movie.id,
+                "result_message": item.result_message,
+                "bulk_stopped": "critical",
+            }
+        if item.state == TMDBSyncQueueItem.State.ERROR:
+            # считаем только транзиентные/лимит как фейл для подряд (бизнес NOT_FOUND/CONFIRM уже не ERROR)
+            is_rate = "429" in (item.result_message or "") or "Rate limit" in (item.result_message or "")
+            cls._consecutive_failures += 1
+            cls._last_errors.append(f"movie={movie.id} err={item.result_message[:200]}")
+            cls._last_errors = cls._last_errors[-5:]
+            if is_rate:
+                cls._bulk_stats["rate_limited"] += 1
+            if cls._consecutive_failures >= 3:
+                logger.critical("BULK_STOP | reason=3_consecutive_failures | last_errors=%s", cls._last_errors)
+                cls.stop()
+                return {
+                    "state": item.state,
+                    "movie_id": movie.id,
+                    "result_message": item.result_message,
+                    "bulk_stopped": "consecutive",
+                }
+        else:
+            # SYNCED, NOT_FOUND, CONFIRM — сброс подряд
+            cls._consecutive_failures = 0
+
+        if cls._processed_count % 100 == 0:
+            total_pending = TMDBSyncQueueItem.objects.filter(state=TMDBSyncQueueItem.State.PENDING).count()
+            logger.info(
+                "BULK_PROGRESS | done=%s | pending=%s | success=%s not_found=%s confirm=%s error=%s rate=%s critical=%s",
+                cls._processed_count,
+                total_pending,
+                cls._bulk_stats.get("success", 0),
+                cls._bulk_stats.get("not_found", 0),
+                cls._bulk_stats.get("confirm", 0),
+                cls._bulk_stats.get("error", 0),
+                cls._bulk_stats.get("rate_limited", 0),
+                cls._bulk_stats.get("critical", 0),
+            )
+
+        # Само-перепланирование следующего тика (проверяем enabled ещё раз после возможного stop)
+        prefs = UserPreferences.get()
         if (
             prefs.tmdb_sync_enabled
             and TMDBSyncQueueItem.objects.filter(state=TMDBSyncQueueItem.State.PENDING).exists()
@@ -317,6 +394,30 @@ class TMDBSyncQueueService:
             item.result_year = movie.year
 
         item.error_trace = outcome.get("error_trace", "")
+
+    @classmethod
+    def _update_bulk_stats(cls, state: str, outcome: dict) -> None:
+        if state == TMDBSyncQueueItem.State.SYNCED:
+            cls._bulk_stats["success"] = cls._bulk_stats.get("success", 0) + 1
+        elif state == TMDBSyncQueueItem.State.NOT_FOUND:
+            cls._bulk_stats["not_found"] = cls._bulk_stats.get("not_found", 0) + 1
+        elif state == TMDBSyncQueueItem.State.CONFIRM:
+            cls._bulk_stats["confirm"] = cls._bulk_stats.get("confirm", 0) + 1
+        elif state == TMDBSyncQueueItem.State.ERROR:
+            cls._bulk_stats["error"] = cls._bulk_stats.get("error", 0) + 1
+
+    @classmethod
+    def _is_critical_outcome(cls, outcome: dict) -> bool:
+        msg = (outcome.get("result_message") or "") + " " + (outcome.get("error_trace") or "")
+        # 401 критичная — как в writeback
+        return (
+            "401" in msg
+            or "Invalid API key" in msg
+            or "Authentication" in msg
+            or "Unauthorized" in msg
+            or "WritePermission" in msg
+            or "PrivateResource" in msg
+        )
 
     @classmethod
     def _next_pending_item(cls) -> TMDBSyncQueueItem | None:

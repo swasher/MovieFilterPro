@@ -226,11 +226,12 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
   вернёт `404` — локальный `tmdb_list_id` сбрасывается, список пересоздаётся и
   операция повторяется один раз (тот же паттерн, что у skip-листа).
 
-### 6.7 Лимитер и ретраи (R6a/b)
+### 6.7 Лимитер и ретраи (R6a/b/d)
 
 - **Rate limiter `vault/services/tmdb_rate_limiter.py`.** Глобальный `TmdbRateLimiter` — `0.5 сек` между любыми `TMDB` вызовами (`2/sec`, запас `×2` от лимита `TMDB 40/10сек`). Один на процесс (`WEB` и `HUEY` — разные процессы), `threading.Lock`. Вызывается перед `tmdb.movie/tv/person/tv_season` (read) и перед `watchlist/favorite/rating/list_*` (write).
-- **Backoff для `429`.** `TMDBWritebackQueueItem.next_retry_at` считается по лестнице `10/30/60/120/300 сек` в зависимости от `attempts` (`_get_retry_delay`). `401` → `state=ERROR`, `next_retry=None` (без авто-ретрая). Прочие ошибки → `600 сек`.
-- **Не делается (сознательно):** батчи-паузы (`6c`) — лимитер уже сглаживает; `stop-кран` и классификация `5 подряд фейлов` вынесены в отдельное ТЗ по обработке ошибок.
+- **Backoff для `429`.** `TMDBWritebackQueueItem.next_retry_at` считается по лестнице `10/30/60/120/300 сек` в зависимости от `attempts` (`_get_retry_delay`). `401` → `state=ERROR`, `next_retry=None` (без авто-ретрая), стопает обе очереди (см. `TZ_ERROR_HANDLING`). Прочие транзиентные → `600 сек`, после `5` попыток → `ERROR` без ретрая.
+- **Bulk-стоп-кран (ТЗ 6d).** `TMDBSyncQueueService` ведёт `consecutive_failures` и `bulk_stats`, `BULK_PROGRESS` каждые `100`, `BULK_STOP` при `3 подряд` транзиентных/`429` или при любой `401` (стоп обеих очередей). См. `docs/TZ_ERROR_HANDLING.md`.
+- **Не делается:** батчи-паузы (`6c`) — лимитер уже сглаживает.
 
 ## 7. Сигналы (`vault/signals.py`)
 
