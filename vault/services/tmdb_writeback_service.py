@@ -118,33 +118,72 @@ class TmdbWritebackService:
             or "Authentication" in msg
         )
 
+    @staticmethod
+    def _get_retry_delay(attempts: int, *, is_rate_limited: bool = False) -> int | None:
+        """6b: экспоненциальный backoff для 429, иначе фиксированные 10 мин. Auth → None."""
+        if is_rate_limited:
+            # 10, 30, 60, 120, 300 сек — быстро отходит, не долбит при длительном лимите
+            delays = [10, 30, 60, 120, 300]
+            return delays[min(max(attempts, 1) - 1, len(delays) - 1)]
+        return 600  # 10 минут для прочих ошибок
+
     # --- persistent queue (forever) ---
 
     @classmethod
     def _upsert_queue_item(cls, movie, error: str, *, is_auth: bool = False):
-        """Создать/обновить запись forever-очереди. Auth → next_retry=None."""
+        """Создать/обновить запись forever-очереди. Auth → next_retry=None, 429 → backoff 10-300с."""
         try:
             from vault.models import TMDBWritebackQueueItem
 
             now = timezone.now()
-            next_retry = None if is_auth else now + timedelta(minutes=10)
+            # 6b: rate-limit backoff по количеству попыток
+            is_rate = not is_auth and ("429" in (error or "") or "Rate limit" in (error or ""))
             state = TMDBWritebackQueueItem.State.ERROR if is_auth else TMDBWritebackQueueItem.State.PENDING
             # need movie_id for snap support
             movie_id = getattr(movie, "id", None) or getattr(movie, "pk", None)
             if not movie_id:
                 return None
-            obj, created = TMDBWritebackQueueItem.objects.update_or_create(
-                movie_id=movie_id,
-                defaults={
-                    "state": state,
-                    "last_error": (error or "")[:2000],
-                    "next_retry_at": next_retry,
-                },
+            # Атомарно считаем попытки через select_for_update, чтобы backoff был точным
+            # (F() не даёт нам значение для вычисления задержки).
+            with transaction.atomic():
+                try:
+                    existing = TMDBWritebackQueueItem.objects.select_for_update().get(movie_id=movie_id)
+                    new_attempts = (existing.attempts or 0) + 1
+                    if is_auth:
+                        next_retry = None
+                    else:
+                        delay = cls._get_retry_delay(new_attempts, is_rate_limited=is_rate)
+                        next_retry = now + timedelta(seconds=delay) if delay is not None else None
+                    existing.state = state
+                    existing.last_error = (error or "")[:2000]
+                    existing.next_retry_at = next_retry
+                    existing.attempts = new_attempts
+                    existing.save(update_fields=["state", "last_error", "next_retry_at", "attempts", "updated_at"])
+                    obj = existing
+                    created = False
+                except TMDBWritebackQueueItem.DoesNotExist:
+                    new_attempts = 1
+                    if is_auth:
+                        next_retry = None
+                    else:
+                        delay = cls._get_retry_delay(new_attempts, is_rate_limited=is_rate)
+                        next_retry = now + timedelta(seconds=delay) if delay is not None else None
+                    obj = TMDBWritebackQueueItem.objects.create(
+                        movie_id=movie_id,
+                        state=state,
+                        last_error=(error or "")[:2000],
+                        next_retry_at=next_retry,
+                        attempts=new_attempts,
+                    )
+                    created = True
+            logger.warning(
+                "writeback queue upsert movie=%s state=%s next_retry=%s attempts=%s err=%s",
+                movie_id,
+                state,
+                next_retry,
+                new_attempts,
+                (error or "")[:200],
             )
-            # Атомарный инкремент через F() — не теряем попытки при конкурентных
-            # вызовах (два periodic tick'а, rapid-fire сигналы и т.п.).
-            TMDBWritebackQueueItem.objects.filter(pk=obj.pk).update(attempts=F("attempts") + 1)
-            logger.warning("writeback queue upsert movie=%s state=%s next_retry=%s err=%s", movie_id, state, next_retry, error[:200])
             return obj
         except Exception as exc:
             logger.exception("writeback queue upsert failed movie=%s: %s", getattr(movie, "id", "?"), exc)
@@ -373,9 +412,12 @@ class TmdbWritebackService:
 
         results: list[WritebackResult] = []
         try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
             tmdb_obj = cls._get_tmdb_obj(movie)
             # watchlist remove
             try:
+                TmdbRateLimiter.wait()
                 tmdb_obj.remove_from_watchlist()
                 logger.info("writeback delete: watchlist_remove tmdb_id=%s", movie.tmdb_id)
                 results.append(WritebackResult(success=True, action="watchlist_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type))
@@ -389,6 +431,7 @@ class TmdbWritebackService:
                     results.append(WritebackResult(success=False, action="watchlist_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg))
             # favorite remove
             try:
+                TmdbRateLimiter.wait()
                 tmdb_obj.remove_as_favorite()
                 logger.info("writeback delete: favorite_remove tmdb_id=%s", movie.tmdb_id)
                 results.append(WritebackResult(success=True, action="favorite_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type))
@@ -401,6 +444,7 @@ class TmdbWritebackService:
                     results.append(WritebackResult(success=False, action="favorite_remove", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=msg))
             # rating delete
             try:
+                TmdbRateLimiter.wait()
                 tmdb_obj.delete_rating()
                 logger.info("writeback delete: delete_rating tmdb_id=%s", movie.tmdb_id)
                 results.append(WritebackResult(success=True, action="unrate", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type))
@@ -419,6 +463,8 @@ class TmdbWritebackService:
                     movie_tmdb_id = getattr(movie, "tmdb_id", None)
                     if movie_tmdb_id:
                         from tmdb_adapter.client_singleton import get_tmdb_client
+
+                        TmdbRateLimiter.wait()
                         tmdb = get_tmdb_client()
                         api4 = tmdb._api4
                         if api4:
@@ -455,6 +501,9 @@ class TmdbWritebackService:
         # PLAN (2) -> add, else remove
         watch_status = status
         try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            TmdbRateLimiter.wait()
             if watch_status == UM.WatchStatus.PLAN:
                 tmdb_obj.add_to_watchlist()
                 logger.info("writeback watchlist_add movie=%s tmdb_id=%s", movie.id, movie.tmdb_id)
@@ -481,6 +530,9 @@ class TmdbWritebackService:
         tmdb_obj = cls._get_tmdb_obj(movie)
         is_fav = bool(user_movie.is_favorite)
         try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            TmdbRateLimiter.wait()
             if is_fav:
                 tmdb_obj.mark_as_favorite()
                 logger.info("writeback favorite_add movie=%s tmdb_id=%s", movie.id, movie.tmdb_id)
@@ -506,6 +558,9 @@ class TmdbWritebackService:
         tmdb_obj = cls._get_tmdb_obj(movie)
         rating = user_movie.rating
         try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            TmdbRateLimiter.wait()
             if rating is not None:
                 # TMDB принимает float 0.5-10.0, Vault int 1-10 — передаём как есть (целые валидны)
                 tmdb_obj.rate(float(rating))
@@ -573,6 +628,9 @@ class TmdbWritebackService:
                 page = 1
                 while True:
                     try:
+                        from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                        TmdbRateLimiter.wait()
                         result = api4.account_get_lists(page=page)
                     except Exception:
                         break
@@ -589,6 +647,9 @@ class TmdbWritebackService:
                     page += 1
 
                 # 2. Создаём (api4.list_create_list возвращает dict)
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
                 result = api4.list_create_list(
                     name=target_name,
                     iso_639_1="ru",
@@ -632,12 +693,14 @@ class TmdbWritebackService:
 
         def _apply(list_tmdb_id: int) -> WritebackResult:
             from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
 
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
                 return WritebackResult(success=False, action="skip_list", tmdb_id=movie_tmdb_id, media_type=media_type, error="no v4 client")
 
+            TmdbRateLimiter.wait()
             if watch_status == UM.WatchStatus.SKIP:
                 api4.list_add_items(
                     list_id=list_tmdb_id,
@@ -742,7 +805,9 @@ class TmdbWritebackService:
             user_list.refresh_from_db(fields=["tmdb_list_id"])
         def _do_add(list_id: int) -> None:
             from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
 
+            TmdbRateLimiter.wait()
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
@@ -822,7 +887,9 @@ class TmdbWritebackService:
             return WritebackResult(success=False, action="list_remove", error="no tmdb_id")
         def _do_remove(list_id: int) -> None:
             from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
 
+            TmdbRateLimiter.wait()
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
@@ -885,6 +952,9 @@ class TmdbWritebackService:
                     except Exception:
                         pass
                     return WritebackResult(success=True, action="list_create", tmdb_id=int(locked.tmdb_list_id), media_type="list")
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
                 tmdb = get_tmdb_client()
                 list_name = tmdb_name or locked.name
                 result = tmdb.create_list(name=list_name, iso_639_1="ru", description=locked.description or "", public=bool(locked.is_public))
@@ -920,7 +990,9 @@ class TmdbWritebackService:
             return WritebackResult(success=False, action="list_delete_skipped", error="no tmdb_list_id")
         try:
             from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
 
+            TmdbRateLimiter.wait()
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:
@@ -943,7 +1015,9 @@ class TmdbWritebackService:
             return WritebackResult(success=False, action="list_update_skipped", error="no tmdb_list_id")
         try:
             from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
 
+            TmdbRateLimiter.wait()
             tmdb = get_tmdb_client()
             api4 = tmdb._api4
             if api4 is None:

@@ -152,14 +152,14 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
 плюс строковый fallback «401»/"Invalid API key"/"Authentication" (для обёрнутых
 `Exception(r.error)`).
 
-429 → задача уходит в persistent queue (`state=pending`) и ретраится раз в 10 минут.
+429 → задача уходит в persistent queue (`state=pending`) и ретраится по backoff `10/30/60/120/300 сек` (см. `6.7`).
 401 → задача уходит в persistent queue со `state=error`, без авто-ретрая (нужен re-auth).
 
 ### 6.3 Persistent queue (`TMDBWritebackQueueItem`)
 
 - Единственный механизм ретрая failed операций.
 - `_upsert_queue_item(movie, error, is_auth=...)` — создаёт/обновляет запись;
-  `attempts` инкрементится атомарно через `F("attempts") + 1`.
+  `attempts` инкрементится атомарно (`select_for_update`), `next_retry_at` считается через `_get_retry_delay`.
 - `_clear_queue_item(movie)` — удаляет запись при успехе.
 - Обрабатывается `tmdb_writeback_retry_tick` (10 мин, лимит 20 за тик).
 - UI: страница `/tmdb-writeback` показывает очередь, позволяет Retry/Delete per item.
@@ -225,6 +225,12 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
   `100`). Живость проверяется лениво: если при реальном `list_add/remove` TMDB
   вернёт `404` — локальный `tmdb_list_id` сбрасывается, список пересоздаётся и
   операция повторяется один раз (тот же паттерн, что у skip-листа).
+
+### 6.7 Лимитер и ретраи (R6a/b)
+
+- **Rate limiter `vault/services/tmdb_rate_limiter.py`.** Глобальный `TmdbRateLimiter` — `0.5 сек` между любыми `TMDB` вызовами (`2/sec`, запас `×2` от лимита `TMDB 40/10сек`). Один на процесс (`WEB` и `HUEY` — разные процессы), `threading.Lock`. Вызывается перед `tmdb.movie/tv/person/tv_season` (read) и перед `watchlist/favorite/rating/list_*` (write).
+- **Backoff для `429`.** `TMDBWritebackQueueItem.next_retry_at` считается по лестнице `10/30/60/120/300 сек` в зависимости от `attempts` (`_get_retry_delay`). `401` → `state=ERROR`, `next_retry=None` (без авто-ретрая). Прочие ошибки → `600 сек`.
+- **Не делается (сознательно):** батчи-паузы (`6c`) — лимитер уже сглаживает; `stop-кран` и классификация `5 подряд фейлов` вынесены в отдельное ТЗ по обработке ошибок.
 
 ## 7. Сигналы (`vault/signals.py`)
 

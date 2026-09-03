@@ -209,12 +209,18 @@ class TMDBMovieSyncService:
         tmdb_id = candidate.tmdb_id
 
         try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            TmdbRateLimiter.wait()
             if media_type == "movie":
                 return tmdb.movie(tmdb_id), "movie"
             return tmdb.tv_show(tmdb_id), "tv"
         except Exception:
             fallback: MediaType = "tv" if media_type == "movie" else "movie"
             try:
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
                 if fallback == "movie":
                     return tmdb.movie(tmdb_id), "movie"
                 return tmdb.tv_show(tmdb_id), "tv"
@@ -794,6 +800,9 @@ class TMDBMovieSyncService:
 
             # Load episode details
             try:
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
                 season_details = tmdb.tv_season(tmdb_id, season_number)
             except Exception:
                 season_details = None
@@ -1044,6 +1053,9 @@ class TMDBMovieSyncService:
             return cache[person_id]
 
         try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            TmdbRateLimiter.wait()
             details = tmdb.person(person_id)
         except Exception:
             details = None
