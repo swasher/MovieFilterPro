@@ -28,6 +28,13 @@ SyncStatus = Literal["ok", "needs_confirmation", "needs_user_choice", "error"]
 MediaType = Literal["movie", "tv"]
 logger = logging.getLogger("vault.tmdb_sync")
 
+# R5 простой путь: процесс-локальный кэш персон для bulk (10K фильмов).
+# Избегает лишних tmdb.person вызовов: один SELECT на пачку ID + память.
+# Single-user, bulk sequential — достаточно. Инвалидация не нужна: новые персоны
+# вставляются в кэш сразу после создания.
+_GLOBAL_PERSON_CACHE: dict[int, Person] = {}
+_GLOBAL_PERSON_DETAILS_CACHE: dict[int, object | None] = {}
+
 
 @dataclass(slots=True, frozen=True)
 class TMDBSyncResult:
@@ -504,8 +511,30 @@ class TMDBMovieSyncService:
         movie.movie_persons.all().delete()
 
         unknown_country = cls._get_unknown_country()
+        # R5 простой путь: батч SELECT уже существующих Person (DB есть → пропуск API).
+        # Последовательно: фильм → список персон → кто в DB — пропуск, остальных — tmdb.person.
+        # Глобальный кэш (_GLOBAL_*) остаётся для наблюдения, но кросс-фильм дедуп
+        # делает DB (1 SELECT), чтобы не хранить stale Person после тестового rollback.
         person_cache: dict[int, Person] = {}
         person_details_cache: dict[int, object | None] = {}
+        # Батч-проверка DB для всех персон этого фильма (1 SELECT вместо N)
+        try:
+            all_credits_for_check = cast_items + crew_items + showrunner_items
+            all_ids = {cls._safe_int(getattr(c, "person_id", None)) for c in all_credits_for_check}
+            all_ids.discard(None)
+            if all_ids:
+                tmdb_ids = [cls._normalize_tmdb_person_id(pid) for pid in all_ids]
+                tmdb_ids = [tid for tid in tmdb_ids if tid]
+                if tmdb_ids:
+                    existing_persons = list(Person.objects.filter(tmdb_id__in=tmdb_ids))
+                    tmdb_to_person = {p.tmdb_id: p for p in existing_persons}
+                    for pid in all_ids:
+                        tid = cls._normalize_tmdb_person_id(pid)
+                        person = tmdb_to_person.get(tid) if tid else None
+                        if person is not None:
+                            person_cache[pid] = person
+        except Exception:
+            pass
         seen_relations: set[tuple[int, str, str]] = set()
 
         for credit in cast_items:
@@ -571,6 +600,12 @@ class TMDBMovieSyncService:
 
         # Для tv crew не синхронизируем — только showrunner + actors
         if is_tv:
+            # R5: прогреть глобальный кэш для следующих фильмов bulk
+            try:
+                _GLOBAL_PERSON_CACHE.update(person_cache)
+                _GLOBAL_PERSON_DETAILS_CACHE.update(person_details_cache)
+            except Exception:
+                pass
             after_keys = set(
                 movie.movie_persons.values_list("person_id", "role", "character_name")
             )
@@ -610,6 +645,12 @@ class TMDBMovieSyncService:
                 popularity=popularity,
             )
 
+        # R5: прогреть глобальный кэш для следующих фильмов bulk
+        try:
+            _GLOBAL_PERSON_CACHE.update(person_cache)
+            _GLOBAL_PERSON_DETAILS_CACHE.update(person_details_cache)
+        except Exception:
+            pass
         after_keys = set(
             movie.movie_persons.values_list("person_id", "role", "character_name")
         )
