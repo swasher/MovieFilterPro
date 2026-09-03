@@ -319,6 +319,23 @@ class TMDBSyncQueueService:
                 cls._bulk_stats.get("critical", 0),
             )
 
+        # После успешной pull-синхронизации — залить локальные статусы/списки обратно в TMDB (writeback)
+        # Bulk-импорт 10K: у каждого фильма может быть UserMovie с watch_status/rating/favorite + списки.
+        # Раньше pull не триггерил push, поэтому tmdb-writeback не выполнялся.
+        if item.state == TMDBSyncQueueItem.State.SYNCED:
+            try:
+                from vault.models import UserMovie as _UM
+                from vault.services.tmdb_writeback_dispatch import TmdbWritebackDispatch
+
+                # Берём свежий movie с tmdb_id, т.к. movie уже сохранён выше
+                fresh_movie = Movie.objects.filter(pk=movie.pk).first()
+                if fresh_movie and fresh_movie.tmdb_id:
+                    for um in _UM.objects.filter(movie=fresh_movie).only("id"):
+                        # Full sync (None) — списки тоже пройдут через sync_list_item_added
+                        TmdbWritebackDispatch.schedule_user_movie_writeback(um.pk, changed_fields=None)
+            except Exception as exc:
+                logger.warning("writeback schedule after sync failed movie=%s: %s", movie.id, exc)
+
         # Само-перепланирование следующего тика (проверяем enabled ещё раз после возможного stop)
         prefs = UserPreferences.get()
         if (
