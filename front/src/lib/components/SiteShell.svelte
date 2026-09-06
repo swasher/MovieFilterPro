@@ -172,7 +172,7 @@
                   {#snippet child({ props })}
                     <a href="/tmdb-writeback" {...props}>
                       <List class="mr-2 size-4" />
-                      <span>TMDB Write-back</span>
+                      <span>Write-back Error Log</span>
                     </a>
                   {/snippet}
                 </DropdownMenu.Item>

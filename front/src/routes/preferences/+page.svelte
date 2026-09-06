@@ -454,7 +454,7 @@
             </div>
             <div class="flex gap-3 pt-1">
               <Button variant="outline" href="/tmdb-auth">TMDB Auth</Button>
-              <Button variant="outline" href="/tmdb-writeback">Очередь и статистика →</Button>
+              <Button variant="outline" href="/tmdb-writeback">TMDB Write-back Error Log →</Button>
             </div>
           </CardContent>
         </Card>

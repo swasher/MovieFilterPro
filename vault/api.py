@@ -1667,6 +1667,13 @@ class WritebackStatusOut(Schema):
     total_user_movies: int
     total_with_tmdb: int
     total_without_tmdb: int
+    # Error Log dash — дополнительные поля для дашборда
+    skip_list_id: int | None = None
+    lists_initialized: bool = False
+    queue_pending: int = 0
+    queue_error: int = 0
+    queue_total: int = 0
+    huey_pending: int | None = None  # ephemeral HUEY tasks, 2с окно
 
 
 class WritebackSettingsIn(Schema):
@@ -1711,12 +1718,57 @@ def tmdb_writeback_status(request):
     from moviefilter.models import UserPreferences
 
     prefs = UserPreferences.get()
-    total = UserMovie.objects.filter(user=_resolve_api_user(request)).count() if _resolve_api_user(request) else 0
+    user = _resolve_api_user(request)
+    total = UserMovie.objects.filter(user=user).count() if user else 0
     total_with = (
-        UserMovie.objects.filter(user=_resolve_api_user(request), movie__tmdb_id__isnull=False).count()
-        if _resolve_api_user(request)
+        UserMovie.objects.filter(user=user, movie__tmdb_id__isnull=False).count()
+        if user
         else 0
     )
+    # queue counters for dashboard
+    from vault.models import TMDBWritebackQueueItem
+
+    qs = TMDBWritebackQueueItem.objects.all()
+    # single-user: filter by user if present, else global
+    if user:
+        # TMDBWritebackQueueItem.user is nullable legacy — count all + pending/error split
+        pass
+    queue_pending = qs.filter(state=TMDBWritebackQueueItem.State.PENDING).count()
+    queue_error = qs.filter(state=TMDBWritebackQueueItem.State.ERROR).count()
+    queue_total = queue_pending + queue_error
+
+    # ephemeral HUEY pending — best-effort, SqliteHuey stores schedule in file
+    huey_pending = None
+    try:
+        from movie_filter_pro.huey import HUEY as _HUEY
+
+        # SqliteHuey: scheduled() returns scheduled tasks; pending() — ready queue
+        # Both may raise if storage locked — swallow.
+        scheduled = 0
+        pending = 0
+        try:
+            # huey 2.x: HUEY.pending() / HUEY.scheduled() return Result iter
+            if hasattr(_HUEY, "scheduled"):
+                scheduled = len(list(_HUEY.scheduled()))
+            if hasattr(_HUEY, "pending"):
+                pending = len(list(_HUEY.pending()))
+            # fallback: in-mem dispatch pending (WEB process only)
+            try:
+                from vault.services.tmdb_writeback_dispatch import TmdbWritebackDispatch
+
+                dispatch_pending = len(getattr(TmdbWritebackDispatch, "_pending", {}))
+                # huey file count + dispatch in-mem
+                huey_pending = scheduled + pending + dispatch_pending
+                # but if file counts are 0, keep dispatch count as at least
+                if huey_pending == 0 and dispatch_pending:
+                    huey_pending = dispatch_pending
+            except Exception:
+                huey_pending = scheduled + pending if (scheduled + pending) else None
+        except Exception:
+            huey_pending = None
+    except Exception:
+        huey_pending = None
+
     return WritebackStatusOut(
         writeback_enabled=bool(prefs.tmdb_writeback_enabled),
         lists_writeback_enabled=bool(prefs.tmdb_writeback_lists_enabled),
@@ -1724,6 +1776,12 @@ def tmdb_writeback_status(request):
         total_user_movies=total,
         total_with_tmdb=total_with,
         total_without_tmdb=total - total_with,
+        skip_list_id=getattr(prefs, "tmdb_skip_list_id", None),
+        lists_initialized=bool(getattr(prefs, "tmdb_lists_initialized", False)),
+        queue_pending=queue_pending,
+        queue_error=queue_error,
+        queue_total=queue_total,
+        huey_pending=huey_pending,
     )
 
 
@@ -1798,6 +1856,97 @@ def tmdb_writeback_queue_delete(request, item_id: int):
     if not deleted:
         raise HttpError(404, "Queue item not found")
     return {"deleted": deleted}
+
+
+class WritebackRecentItemOut(Schema):
+    movie_id: int
+    movie_title: str
+    movie_slug: str
+    tmdb_id: int | None = None
+    tmdb_media_type: str | None = None
+    year: int | None = None
+    watch_status: int | None = None
+    watch_status_display: str | None = None
+    is_favorite: bool = False
+    rating: int | None = None
+    updated_at: str | None = None
+    writeback_status: str  # synced|pending|error|disabled|no_tmdb_id
+    writeback_last_error: str | None = None
+    writeback_next_retry_at: str | None = None
+    writeback_reason: str | None = None
+
+
+class WritebackRecentOut(Schema):
+    items: list[WritebackRecentItemOut]
+    total: int
+
+
+@api.get("/tmdb-writeback/recent", response=WritebackRecentOut)
+def tmdb_writeback_recent(request, limit: int = 20):
+    """Последние UserMovie с tmdb-диагностикой для Error Log дашборда (вариант C)."""
+    _require_api_user(request)
+    user = _resolve_api_user(request)
+    if user is None:
+        return WritebackRecentOut(items=[], total=0)
+    bounded = max(1, min(limit, 50))
+    qs = (
+        UserMovie.objects.filter(user=user)
+        .select_related("movie")
+        .order_by("-updated_at", "-id")
+    )
+    total = qs.count()
+    items = list(qs[:bounded])
+    # preload queue map: movie_id -> queue item for fast badge
+    from vault.models import TMDBWritebackQueueItem
+
+    queue_map = {
+        q.movie_id: q
+        for q in TMDBWritebackQueueItem.objects.filter(movie_id__in=[i.movie_id for i in items])
+    }
+    # prefs once for _should_writeback reason
+    from vault.services.tmdb_writeback_service import TmdbWritebackService
+
+    out: list[WritebackRecentItemOut] = []
+    for um in items:
+        movie = um.movie
+        # writeback status per movie (queue > guard)
+        qi = queue_map.get(movie.id)
+        if qi:
+            wb_status = qi.state
+            wb_err = qi.last_error
+            wb_next = _datetime_to_iso(qi.next_retry_at)
+            wb_reason = None
+        else:
+            data = TmdbWritebackService.get_writeback_status(movie)
+            wb_status = data.get("status", "unknown")
+            wb_err = data.get("last_error")
+            wb_next = data.get("next_retry_at")
+            wb_reason = data.get("reason")
+        # watch_status display
+        try:
+            ws_display = um.get_watch_status_display() if um.watch_status else None
+        except Exception:
+            ws_display = None
+        out.append(
+            WritebackRecentItemOut(
+                movie_id=movie.id,
+                movie_title=movie.title,
+                movie_slug=movie.slug,
+                tmdb_id=movie.tmdb_id,
+                tmdb_media_type=movie.tmdb_media_type,
+                year=movie.year,
+                watch_status=um.watch_status,
+                watch_status_display=ws_display,
+                is_favorite=bool(um.is_favorite),
+                rating=um.rating,
+                updated_at=_datetime_to_iso(um.updated_at),
+                writeback_status=wb_status,
+                writeback_last_error=wb_err,
+                writeback_next_retry_at=wb_next,
+                writeback_reason=wb_reason,
+            )
+        )
+    return WritebackRecentOut(items=out, total=total)
 
 
 @api.post("/tmdb-writeback/queue/{item_id}/retry", response=WritebackQueueItemOut)
