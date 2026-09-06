@@ -167,9 +167,9 @@ def on_user_list_movie_deleted(sender, instance, **kwargs):
 
 @receiver(post_save, sender=UserList)
 def on_userlist_saved(sender, instance, created, **kwargs):
-    # skip-лист («Не интересует») создаётся на TMDB с тем же именем,
-    # это делает sync_skip_list, здесь не дублируем
-    if instance.name == TmdbWritebackDispatch.SKIP_LIST_NAME:
+    # skip/watched-листы («Не интересует»/«Просмотрено») создаются на TMDB
+    # зеркалами sync_skip_list/sync_watched_list, здесь не дублируем
+    if instance.name in (TmdbWritebackDispatch.SKIP_LIST_NAME, TmdbWritebackDispatch.WATCHED_LIST_NAME):
         return
     ul_id = instance.pk
     transaction.on_commit(lambda ul_id=ul_id: TmdbWritebackDispatch.schedule_list_sync(ul_id))

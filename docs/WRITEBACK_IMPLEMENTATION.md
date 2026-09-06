@@ -13,6 +13,7 @@ Write-back — это обратная запись пользовательск
 - избранное → **favorites** TMDB
 - оценка → **rating** TMDB
 - системный статус «Не интересует» (SKIP) → отдельный **TMDB-лист «Не интересует»**
+- системный статус «Просмотрено» (WATCHED) → отдельный **TMDB-лист «Просмотрено»** (включая фильмы без оценки)
 - пользовательские списки (`UserList`) → **TMDB Lists** (создание/переименование/удаление/состав)
 
 **Базовый принцип:** записи выполняются **асинхронно через HUEY**. Локальные данные
@@ -57,8 +58,8 @@ TmdbWritebackService.sync_*(...)      (vault/services/tmdb_writeback_service.py)
 | `vault/tasks.py` | HUEY-задачи | Тонкие обёртки над сервисом: `tmdb_writeback_user_movie`, `_user_movie_delete`, `_list_item_added/removed`, `_list_sync`, `_list_delete`, `tmdb_writeback_retry_tick`, `tmdb_lists_init`. |
 | `vault/services/tmdb_writeback_service.py` | Сервис | Вся прикладная логика TMDB-вызовов, guards, persistent queue helpers. |
 | `vault/models.py` | Модели | `TMDBWritebackQueueItem`, `UserList.tmdb_list_id`. |
-| `vault/constants.py` | Константы | `SKIP_LIST_NAME` и системные label-константы. |
-| `moviefilter/models.py` | Preferences | `tmdb_writeback_enabled`, `tmdb_v4_authenticated_access_token`, `tmdb_skip_list_id`, `tmdb_lists_initialized`. |
+| `vault/constants.py` | Константы | `SKIP_LIST_NAME`, `WATCHED_LIST_NAME` и системные label-константы. |
+| `moviefilter/models.py` | Preferences | `tmdb_writeback_enabled`, `tmdb_v4_authenticated_access_token`, `tmdb_skip_list_id`, `tmdb_watched_list_id`, `tmdb_lists_initialized`. |
 | `tmdb_adapter/client_singleton.py` | Инфраструктура | `get_tmdb_client()` — единый синглтон `TMDbAPIs`. |
 | `vault/api.py` | API | Эндпоинты writeback + ручной push. |
 
@@ -76,12 +77,13 @@ TmdbWritebackService.sync_*(...)      (vault/services/tmdb_writeback_service.py)
 | `UserMovie.is_favorite` | `mark/remove_as_favorite()` | |
 | `UserMovie.rating` (1–10) | `rate(float)` / `delete_rating()` | TMDB принимает 1–10 (целые валидны) |
 | `watch_status == SKIP` | `list_add_items` в TMDB-лист «Не интересует» | ID списка в `prefs.tmdb_skip_list_id` |
+| `watch_status == WATCHED` | `list_add_items` в TMDB-лист «Просмотрено» | ID списка в `prefs.tmdb_watched_list_id` (даже без `rating`) |
 | `UserList` create | `list_create_list` → `UserList.tmdb_list_id` | |
 | `UserList` rename | `list_update_list` | |
 | `UserList` delete | `list_delete_list` | |
 | `UserListMovie` add | `list_add_items` | автосоздание листа в `sync_list_item_added` если нет `tmdb_list_id` |
 | `UserListMovie` remove | `list_remove_items` | |
-| При удалении `UserMovie` | watchlist/favorite/rating remove | cleanup из `sync_user_movie_deleted` |
+| При удалении `UserMovie` | watchlist/favorite/rating + оба зеркальных списка remove | cleanup из `sync_user_movie_deleted` |
 
 **Не синхронизируется:** сезоны/эпизоды (`UserSeason`) — TMDB не поддерживает
 watchlist/favorite для эпизодов, только рейтинги (отдельная фаза, не реализована).
@@ -175,10 +177,12 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
 - `sync_user_movie_deleted(user_movie)` — cleanup при удалении.
 - `sync_watch_status`, `sync_favorite`, `sync_rating` — по одному sub-sync.
 - `sync_skip_list(user_movie)` — SKIP ↔ TMDB-лист «Не интересует».
+- `sync_watched_list(user_movie)` — WATCHED ↔ TMDB-лист «Просмотрено» (копия skip-логики, без общего helper — YAGNI).
 - `sync_list_item_added(list_movie)`, `sync_list_item_removed(list_movie)`.
 - `create_tmdb_list`, `update_tmdb_list`, `delete_tmdb_list`.
 - `init_all_user_lists()` — инициализация/восстановление всех листов на TMDB.
 - `_ensure_skip_list_tmdb_id(prefs=None)` — find-or-create skip list. **Fast-path:**
+- `_ensure_watched_list_tmdb_id(prefs=None)` — аналогично для «Просмотрено» (прямая копия, без абстракции). **Fast-path:**
   если `prefs.tmdb_skip_list_id` заполнен — возвращается напрямую (0 API-вызовов,
   без `list_get_list`). Slow-path (только когда id пуст) — поиск по имени среди
   account lists / создание, под `_skip_list_lock` + `select_for_update` (защита от дублей).
@@ -192,12 +196,12 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
 - **Автосоздание TMDB-листа** в `sync_list_item_added`: если `user_list.tmdb_list_id`
   пуст — вызывается `create_tmdb_list` (self-heal race между `list_sync` и
   `list_item_added` при async-HUEY). Защита от дублей — `select_for_update`.
-- `sync_skip_list` имеет defensive-guard `if not movie_tmdb_id: return None` — он
+- `sync_skip_list` / `sync_watched_list` имеют defensive-guard `if not movie_tmdb_id: return None` — он
   валиден (публичный метод), не убирать.
-- **Skip-list fast-path (без проверки живости):** `_ensure_skip_list_tmdb_id` НЕ
+- **Skip/Watched-list fast-path (без проверки живости):** `_ensure_*_list_tmdb_id` НЕ
   вызывает `list_get_list` для кэшированного `tmdb_skip_list_id` в горячем пути.
   Если список удалён на TMDB, `list_add_items`/`list_remove_items` вернёт 404 —
-  `sync_skip_list` сбрасывает кэш, пересоздаёт список и повторяет операцию один раз.
+  `sync_skip_list` / `sync_watched_list` сбрасывают кэш, пересоздают список и повторяют операцию один раз.
   Не возвращать верификацию через `list_get_list` — это лишний API-вызов на фильм.
 
 ### 6.6 Оптимизации bulk-синхронизации (10K)
@@ -241,7 +245,7 @@ delete-задач принимаются **снапшот-данные** (`tmdb_
 - `UserListMovie post_save` (created) → `schedule_list_item_added(pk)`.
 - `UserListMovie pre_delete` → снапшот instance в `_pending_list_delete`.
 - `UserListMovie post_delete` → `schedule_list_item_removed(tmdb_list_id, tmdb_id, media_type)`.
-- `UserList post_save` → `schedule_list_sync(ul_id)` (skip-лист «Не интересует» пропускается).
+- `UserList post_save` → `schedule_list_sync(ul_id)` (зеркальные списки «Не интересует»/«Просмотрено» пропускаются).
 - `UserList post_delete` → `schedule_list_delete(tmdb_list_id)`.
 
 Все обёрнуты в `transaction.on_commit` с захватом `pk=pk` по значению (R1-паттерн).

@@ -56,3 +56,6 @@ SYSTEM_LIST_TITLES: set[str] = {
 
 # Имя TMDB-зеркального списка для SKIP
 SKIP_LIST_NAME = WONT_WATCH_LABEL
+
+# Имя TMDB-зеркального списка для WATCHED
+WATCHED_LIST_NAME = WATCHED_LABEL

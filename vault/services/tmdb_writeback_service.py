@@ -11,6 +11,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from vault.constants import SKIP_LIST_NAME as _SKIP_LIST_NAME
+from vault.constants import WATCHED_LIST_NAME as _WATCHED_LIST_NAME
 
 # Классы tmdbapis, поднимаемые на HTTP 401 (см. tmdbapis/api3.py::_request).
 # Приоритетная классификация auth-ошибок по типу; строка — fallback для
@@ -85,10 +86,14 @@ class TmdbWritebackService:
     # синхронизируется в TMDB-лист с таким же именем.
     SKIP_LIST_NAME = _SKIP_LIST_NAME
 
+    # Локальный системный зеркальный список "Просмотрено" — аналогично SKIP.
+    WATCHED_LIST_NAME = _WATCHED_LIST_NAME
+
     # Процесс-лок для сериализации _ensure_skip_list_tmdb_id.
     # На sqlite select_for_update — no-op, поэтому дополнительно используем
     # threading.Lock (по образцу tmdb_adapter/client_singleton.py).
     _skip_list_lock = threading.Lock()
+    _watched_list_lock = threading.Lock()
 
     # --- error classification ---
 
@@ -381,6 +386,18 @@ class TmdbWritebackService:
         else:
             logger.debug("writeback skip_list skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
 
+        # watched mirror list — аналогично skip, производное от watch_status
+        if _should_run("watch_status"):
+            try:
+                r = cls.sync_watched_list(user_movie, prefs=prefs)
+                if r:
+                    results.append(r)
+            except Exception as exc:
+                logger.exception("writeback watched_list failed: %s", exc)
+                results.append(WritebackResult(success=False, action="watched_list", tmdb_id=movie.tmdb_id, media_type=movie.tmdb_media_type, error=str(exc)))
+        else:
+            logger.debug("writeback watched_list skipped (Δ-sync) movie=%s", getattr(movie, "id", "?"))
+
         # user custom lists — через отдельный сигнал UserListMovie; здесь только для full-sync/ретрая
         # Чистая архитектура: списки синхронизируются через UserListMovie post_save/post_delete,
         # а не через UserMovie save. Оставляем блок только для full-sync (changed_fields is None)
@@ -513,6 +530,25 @@ class TmdbWritebackService:
                             logger.info("writeback skip_list cleanup movie=%s tmdb_id=%s", movie.id, movie_tmdb_id)
             except Exception as exc:
                 logger.warning("writeback skip_list cleanup failed: %s", exc)
+            # watched list cleanup: удалить из TMDB watched list если был
+            try:
+                if prefs.tmdb_watched_list_id:
+                    media_type = getattr(movie, "tmdb_media_type", None) or "movie"
+                    movie_tmdb_id = getattr(movie, "tmdb_id", None)
+                    if movie_tmdb_id:
+                        from tmdb_adapter.client_singleton import get_tmdb_client
+
+                        TmdbRateLimiter.wait()
+                        tmdb = get_tmdb_client()
+                        api4 = tmdb._api4
+                        if api4:
+                            api4.list_remove_items(
+                                list_id=int(prefs.tmdb_watched_list_id),
+                                items=[{"media_type": media_type, "media_id": int(movie_tmdb_id)}],
+                            )
+                            logger.info("writeback watched_list cleanup movie=%s tmdb_id=%s", movie.id, movie_tmdb_id)
+            except Exception as exc:
+                logger.warning("writeback watched_list cleanup failed: %s", exc)
         except Exception as exc:
             logger.exception("writeback delete failed tmdb_id=%s: %s", getattr(movie, "tmdb_id", "?"), exc)
             results.append(WritebackResult(success=False, action="delete", tmdb_id=getattr(movie, "tmdb_id", None), media_type=getattr(movie, "tmdb_media_type", None), error=str(exc)))
@@ -778,6 +814,166 @@ class TmdbWritebackService:
                         error=msg2,
                     )
             logger.warning("writeback skip_list failed movie=%s: %s", getattr(movie, "id", "?"), exc)
+            return WritebackResult(
+                success=False,
+                action=failure_action,
+                tmdb_id=movie_tmdb_id,
+                media_type=media_type,
+                error=msg,
+            )
+
+    # --- watched list (TMDB mirror, без локального UserList) — копия skip, без абстракции ---
+
+    @classmethod
+    def _ensure_watched_list_tmdb_id(cls, prefs=None) -> int:
+        """Вернуть TMDB list ID для 'Просмотрено'.
+
+        Fast-path: кэшированный id из prefs используем напрямую (0 API-вызовов).
+        Живость списка на TMDB в горячем пути НЕ проверяем — если лист удалён,
+        list_add/remove вернёт 404, и sync_watched_list сбросит кэш, пересоздаст
+        и повторит операцию.
+
+        Slow-path (только когда id пуст): ищем по имени среди account lists,
+        если нет — создаём. Бросает исключение если TMDB API недоступен."""
+        from moviefilter.models import UserPreferences
+        from tmdb_adapter.client_singleton import get_tmdb_client
+
+        tmdb = get_tmdb_client()
+        api4 = tmdb._api4
+        if api4 is None:
+            raise RuntimeError("TMDB v4 client not available")
+
+        target_name = cls.WATCHED_LIST_NAME
+
+        # Fast-path: только чтение, без лока/транзакции.
+        source = prefs if prefs is not None else UserPreferences.get()
+        cached_id = getattr(source, "tmdb_watched_list_id", None)
+        if cached_id:
+            return int(cached_id)
+
+        # Slow-path: сериализуем параллельное создание списка.
+        with cls._watched_list_lock:
+            with transaction.atomic():
+                prefs = UserPreferences.objects.select_for_update().get(pk=1)
+
+                # повторная проверка под локом — другой тред мог успеть создать
+                if prefs.tmdb_watched_list_id:
+                    return int(prefs.tmdb_watched_list_id)
+
+                # 1. Ищем по имени (api4 возвращает dict)
+                page = 1
+                while True:
+                    try:
+                        from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                        TmdbRateLimiter.wait()
+                        result = api4.account_get_lists(page=page)
+                    except Exception:
+                        break
+                    if not isinstance(result, dict):
+                        break
+                    for item in result.get("results", []):
+                        if item.get("name") == target_name:
+                            list_id = int(item["id"])
+                            prefs.tmdb_watched_list_id = list_id
+                            prefs.save(update_fields=["tmdb_watched_list_id"])
+                            return list_id
+                    if page >= result.get("total_pages", 1):
+                        break
+                    page += 1
+
+                # 2. Создаём (api4.list_create_list возвращает dict)
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
+                result = api4.list_create_list(
+                    name=target_name,
+                    iso_639_1="ru",
+                    description="Зеркало системного статуса 'Просмотрено'",
+                    public=False,
+                )
+                new_id = result.get("id") if isinstance(result, dict) else None
+                if not new_id:
+                    raise RuntimeError(f"TMDB list_create_list returned unexpected: {result}")
+                new_id = int(new_id)
+                prefs.tmdb_watched_list_id = new_id
+                prefs.save(update_fields=["tmdb_watched_list_id"])
+                return new_id
+
+    @classmethod
+    def sync_watched_list(cls, user_movie, prefs=None) -> Optional[WritebackResult]:
+        """WATCHED (Просмотрено) ↔ TMDB List 'Просмотрено'.
+
+        Архитектура:
+        - Локально: системный список = UserMovie.watch_status=WATCHED. Никакого UserList.
+        - На TMDB: отдельный список, ID хранится в UserPreferences.tmdb_watched_list_id.
+        - Метод идемпотентен: добавляет/убирает фильм из TMDB-листа.
+
+        Fast-path: _ensure использует кэшированный id напрямую (без list_get_list).
+        Если лист удалён на TMDB, list_add/remove вернёт 404 → кэш сбрасывается,
+        список пересоздаётся и операция повторяется один раз."""
+        from vault.models import UserMovie as UM
+
+        movie = getattr(user_movie, "movie", None)
+        if not movie:
+            return None
+        watch_status = getattr(user_movie, "watch_status", None)
+        movie_tmdb_id = getattr(movie, "tmdb_id", None)
+        if not movie_tmdb_id:
+            return None
+
+        media_type = getattr(movie, "tmdb_media_type", None) or "movie"
+        failure_action = "watched_list_add" if watch_status == UM.WatchStatus.WATCHED else "watched_list_remove"
+
+        def _apply(list_tmdb_id: int) -> WritebackResult:
+            from tmdb_adapter.client_singleton import get_tmdb_client
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            tmdb = get_tmdb_client()
+            api4 = tmdb._api4
+            if api4 is None:
+                return WritebackResult(success=False, action="watched_list", tmdb_id=movie_tmdb_id, media_type=media_type, error="no v4 client")
+
+            TmdbRateLimiter.wait()
+            if watch_status == UM.WatchStatus.WATCHED:
+                api4.list_add_items(
+                    list_id=list_tmdb_id,
+                    items=[{"media_type": media_type, "media_id": int(movie_tmdb_id)}],
+                )
+                logger.info("writeback watched_list add movie=%s tmdb_id=%s list=%s", movie.id, movie_tmdb_id, list_tmdb_id)
+                return WritebackResult(success=True, action="watched_list_add", tmdb_id=movie_tmdb_id, media_type=media_type)
+            else:
+                api4.list_remove_items(
+                    list_id=list_tmdb_id,
+                    items=[{"media_type": media_type, "media_id": int(movie_tmdb_id)}],
+                )
+                logger.info("writeback watched_list remove movie=%s tmdb_id=%s list=%s", movie.id, movie_tmdb_id, list_tmdb_id)
+                return WritebackResult(success=True, action="watched_list_remove", tmdb_id=movie_tmdb_id, media_type=media_type)
+
+        try:
+            list_tmdb_id = cls._ensure_watched_list_tmdb_id(prefs=prefs)
+            return _apply(list_tmdb_id)
+        except Exception as exc:
+            msg = str(exc)
+            # Список был удалён на TMDB — сбросить кэш, пересоздать и повторить один раз.
+            if "404" in msg or "not found" in msg.lower():
+                from moviefilter.models import UserPreferences
+
+                UserPreferences.objects.filter(pk=1).update(tmdb_watched_list_id=None)
+                try:
+                    list_tmdb_id = cls._ensure_watched_list_tmdb_id(prefs=prefs)
+                    return _apply(list_tmdb_id)
+                except Exception as exc2:
+                    msg2 = str(exc2)
+                    logger.warning("writeback watched_list recreate failed movie=%s: %s", getattr(movie, "id", "?"), exc2)
+                    return WritebackResult(
+                        success=False,
+                        action=failure_action,
+                        tmdb_id=movie_tmdb_id,
+                        media_type=media_type,
+                        error=msg2,
+                    )
+            logger.warning("writeback watched_list failed movie=%s: %s", getattr(movie, "id", "?"), exc)
             return WritebackResult(
                 success=False,
                 action=failure_action,
@@ -1078,11 +1274,15 @@ class TmdbWritebackService:
         if not should:
             return {"created": 0, "error": reason}
 
-        # инициализируем TMDB skip list ID (если ещё нет)
+        # инициализируем TMDB skip/watched list ID (если ещё нет)
         try:
             cls._ensure_skip_list_tmdb_id(prefs=prefs)
         except Exception as exc:
             logger.warning("writeback lists init: skip list init failed: %s", exc)
+        try:
+            cls._ensure_watched_list_tmdb_id(prefs=prefs)
+        except Exception as exc:
+            logger.warning("writeback lists init: watched list init failed: %s", exc)
 
         # берём все локальные списки — живыми считаем все с tmdb_list_id (R4).
         # Проверку list_get_list убрали: N API-вызовов → 0. Если список удалён на

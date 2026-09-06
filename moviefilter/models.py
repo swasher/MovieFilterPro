@@ -198,6 +198,12 @@ class UserPreferences(models.Model):
         blank=True,
         help_text='ID TMDB-листа "Не интересует" (зеркало системного статуса SKIP)',
     )
+    tmdb_watched_list_id = models.PositiveIntegerField(
+        'TMDB Watched List ID',
+        null=True,
+        blank=True,
+        help_text='ID TMDB-листа "Просмотрено" (зеркало системного статуса WATCHED)',
+    )
 
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью

@@ -16,6 +16,7 @@ import logging
 import time
 
 from vault.constants import SKIP_LIST_NAME as _SKIP_LIST_NAME
+from vault.constants import WATCHED_LIST_NAME as _WATCHED_LIST_NAME
 
 logger = logging.getLogger("vault.tmdb_writeback")
 
@@ -30,6 +31,7 @@ class TmdbWritebackDispatch:
     # Локальный системный зеркальный список "Не интересует" зеркально
     # синхронизируется в TMDB-лист с таким же именем.
     SKIP_LIST_NAME = _SKIP_LIST_NAME
+    WATCHED_LIST_NAME = _WATCHED_LIST_NAME
 
     # Последний Result для каждого ключа дедупликации → reschedule() при повторе.
     _pending: dict[str, object] = {}
