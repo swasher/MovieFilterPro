@@ -26,11 +26,29 @@ class OMDBRatings(TypedDict, total=False):
 class OMDBService:
     """Клиент OMDB API для получения рейтингов по IMDb ID.
 
-    Использует OMDB_API_KEY из settings (.env).
+    Ключ читается из UserPreferences.omdb_api_key.
+    OMDB_API_KEY из settings (.env) оставлен только как legacy-fallback.
     Читает массив Ratings, а не верхнеуровневые поля.
     """
 
     BASE_URL = "https://www.omdbapi.com/"
+
+    @classmethod
+    def get_api_key(cls) -> str:
+        """OMDB ключ: сначала UserPreferences, затем legacy settings (.env)."""
+        try:
+            from moviefilter.models import UserPreferences
+
+            prefs_key = (UserPreferences.get().omdb_api_key or "").strip()
+            if prefs_key:
+                return prefs_key
+        except Exception:
+            logger.debug("OMDB prefs lookup failed, fallback to settings", exc_info=True)
+        return (getattr(settings, "OMDB_API_KEY", "") or "").strip()
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return bool(cls.get_api_key())
 
     @classmethod
     def fetch_ratings(cls, imdb_id: str) -> OMDBRatings | None:
@@ -38,10 +56,9 @@ class OMDBService:
         if not imdb_id:
             return None
 
-        api_key = getattr(settings, "OMDB_API_KEY", "") or ""
-        api_key = api_key.strip()
+        api_key = cls.get_api_key()
         if not api_key:
-            logger.warning("OMDB_API_KEY not configured, skip omdb fetch for %s", imdb_id)
+            logger.warning("OMDB API key not configured (UserPreferences.omdb_api_key), skip omdb fetch for %s", imdb_id)
             return None
 
         try:

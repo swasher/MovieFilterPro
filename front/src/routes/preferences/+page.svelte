@@ -33,6 +33,7 @@
     torrents_hotfolder: string;
     ignore_title: string;
     tmdb_api_key: string;
+    omdb_api_key: string;
     tmdb_v4_read_access_token: string;
   };
 
@@ -71,6 +72,7 @@
     torrents_hotfolder: preferences.torrents_hotfolder ?? "",
     ignore_title: preferences.ignore_title,
     tmdb_api_key: preferences.tmdb_api_key ?? "",
+    omdb_api_key: preferences.omdb_api_key ?? "",
     tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? ""
   });
 
@@ -93,6 +95,7 @@
     torrents_hotfolder: asOptionalText(formState.torrents_hotfolder),
     ignore_title: formState.ignore_title.trim(),
     tmdb_api_key: asOptionalText(formState.tmdb_api_key),
+    omdb_api_key: asOptionalText(formState.omdb_api_key),
     tmdb_v4_read_access_token: asOptionalText(formState.tmdb_v4_read_access_token)
   });
 
@@ -438,6 +441,19 @@
 
         <Card class="border-border/70">
           <CardHeader>
+            <CardTitle class="text-xl">OMDB</CardTitle>
+            <CardDescription>Ключ OMDB API для рейтингов IMDb, Rotten Tomatoes и Metacritic.</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="space-y-2">
+              <div class="text-sm font-medium">OMDB API key</div>
+              <Input bind:value={form.omdb_api_key} placeholder="OMDB API key" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
             <CardTitle class="text-xl">TMDB Write-back</CardTitle>
             <CardDescription>Обратная синхронизация Vault → TMDB (watchlist/favorite/rating). Работает через tmdb_adapter.</CardDescription>
           </CardHeader>
@@ -476,6 +492,10 @@
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>TMDB read token</span>
               <span>{form.tmdb_v4_read_access_token.trim() ? "Configured" : "Missing"}</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <span>OMDB API key</span>
+              <span>{form.omdb_api_key.trim() ? "Configured" : "Missing"}</span>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>Plex token</span>

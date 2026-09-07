@@ -37,6 +37,7 @@ class PreferencesOut(Schema):
     hotfolder_hint: str
     ignore_title: str
     tmdb_api_key: str | None = None
+    omdb_api_key: str | None = None
     tmdb_v4_read_access_token: str | None = None
     tmdb_v4_authenticated_access_token: str | None = None
 
@@ -60,6 +61,7 @@ class PreferencesUpdateIn(Schema):
     torrents_hotfolder: str | None = None
     ignore_title: str = ""
     tmdb_api_key: str | None = None
+    omdb_api_key: str | None = None
     tmdb_v4_read_access_token: str | None = None
 
 
@@ -111,6 +113,7 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         hotfolder_hint=HOTFOLDER_HINT,
         ignore_title=preferences.ignore_title or "",
         tmdb_api_key=preferences.tmdb_api_key or None,
+        omdb_api_key=preferences.omdb_api_key or None,
         tmdb_v4_read_access_token=preferences.tmdb_v4_read_access_token or None,
         tmdb_v4_authenticated_access_token=preferences.tmdb_v4_authenticated_access_token or None,
     )
@@ -135,6 +138,7 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.torrents_hotfolder = _normalized_optional_string(payload.torrents_hotfolder)
     preferences.ignore_title = payload.ignore_title
     preferences.tmdb_api_key = _normalized_optional_string(payload.tmdb_api_key)
+    preferences.omdb_api_key = _normalized_optional_string(payload.omdb_api_key)
     preferences.tmdb_v4_read_access_token = _normalized_optional_string(payload.tmdb_v4_read_access_token)
     preferences.save()
     return preferences

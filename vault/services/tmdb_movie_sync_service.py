@@ -59,13 +59,18 @@ class TMDBMovieSyncService:
     """Синхронизация локального vault.Movie с данными TMDB."""
 
     @classmethod
-    @transaction.atomic
     def sync_movie(
         cls,
         movie: Movie,
         force_rematch: bool = False,
         selected_candidate: TMDBCandidate | None = None,
     ) -> TMDBSyncResult:
+        """Синхронизация фильма с TMDB в две фазы.
+
+        Фаза 1 (без транзакции): весь сетевой I/O — matching, детали фильма,
+        OMDB. Может длиться десятки секунд и не должна держать DB-транзакцию.
+        Фаза 2 (короткая транзакция): только запись в БД.
+        """
         cls._log_start(movie)
         try:
             tmdb = get_tmdb_client()
@@ -152,45 +157,49 @@ class TMDBMovieSyncService:
             except Exception:
                 logger.warning("OMDB sync failed for movie_id=%s imdb_id=%s", movie.id, movie.imdb_id, exc_info=True)
 
-            # Коллекция TMDB — только для movie (для tv/series не существует)
-            collection_changed = False
-            try:
-                collection_changed = cls._sync_collection(movie, details, media_type)
-            except Exception:
-                logger.warning("collection sync failed for movie_id=%s", movie.id, exc_info=True)
+            # Фаза 2 — только запись в БД, короткая транзакция (весь сетевой
+            # I/O уже позади, кроме одиночных вызовов внутри _sync_collection /
+            # _sync_movie_persons / _sync_seasons, которые нужны рядом с записью).
+            with transaction.atomic():
+                # Коллекция TMDB — только для movie (для tv/series не существует)
+                collection_changed = False
+                try:
+                    collection_changed = cls._sync_collection(movie, details, media_type)
+                except Exception:
+                    logger.warning("collection sync failed for movie_id=%s", movie.id, exc_info=True)
 
-            if updated_fields:
-                movie.save(update_fields=updated_fields)
+                if updated_fields:
+                    movie.save(update_fields=updated_fields)
 
-            relations_updated: list[str] = []
-            if collection_changed:
-                relations_updated.append("collection")
-            if cls._sync_genres(movie, getattr(details, "genres", None)):
-                relations_updated.append("genres")
-            if cls._sync_countries(
-                movie,
-                countries=getattr(details, "countries", None),
-                origin_countries=getattr(details, "origin_countries", None),
-            ):
-                relations_updated.append("countries")
-            if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
-                relations_updated.append("movie_persons")
-            if media_type == "tv":
-                season_updates = cls._sync_seasons_and_episodes(movie, details, tmdb)
-                if season_updates:
-                    relations_updated.append("seasons")
-                    relations_updated.append("episodes")
-                cls._sync_season_user_statuses(movie)
-            orphan_deleted_count = cls._cleanup_orphan_persons()
-            if orphan_deleted_count:
-                relations_updated.append("orphan_person_cleanup")
+                relations_updated: list[str] = []
+                if collection_changed:
+                    relations_updated.append("collection")
+                if cls._sync_genres(movie, getattr(details, "genres", None)):
+                    relations_updated.append("genres")
+                if cls._sync_countries(
+                    movie,
+                    countries=getattr(details, "countries", None),
+                    origin_countries=getattr(details, "origin_countries", None),
+                ):
+                    relations_updated.append("countries")
+                if cls._sync_movie_persons(movie=movie, details=details, tmdb=tmdb):
+                    relations_updated.append("movie_persons")
+                if media_type == "tv":
+                    season_updates = cls._sync_seasons_and_episodes(movie, details, tmdb)
+                    if season_updates:
+                        relations_updated.append("seasons")
+                        relations_updated.append("episodes")
+                    cls._sync_season_user_statuses(movie)
+                orphan_deleted_count = cls._cleanup_orphan_persons()
+                if orphan_deleted_count:
+                    relations_updated.append("orphan_person_cleanup")
 
-            all_updates = tuple(updated_fields + relations_updated)
-            cast_count = len(list(getattr(details, "cast", None) or []))
-            crew_count = len(list(getattr(details, "crew", None) or []))
-            cls._log_sync_apply(all_updates, cast_count, crew_count)
-            cls._log_orphan_cleanup(orphan_deleted_count)
-            cls._log_done("ok", "sync completed")
+                all_updates = tuple(updated_fields + relations_updated)
+                cast_count = len(list(getattr(details, "cast", None) or []))
+                crew_count = len(list(getattr(details, "crew", None) or []))
+                cls._log_sync_apply(all_updates, cast_count, crew_count)
+                cls._log_orphan_cleanup(orphan_deleted_count)
+                cls._log_done("ok", "sync completed")
 
             return TMDBSyncResult(
                 status="ok",

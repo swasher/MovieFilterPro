@@ -30,7 +30,7 @@ from vault.services.season_status_service import UNSET, SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
-from vault.services.tmdb_sync_queue_service import TMDBSyncQueueService
+from vault.services.tmdb_sync_queue_service import TMDBSyncKeysMissingError, TMDBSyncQueueService
 from vault.constants import SYSTEM_LIST_LABELS
 
 
@@ -320,6 +320,7 @@ class TMDBSyncQueueStateOut(Schema):
     enabled: bool
     counters: dict[str, int]  # pending, in_progress, synced, confirm, not_found, error
     total_unsynced: int  # сколько в базе вообще несинхронизированных (source=KINORIUM, tmdb_id IS NULL)
+    missing_keys: list[str] = []  # незаполненные API-ключи, блокирующие старт очереди
 
 
 class TMDBSyncQueueItemOut(Schema):
@@ -1133,6 +1134,39 @@ def tmdb_lookup(request, tmdb_id: int, media_type: str | None = None):
     return _build_tmdb_candidate_out(candidate)
 
 
+class TMDBLookupAnyOut(Schema):
+    movie: TMDBCandidateOut | None = None
+    tv: TMDBCandidateOut | None = None
+
+
+@api.get("/tmdb/lookup-any", response=TMDBLookupAnyOut)
+def tmdb_lookup_any(request, tmdb_id: int):
+    """Пакетный lookup для диалога Link TMDB: ищет ID и как movie, и как tv.
+
+    Всегда отвечает 200 (кандидаты или null), чтобы фронт не слал два
+    параллельных запроса, один из которых заведомо падает в 404 и шумит
+    в консоли браузера. Старый /tmdb/lookup не тронут.
+    """
+    _require_api_user(request)
+
+    movie_out: TMDBCandidateOut | None = None
+    tv_out: TMDBCandidateOut | None = None
+    try:
+        movie_candidate = TMDBMovieImportService.lookup_by_id(tmdb_id, media_type="movie")
+        if movie_candidate is not None:
+            movie_out = _build_tmdb_candidate_out(movie_candidate)
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+    try:
+        tv_candidate = TMDBMovieImportService.lookup_by_id(tmdb_id, media_type="tv")
+        if tv_candidate is not None:
+            tv_out = _build_tmdb_candidate_out(tv_candidate)
+    except Exception as exc:
+        raise HttpError(400, str(exc))
+
+    return TMDBLookupAnyOut(movie=movie_out, tv=tv_out)
+
+
 @api.get("/connection-events", response=ConnectionEventsOut)
 def connection_events(
     request,
@@ -1622,7 +1656,10 @@ def tmdb_sync_delete_item(request, item_id: int):
 @api.post("/tmdb-sync/start", response=TMDBSyncQueueStateOut)
 def tmdb_sync_start(request):
     _require_api_user(request)
-    TMDBSyncQueueService.start()
+    try:
+        TMDBSyncQueueService.start()
+    except TMDBSyncKeysMissingError as exc:
+        raise HttpError(400, str(exc))
     return TMDBSyncQueueService.get_state()
 
 

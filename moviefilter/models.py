@@ -172,6 +172,7 @@ class UserPreferences(models.Model):
     ignore_title = models.CharField(max_length=500, default='')
 
     tmdb_api_key = models.CharField(max_length=50, blank=True, null=True)
+    omdb_api_key = models.CharField(max_length=50, blank=True, null=True)
     tmdb_v4_read_access_token = models.CharField(max_length=400, blank=True, null=True)
     tmdb_v4_authenticated_access_token = models.CharField(max_length=400, blank=True, null=True)
 

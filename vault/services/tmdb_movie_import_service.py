@@ -76,7 +76,13 @@ class TMDBMovieImportService:
         if media_type:
             normalized = cls._normalize_media_type(media_type)
             if normalized:
-                details, resolved_media_type = cls._load_details(tmdb=tmdb, tmdb_id=tmdb_id, media_type=normalized)
+                # Строго без fallback: иначе параллельные запросы movie+tv из
+                # диалога Link TMDB возвращают один и тот же кандидат дважды
+                # (tv-запрос падает обратно на movie) и фронт падает с
+                # each_key_duplicate на одинаковом ключе tmdb_id-media_type.
+                details, resolved_media_type = cls._load_details(
+                    tmdb=tmdb, tmdb_id=tmdb_id, media_type=normalized, allow_fallback=False
+                )
                 if details is None or resolved_media_type is None:
                     return None
                 
@@ -231,12 +237,14 @@ class TMDBMovieImportService:
         return (left.year or 0) > (right.year or 0)
 
     @classmethod
-    def _load_details(cls, tmdb, tmdb_id: int, media_type: MediaType) -> tuple[object | None, MediaType | None]:
+    def _load_details(cls, tmdb, tmdb_id: int, media_type: MediaType, allow_fallback: bool = True) -> tuple[object | None, MediaType | None]:
         try:
             if media_type == "movie":
                 return tmdb.movie(tmdb_id), "movie"
             return tmdb.tv_show(tmdb_id), "tv"
         except Exception:
+            if not allow_fallback:
+                return None, None
             fallback: MediaType = "tv" if media_type == "movie" else "movie"
             try:
                 if fallback == "movie":

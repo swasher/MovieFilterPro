@@ -253,6 +253,9 @@ class Movie(models.Model):
         indexes = [
             models.Index(fields=['-year', 'title']),
             models.Index(fields=['status']),
+            # Очередь TMDB-sync и get_state() постоянно считают
+            # filter(source=KINORIUM, tmdb_id__isnull=True) — без индекса Seq Scan.
+            models.Index(fields=['source', 'tmdb_id'], name='movie_source_tmdb_idx'),
             # GIN trigram — ускоряет title__icontains / original_title__icontains «на лету»
             # Требует расширения pg_trgm (миграция 0033)
             GinIndex(

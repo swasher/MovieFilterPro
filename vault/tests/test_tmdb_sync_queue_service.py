@@ -1,13 +1,13 @@
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from moviefilter.models import UserPreferences
 from vault.models import Movie, TMDBSyncQueueItem
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBSyncResult, TMDBMovieSyncService
-from vault.services.tmdb_sync_queue_service import TMDBSyncQueueService
+from vault.services.tmdb_sync_queue_service import TMDBSyncKeysMissingError, TMDBSyncQueueService
 
 
 def _candidate(tmdb_id: int):
@@ -29,6 +29,9 @@ class TMDBSyncQueueServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="tester", password="x")
         prefs = UserPreferences(user=self.user)
+        # Ключи нужны для start(): без них очередь блокируется
+        prefs.tmdb_api_key = "test-tmdb-key"
+        prefs.omdb_api_key = "test-omdb-key"
         prefs.save()  # save() принудительно ставит pk=1 (синглтон)
 
         schedule_patcher = patch.object(TMDBSyncQueueService, "_schedule_tick")
@@ -331,3 +334,72 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertFalse(TMDBSyncQueueItem.objects.filter(pk=item1.id).exists())
         self.assertTrue(TMDBSyncQueueItem.objects.filter(pk=item2.id).exists())
         self.assertTrue(TMDBSyncQueueItem.objects.filter(pk=item3.id).exists())
+
+    # ------------------------------------------------------------------ #
+    #                    start без настроенных ключей                     #
+    # ------------------------------------------------------------------ #
+
+    def _clear_keys(self):
+        prefs = UserPreferences.get()
+        prefs.tmdb_api_key = None
+        prefs.omdb_api_key = None
+        prefs.save(update_fields=["tmdb_api_key", "omdb_api_key"])
+
+    @override_settings(OMDB_API_KEY="")
+    def test_get_missing_keys_lists_unconfigured_keys(self):
+        self.assertEqual(TMDBSyncQueueService.get_missing_keys(), [])
+
+        prefs = UserPreferences.get()
+        prefs.omdb_api_key = None
+        prefs.save(update_fields=["omdb_api_key"])
+        self.assertEqual(TMDBSyncQueueService.get_missing_keys(), ["omdb_api_key"])
+
+        self._clear_keys()
+        self.assertEqual(
+            TMDBSyncQueueService.get_missing_keys(), ["tmdb_api_key", "omdb_api_key"]
+        )
+
+    @override_settings(OMDB_API_KEY="")
+    def test_get_state_reports_missing_keys(self):
+        self.assertEqual(TMDBSyncQueueService.get_state()["missing_keys"], [])
+        self._clear_keys()
+        self.assertEqual(
+            TMDBSyncQueueService.get_state()["missing_keys"],
+            ["tmdb_api_key", "omdb_api_key"],
+        )
+
+    @override_settings(OMDB_API_KEY="")
+    def test_start_raises_when_keys_missing(self):
+        self._clear_keys()
+        with self.assertRaises(TMDBSyncKeysMissingError) as ctx:
+            TMDBSyncQueueService.start()
+        self.assertEqual(ctx.exception.missing_keys, ["tmdb_api_key", "omdb_api_key"])
+        self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
+        self.mock_schedule_tick.assert_not_called()
+
+    @override_settings(OMDB_API_KEY="")
+    def test_start_raises_when_only_omdb_missing(self):
+        prefs = UserPreferences.get()
+        prefs.omdb_api_key = None
+        prefs.save(update_fields=["omdb_api_key"])
+        with self.assertRaises(TMDBSyncKeysMissingError) as ctx:
+            TMDBSyncQueueService.start()
+        self.assertEqual(ctx.exception.missing_keys, ["omdb_api_key"])
+        self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
+
+    @override_settings(OMDB_API_KEY="")
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_process_one_stops_queue_when_keys_removed_midrun(self, sync_mock):
+        movie = self._movie(title="Target")
+        TMDBSyncQueueService.enqueue_unsynced()
+        TMDBSyncQueueService.start()
+        self.assertTrue(UserPreferences.get().tmdb_sync_enabled)
+
+        self._clear_keys()
+        result = TMDBSyncQueueService.process_one()
+        self.assertIsNotNone(result)
+        self.assertEqual(result["state"], "stopped")
+        self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
+        sync_mock.assert_not_called()
+        item = TMDBSyncQueueItem.objects.get(movie=movie)
+        self.assertEqual(item.state, TMDBSyncQueueItem.State.PENDING)

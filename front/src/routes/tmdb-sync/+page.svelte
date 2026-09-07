@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { toast } from "svelte-sonner";
   import { goto } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
@@ -21,7 +22,7 @@
   } from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { CheckCheck, ExternalLink, Play, Plus, RotateCw, Square, Trash2 } from "@lucide/svelte";
+  import { CheckCheck, ExternalLink, Play, Plus, RefreshCw, RotateCw, Square, Trash2 } from "@lucide/svelte";
   import * as Pagination from "$lib/components/ui/pagination";
 
   let { data } = $props();
@@ -50,19 +51,41 @@
     retry_count: number;
   };
 
+  type TmdbCandidate = {
+    tmdb_id: number;
+    media_type: string;
+    title: string;
+    original_title: string;
+    year: number | null;
+    score: number;
+    score_reasons: string[];
+    poster_url: string | null;
+    popularity: number | null;
+    vote_average: number | null;
+  };
+
   type QueueState = {
     enabled: boolean;
     counters: Record<string, number>;
     total_unsynced: number;
+    missing_keys?: string[];
   };
+
+  const KEY_LABELS: Record<string, string> = {
+    tmdb_api_key: "TMDB API key",
+    omdb_api_key: "OMDB API key"
+  };
+  const keyLabel = (key: string) => KEY_LABELS[key] ?? key;
 
   let enabled = $state(data.state?.enabled ?? false);
   let counters = $state<Record<string, number>>(data.state?.counters ?? {});
   let totalUnsynced = $state(data.state?.total_unsynced ?? 0);
+  let missingKeys = $state<string[]>(data.state?.missing_keys ?? []);
   let items = $state<QueueItem[]>(data.items ?? []);
   let total = $state(data.total ?? 0);
-  let page = $state(1);
+  let page = $state(data.page ?? 1);
   let apiError = $state(data.apiError);
+  let jumpTo = $state("");
 
   let isAdding = $state(false);
   let isStarting = $state(false);
@@ -73,6 +96,13 @@
   let resyncDialogOpen = $state(false);
   let isResyncing = $state(false);
   let deletingIds = $state<Record<number, boolean>>({});
+  let syncingIds = $state<Record<number, boolean>>({});
+  let candidateDialogOpen = $state(false);
+  let candidateDialogMode = $state<"needs_confirmation" | "needs_user_choice">("needs_user_choice");
+  let tmdbCandidates = $state<TmdbCandidate[]>([]);
+  let selectedCandidateId = $state<number | null>(null);
+  let isConfirmingCandidate = $state(false);
+  let activeSyncItem = $state<QueueItem | null>(null);
 
   const handleUnauthorized = async (status: number, message?: string): Promise<boolean> => {
     if (status !== 401) return false;
@@ -81,23 +111,27 @@
     return true;
   };
 
-  const refresh = async () => {
-    const [stateResponse, itemsResponse] = await Promise.all([
-      fetch("/api/vault/tmdb-sync/state"),
-      fetch(
-        `/api/vault/tmdb-sync/items?limit=${PAGE_SIZE}&offset=${(page - 1) * PAGE_SIZE}`
-      )
-    ]);
+  // Лёгкий опрос состояния (без тяжёлого items+count) — для авто-таймера.
+  // Полный refresh (state + items) — только по ручным действиям;
+  // смена страницы идёт через навигацию с ?page= (данные подтягивает load).
+  const refreshState = async () => {
+    const stateResponse = await fetch("/api/vault/tmdb-sync/state");
 
     if (stateResponse.ok) {
       const payload = (await stateResponse.json()) as QueueState;
       enabled = payload.enabled;
       counters = payload.counters;
       totalUnsynced = payload.total_unsynced;
+      missingKeys = payload.missing_keys ?? [];
     } else if (stateResponse.status === 401) {
       await handleUnauthorized(401);
-      return;
     }
+  };
+
+  const refreshItems = async () => {
+    const itemsResponse = await fetch(
+      `/api/vault/tmdb-sync/items?limit=${PAGE_SIZE}&offset=${(page - 1) * PAGE_SIZE}`
+    );
 
     if (itemsResponse.ok) {
       const payload = (await itemsResponse.json()) as {
@@ -109,14 +143,40 @@
     }
   };
 
+  const refresh = async () => {
+    const stateResponse = await fetch("/api/vault/tmdb-sync/state");
+
+    if (stateResponse.ok) {
+      const payload = (await stateResponse.json()) as QueueState;
+      enabled = payload.enabled;
+      counters = payload.counters;
+      totalUnsynced = payload.total_unsynced;
+      missingKeys = payload.missing_keys ?? [];
+    } else if (stateResponse.status === 401) {
+      await handleUnauthorized(401);
+      return;
+    }
+
+    await refreshItems();
+
+    // Очередь могла ужаться (удаления/обработка): уводим с несуществующей страницы.
+    // Навигацию и дозагрузку выполнит вотчер page ниже.
+    const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (page > maxPage) {
+      page = maxPage;
+    }
+  };
+
   // Polling: пауза на скрытой вкладке, чаще при активной обработке.
+  // Таймер дёргает только state (дешёвый запрос без count/offset);
+  // список items обновляется при смене страницы и ручных действиях.
   $effect(() => {
-    const intervalMs = enabled ? 2000 : 3000;
+    const intervalMs = enabled ? 5000 : 10000;
     let timer: ReturnType<typeof setInterval> | null = null;
 
     const start = () => {
       if (timer) return;
-      timer = setInterval(refresh, intervalMs);
+      timer = setInterval(refreshState, intervalMs);
     };
     const stop = () => {
       if (timer) {
@@ -137,10 +197,38 @@
     };
   });
 
-  // Смена страницы пагинации — сразу перезагружаем список.
+  // Навигация (goto с ?page=) обновляет data через load — подхватываем в локальный стейт.
   $effect(() => {
-    page;
-    refresh();
+    page = data.page ?? 1;
+    items = data.items ?? [];
+    total = data.total ?? 0;
+    enabled = data.state?.enabled ?? enabled;
+    counters = data.state?.counters ?? {};
+    totalUnsynced = data.state?.total_unsynced ?? totalUnsynced;
+    missingKeys = data.state?.missing_keys ?? missingKeys;
+  });
+
+  // Смена страницы пагинации — навигация с ?page= в URL (переживает reload, шарится ссылкой).
+  // Данные подтянет load через goto, ручной refreshItems здесь не нужен.
+  $effect(() => {
+    const current = page;
+    const loaded = untrack(() => data.page ?? 1);
+    if (current === loaded) return;
+    const params = untrack(() => new URLSearchParams(window.location.search));
+    if (current <= 1) params.delete("page");
+    else params.set("page", String(current));
+    const query = params.toString();
+    const target = `/tmdb-sync${query ? `?${query}` : ""}`;
+    const currentUrl = untrack(() => window.location.pathname + window.location.search);
+    if (currentUrl === target) return;
+    void goto(target, { replaceState: true, keepFocus: true, noScroll: true });
+  });
+
+  // ?page= вышел за пределы (очередь ужалась или вручную ввели 999) — на последнюю страницу.
+  $effect(() => {
+    if (total > 0 && page > totalPages) {
+      page = totalPages;
+    }
   });
 
   const addAll = async () => {
@@ -195,8 +283,16 @@
     try {
       const response = await fetch("/api/vault/tmdb-sync/start", { method: "POST" });
       if (!response.ok) {
-        if (await handleUnauthorized(response.status)) return;
-        toast.error(`HTTP ${response.status}`);
+        let detail = `HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { detail?: string };
+          if (payload.detail?.trim()) detail = payload.detail.trim();
+        } catch {
+          // ignore non-json payloads
+        }
+        if (await handleUnauthorized(response.status, detail)) return;
+        toast.error(detail);
+        await refreshState();
         return;
       }
       toast.success("Обработка очереди запущена.");
@@ -270,6 +366,104 @@
     }
   };
 
+  const syncOne = async (item: QueueItem) => {
+    if (!item.movie_slug || syncingIds[item.id]) return;
+    syncingIds = { ...syncingIds, [item.id]: true };
+    try {
+      const response = await fetch(`/api/vault/movies/${item.movie_slug}/fetch-tmdb`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force_rematch: false })
+      });
+      const payload = (await response.json()) as {
+        status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
+        message?: string;
+        detail?: string;
+        candidates?: TmdbCandidate[];
+      };
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message ?? payload.detail)) return;
+        toast.error(payload.message ?? payload.detail ?? `HTTP ${response.status}`);
+        return;
+      }
+      if (payload.status === "ok") {
+        toast.success(payload.message ?? "TMDB sync done.");
+        await refresh();
+      } else if (payload.status === "needs_confirmation" || payload.status === "needs_user_choice") {
+        tmdbCandidates = payload.candidates ?? [];
+        selectedCandidateId = tmdbCandidates[0]?.tmdb_id ?? null;
+        candidateDialogMode = payload.status;
+        activeSyncItem = { ...item };
+        candidateDialogOpen = true;
+        toast.warning(payload.message ?? "TMDB requires manual confirmation.");
+      } else {
+        toast.error(payload.message ?? "TMDB sync failed.");
+        await refresh();
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось синхронизировать фильм");
+    } finally {
+      syncingIds = { ...syncingIds, [item.id]: false };
+    }
+  };
+
+  const confirmTmdbCandidate = async () => {
+    const candidate = tmdbCandidates.find((entry) => entry.tmdb_id === selectedCandidateId);
+    if (!candidate) {
+      toast.error("Выбери кандидата.");
+      return;
+    }
+    if (!activeSyncItem?.movie_slug) {
+      toast.error("Нет фильма для подтверждения.");
+      return;
+    }
+    if (isConfirmingCandidate) return;
+    isConfirmingCandidate = true;
+    try {
+      const response = await fetch(`/api/vault/movies/${activeSyncItem.movie_slug}/fetch-tmdb-confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tmdb_id: candidate.tmdb_id,
+          media_type: candidate.media_type
+        })
+      });
+      const payload = (await response.json()) as {
+        status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
+        message?: string;
+        detail?: string;
+        candidates?: TmdbCandidate[];
+      };
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message ?? payload.detail)) return;
+        toast.error(payload.message ?? payload.detail ?? `HTTP ${response.status}`);
+        return;
+      }
+      if (payload.status === "ok") {
+        candidateDialogOpen = false;
+        tmdbCandidates = [];
+        selectedCandidateId = null;
+        activeSyncItem = null;
+        toast.success(payload.message ?? "TMDB sync done.");
+        await refresh();
+        return;
+      }
+      if (payload.status === "needs_confirmation" || payload.status === "needs_user_choice") {
+        tmdbCandidates = payload.candidates ?? [];
+        selectedCandidateId = tmdbCandidates[0]?.tmdb_id ?? null;
+        candidateDialogMode = payload.status;
+        toast.warning(payload.message ?? "Нужно подтвердить кандидата.");
+        return;
+      }
+      toast.error(payload.message ?? payload.detail ?? "TMDB sync failed.");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unknown TMDB confirm error");
+    } finally {
+      isConfirmingCandidate = false;
+    }
+  };
+
   const removeSynced = async () => {
     if (isRemovingSynced) return;
     isRemovingSynced = true;
@@ -319,6 +513,18 @@
     iso ? new Date(iso).toLocaleString() : "";
 
   const queuedCount = $derived(counters.pending ?? 0);
+  const totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+  const rangeStart = $derived(total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1);
+  const rangeEnd = $derived(Math.min(total, page * PAGE_SIZE));
+
+  const submitJump = (event: SubmitEvent) => {
+    event.preventDefault();
+    const next = Math.floor(Number(jumpTo));
+    if (!Number.isFinite(next)) return;
+    jumpTo = "";
+    page = Math.min(Math.max(1, next), totalPages);
+  };
+
   const isProcessing = $derived(enabled && (counters.in_progress ?? 0) > 0);
   const statusLabel = $derived(
     enabled
@@ -341,6 +547,14 @@
         Скорость ограничена лимитером TMDB (2 зап/сек).
       </CardDescription>
     </CardHeader>
+    {#if missingKeys.length > 0}
+      <div class="px-6 pb-2">
+        <div class="rounded-xl border border-amber-600/40 bg-amber-500/10 px-4 py-3 text-sm">
+          Не настроены ключи: {missingKeys.map(keyLabel).join(", ")}. Заполни их в
+          <a href="/preferences" class="font-medium underline">Preferences</a>, иначе очередь нельзя запустить.
+        </div>
+      </div>
+    {/if}
     <CardContent class="flex flex-wrap items-center gap-3">
       <Button onclick={addAll} disabled={isAdding} class="gap-2">
         <Plus data-icon="inline-start" />
@@ -354,7 +568,10 @@
 
       <Button
         onclick={startProcessing}
-        disabled={enabled || isAdding}
+        disabled={enabled || isAdding || isStarting || missingKeys.length > 0}
+        title={missingKeys.length > 0
+          ? `Нужны ключи: ${missingKeys.map(keyLabel).join(", ")} (Preferences)`
+          : undefined}
         class="gap-2"
       >
         <Play data-icon="inline-start" />
@@ -418,14 +635,14 @@
               <TableHead>Результат</TableHead>
               <TableHead class="w-44">Поставлен</TableHead>
               <TableHead class="w-44">Синхронизирован</TableHead>
-              <TableHead class="w-28">Action</TableHead>
+              <TableHead class="w-36">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {#each items as item, i (item.id)}
               <TableRow>
                 <TableCell>
-                  <span class="text-xs text-muted-foreground">{i + 1}</span>
+                  <span class="text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</span>
                 </TableCell>
                 <TableCell>
                   <Badge variant={stateBadgeVariant(item.state)} class={stateBadgeClass(item.state)}>
@@ -496,6 +713,8 @@
                         <Tooltip.Trigger>
                           <Button
                             href={`/movies/${item.movie_slug}`}
+                            target="_blank"
+                            rel="noreferrer"
                             variant="ghost"
                             size="icon"
                             aria-label="Открыть фильм"
@@ -505,6 +724,23 @@
                           </Button>
                         </Tooltip.Trigger>
                         <Tooltip.Content side="bottom" align="center">Открыть</Tooltip.Content>
+                      </Tooltip.Root>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Sync using tmdb-id"
+                            disabled={!item.movie_slug || syncingIds[item.id] || item.state === "in_progress"}
+                            onclick={() => syncOne(item)}
+                          >
+                            <RefreshCw
+                              data-icon="inline-start"
+                              class={syncingIds[item.id] ? "animate-spin" : ""}
+                            />
+                          </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content side="bottom" align="center">Sync using tmdb-id</Tooltip.Content>
                       </Tooltip.Root>
                       <Tooltip.Root>
                         <Tooltip.Trigger>
@@ -527,6 +763,24 @@
             {/each}
           </TableBody>
         </Table>
+      </div>
+      <div class="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
+        <span>Показаны {rangeStart}–{rangeEnd} из {total}</span>
+        {#if totalPages > 1}
+          <form onsubmit={submitJump} class="flex items-center gap-2">
+            <label for="tmdb-sync-jump">Перейти на страницу:</label>
+            <Input
+              id="tmdb-sync-jump"
+              bind:value={jumpTo}
+              type="number"
+              min={1}
+              max={totalPages}
+              placeholder={`1–${totalPages}`}
+              class="h-8 w-24"
+            />
+            <Button type="submit" variant="outline" size="sm">Перейти</Button>
+          </form>
+        {/if}
       </div>
       <Pagination.Root count={total} perPage={PAGE_SIZE} bind:page>
         {#snippet children({ pages, currentPage })}
@@ -593,6 +847,96 @@
       </Button>
       <Button onclick={resyncAll} disabled={isResyncing}>
         {isResyncing ? "Добавляю…" : "Re-Sync"}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={candidateDialogOpen}>
+  <Dialog.Content class="sm:max-w-3xl">
+    <Dialog.Header>
+      <Dialog.Title>
+        {candidateDialogMode === "needs_confirmation" ? "Подтверждение TMDB-совпадения" : "Выбор фильма на TMDB"}
+      </Dialog.Title>
+      <Dialog.Description>
+        {#if activeSyncItem}
+          {activeSyncItem.snapshot_title}
+          {#if activeSyncItem.snapshot_year}
+            ({activeSyncItem.snapshot_year})
+          {/if}
+          —
+        {/if}
+        {#if candidateDialogMode === "needs_confirmation"}
+          Найден один неуверенный кандидат. Проверь его и подтверди выбор вручную.
+        {:else}
+          Найдено несколько кандидатов. Выбери нужный вариант и подтверди.
+        {/if}
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <div class="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+      {#each tmdbCandidates as candidate (candidate.tmdb_id)}
+        <button
+          type="button"
+          class={`w-full rounded-xl border p-3 text-left transition ${
+            selectedCandidateId === candidate.tmdb_id
+              ? "border-primary bg-accent/40"
+              : "border-border/70 bg-card hover:bg-accent/20"
+          }`}
+          onclick={() => {
+            selectedCandidateId = candidate.tmdb_id;
+          }}
+        >
+          <div class="flex gap-3">
+            <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
+              {#if candidate.poster_url}
+                <img
+                  src={candidate.poster_url}
+                  alt={candidate.title}
+                  class="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              {:else}
+                <span class="text-muted-foreground text-[10px]">no poster</span>
+              {/if}
+            </div>
+
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="space-y-1">
+                <p class="truncate text-sm font-semibold">{candidate.title}</p>
+                {#if candidate.original_title}
+                  <p class="text-muted-foreground truncate text-xs">{candidate.original_title}</p>
+                {/if}
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <Badge variant="secondary">{candidate.media_type}</Badge>
+                <Badge variant="outline">{candidate.year ?? "—"}</Badge>
+                <Badge variant="outline">score {candidate.score}</Badge>
+                {#if candidate.vote_average}
+                  <Badge variant="outline">TMDB {candidate.vote_average.toFixed(1)}</Badge>
+                {/if}
+              </div>
+
+              {#if candidate.score_reasons.length}
+                <p class="text-muted-foreground line-clamp-2 text-xs">
+                  {candidate.score_reasons.join(", ")}
+                </p>
+              {/if}
+            </div>
+          </div>
+        </button>
+      {/each}
+    </div>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => {
+        candidateDialogOpen = false;
+      }}>
+        Отмена
+      </Button>
+      <Button onclick={confirmTmdbCandidate} disabled={isConfirmingCandidate || selectedCandidateId === null}>
+        {isConfirmingCandidate ? "Сохраняю..." : "Выбрать"}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

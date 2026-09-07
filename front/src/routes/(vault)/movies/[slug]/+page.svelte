@@ -362,11 +362,8 @@
     linkCandidates = [];
 
     try {
-      // Ищем и movie, и tv параллельно
-      const [movieRes, tvRes] = await Promise.all([
-        fetch(`/api/vault/tmdb/lookup?tmdb_id=${tmdbId}&media_type=movie`),
-        fetch(`/api/vault/tmdb/lookup?tmdb_id=${tmdbId}&media_type=tv`),
-      ]);
+      // Один batch-запрос ищет ID и как movie, и как tv (всегда 200, без 404-шума в консоли)
+      const res = await fetch(`/api/vault/tmdb/lookup-any?tmdb_id=${tmdbId}`);
 
       const results: Array<{
         tmdb_id: number;
@@ -379,34 +376,37 @@
         vote_average: number | null;
       }> = [];
 
-      for (const res of [movieRes, tvRes]) {
-        if (res.ok) {
-          try {
-            const payload = await res.json();
-            if (payload.tmdb_id) {
-              results.push(payload);
+      if (res.ok) {
+        try {
+          const payload = await res.json();
+          for (const item of [payload.movie, payload.tv]) {
+            if (item && item.tmdb_id) {
+              results.push(item);
             }
-          } catch {
-            // игнорируем ошибки парсинга
           }
+        } catch {
+          // игнорируем ошибки парсинга
         }
       }
 
       if (results.length === 0) {
-        // Если оба 404, берем сообщение от movie
-        if (!movieRes.ok) {
-          const payload = await movieRes.json().catch(() => ({}));
-          linkLookupError = payload.message ?? `HTTP ${movieRes.status}`;
-        } else if (!tvRes.ok) {
-          const payload = await tvRes.json().catch(() => ({}));
-          linkLookupError = payload.message ?? `HTTP ${tvRes.status}`;
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          linkLookupError = payload.detail ?? payload.message ?? `HTTP ${res.status}`;
         } else {
           linkLookupError = "Ничего не найдено на TMDB";
         }
         linkCandidates = [];
       } else {
-        linkCandidates = results;
-        selectedLinkCandidateKey = results[0] ? makeCandidateKey(results[0].tmdb_id, results[0].media_type) : null;
+        // Страховка от дублей по ключу tmdb_id-media_type (keyed each падает на дубликатах)
+        const seen = new Set<string>();
+        linkCandidates = results.filter((item) => {
+          const key = makeCandidateKey(item.tmdb_id, item.media_type);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        selectedLinkCandidateKey = linkCandidates[0] ? makeCandidateKey(linkCandidates[0].tmdb_id, linkCandidates[0].media_type) : null;
       }
     } catch (error) {
       linkCandidates = [];

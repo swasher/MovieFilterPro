@@ -32,6 +32,7 @@ class PreferencesApiTests(TestCase):
             torrents_hotfolder=r"C:\temp\torrents",
             ignore_title="camrip",
             tmdb_api_key="tmdb-key",
+            omdb_api_key="omdb-key",
             tmdb_v4_read_access_token="tmdb-read-token",
             tmdb_v4_authenticated_access_token="tmdb-auth-token",
         )
@@ -49,6 +50,7 @@ class PreferencesApiTests(TestCase):
             self.assertEqual(payload["resolved_torrents_hotfolder"], str(Path(temp_dir)))
             self.assertTrue(payload["hotfolder_exists"])
             self.assertEqual(payload["tmdb_v4_authenticated_access_token"], "tmdb-auth-token")
+            self.assertEqual(payload["omdb_api_key"], "omdb-key")
 
     def test_put_preferences_updates_values_and_trims_optional_fields(self):
         response = self.client.put(
@@ -72,6 +74,7 @@ class PreferencesApiTests(TestCase):
                 "torrents_hotfolder": "  C:\\downloads\\torrents  ",
                 "ignore_title": "ts, camrip",
                 "tmdb_api_key": "  new-tmdb-key  ",
+                "omdb_api_key": "  new-omdb-key  ",
                 "tmdb_v4_read_access_token": "  new-read-token  ",
             },
             content_type="application/json",
@@ -84,6 +87,8 @@ class PreferencesApiTests(TestCase):
         self.assertEqual(self.preferences.kinozal_domain, "kinozal.guru")
         self.assertEqual(self.preferences.torrents_hotfolder, r"C:\downloads\torrents")
         self.assertEqual(self.preferences.plex_address, "http://new-plex:32400")
+        self.assertEqual(self.preferences.tmdb_api_key, "new-tmdb-key")
+        self.assertEqual(self.preferences.omdb_api_key, "new-omdb-key")
         self.assertEqual(self.preferences.tmdb_v4_read_access_token, "new-read-token")
         self.assertEqual(self.preferences.tmdb_v4_authenticated_access_token, "tmdb-auth-token")
 

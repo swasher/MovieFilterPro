@@ -62,7 +62,9 @@ class TMDBMovieMatchingService:
     AMBIGUOUS_DELTA_THRESHOLD = 15
     MIN_RELEVANT_SCORE = 40
     SEARCH_RESULTS_PER_REQUEST = 8
-    MAX_CANDIDATES_FOR_DETAIL = 30
+    # Детали под альтернативные названия тянем только для топа по quick_score:
+    # было 30 (минуты сети внутри синка одного фильма), стало 10.
+    MAX_CANDIDATES_FOR_DETAIL = 10
     TOP_CANDIDATES_LIMIT = 5
 
     @classmethod
@@ -309,6 +311,10 @@ class TMDBMovieMatchingService:
 
     @classmethod
     def _search_once(cls, tmdb, media_type: MediaType, query: str, year: int | None):
+        # limit: до 12 вызовов подряд на фильм — без лимитера ловим 429 от TMDB.
+        from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+        TmdbRateLimiter.wait()
         try:
             if media_type == "movie":
                 if year:
@@ -434,6 +440,9 @@ class TMDBMovieMatchingService:
 
         for raw in limited:
             try:
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
                 details = tmdb.movie(raw.tmdb_id) if raw.media_type == "movie" else tmdb.tv_show(raw.tmdb_id)
             except Exception:
                 continue

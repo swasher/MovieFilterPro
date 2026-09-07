@@ -9,7 +9,7 @@ class PreferencesForm(forms.ModelForm):
         model = UserPreferences
         fields = ['last_scan', 'scan_from_page', 'plex_address', 'plex_token', 'countries', 'genres', 'max_year',
                   'min_rating', 'kinozal_domain', 'low_countries', 'low_genres', 'low_max_year', 'low_min_rating',
-                  'tmdb_api_key', 'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
+                  'tmdb_api_key', 'omdb_api_key', 'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
                   'ignore_title', 'cookie_pass', 'cookie_uid',
                   'torrents_hotfolder']
 
@@ -51,6 +51,12 @@ class PreferencesForm(forms.ModelForm):
             Field("tmdb_api_key"),
             Field("tmdb_v4_read_access_token"),
             Field("tmdb_v4_authenticated_access_token"),
+            HTML("""
+                <h3>OMDB</h3>
+                <i>Ключ OMDB API для рейтингов IMDb, Rotten Tomatoes и Metacritic</i>
+                <hr>
+            """),
+            Field("omdb_api_key"),
             HTML("""<h3>Strict rules</h3>
                 <i>Сначала из всего списка удаляеся все, что содержит эти страны/жанры или менее года/рейтинга</i>
                 <hr>

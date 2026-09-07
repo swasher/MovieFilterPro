@@ -20,6 +20,7 @@ export type PreferencesData = {
   hotfolder_hint: string;
   ignore_title: string;
   tmdb_api_key: string | null;
+  omdb_api_key: string | null;
   tmdb_v4_read_access_token: string | null;
   tmdb_v4_authenticated_access_token: string | null;
 };
@@ -43,6 +44,7 @@ export type PreferencesUpdatePayload = {
   torrents_hotfolder: string | null;
   ignore_title: string;
   tmdb_api_key: string | null;
+  omdb_api_key: string | null;
   tmdb_v4_read_access_token: string | null;
 };
 
@@ -72,6 +74,7 @@ export const emptyPreferences = (): PreferencesData => ({
   hotfolder_hint: "",
   ignore_title: "",
   tmdb_api_key: null,
+  omdb_api_key: null,
   tmdb_v4_read_access_token: null,
   tmdb_v4_authenticated_access_token: null
 });

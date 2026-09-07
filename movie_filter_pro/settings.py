@@ -374,4 +374,5 @@ SOURCE_MIRRORS = {
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/"  # Но по феншую эта строка берется из /configuration эндпоинта TMDB API
 
 # OMDB
+# Legacy fallback: основной источник — UserPreferences.omdb_api_key (см. OMDBService.get_api_key).
 OMDB_API_KEY = config("OMDB_API_KEY", default="")

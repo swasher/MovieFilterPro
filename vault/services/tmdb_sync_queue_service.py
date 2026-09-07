@@ -5,7 +5,7 @@ import traceback
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from moviefilter.models import UserPreferences
@@ -13,6 +13,19 @@ from vault.models import Movie, TMDBSyncQueueItem
 from vault.services.tmdb_movie_sync_service import TMDBSyncResult, TMDBMovieSyncService
 
 logger = logging.getLogger("vault.tmdb_sync")
+
+
+class TMDBSyncKeysMissingError(ValueError):
+    """Очередь TMDB sync нельзя стартовать: не настроены API-ключи."""
+
+    def __init__(self, missing_keys: list[str]):
+        self.missing_keys = list(missing_keys)
+        labels = [TMDBSyncQueueService.KEY_LABELS.get(k, k) for k in missing_keys]
+        super().__init__(
+            "TMDB sync нельзя запустить: не настроены ключи: "
+            + ", ".join(labels)
+            + ". Заполни их в Preferences."
+        )
 
 
 # ------------------------------------ #
@@ -28,6 +41,38 @@ class TMDBSyncQueueService:
     """
 
     STATE_KEYS = ("pending", "in_progress", "synced", "confirm", "not_found", "error")
+
+    # IN_PROGRESS старше этого возраста считается оборванным тиком
+    # (воркер упал/перезапустился/Huey потерял задачу) и возвращается в PENDING.
+    # Обычный синк даже жирного сериала укладывается в единицы минут.
+    STALE_IN_PROGRESS_TIMEOUT = timedelta(minutes=20)
+
+    # Ключи, без которых очередь нельзя стартовать:
+    # tmdb_api_key — сам TMDB sync, omdb_api_key — рейтинги IMDb/RT/Metacritic
+    # (OMDB тянется внутри каждого синка по imdb_id).
+    REQUIRED_KEY_FIELDS = ("tmdb_api_key", "omdb_api_key")
+    KEY_LABELS = {
+        "tmdb_api_key": "TMDB API key",
+        "omdb_api_key": "OMDB API key",
+    }
+
+    @classmethod
+    def get_missing_keys(cls, prefs=None) -> list[str]:
+        """Список незаполненных API-ключей, нужных для TMDB sync.
+
+        OMDB считается настроенным, если ключ есть хотя бы где-то
+        (UserPreferences.omdb_api_key или legacy OMDB_API_KEY в .env),
+        т.к. OMDBService умеет оба источника.
+        """
+        from vault.services.omdb_service import OMDBService
+
+        prefs = prefs if prefs is not None else UserPreferences.get()
+        missing: list[str] = []
+        if not (prefs.tmdb_api_key or "").strip():
+            missing.append("tmdb_api_key")
+        if not OMDBService.is_configured():
+            missing.append("omdb_api_key")
+        return missing
 
     # ТЗ 6d: стоп-кран — 3 подряд фейла, bulk_stats каждые 100
     _consecutive_failures: int = 0
@@ -136,6 +181,9 @@ class TMDBSyncQueueService:
     @classmethod
     def start(cls) -> None:
         prefs = UserPreferences.get()
+        missing = cls.get_missing_keys(prefs)
+        if missing:
+            raise TMDBSyncKeysMissingError(missing)
         if not prefs.tmdb_sync_enabled:
             prefs.tmdb_sync_enabled = True
             prefs.save(update_fields=["tmdb_sync_enabled"])
@@ -212,6 +260,7 @@ class TMDBSyncQueueService:
             "enabled": prefs.tmdb_sync_enabled,
             "counters": counters,
             "total_unsynced": cls._unsynced_count(),
+            "missing_keys": cls.get_missing_keys(prefs),
         }
 
     # ------------------------------------------------------------------ #
@@ -224,6 +273,21 @@ class TMDBSyncQueueService:
         prefs = UserPreferences.get()
         if not prefs.tmdb_sync_enabled:
             return None
+
+        missing = cls.get_missing_keys(prefs)
+        if missing:
+            labels = [cls.KEY_LABELS.get(k, k) for k in missing]
+            logger.critical(
+                "TMDB_SYNC_STOP | reason=missing_keys | missing=%s", ",".join(missing)
+            )
+            cls.stop()
+            return {
+                "state": "stopped",
+                "movie_id": None,
+                "result_message": "Очередь остановлена: не настроены ключи: "
+                + ", ".join(labels)
+                + ". Заполни их в Preferences.",
+            }
 
         item = cls._next_pending_item()
         if item is None:
@@ -239,6 +303,9 @@ class TMDBSyncQueueService:
             item.save(update_fields=["state", "finished_at", "result_status", "result_message"])
             return {"state": item.state, "movie_id": item.movie_id}
 
+        logger.info(
+            f'TICK_START | item_id={item.id} | movie_id={movie.id} | title="{movie.title}"'
+        )
         outcome = cls._run_sync(item, movie)
 
         item.finished_at = timezone.now()
@@ -428,6 +495,10 @@ class TMDBSyncQueueService:
 
     @classmethod
     def _next_pending_item(cls) -> TMDBSyncQueueItem | None:
+        # Сначала реанимируем оборванные тики, иначе один залипший IN_PROGRESS
+        # навсегда останавливает очередь (и тики, и watchdog отказываются работать).
+        cls._reclaim_stale_in_progress()
+
         # Не обрабатываем, если другой тик уже взял элемент (защита -w 2 и повторных тиков).
         if TMDBSyncQueueItem.objects.filter(state=TMDBSyncQueueItem.State.IN_PROGRESS).exists():
             return None
@@ -459,6 +530,12 @@ class TMDBSyncQueueService:
         """Периодическая подстраховка: тик давно не перепланирован — подтолкнуть."""
         if not UserPreferences.get().tmdb_sync_enabled:
             return False
+        if cls.get_missing_keys():
+            # Ключи снесли на ходу — глушим очередь, а не дёргаем тики впустую.
+            cls.stop()
+            return False
+        # Реанимация оборванных тиков — иначе очередь мертва навсегда.
+        cls._reclaim_stale_in_progress()
         if not TMDBSyncQueueItem.objects.filter(state=TMDBSyncQueueItem.State.PENDING).exists():
             return False
         if TMDBSyncQueueItem.objects.filter(state=TMDBSyncQueueItem.State.IN_PROGRESS).exists():
@@ -466,6 +543,33 @@ class TMDBSyncQueueService:
         cls._schedule_tick(delay=1)
         logger.info("TMDB_SYNC_WATCHDOG | tick rescheduled")
         return True
+
+    @classmethod
+    def _reclaim_stale_in_progress(cls) -> int:
+        """Вернуть оборванные IN_PROGRESS обратно в PENDING.
+
+        IN_PROGRESS старше STALE_IN_PROGRESS_TIMEOUT — это тик, который уже
+        никогда не завершится (воркер упал/перезапустился, Huey потерял задачу,
+        сеть повисла без таймаута). Возвращаем в очередь с инкрементом попыток.
+        """
+        cutoff = timezone.now() - cls.STALE_IN_PROGRESS_TIMEOUT
+        stale_qs = TMDBSyncQueueItem.objects.filter(
+            state=TMDBSyncQueueItem.State.IN_PROGRESS
+        ).filter(Q(started_at__lt=cutoff) | Q(started_at__isnull=True))
+        reclaimed = 0
+        for item in stale_qs:
+            item.state = TMDBSyncQueueItem.State.PENDING
+            item.started_at = None
+            item.retry_count = (item.retry_count or 0) + 1
+            item.result_message = (
+                "Тик оборвался (stale IN_PROGRESS), возвращено в очередь. "
+                f"Попытка №{item.retry_count}."
+            )
+            item.save(update_fields=["state", "started_at", "retry_count", "result_message"])
+            reclaimed += 1
+        if reclaimed:
+            logger.warning("TMDB_SYNC_RECLAIM_STALE | reclaimed=%s", reclaimed)
+        return reclaimed
 
     @classmethod
     def _schedule_tick(cls, delay: int) -> None:

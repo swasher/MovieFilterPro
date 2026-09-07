@@ -26,12 +26,19 @@ type QueueStateResp = {
   enabled: boolean;
   counters: Record<string, number>;
   total_unsynced: number;
+  missing_keys?: string[];
 };
 
-export const load: PageLoad = async ({ fetch }) => {
+const PAGE_SIZE = 100;
+
+export const load: PageLoad = async ({ fetch, url }) => {
+  const rawPage = Number(url.searchParams.get("page") ?? "1");
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
+  const offset = (page - 1) * PAGE_SIZE;
+
   const [stateResponse, itemsResponse] = await Promise.all([
     fetch("/api/vault/tmdb-sync/state"),
-    fetch("/api/vault/tmdb-sync/items?limit=100"),
+    fetch(`/api/vault/tmdb-sync/items?limit=${PAGE_SIZE}&offset=${offset}`),
   ]);
 
   const state = stateResponse.ok
@@ -45,6 +52,7 @@ export const load: PageLoad = async ({ fetch }) => {
     state,
     items: itemsPayload?.items ?? [],
     total: itemsPayload?.total ?? 0,
+    page,
     apiError: !stateResponse.ok ? stateResponse.status : 0,
   };
 };
