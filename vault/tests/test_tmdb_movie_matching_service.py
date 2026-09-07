@@ -100,6 +100,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
             poster_path="/d1.jpg",
             popularity=90.0,
             vote_average=8.1,
+            overview="Пол и Атрейдесы летят на Арракис.",
         )
         candidate_2 = SimpleNamespace(
             id=11,
@@ -109,6 +110,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
             poster_path="/d2.jpg",
             popularity=89.0,
             vote_average=8.0,
+            overview="Другая версия про пустынную планету.",
         )
         fake_tmdb = _FakeTMDB(
             movie_results=[candidate_1, candidate_2],
@@ -127,6 +129,9 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         ids = {c.tmdb_id for c in result.candidates}
         self.assertIn(10, ids)
         self.assertIn(11, ids)
+        by_id = {c.tmdb_id: c for c in result.candidates}
+        self.assertEqual(by_id[10].overview, "Пол и Атрейдесы летят на Арракис.")
+        self.assertEqual(by_id[11].overview, "Другая версия про пустынную планету.")
 
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_find_by_imdb_id_returns_auto_match_for_single_movie_result(self, get_tmdb_client_mock):

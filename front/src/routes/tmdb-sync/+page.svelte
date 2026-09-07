@@ -68,6 +68,7 @@
     poster_url: string | null;
     popularity: number | null;
     vote_average: number | null;
+    overview: string;
   };
 
   type QueueState = {
@@ -897,7 +898,7 @@
 </Dialog.Root>
 
 <Dialog.Root bind:open={candidateDialogOpen}>
-  <Dialog.Content class="sm:max-w-3xl">
+  <Dialog.Content class="sm:max-w-5xl">
     <Dialog.Header>
       <Dialog.Title>
         {candidateDialogMode === "needs_confirmation" ? "Подтверждение TMDB-совпадения" : "Выбор фильма на TMDB"}
@@ -965,6 +966,12 @@
               {#if candidate.score_reasons.length}
                 <p class="text-muted-foreground line-clamp-2 text-xs">
                   {candidate.score_reasons.join(", ")}
+                </p>
+              {/if}
+
+              {#if candidate.overview}
+                <p class="line-clamp-3 text-xs leading-relaxed">
+                  {candidate.overview}
                 </p>
               {/if}
             </div>

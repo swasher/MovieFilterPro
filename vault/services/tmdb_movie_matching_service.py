@@ -26,6 +26,7 @@ class TMDBCandidate:
     poster_path: str | None = None
     popularity: float | None = None
     vote_average: float | None = None
+    overview: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -46,6 +47,7 @@ class _RawCandidate:
     poster_path: str | None
     popularity: float | None
     vote_average: float | None
+    overview: str = ""
     quick_score: int = 0
     alternative_titles: set[str] = field(default_factory=set)
 
@@ -356,6 +358,7 @@ class TMDBMovieMatchingService:
         poster_path = getattr(item, "poster_path", None)
         popularity = cls._safe_float(getattr(item, "popularity", None))
         vote_average = cls._safe_float(getattr(item, "vote_average", None))
+        overview = getattr(item, "overview", None) or ""
 
         return _RawCandidate(
             tmdb_id=tmdb_id,
@@ -366,6 +369,7 @@ class TMDBMovieMatchingService:
             poster_path=poster_path,
             popularity=popularity,
             vote_average=vote_average,
+            overview=overview,
         )
 
     @classmethod
@@ -486,6 +490,7 @@ class TMDBMovieMatchingService:
                     poster_path=raw.poster_path,
                     popularity=raw.popularity,
                     vote_average=raw.vote_average,
+                    overview=raw.overview,
                 )
             )
 

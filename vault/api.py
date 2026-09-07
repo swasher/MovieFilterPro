@@ -233,6 +233,7 @@ class TMDBCandidateOut(Schema):
     poster_url: str | None = None
     popularity: float | None = None
     vote_average: float | None = None
+    overview: str = ""
 
 
 class ToggleStatusIn(Schema):
@@ -555,6 +556,7 @@ def _build_tmdb_candidate_out(item) -> TMDBCandidateOut:
         poster_url=_tmdb_image_url(item.poster_path),
         popularity=item.popularity,
         vote_average=item.vote_average,
+        overview=getattr(item, "overview", None) or "",
     )
 
 

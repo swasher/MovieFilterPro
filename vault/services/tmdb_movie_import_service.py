@@ -226,6 +226,7 @@ class TMDBMovieImportService:
             poster_path=getattr(item, "poster_path", None),
             popularity=cls._safe_float(getattr(item, "popularity", None)),
             vote_average=cls._safe_float(getattr(item, "vote_average", None)),
+            overview=getattr(item, "overview", None) or "",
         )
 
     @staticmethod
