@@ -328,6 +328,11 @@ class TMDBSyncQueueItemOut(Schema):
     movie_id: int
     movie_slug: str
     movie_title: str
+    movie_original_title: str = ""
+    movie_year: int | None = None
+    movie_description: str = ""
+    movie_poster_url: str | None = None
+    movie_has_tmdb: bool = False
     snapshot_title: str
     snapshot_original_title: str
     snapshot_year: int | None = None
@@ -1591,6 +1596,11 @@ def _build_tmdb_sync_queue_item_out(item: "TMDBSyncQueueItem") -> TMDBSyncQueueI
         movie_id=item.movie_id,
         movie_slug=item.movie.slug if item.movie_id else "",
         movie_title=item.movie.title if item.movie_id else "",
+        movie_original_title=item.movie.original_title or "" if item.movie_id else "",
+        movie_year=item.movie.year if item.movie_id else None,
+        movie_description=item.movie.description or "" if item.movie_id else "",
+        movie_poster_url=item.movie.poster_url if item.movie_id else None,
+        movie_has_tmdb=bool(item.movie.tmdb_id) if item.movie_id else False,
         snapshot_title=item.snapshot_title,
         snapshot_original_title=item.snapshot_original_title,
         snapshot_year=item.snapshot_year,

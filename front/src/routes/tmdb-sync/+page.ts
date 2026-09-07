@@ -5,6 +5,11 @@ type QueueItem = {
   movie_id: number;
   movie_slug: string;
   movie_title: string;
+  movie_original_title: string;
+  movie_year: number | null;
+  movie_description: string;
+  movie_poster_url: string | null;
+  movie_has_tmdb: boolean;
   snapshot_title: string;
   snapshot_original_title: string;
   snapshot_year: number | null;

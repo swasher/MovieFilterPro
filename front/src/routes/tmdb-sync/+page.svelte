@@ -21,6 +21,7 @@
     TableRow
   } from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as HoverCard from "$lib/components/ui/hover-card/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { CheckCheck, ExternalLink, Play, Plus, RefreshCw, RotateCw, Square, Trash2 } from "@lucide/svelte";
   import * as Pagination from "$lib/components/ui/pagination";
@@ -34,6 +35,11 @@
     movie_id: number;
     movie_slug: string;
     movie_title: string;
+    movie_original_title: string;
+    movie_year: number | null;
+    movie_description: string;
+    movie_poster_url: string | null;
+    movie_has_tmdb: boolean;
     snapshot_title: string;
     snapshot_original_title: string;
     snapshot_year: number | null;
@@ -618,6 +624,26 @@
     </CardContent>
   </Card>
 
+  {#snippet beforeCell(cellItem: QueueItem)}
+    {#if cellItem.movie_slug}
+      <a
+        href={`/movies/${cellItem.movie_slug}`}
+        data-sveltekit-preload-data="hover"
+        class="truncate text-sm font-medium hover:underline"
+      >
+        {cellItem.snapshot_title}
+      </a>
+    {:else}
+      <div class="truncate text-sm font-medium">{cellItem.snapshot_title}</div>
+    {/if}
+    {#if cellItem.snapshot_original_title && cellItem.snapshot_original_title !== cellItem.snapshot_title}
+      <div class="truncate text-xs text-muted-foreground">{cellItem.snapshot_original_title}</div>
+    {/if}
+    {#if cellItem.snapshot_year}
+      <div class="text-xs text-muted-foreground">{cellItem.snapshot_year}</div>
+    {/if}
+  {/snippet}
+
   <div class="flex flex-col gap-2">
     {#if items.length === 0}
       <div class="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
@@ -650,22 +676,40 @@
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  {#if item.movie_slug}
-                    <a
-                      href={`/movies/${item.movie_slug}`}
-                      data-sveltekit-preload-data="hover"
-                      class="truncate text-sm font-medium hover:underline"
-                    >
-                      {item.snapshot_title}
-                    </a>
+                  {#if !item.movie_has_tmdb}
+                    <HoverCard.Root openDelay={400}>
+                      <HoverCard.Trigger class="block min-w-0 text-left">
+                        {@render beforeCell(item)}
+                      </HoverCard.Trigger>
+                      <HoverCard.Content class="w-96" side="right" align="start">
+                        <div class="flex gap-3">
+                          {#if item.movie_poster_url}
+                            <img
+                              src={item.movie_poster_url}
+                              alt={item.movie_title || item.snapshot_title}
+                              class="h-36 w-24 shrink-0 rounded-md object-cover"
+                              loading="lazy"
+                            />
+                          {/if}
+                          <div class="min-w-0 space-y-1">
+                            <p class="text-sm font-semibold">{item.movie_title || item.snapshot_title}</p>
+                            {#if item.movie_original_title && item.movie_original_title !== (item.movie_title || item.snapshot_title)}
+                              <p class="truncate text-xs text-muted-foreground">{item.movie_original_title}</p>
+                            {/if}
+                            {#if item.movie_year}
+                              <Badge variant="outline">{item.movie_year}</Badge>
+                            {/if}
+                            {#if item.movie_description}
+                              <p class="line-clamp-6 text-xs text-muted-foreground">{item.movie_description}</p>
+                            {:else}
+                              <p class="text-xs text-muted-foreground italic">Без описания</p>
+                            {/if}
+                          </div>
+                        </div>
+                      </HoverCard.Content>
+                    </HoverCard.Root>
                   {:else}
-                    <div class="truncate text-sm font-medium">{item.snapshot_title}</div>
-                  {/if}
-                  {#if item.snapshot_original_title && item.snapshot_original_title !== item.snapshot_title}
-                    <div class="truncate text-xs text-muted-foreground">{item.snapshot_original_title}</div>
-                  {/if}
-                  {#if item.snapshot_year}
-                    <div class="text-xs text-muted-foreground">{item.snapshot_year}</div>
+                    {@render beforeCell(item)}
                   {/if}
                 </TableCell>
                 <TableCell>
