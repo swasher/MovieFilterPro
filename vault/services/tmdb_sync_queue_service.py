@@ -592,9 +592,10 @@ class TMDBSyncQueueService:
     def _candidates_text(result: TMDBSyncResult) -> str:
         parts = []
         for cand in result.candidates or ():
+            reasons = ",".join(cand.score_reasons or ())
             parts.append(
                 f"{cand.tmdb_id}|{cand.media_type}|{cand.title}"
                 f"{' (' + str(cand.original_title) + ')' if cand.original_title else ''}"
-                f" ({cand.year or '?'}) score={cand.score}"
+                f" ({cand.year or '?'}) score={cand.score} reasons=[{reasons}]"
             )
         return "; ".join(parts)

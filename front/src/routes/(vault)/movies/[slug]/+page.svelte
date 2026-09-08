@@ -1430,7 +1430,7 @@
           </CardHeader>
           <CardContent class="pt-0">
             <div class="vd-collection-grid vd-collection-grid--compact">
-              {#each movie.collection.parts as part (part.tmdb_id)}
+              {#each movie.collection.parts as part, partIdx (part.tmdb_id + '-' + partIdx)}
                 <CollectionPartCard
                   {part}
                   isCurrent={part.tmdb_id === movie.tmdb_id}
@@ -1462,7 +1462,7 @@
             <p class="vd-section-title">В ролях</p>
             <div class="vd-crew-grid">
               {#if movie.actors.length}
-                {#each movie.actors as person (person.id)}
+                {#each movie.actors as person, actorIdx (person.id + '-' + (person.character_name ?? '') + '-' + actorIdx)}
                   <PersonCard {person} />
                 {/each}
               {:else}
@@ -1550,7 +1550,7 @@
     </Dialog.Header>
 
     <div class="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
-      {#each tmdbCandidates as candidate (candidate.tmdb_id)}
+      {#each tmdbCandidates as candidate (candidate.tmdb_id + '-' + candidate.media_type)}
         <button
           type="button"
           class={`w-full rounded-xl border p-3 text-left transition ${

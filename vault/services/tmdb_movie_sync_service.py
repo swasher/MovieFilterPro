@@ -1383,8 +1383,13 @@ class TMDBMovieSyncService:
             cls._emit_log("MATCH_FOUND | candidates=- | top=[]")
             return
         candidates = match_result.candidates or ()
-        top = ",".join([f"{c.tmdb_id}:{c.score}" for c in candidates[:5]])
-        cls._emit_log(f"MATCH_FOUND | candidates={len(candidates)} | top=[{top}]")
+        top = ",".join(
+            f"{c.tmdb_id}:{c.score}:[{','.join(c.score_reasons or ())}]" for c in candidates[:5]
+        )
+        cls._emit_log(
+            f"MATCH_FOUND | status={match_result.status} | candidates={len(candidates)} "
+            f"| top=[{top}] | msg=\"{cls._log_text(match_result.message, 120)}\""
+        )
 
     @classmethod
     def _log_match_selected(cls, candidate: TMDBCandidate, reason: str) -> None:

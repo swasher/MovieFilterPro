@@ -175,15 +175,32 @@
   };
 
   // Polling: пауза на скрытой вкладке, чаще при активной обработке.
-  // Таймер дёргает только state (дешёвый запрос без count/offset);
-  // список items обновляется при смене страницы и ручных действиях.
+  // При активной очереди обновляем и state, и items текущей страницы,
+  // иначе строка в in_progress замирает с "Обработка…" до ручного F5.
   $effect(() => {
     const intervalMs = enabled ? 5000 : 10000;
     let timer: ReturnType<typeof setInterval> | null = null;
+    let inFlight = false;
+
+    const tick = async () => {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        await refreshState();
+        // В простое список статичен, дёргаем items только при включённой очереди.
+        if (enabled) {
+          await refreshItems();
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
 
     const start = () => {
       if (timer) return;
-      timer = setInterval(refreshState, intervalMs);
+      timer = setInterval(() => {
+        void tick();
+      }, intervalMs);
     };
     const stop = () => {
       if (timer) {
@@ -920,7 +937,7 @@
     </Dialog.Header>
 
     <div class="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
-      {#each tmdbCandidates as candidate (candidate.tmdb_id)}
+      {#each tmdbCandidates as candidate (candidate.tmdb_id + '-' + candidate.media_type)}
         <button
           type="button"
           class={`w-full rounded-xl border p-3 text-left transition ${

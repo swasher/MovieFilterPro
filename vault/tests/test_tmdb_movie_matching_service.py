@@ -42,6 +42,21 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         normalized = TMDBMovieMatchingService.normalize_title("  Ёлки, 2!!!  ")
         self.assertEqual(normalized, "елки 2")
 
+    def test_normalize_title_strips_edition_suffix(self):
+        self.assertEqual(
+            TMDBMovieMatchingService.normalize_title("Captain America: Brave New World (IMAX)"),
+            "captain america brave new world",
+        )
+        self.assertEqual(
+            TMDBMovieMatchingService.normalize_title("Носферату (Расширенная версия)"),
+            "носферату",
+        )
+        # Скобки без маркеров изданий не трогаем.
+        self.assertEqual(
+            TMDBMovieMatchingService.normalize_title("Обычный фильм (2024)"),
+            "обычный фильм 2024",
+        )
+
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_exact_match_outscores_partial(self, get_tmdb_client_mock):
         movie = Movie(
@@ -159,3 +174,94 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIsNotNone(result.selected_candidate)
         self.assertEqual(result.selected_candidate.tmdb_id, 321)
         self.assertEqual(result.selected_candidate.media_type, "movie")
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_singleton_title_year_exact_auto_matches_despite_dirty_original(self, get_tmdb_client_mock):
+        # Кейс из prod-очереди: Kinorium хранит английский международный тайтл,
+        # TMDB — настоящий оригинал. RU-название и год точные, кандидат один.
+        movie = Movie(
+            title="Женщина в очереди",
+            original_title="The Woman in the Line",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+        )
+        candidate = SimpleNamespace(
+            id=1193861,
+            title="Женщина в очереди",
+            original_title="La mujer de la fila",
+            release_date=date(2025, 1, 1),
+            poster_path="/w.jpg",
+            popularity=10.0,
+            vote_average=7.0,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate],
+            movie_details={1193861: SimpleNamespace(alternative_titles=[])},
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1193861)
+        self.assertIn("title_exact", result.selected_candidate.score_reasons)
+        self.assertIn("year_exact", result.selected_candidate.score_reasons)
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_singleton_year_near_stays_confirmation(self, get_tmdb_client_mock):
+        movie = Movie(
+            title="Перегонщик",
+            original_title="",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+        )
+        candidate = SimpleNamespace(
+            id=1591602,
+            title="Перегонщик",
+            original_title="Перегонщик",
+            release_date=date(2024, 1, 1),
+            poster_path="/p.jpg",
+            popularity=5.0,
+            vote_average=6.0,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate],
+            movie_details={1591602: SimpleNamespace(alternative_titles=[])},
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "needs_confirmation")
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_singleton_alternative_title_only_stays_confirmation(self, get_tmdb_client_mock):
+        movie = Movie(
+            title="Токсик",
+            original_title="Akiplesa",
+            year=2024,
+            movie_type=Movie.MovieType.MOVIE,
+        )
+        candidate = SimpleNamespace(
+            id=1315091,
+            title="Токсичность",
+            original_title="Akiplėša",
+            release_date=date(2024, 1, 1),
+            poster_path="/t.jpg",
+            popularity=5.0,
+            vote_average=6.0,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate],
+            movie_details={
+                1315091: SimpleNamespace(
+                    alternative_titles=[SimpleNamespace(title="Токсик")]
+                ),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "needs_confirmation")

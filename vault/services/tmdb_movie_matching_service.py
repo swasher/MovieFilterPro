@@ -127,6 +127,20 @@ class TMDBMovieMatchingService:
                 message="Найден уверенный матч TMDB",
             )
 
+        # Singleton с точным названием + точным годом: в датасете Kinorium
+        # original_title систематически грязный (английский международный тайтл
+        # вместо оригинала, суффиксы изданий, пустое поле), поэтому недобор
+        # до AUTO_MATCH_MIN_SCORE за счет original — не признак неуверенности.
+        # Конкурентов нет, media-бонус не требуем (для ANIME expected=None
+        # и бонус недостижим в принципе).
+        if len(relevant) == 1 and cls._is_confident_singleton(best):
+            return TMDBMatchingResult(
+                status="auto_match",
+                selected_candidate=best,
+                candidates=(best,),
+                message="Найден уверенный матч TMDB (единственный кандидат: точное название + год)",
+            )
+
         if len(relevant) == 1:
             return TMDBMatchingResult(
                 status="needs_confirmation",
@@ -241,10 +255,44 @@ class TMDBMovieMatchingService:
     @classmethod
     def normalize_title(cls, title: str) -> str:
         value = (title or "").lower().replace("ё", "е")
+        value = cls._strip_edition_suffix(value)
         value = re.sub(r"[^\w\s]", " ", value, flags=re.UNICODE)
         value = re.sub(r"_", " ", value)
         value = re.sub(r"\s+", " ", value)
         return value.strip()
+
+    # Маркеры изданий/версий в trailing-скобках, которые не отличают фильмы:
+    # "Captain America: Brave New World (IMAX)", "Носферату (Расширенная версия)".
+    # Срез симметричен с обеих сторон (одинаковые скобки стираются везде,
+    # разные издания одного фильма схлопываются), поэтому для матчинга безопасен.
+    _TRAILING_PAREN_RE = re.compile(r"\s*[\(\[]([^()\[\]]*)[\)\]]\s*$")
+    _EDITION_KEYWORD_RE = re.compile(
+        r"\b(imax|extended|director|unrated|uncut|remaster|anniversary|theatrical|redux"
+        r"|special edition|dolby|расширенная|расширенный|режиссерская|режиссерский"
+        r"|полная версия|без цензуры|юбилейн|3d|4k)\b"
+    )
+
+    @classmethod
+    def _strip_edition_suffix(cls, value: str) -> str:
+        """Срезает trailing-скобки с маркерами изданий: (IMAX), (Extended Cut)..."""
+        while True:
+            match = cls._TRAILING_PAREN_RE.search(value)
+            if not match:
+                return value
+            inner = match.group(1).strip()
+            if not inner or not cls._EDITION_KEYWORD_RE.search(inner):
+                return value
+            value = value[: match.start()].rstrip()
+            if not value:
+                return value
+
+    @staticmethod
+    def _is_confident_singleton(candidate: TMDBCandidate) -> bool:
+        """Единственный кандидат с точным названием (RU или оригинал) + точным годом."""
+        reasons = set(candidate.score_reasons or ())
+        if "year_exact" not in reasons:
+            return False
+        return "title_exact" in reasons or "original_exact" in reasons
 
     @classmethod
     def _collect_candidates(cls, tmdb, movie: Movie) -> dict[tuple[str, int], _RawCandidate]:
