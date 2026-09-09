@@ -8,9 +8,11 @@
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    birth_date?: string | null;
+    death_date?: string | null;
   };
 
-  let { person }: { person: PersonCredit } = $props();
+  let { person, movieYear }: { person: PersonCredit; movieYear?: number | null } = $props();
 
   let pointer = $state({ x: 0, y: 0 });
 
@@ -25,6 +27,43 @@
       .join("")
       .slice(0, 2)
       .toUpperCase();
+
+  function calcFullYears(fromIso: string | null | undefined, to: Date): number | null {
+    if (!fromIso) return null;
+    const birth = new Date(fromIso);
+    if (Number.isNaN(birth.getTime()) || Number.isNaN(to.getTime())) return null;
+    let age = to.getFullYear() - birth.getFullYear();
+    const beforeBirthday =
+      to.getMonth() < birth.getMonth() ||
+      (to.getMonth() === birth.getMonth() && to.getDate() < birth.getDate());
+    if (beforeBirthday) age--;
+    return age >= 0 ? age : null;
+  }
+
+  const birthDate = $derived(person.birth_date ?? null);
+  const deathDate = $derived(person.death_date ?? null);
+
+  const currentAge = $derived.by(() => {
+    if (!birthDate) return null;
+    const end = deathDate ? new Date(deathDate) : new Date();
+    return calcFullYears(birthDate, end);
+  });
+
+  const ageAtRelease = $derived.by(() => {
+    if (!birthDate || movieYear == null || currentAge == null) return null;
+    const birth = new Date(birthDate);
+    if (Number.isNaN(birth.getTime())) return null;
+    if (movieYear < birth.getFullYear()) return null;
+    const anchorYear = deathDate ? new Date(deathDate).getFullYear() : new Date().getFullYear();
+    if (Number.isNaN(anchorYear)) return null;
+    // Точной даты релиза нет, только год. Якоримся от точного текущего
+    // возраста, чтобы возраст на момент выхода никогда не превышал текущий
+    // для фильмов текущего/прошлых лет (год − год рождения давал 41 при 40 сейчас).
+    if (movieYear >= anchorYear) return currentAge;
+    return currentAge - (anchorYear - movieYear);
+  });
+
+  const nowLabel = $derived(deathDate ? "на момент смерти" : "сейчас");
 </script>
 
 <Tooltip.Root>
@@ -66,6 +105,11 @@
     <span class="block">{person.name}</span>
     {#if person.character_name}
       <span class="block text-foreground/70">{person.character_name}</span>
+    {/if}
+    {#if currentAge !== null}
+      <span class="block">
+        Возраст: {#if ageAtRelease !== null && movieYear != null}{ageAtRelease} (съемки) / {/if}{currentAge} ({nowLabel})
+      </span>
     {/if}
   </Tooltip.Content>
 </Tooltip.Root>

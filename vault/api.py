@@ -136,6 +136,8 @@ class PersonCreditOut(Schema):
     character_name: str | None = None
     is_favorite: bool = False
     popularity: float | None = None
+    birth_date: str | None = None
+    death_date: str | None = None
 
 
 class UserStateOut(Schema):
@@ -906,6 +908,8 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
+                birth_date=_date_to_iso(item.person.birth_date),
+                death_date=_date_to_iso(item.person.death_date),
             )
             for item in movie.get_directors().select_related("person")
         ],
@@ -916,6 +920,8 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
+                birth_date=_date_to_iso(item.person.birth_date),
+                death_date=_date_to_iso(item.person.death_date),
             )
             for item in movie.get_producers().select_related("person")
         ],
@@ -926,6 +932,8 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
+                birth_date=_date_to_iso(item.person.birth_date),
+                death_date=_date_to_iso(item.person.death_date),
             )
             for item in movie.get_screenplays().select_related("person")
         ],
@@ -936,6 +944,8 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
+                birth_date=_date_to_iso(item.person.birth_date),
+                death_date=_date_to_iso(item.person.death_date),
             )
             for item in movie.get_writers().select_related("person")
         ],
@@ -946,6 +956,8 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
+                birth_date=_date_to_iso(item.person.birth_date),
+                death_date=_date_to_iso(item.person.death_date),
             )
             for item in movie.get_showrunners().select_related("person")
         ],
@@ -957,6 +969,8 @@ def movie_detail(request, slug: str):
                 character_name=item.character_name or None,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
+                birth_date=_date_to_iso(item.person.birth_date),
+                death_date=_date_to_iso(item.person.death_date),
             )
             for item in movie.get_actors().select_related("person")[:12]
         ],

@@ -1450,7 +1450,7 @@
             {#if crewCards.length}
               <div class="vd-crew-grid">
                 {#each crewCards as person (person.id)}
-                  <PersonCard person={{ ...person, character_name: person._roleLabelCombined }} />
+                  <PersonCard person={{ ...person, character_name: person._roleLabelCombined }} movieYear={movie.year} />
                 {/each}
               </div>
             {:else}
@@ -1463,7 +1463,7 @@
             <div class="vd-crew-grid">
               {#if movie.actors.length}
                 {#each movie.actors as person, actorIdx (person.id + '-' + (person.character_name ?? '') + '-' + actorIdx)}
-                  <PersonCard {person} />
+                  <PersonCard {person} movieYear={movie.year} />
                 {/each}
               {:else}
                 <p class="vd-empty">Нет данных</p>
