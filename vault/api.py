@@ -132,6 +132,7 @@ class NamedItemOut(Schema):
 class PersonCreditOut(Schema):
     id: int
     name: str
+    original_name: str | None = None
     photo_url: str | None = None
     character_name: str | None = None
     is_favorite: bool = False
@@ -905,6 +906,7 @@ def movie_detail(request, slug: str):
             PersonCreditOut(
                 id=item.person.id,
                 name=item.person.name,
+                original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
@@ -917,6 +919,7 @@ def movie_detail(request, slug: str):
             PersonCreditOut(
                 id=item.person.id,
                 name=item.person.name,
+                original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
@@ -929,6 +932,7 @@ def movie_detail(request, slug: str):
             PersonCreditOut(
                 id=item.person.id,
                 name=item.person.name,
+                original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
@@ -941,6 +945,7 @@ def movie_detail(request, slug: str):
             PersonCreditOut(
                 id=item.person.id,
                 name=item.person.name,
+                original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
@@ -953,6 +958,7 @@ def movie_detail(request, slug: str):
             PersonCreditOut(
                 id=item.person.id,
                 name=item.person.name,
+                original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
                 popularity=item.popularity,
@@ -965,6 +971,7 @@ def movie_detail(request, slug: str):
             PersonCreditOut(
                 id=item.person.id,
                 name=item.person.name,
+                original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 character_name=item.character_name or None,
                 is_favorite=item.person.id in favorite_person_ids,

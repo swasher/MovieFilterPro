@@ -1,12 +1,18 @@
 <script lang="ts">
   import { invalidateAll } from "$app/navigation";
   import { toast } from "svelte-sonner";
+  import { tick } from "svelte";
+  import CheckIcon from "@lucide/svelte/icons/check";
+  import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
+  import * as Command from "$lib/components/ui/command";
   import { Input } from "$lib/components/ui/input";
+  import * as Popover from "$lib/components/ui/popover";
   import { Separator } from "$lib/components/ui/separator";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
+  import { cn } from "$lib/utils.js";
   import {
     emptyPreferences,
     type PreferencesApiErrorPayload,
@@ -35,6 +41,10 @@
     tmdb_api_key: string;
     omdb_api_key: string;
     tmdb_v4_read_access_token: string;
+    ai_enabled: boolean;
+    ai_base_url: string;
+    ai_api_key: string;
+    ai_model: string;
   };
 
   let { data } = $props();
@@ -73,7 +83,11 @@
     ignore_title: preferences.ignore_title,
     tmdb_api_key: preferences.tmdb_api_key ?? "",
     omdb_api_key: preferences.omdb_api_key ?? "",
-    tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? ""
+    tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? "",
+    ai_enabled: preferences.ai_enabled ?? false,
+    ai_base_url: preferences.ai_base_url ?? "",
+    ai_api_key: preferences.ai_api_key ?? "",
+    ai_model: preferences.ai_model ?? ""
   });
 
   const buildPayload = (formState: PreferencesFormState): PreferencesUpdatePayload => ({
@@ -96,7 +110,11 @@
     ignore_title: formState.ignore_title.trim(),
     tmdb_api_key: asOptionalText(formState.tmdb_api_key),
     omdb_api_key: asOptionalText(formState.omdb_api_key),
-    tmdb_v4_read_access_token: asOptionalText(formState.tmdb_v4_read_access_token)
+    tmdb_v4_read_access_token: asOptionalText(formState.tmdb_v4_read_access_token),
+    ai_enabled: formState.ai_enabled,
+    ai_base_url: asOptionalText(formState.ai_base_url),
+    ai_api_key: asOptionalText(formState.ai_api_key),
+    ai_model: asOptionalText(formState.ai_model)
   });
 
   const payloadSnapshot = (formState: PreferencesFormState) => JSON.stringify(buildPayload(formState));
@@ -166,6 +184,56 @@
       // revert on error
       await loadWritebackStatus();
     }
+  };
+
+
+
+  // --- Local AI models ---
+  let aiModels = $state<string[]>([]);
+  let aiModelsLoading = $state(false);
+  let aiModelsError = $state("");
+  let aiModelsBaseUrl = $state("");
+  let aiComboboxOpen = $state(false);
+  let aiTriggerRef = $state<HTMLButtonElement>(null!);
+
+  const loadAiModels = async () => {
+    aiModelsLoading = true;
+    aiModelsError = "";
+    try {
+      const params = new URLSearchParams();
+      if (form.ai_base_url.trim()) params.set("base_url", form.ai_base_url.trim());
+      if (form.ai_api_key.trim()) params.set("api_key", form.ai_api_key.trim());
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`/api/core/ai-models${qs}`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail ?? `HTTP ${res.status}`);
+      aiModels = payload.models ?? [];
+      aiModelsBaseUrl = payload.base_url ?? "";
+      if (!aiModels.length) {
+        aiModelsError = "Сервер ответил, но список моделей пуст.";
+      } else {
+        toast.success(`Найдено моделей: ${aiModels.length}`);
+      }
+    } catch (e) {
+      aiModels = [];
+      aiModelsError = e instanceof Error ? e.message : String(e);
+      toast.error(aiModelsError);
+    } finally {
+      aiModelsLoading = false;
+    }
+  };
+
+  const pickAiModel = (name: string) => {
+    form.ai_model = name;
+    formRevision++;
+    hasUnsavedChanges = true;
+  };
+
+  const closeAndFocusAiTrigger = () => {
+    aiComboboxOpen = false;
+    tick().then(() => {
+      aiTriggerRef.focus();
+    });
   };
 
 
@@ -454,6 +522,84 @@
 
         <Card class="border-border/70">
           <CardHeader>
+            <CardTitle class="text-xl">Local AI</CardTitle>
+            <CardDescription>OpenAI-совместимый локальный сервер (Ollama / LM Studio / Lemonade / Unsloth) для будущих фич. Пока только храним настройки, ничего их не вызывает.</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <div class="space-y-1">
+                <Label for="ai-enabled" class="text-sm font-medium">Local AI enabled</Label>
+                <div class="text-xs text-muted-foreground">Вкл — будущие фичи смогут обращаться к локальному AI. Выкл — всё без AI.</div>
+              </div>
+              <Switch id="ai-enabled" bind:checked={form.ai_enabled} onCheckedChange={(v) => { form.ai_enabled = v; formRevision++; hasUnsavedChanges = true; return v; }} />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium">Base URL</div>
+              <Input bind:value={form.ai_base_url} placeholder="http://localhost:11434/v1" />
+              <div class="text-xs text-muted-foreground">Без слэша в конце. Lemonade обычно http://localhost:13305/v1, Unsloth — http://localhost:8888/v1.</div>
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium">Model</div>
+              <div class="flex gap-2">
+                <Popover.Root bind:open={aiComboboxOpen}>
+                  <Popover.Trigger bind:ref={aiTriggerRef}>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={aiComboboxOpen}
+                        class="flex-1 justify-between"
+                      >
+                        <span class="truncate">{form.ai_model.trim() || "Select model..."}</span>
+                        <ChevronsUpDownIcon data-icon="inline-end" class="opacity-50" />
+                      </Button>
+                    {/snippet}
+                  </Popover.Trigger>
+                  <Popover.Content class="w-[320px] p-0" align="start">
+                    <Command.Root>
+                      <Command.Input placeholder="Search model..." />
+                      <Command.List>
+                        <Command.Empty>
+                          {aiModels.length ? "No model found." : "No models loaded. Click Get models."}
+                        </Command.Empty>
+                        <Command.Group value="ai-models" heading={aiModelsBaseUrl || undefined}>
+                          {#each aiModels as modelName (modelName)}
+                            <Command.Item
+                              value={modelName}
+                              onSelect={() => {
+                                pickAiModel(modelName);
+                                closeAndFocusAiTrigger();
+                              }}
+                            >
+                              <CheckIcon
+                                class={cn(form.ai_model.trim() !== modelName && "text-transparent")}
+                              />
+                              <span class="truncate">{modelName}</span>
+                            </Command.Item>
+                          {/each}
+                        </Command.Group>
+                      </Command.List>
+                    </Command.Root>
+                  </Popover.Content>
+                </Popover.Root>
+                <Button variant="outline" onclick={loadAiModels} disabled={aiModelsLoading}>
+                  {aiModelsLoading ? "Loading..." : "Get models"}
+                </Button>
+              </div>
+              {#if aiModelsError}
+                <div class="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{aiModelsError}</div>
+              {/if}
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium">API key (optional)</div>
+              <Input bind:value={form.ai_api_key} type="password" placeholder="обычно пусто для локальных серверов" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
             <CardTitle class="text-xl">TMDB Write-back</CardTitle>
             <CardDescription>Обратная синхронизация Vault → TMDB (watchlist/favorite/rating). Работает через tmdb_adapter.</CardDescription>
           </CardHeader>
@@ -500,6 +646,10 @@
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>Plex token</span>
               <span>{form.plex_token.trim() ? "Configured" : "Missing"}</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <span>Local AI</span>
+              <span>{form.ai_enabled && form.ai_base_url.trim() && form.ai_model.trim() ? "Configured" : form.ai_enabled ? "Incomplete" : "Disabled"}</span>
             </div>
           </CardContent>
         </Card>

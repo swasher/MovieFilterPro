@@ -5,6 +5,7 @@
   type PersonCredit = {
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
@@ -84,6 +85,9 @@
                 {/if}
                 <p class="vd-crew-title">{person.name}</p>
               </div>
+              {#if person.original_name && person.original_name !== person.name}
+                <p class="vd-crew-subtitle">{person.original_name}</p>
+              {/if}
               {#if person.character_name}
                 <p class="vd-crew-subtitle">{person.character_name}</p>
               {/if}
@@ -103,6 +107,9 @@
     class="vd-tooltip"
   >
     <span class="block">{person.name}</span>
+    {#if person.original_name && person.original_name !== person.name}
+      <span class="block text-foreground/70">{person.original_name}</span>
+    {/if}
     {#if person.character_name}
       <span class="block text-foreground/70">{person.character_name}</span>
     {/if}

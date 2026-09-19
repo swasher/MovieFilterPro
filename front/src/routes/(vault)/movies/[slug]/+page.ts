@@ -60,6 +60,7 @@ type ApiMovieDetail = {
   directors: Array<{
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
@@ -70,6 +71,7 @@ type ApiMovieDetail = {
   producers: Array<{
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
@@ -80,6 +82,7 @@ type ApiMovieDetail = {
   screenplays: Array<{
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
@@ -90,6 +93,7 @@ type ApiMovieDetail = {
   writers: Array<{
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
@@ -100,6 +104,7 @@ type ApiMovieDetail = {
   showrunners: Array<{
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
@@ -110,6 +115,7 @@ type ApiMovieDetail = {
   actors: Array<{
     id: number;
     name: string;
+    original_name?: string | null;
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;

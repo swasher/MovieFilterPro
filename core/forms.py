@@ -11,7 +11,8 @@ class PreferencesForm(forms.ModelForm):
                   'min_rating', 'kinozal_domain', 'low_countries', 'low_genres', 'low_max_year', 'low_min_rating',
                   'tmdb_api_key', 'omdb_api_key', 'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
                   'ignore_title', 'cookie_pass', 'cookie_uid',
-                  'torrents_hotfolder']
+                  'torrents_hotfolder',
+                  'ai_enabled', 'ai_base_url', 'ai_api_key', 'ai_model']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -80,6 +81,15 @@ class PreferencesForm(forms.ModelForm):
                 <hr>
             """),
             Field("ignore_title"),
+            HTML("""
+                <h3>Local AI</h3>
+                <i>OpenAI-совместимый локальный сервер (Ollama / LM Studio / Lemonade / Unsloth) для будущих фич</i>
+                <hr>
+            """),
+            Field("ai_enabled"),
+            Field("ai_base_url"),
+            Field("ai_api_key"),
+            Field("ai_model"),
             Submit("submit", "Save", css_class=""),
         )
 

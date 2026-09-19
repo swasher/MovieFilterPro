@@ -206,6 +206,30 @@ class UserPreferences(models.Model):
         help_text='ID TMDB-листа "Просмотрено" (зеркало системного статуса WATCHED)',
     )
 
+    ai_enabled = models.BooleanField(
+        'Локальный AI включен',
+        default=False,
+        help_text='Использовать локальный AI для будущих фич',
+    )
+    ai_base_url = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text='Base URL OpenAI-совместимого сервера, например http://localhost:11434/v1',
+    )
+    ai_api_key = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text='API-ключ, если сервер его требует (для локальных обычно не нужен)',
+    )
+    ai_model = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='Имя модели, например qwen2.5:7b',
+    )
+
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью
         super().save(*args, **kwargs)
