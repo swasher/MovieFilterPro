@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 import re
 from typing import Literal
 
@@ -164,36 +164,13 @@ class TMDBMovieMatchingService:
 
     @classmethod
     def _resolve_with_ai_if_confident(cls, movie: Movie, result: TMDBMatchingResult) -> TMDBMatchingResult:
-        if result.status not in {"needs_confirmation", "needs_user_choice"} or not result.candidates:
-            return result
+        """Тонкий делегат: весь fuzzy -> AI конвейер живет в TMDBMatchResolver."""
+        from vault.services.tmdb_match_resolver import TMDBMatchResolver
 
-        from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
-
-        choice = TMDBAIMatchingService.choose_best_candidate(movie, result.candidates)
-        if not TMDBAIMatchingService.is_auto_match(
-            choice,
-            deterministic_best=result.candidates[0] if result.candidates else None,
-            deterministic_second=result.candidates[1] if len(result.candidates) > 1 else None,
-        ) or choice is None or choice.selected_candidate is None:
-            return result
-
-        selected = replace(
-            choice.selected_candidate,
-            score=max(choice.selected_candidate.score, cls.AUTO_MATCH_MIN_SCORE),
-            score_reasons=tuple(choice.selected_candidate.score_reasons or ()) + ("ai_plot_match",),
-        )
-        candidates = tuple(
-            selected
-            if candidate.tmdb_id == selected.tmdb_id and candidate.media_type == selected.media_type
-            else candidate
-            for candidate in result.candidates
-        )
-        reason = f" {choice.reason}" if choice.reason else ""
-        return TMDBMatchingResult(
-            status="auto_match",
-            selected_candidate=selected,
-            candidates=candidates,
-            message=f"AI подтвердил матч TMDB по описаниям (confidence={choice.confidence:.2f}).{reason}",
+        return TMDBMatchResolver.resolve_with_ai_if_confident(
+            movie,
+            result,
+            auto_match_min_score=cls.AUTO_MATCH_MIN_SCORE,
         )
 
     @classmethod

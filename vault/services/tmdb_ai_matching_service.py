@@ -48,13 +48,15 @@ class TMDBAIMatchingService:
     a clear, high-confidence winner.
     """
 
-    PROMPT_VERSION = "tmdb_plot_match_v1"
+    PROMPT_VERSION = "tmdb_plot_match_v2"
     REQUEST_TIMEOUT_SECONDS = 45
     MIN_PLOT_CHARS = 40
     AUTO_MATCH_MIN_CONFIDENCE = 0.88
     AUTO_MATCH_MIN_GAP = 0.08
     SUPPORTED_AUTO_MATCH_MIN_CONFIDENCE = 0.70
     SUPPORTED_AUTO_MATCH_MIN_GAP = 0.05
+    # Шаг 2 гибрида: независимая попарная проверка победителя.
+    VERIFY_MIN_CONFIDENCE = 0.70
 
     @classmethod
     def compare_plots(cls, plot1: str, plot2: str) -> AIPlotComparison | None:
@@ -78,12 +80,21 @@ class TMDBAIMatchingService:
         )
         if response is None:
             return None
-        return AIPlotComparison(
+        comparison = AIPlotComparison(
             same_work=bool(response.get("same_work")),
             confidence=cls._clamp_confidence(response.get("confidence")),
             reason=cls._safe_text(response.get("reason"), 500),
             red_flags=cls._safe_text_tuple(response.get("red_flags")),
         )
+        logger.info(
+            "TMDB_AI_MATCH_VERIFY | prompt=%s | same_work=%s | confidence=%.2f | red_flags=%s | reason=%s",
+            cls.PROMPT_VERSION,
+            comparison.same_work,
+            comparison.confidence,
+            ";".join(comparison.red_flags),
+            comparison.reason,
+        )
+        return comparison
 
     @classmethod
     def choose_best_candidate(cls, movie: Movie, candidates: tuple[TMDBCandidate, ...]) -> AICandidateChoice | None:
@@ -175,6 +186,22 @@ class TMDBAIMatchingService:
             and choice.confidence >= cls.SUPPORTED_AUTO_MATCH_MIN_CONFIDENCE
             and choice.confidence_gap >= cls.SUPPORTED_AUTO_MATCH_MIN_GAP
         )
+
+    @classmethod
+    def is_plot_verified(cls, comparison: AIPlotComparison | None) -> bool:
+        """Шаг 2 гибрида: независимая попарная проверка победителя.
+
+        Возвращает True только если AI отдельно подтвердил, что описание
+        источника и описание выбранного кандидата — одно произведение,
+        без красных флагов и с достаточной уверенностью.
+        """
+        if comparison is None:
+            return False
+        if not comparison.same_work:
+            return False
+        if comparison.red_flags:
+            return False
+        return comparison.confidence >= cls.VERIFY_MIN_CONFIDENCE
 
     @classmethod
     def _build_choice_prompt(cls, movie: Movie, candidates: tuple[TMDBCandidate, ...]) -> str:

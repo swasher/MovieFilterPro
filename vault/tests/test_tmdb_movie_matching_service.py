@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from vault.models import Movie
-from vault.services.tmdb_ai_matching_service import AICandidateChoice
+from vault.services.tmdb_ai_matching_service import AICandidateChoice, AIPlotComparison
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService
 
 
@@ -149,9 +149,15 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertEqual(by_id[10].overview, "Пол и Атрейдесы летят на Арракис.")
         self.assertEqual(by_id[11].overview, "Другая версия про пустынную планету.")
 
+    @patch(
+        "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
+        return_value=AIPlotComparison(same_work=True, confidence=0.92, reason="Сюжеты про Арракис совпадают."),
+    )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_ambiguous_case_can_auto_match_with_confident_ai_choice(self, get_tmdb_client_mock, choose_best_mock):
+    def test_ambiguous_case_can_auto_match_with_confident_ai_choice(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
         movie = Movie(
             title="Дюна",
             original_title="",
@@ -210,10 +216,18 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIsNotNone(result.selected_candidate)
         self.assertEqual(result.selected_candidate.tmdb_id, 10)
         self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
+        self.assertIn("ai_plot_verified", result.selected_candidate.score_reasons)
+        self.assertTrue(compare_mock.called)
 
+    @patch(
+        "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
+        return_value=AIPlotComparison(same_work=True, confidence=0.81, reason="Сюжеты совместимы."),
+    )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_ai_choice_can_break_tie_when_deterministic_best_is_strong(self, get_tmdb_client_mock, choose_best_mock):
+    def test_ai_choice_can_break_tie_when_deterministic_best_is_strong(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
         movie = Movie(
             title="Взрывные триггер счастье",
             original_title="Trigger Happy",
@@ -273,6 +287,133 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIsNotNone(result.selected_candidate)
         self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
         self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
+        self.assertIn("ai_plot_verified", result.selected_candidate.score_reasons)
+
+    @patch(
+        "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
+        return_value=AIPlotComparison(same_work=False, confidence=0.85, reason="Сюжеты про разное."),
+    )
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_ai_choice_blocked_when_verify_rejects_winner(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
+        movie = Movie(
+            title="Дюна",
+            original_title="",
+            year=2021,
+            movie_type=Movie.MovieType.MOVIE,
+            description="Наследник великого дома оказывается на пустынной планете Арракис, где добывают ценную пряность.",
+        )
+        candidate_1 = SimpleNamespace(
+            id=10,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 9, 3),
+            poster_path="/d1.jpg",
+            popularity=90.0,
+            vote_average=8.1,
+            overview="Наследник дома Атрейдесов прибывает на Арракис и сталкивается с борьбой за контроль над пряностью.",
+        )
+        candidate_2 = SimpleNamespace(
+            id=11,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 10, 1),
+            poster_path="/d2.jpg",
+            popularity=89.0,
+            vote_average=8.0,
+            overview="Другая версия про пустынную планету.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                10: SimpleNamespace(alternative_titles=[]),
+                11: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_best(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return AICandidateChoice(
+                selected_candidate=by_id[10],
+                confidence=0.96,
+                runner_up_confidence=0.40,
+                reason="Выбираю первого.",
+                needs_human=False,
+            )
+
+        choose_best_mock.side_effect = choose_best
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        # Шаг 1 прошел, шаг 2 (попарная проверка) отклонил — остаемся в ручном режиме.
+        self.assertEqual(result.status, "needs_user_choice")
+        self.assertIsNone(result.selected_candidate)
+
+    @patch(
+        "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
+        return_value=None,
+    )
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_ai_choice_blocked_when_verify_unavailable(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
+        movie = Movie(
+            title="Дюна",
+            original_title="",
+            year=2021,
+            movie_type=Movie.MovieType.MOVIE,
+            description="Наследник великого дома оказывается на пустынной планете Арракис, где добывают ценную пряность.",
+        )
+        candidate_1 = SimpleNamespace(
+            id=10,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 9, 3),
+            poster_path="/d1.jpg",
+            popularity=90.0,
+            vote_average=8.1,
+            overview="Наследник дома Атрейдесов прибывает на Арракис и сталкивается с борьбой за контроль над пряностью.",
+        )
+        candidate_2 = SimpleNamespace(
+            id=11,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 10, 1),
+            poster_path="/d2.jpg",
+            popularity=89.0,
+            vote_average=8.0,
+            overview="Другая версия про пустынную планету.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                10: SimpleNamespace(alternative_titles=[]),
+                11: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_best(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return AICandidateChoice(
+                selected_candidate=by_id[10],
+                confidence=0.96,
+                runner_up_confidence=0.40,
+                reason="Выбираю первого.",
+                needs_human=False,
+            )
+
+        choose_best_mock.side_effect = choose_best
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        # Второй запрос упал — консервативно не делаем автомата.
+        self.assertEqual(result.status, "needs_user_choice")
+        self.assertIsNone(result.selected_candidate)
 
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_find_by_imdb_id_returns_auto_match_for_single_movie_result(self, get_tmdb_client_mock):
@@ -391,3 +532,218 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         result = TMDBMovieMatchingService.match_movie(movie)
 
         self.assertEqual(result.status, "needs_confirmation")
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_literal_plot_match_short_circuits_ai_for_singleton(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
+        plot = (
+            "Наследник великого дома оказывается на пустынной планете Арракис, "
+            "где добывают ценную пряность, и возглавляет восстание фременов против империи."
+        )
+        movie = Movie(
+            title="Перегонщик",
+            original_title="",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+            description=plot,
+        )
+        candidate = SimpleNamespace(
+            id=1591602,
+            title="Перегонщик",
+            original_title="Перегонщик",
+            release_date=date(2024, 1, 1),
+            poster_path="/p.jpg",
+            popularity=5.0,
+            vote_average=6.0,
+            overview=plot,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate],
+            movie_details={1591602: SimpleNamespace(alternative_titles=[])},
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1591602)
+        self.assertIn("plot_literal_match", result.selected_candidate.score_reasons)
+        self.assertNotIn("ai_plot_match", result.selected_candidate.score_reasons)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_literal_plot_match_picks_one_of_several_without_ai(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
+        plot_a = (
+            "Наследник великого дома оказывается на пустынной планете Арракис, "
+            "где добывают ценную пряность, и возглавляет восстание фременов против империи."
+        )
+        plot_b = (
+            "Influencers fight to the death at a live-streamed lethal laser-tag match "
+            "on an abandoned island resort far from civilization."
+        )
+        movie = Movie(
+            title="Дюна",
+            original_title="",
+            year=2021,
+            movie_type=Movie.MovieType.MOVIE,
+            description=plot_a,
+        )
+        candidate_1 = SimpleNamespace(
+            id=10,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 9, 3),
+            poster_path="/d1.jpg",
+            popularity=90.0,
+            vote_average=8.1,
+            overview=plot_a,
+        )
+        candidate_2 = SimpleNamespace(
+            id=11,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 10, 1),
+            poster_path="/d2.jpg",
+            popularity=89.0,
+            vote_average=8.0,
+            overview=plot_b,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                10: SimpleNamespace(alternative_titles=[]),
+                11: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 10)
+        self.assertIn("plot_literal_match", result.selected_candidate.score_reasons)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_literal_plot_match_ignores_case_and_punctuation(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
+        overview = (
+            "Наследник великого дома оказывается на пустынной планете Арракис, "
+            "где добывают ценную пряность, и возглавляет восстание фременов против империи."
+        )
+        movie = Movie(
+            title="Перегонщик",
+            original_title="",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+            description="Кратко:  НАСЛЕДНИК Великого Дома!!! оказывается на пустынной планете Арракис, "
+            "где добывают ценную пряность — и возглавляет восстание фременов против империи... Смотрите в кино.",
+        )
+        candidate = SimpleNamespace(
+            id=1591602,
+            title="Перегонщик",
+            original_title="Перегонщик",
+            release_date=date(2024, 1, 1),
+            poster_path="/p.jpg",
+            popularity=5.0,
+            vote_average=6.0,
+            overview=overview,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate],
+            movie_details={1591602: SimpleNamespace(alternative_titles=[])},
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1591602)
+        self.assertIn("plot_literal_match", result.selected_candidate.score_reasons)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()
+
+    @patch(
+        "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
+        return_value=AIPlotComparison(same_work=True, confidence=0.9, reason="Сюжеты совпадают."),
+    )
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_two_literal_hits_fall_through_to_ai(
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+    ):
+        plot = (
+            "Наследник великого дома оказывается на пустынной планете Арракис, "
+            "где добывают ценную пряность, и возглавляет восстание фременов против империи."
+        )
+        movie = Movie(
+            title="Дюна",
+            original_title="",
+            year=2021,
+            movie_type=Movie.MovieType.MOVIE,
+            description=plot,
+        )
+        candidate_1 = SimpleNamespace(
+            id=10,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 9, 3),
+            poster_path="/d1.jpg",
+            popularity=90.0,
+            vote_average=8.1,
+            overview=plot,
+        )
+        candidate_2 = SimpleNamespace(
+            id=11,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 10, 1),
+            poster_path="/d2.jpg",
+            popularity=89.0,
+            vote_average=8.0,
+            overview=plot,
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                10: SimpleNamespace(alternative_titles=[]),
+                11: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_best(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return AICandidateChoice(
+                selected_candidate=by_id[10],
+                confidence=0.96,
+                runner_up_confidence=0.40,
+                reason="Выбираю первого.",
+                needs_human=False,
+            )
+
+        choose_best_mock.side_effect = choose_best
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        # Два дословных попадания — неоднозначность, решает AI.
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 10)
+        self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
+        self.assertNotIn("plot_literal_match", result.selected_candidate.score_reasons)
