@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import re
 from typing import Literal
 
@@ -142,18 +142,58 @@ class TMDBMovieMatchingService:
             )
 
         if len(relevant) == 1:
-            return TMDBMatchingResult(
-                status="needs_confirmation",
-                selected_candidate=None,
-                candidates=(best,),
-                message="Найден один неуверенный матч TMDB. Подтверди выбор вручную.",
+            return cls._resolve_with_ai_if_confident(
+                movie,
+                TMDBMatchingResult(
+                    status="needs_confirmation",
+                    selected_candidate=None,
+                    candidates=(best,),
+                    message="Найден один неуверенный матч TMDB. Подтверди выбор вручную.",
+                ),
             )
 
+        return cls._resolve_with_ai_if_confident(
+            movie,
+            TMDBMatchingResult(
+                status="needs_user_choice",
+                selected_candidate=None,
+                candidates=tuple(relevant[:top_n]),
+                message="Найдено несколько релевантных кандидатов TMDB",
+            ),
+        )
+
+    @classmethod
+    def _resolve_with_ai_if_confident(cls, movie: Movie, result: TMDBMatchingResult) -> TMDBMatchingResult:
+        if result.status not in {"needs_confirmation", "needs_user_choice"} or not result.candidates:
+            return result
+
+        from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
+
+        choice = TMDBAIMatchingService.choose_best_candidate(movie, result.candidates)
+        if not TMDBAIMatchingService.is_auto_match(
+            choice,
+            deterministic_best=result.candidates[0] if result.candidates else None,
+            deterministic_second=result.candidates[1] if len(result.candidates) > 1 else None,
+        ) or choice is None or choice.selected_candidate is None:
+            return result
+
+        selected = replace(
+            choice.selected_candidate,
+            score=max(choice.selected_candidate.score, cls.AUTO_MATCH_MIN_SCORE),
+            score_reasons=tuple(choice.selected_candidate.score_reasons or ()) + ("ai_plot_match",),
+        )
+        candidates = tuple(
+            selected
+            if candidate.tmdb_id == selected.tmdb_id and candidate.media_type == selected.media_type
+            else candidate
+            for candidate in result.candidates
+        )
+        reason = f" {choice.reason}" if choice.reason else ""
         return TMDBMatchingResult(
-            status="needs_user_choice",
-            selected_candidate=None,
-            candidates=tuple(relevant[:top_n]),
-            message="Найдено несколько релевантных кандидатов TMDB",
+            status="auto_match",
+            selected_candidate=selected,
+            candidates=candidates,
+            message=f"AI подтвердил матч TMDB по описаниям (confidence={choice.confidence:.2f}).{reason}",
         )
 
     @classmethod
@@ -498,6 +538,10 @@ class TMDBMovieMatchingService:
                 details = tmdb.movie(raw.tmdb_id) if raw.media_type == "movie" else tmdb.tv_show(raw.tmdb_id)
             except Exception:
                 continue
+
+            detail_overview = getattr(details, "overview", None) or ""
+            if len(detail_overview.strip()) > len((raw.overview or "").strip()):
+                raw.overview = detail_overview
 
             alt_set: set[str] = set()
             for alternative in getattr(details, "alternative_titles", []) or []:

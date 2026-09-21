@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from vault.models import Movie
+from vault.services.tmdb_ai_matching_service import AICandidateChoice
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService
 
 
@@ -147,6 +148,131 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         by_id = {c.tmdb_id: c for c in result.candidates}
         self.assertEqual(by_id[10].overview, "Пол и Атрейдесы летят на Арракис.")
         self.assertEqual(by_id[11].overview, "Другая версия про пустынную планету.")
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_ambiguous_case_can_auto_match_with_confident_ai_choice(self, get_tmdb_client_mock, choose_best_mock):
+        movie = Movie(
+            title="Дюна",
+            original_title="",
+            year=2021,
+            movie_type=Movie.MovieType.MOVIE,
+            description="Наследник великого дома оказывается на пустынной планете Арракис, где добывают ценную пряность.",
+        )
+        candidate_1 = SimpleNamespace(
+            id=10,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 9, 3),
+            poster_path="/d1.jpg",
+            popularity=90.0,
+            vote_average=8.1,
+            overview="",
+        )
+        candidate_2 = SimpleNamespace(
+            id=11,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 10, 1),
+            poster_path="/d2.jpg",
+            popularity=89.0,
+            vote_average=8.0,
+            overview="Другая версия про пустынную планету.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                10: SimpleNamespace(
+                    alternative_titles=[],
+                    overview="Наследник дома Атрейдесов прибывает на Арракис и сталкивается с борьбой за контроль над пряностью.",
+                ),
+                11: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_best(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            self.assertIn("Атрейдесов", by_id[10].overview)
+            return AICandidateChoice(
+                selected_candidate=by_id[10],
+                confidence=0.96,
+                runner_up_confidence=0.40,
+                reason="Оба описания про наследника Атрейдесов на Арракисе и борьбу за пряность.",
+                needs_human=False,
+            )
+
+        choose_best_mock.side_effect = choose_best
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 10)
+        self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_ai_choice_can_break_tie_when_deterministic_best_is_strong(self, get_tmdb_client_mock, choose_best_mock):
+        movie = Movie(
+            title="Взрывные триггер счастье",
+            original_title="Trigger Happy",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+            description=(
+                "Джордж Декер мечтает сбежать от своей жизни и полететь на Багамы, "
+                "но чтобы попасть туда, ему придется найти способ сбежать от жены, долгов и унизительной работы."
+            ),
+        )
+        candidate_1 = SimpleNamespace(
+            id=1234422,
+            title="Триггер счастье",
+            original_title="Trigger Happy",
+            release_date=date(2025, 1, 1),
+            poster_path="/trigger.jpg",
+            popularity=12.0,
+            vote_average=6.0,
+            overview="Подавленный муж пытается убить свою кормильцу жену ради ее полиса страхования жизни.",
+        )
+        candidate_2 = SimpleNamespace(
+            id=1734125,
+            title="Trigger Happy",
+            original_title="Trigger Happy",
+            release_date=date(2026, 1, 1),
+            poster_path="/laser.jpg",
+            popularity=10.0,
+            vote_average=6.0,
+            overview="Influencers fight to the death at a live-streamed, lethal laser-tag match.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                1234422: SimpleNamespace(alternative_titles=[]),
+                1734125: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_best(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            self.assertEqual(by_id[1234422].score, 90)
+            self.assertEqual(by_id[1734125].score, 80)
+            return AICandidateChoice(
+                selected_candidate=by_id[1234422],
+                confidence=0.74,
+                runner_up_confidence=0.30,
+                reason="Первый кандидат совпадает по названию и году, второй сюжетно про другое.",
+                needs_human=True,
+            )
+
+        choose_best_mock.side_effect = choose_best
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
+        self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
 
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_find_by_imdb_id_returns_auto_match_for_single_movie_result(self, get_tmdb_client_mock):
