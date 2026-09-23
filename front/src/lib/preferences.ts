@@ -27,6 +27,8 @@ export type PreferencesData = {
   ai_base_url: string | null;
   ai_api_key: string | null;
   ai_model: string | null;
+  groq_api_key: string | null;
+  groq_model: string | null;
 };
 
 export type PreferencesUpdatePayload = {
@@ -54,6 +56,8 @@ export type PreferencesUpdatePayload = {
   ai_base_url: string | null;
   ai_api_key: string | null;
   ai_model: string | null;
+  groq_api_key: string | null;
+  groq_model: string | null;
 };
 
 export type PreferencesApiErrorPayload = {
@@ -88,5 +92,7 @@ export const emptyPreferences = (): PreferencesData => ({
   ai_enabled: false,
   ai_base_url: null,
   ai_api_key: null,
-  ai_model: null
+  ai_model: null,
+  groq_api_key: null,
+  groq_model: null
 });

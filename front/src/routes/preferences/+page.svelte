@@ -45,6 +45,8 @@
     ai_base_url: string;
     ai_api_key: string;
     ai_model: string;
+    groq_api_key: string;
+    groq_model: string;
   };
 
   let { data } = $props();
@@ -87,7 +89,9 @@
     ai_enabled: preferences.ai_enabled ?? false,
     ai_base_url: preferences.ai_base_url ?? "",
     ai_api_key: preferences.ai_api_key ?? "",
-    ai_model: preferences.ai_model ?? ""
+    ai_model: preferences.ai_model ?? "",
+    groq_api_key: preferences.groq_api_key ?? "",
+    groq_model: preferences.groq_model ?? ""
   });
 
   const buildPayload = (formState: PreferencesFormState): PreferencesUpdatePayload => ({
@@ -114,7 +118,9 @@
     ai_enabled: formState.ai_enabled,
     ai_base_url: asOptionalText(formState.ai_base_url),
     ai_api_key: asOptionalText(formState.ai_api_key),
-    ai_model: asOptionalText(formState.ai_model)
+    ai_model: asOptionalText(formState.ai_model),
+    groq_api_key: asOptionalText(formState.groq_api_key),
+    groq_model: asOptionalText(formState.groq_model)
   });
 
   const payloadSnapshot = (formState: PreferencesFormState) => JSON.stringify(buildPayload(formState));
@@ -600,6 +606,23 @@
 
         <Card class="border-border/70">
           <CardHeader>
+            <CardTitle class="text-xl">Groq</CardTitle>
+            <CardDescription>Облачный Groq API для LLM-фич (рекомендации, анализ).</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="space-y-2">
+              <div class="text-sm font-medium">Groq API key</div>
+              <Input bind:value={form.groq_api_key} type="password" placeholder="gsk_..." />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium">Groq model</div>
+              <Input bind:value={form.groq_model} placeholder="llama-3.3-70b-versatile" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
             <CardTitle class="text-xl">TMDB Write-back</CardTitle>
             <CardDescription>Обратная синхронизация Vault → TMDB (watchlist/favorite/rating). Работает через tmdb_adapter.</CardDescription>
           </CardHeader>
@@ -650,6 +673,10 @@
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>Local AI</span>
               <span>{form.ai_enabled && form.ai_base_url.trim() && form.ai_model.trim() ? "Configured" : form.ai_enabled ? "Incomplete" : "Disabled"}</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <span>Groq</span>
+              <span>{form.groq_api_key.trim() && form.groq_model.trim() ? "Configured" : form.groq_api_key.trim() || form.groq_model.trim() ? "Incomplete" : "Missing"}</span>
             </div>
           </CardContent>
         </Card>

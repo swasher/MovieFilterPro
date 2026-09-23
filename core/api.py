@@ -45,6 +45,8 @@ class PreferencesOut(Schema):
     ai_base_url: str | None = None
     ai_api_key: str | None = None
     ai_model: str | None = None
+    groq_api_key: str | None = None
+    groq_model: str | None = None
 
 
 class PreferencesUpdateIn(Schema):
@@ -72,6 +74,8 @@ class PreferencesUpdateIn(Schema):
     ai_base_url: str | None = None
     ai_api_key: str | None = None
     ai_model: str | None = None
+    groq_api_key: str | None = None
+    groq_model: str | None = None
 
 
 class AiModelsOut(Schema):
@@ -134,6 +138,8 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         ai_base_url=preferences.ai_base_url or None,
         ai_api_key=preferences.ai_api_key or None,
         ai_model=preferences.ai_model or None,
+        groq_api_key=preferences.groq_api_key or None,
+        groq_model=preferences.groq_model or None,
     )
 
 
@@ -162,6 +168,8 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.ai_base_url = _normalized_optional_string(payload.ai_base_url)
     preferences.ai_api_key = _normalized_optional_string(payload.ai_api_key)
     preferences.ai_model = _normalized_optional_string(payload.ai_model)
+    preferences.groq_api_key = _normalized_optional_string(payload.groq_api_key)
+    preferences.groq_model = _normalized_optional_string(payload.groq_model)
     preferences.save()
     return preferences
 

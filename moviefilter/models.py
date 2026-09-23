@@ -229,6 +229,18 @@ class UserPreferences(models.Model):
         null=True,
         help_text='Имя модели, например qwen2.5:7b',
     )
+    groq_api_key = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text='API-ключ Groq для облачных LLM',
+    )
+    groq_model = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='Имя Groq-модели, например llama-3.3-70b-versatile',
+    )
 
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью

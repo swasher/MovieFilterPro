@@ -12,7 +12,8 @@ class PreferencesForm(forms.ModelForm):
                   'tmdb_api_key', 'omdb_api_key', 'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
                   'ignore_title', 'cookie_pass', 'cookie_uid',
                   'torrents_hotfolder',
-                  'ai_enabled', 'ai_base_url', 'ai_api_key', 'ai_model']
+                  'ai_enabled', 'ai_base_url', 'ai_api_key', 'ai_model',
+                  'groq_api_key', 'groq_model']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -90,6 +91,13 @@ class PreferencesForm(forms.ModelForm):
             Field("ai_base_url"),
             Field("ai_api_key"),
             Field("ai_model"),
+            HTML("""
+                <h3>Groq</h3>
+                <i>Облачный Groq API для LLM-фич (рекомендации, анализ)</i>
+                <hr>
+            """),
+            Field("groq_api_key"),
+            Field("groq_model"),
             Submit("submit", "Save", css_class=""),
         )
 
