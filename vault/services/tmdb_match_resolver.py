@@ -13,6 +13,7 @@ logger = logging.getLogger("vault.tmdb_sync")
 
 if TYPE_CHECKING:
     from vault.services.tmdb_ai_matching_service import AICandidateChoice, AIPlotComparison
+    from vault.services.tmdb_groq_matching_service import GroqChoice
     from vault.services.tmdb_movie_matching_service import TMDBCandidate, TMDBMatchingResult
 
 
@@ -24,13 +25,14 @@ if TYPE_CHECKING:
 class TMDBMatchResolver:
     """Конвейер fuzzy-результат -> AI.
 
-    Порядок стадий:
+    Порядок стадий (дешевые первые, дорогие последние):
       1. eligibility (только needs_confirmation / needs_user_choice),
       2. pre-AI правила (_apply_pre_ai_rules: дословное совпадение описаний),
-      3. AI-выбор лучшего из всей кучи,
-      4. проверка уверенности выбора,
-      5. независимая попарная проверка победителя по сюжетам,
-      6. повышение до auto_match.
+      3. GROQ-стадия (семантическое попарное сравнение сюжетов через облако),
+      4. локальный AI-выбор лучшего из всей кучи,
+      5. проверка уверенности выбора,
+      6. независимая попарная проверка победителя по сюжетам,
+      7. повышение до auto_match.
 
     Новые промежуточные правила между детерминированным алгоритмом и AI
     добавляются в _apply_pre_ai_rules и не трогают остальные стадии.
@@ -56,6 +58,10 @@ class TMDBMatchResolver:
         early = cls._apply_pre_ai_rules(movie, fuzzy_result, auto_match_min_score=auto_match_min_score)
         if early is not None:
             return early
+
+        groq_early = cls._stage_groq_if_confident(movie, fuzzy_result, auto_match_min_score)
+        if groq_early is not None:
+            return groq_early
 
         choice = cls._stage_choose(movie, fuzzy_result.candidates)
         if not cls._stage_is_choice_confident(choice, fuzzy_result.candidates):
@@ -158,6 +164,59 @@ class TMDBMatchResolver:
             selected_candidate=promoted,
             candidates=candidates,
             message="Точное совпадение описаний — фильм тот же, AI не понадобился.",
+        )
+
+    @classmethod
+    def _stage_groq_if_confident(
+        cls,
+        movie: Movie,
+        fuzzy_result: TMDBMatchingResult,
+        auto_match_min_score: int,
+    ) -> TMDBMatchingResult | None:
+        """GROQ-стадия: семантическое сравнение сюжетов, когда дословного нет.
+
+        Возвращает готовый auto_match при одном явном победителе,
+        иначе None — конвейер идет дальше к локальному AI.
+        """
+        from vault.services.tmdb_groq_matching_service import GroqChoice, TMDBGROQMatchingService
+
+        choice: GroqChoice | None = TMDBGROQMatchingService.choose_confident(
+            movie,
+            fuzzy_result.candidates,
+        )
+        if not TMDBGROQMatchingService.is_auto_match(choice):
+            return None
+        assert choice is not None and choice.selected_candidate is not None
+        return cls._promote_groq_match(fuzzy_result, choice, auto_match_min_score)
+
+    @classmethod
+    def _promote_groq_match(
+        cls,
+        fuzzy_result: TMDBMatchingResult,
+        choice: GroqChoice,
+        auto_match_min_score: int,
+    ) -> TMDBMatchingResult:
+        from vault.services.tmdb_movie_matching_service import TMDBMatchingResult
+
+        selected = choice.selected_candidate
+        assert selected is not None
+        promoted = replace(
+            selected,
+            score=max(selected.score, auto_match_min_score),
+            score_reasons=tuple(selected.score_reasons or ()) + ("groq_plot_match",),
+        )
+        candidates = tuple(
+            promoted
+            if candidate.tmdb_id == promoted.tmdb_id and candidate.media_type == promoted.media_type
+            else candidate
+            for candidate in fuzzy_result.candidates
+        )
+        reason = f" {choice.reason}" if choice.reason else ""
+        return TMDBMatchingResult(
+            status="auto_match",
+            selected_candidate=promoted,
+            candidates=candidates,
+            message=f"GROQ подтвердил матч TMDB по описаниям (confidence={choice.confidence:.2f}).{reason}",
         )
 
     @classmethod

@@ -333,3 +333,35 @@ class TMDBMovieSyncServiceTests(TestCase):
         linked = movie.movie_persons.filter(role="actor").first()
         self.assertIsNotNone(linked)
         self.assertEqual(linked.person_id, old_person.pk)
+
+    def test_match_source_label_maps_score_reasons(self):
+        def label(reasons):
+            candidate = TMDBCandidate(
+                tmdb_id=1,
+                media_type="movie",
+                title="",
+                original_title="",
+                year=None,
+                score=90,
+                score_reasons=reasons,
+                poster_path=None,
+                popularity=None,
+                vote_average=None,
+            )
+            return TMDBMovieSyncService._match_source_label(candidate)
+
+        self.assertEqual(label(("plot_literal_match",)), "дословное совпадение описаний")
+        self.assertEqual(label(("groq_plot_match",)), "совпадение сюжетов через GROQ")
+        self.assertEqual(
+            label(("ai_plot_match", "ai_plot_verified")), "подтверждено локальным AI"
+        )
+        self.assertEqual(label(("manual_choice",)), "ручной выбор")
+        self.assertEqual(label(("stored_tmdb_id",)), "сохраненная привязка")
+        self.assertEqual(label(("imdb_id_lookup",)), "поиск по IMDb ID")
+        self.assertEqual(
+            label(("title_exact", "year_exact", "media_type_match")),
+            "уверенное совпадение названия",
+        )
+        self.assertEqual(label(("test",)), "")
+        self.assertEqual(label(()), "")
+        self.assertEqual(TMDBMovieSyncService._match_source_label(None), "")

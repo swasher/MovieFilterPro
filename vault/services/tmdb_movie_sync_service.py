@@ -201,9 +201,14 @@ class TMDBMovieSyncService:
                 cls._log_orphan_cleanup(orphan_deleted_count)
                 cls._log_done("ok", "sync completed")
 
+            match_label = cls._match_source_label(candidate)
+            ok_message = "Данные фильма обновлены из TMDB"
+            if match_label:
+                ok_message = f"{ok_message} ({match_label})"
+
             return TMDBSyncResult(
                 status="ok",
-                message="Данные фильма обновлены из TMDB",
+                message=ok_message,
                 updated_fields=all_updates,
                 orphan_persons_deleted=orphan_deleted_count,
                 selected_candidate=candidate,
@@ -1396,6 +1401,26 @@ class TMDBMovieSyncService:
         cls._emit_log(
             f"MATCH_SELECTED | tmdb_id={candidate.tmdb_id} | media={candidate.media_type} | reason={reason}"
         )
+
+    @staticmethod
+    def _match_source_label(candidate: TMDBCandidate | None) -> str:
+        """Короткий ярлык 'чем найден матч' для тоста: из score_reasons кандидата."""
+        reasons = set(getattr(candidate, "score_reasons", None) or ())
+        if "plot_literal_match" in reasons:
+            return "дословное совпадение описаний"
+        if "groq_plot_match" in reasons:
+            return "совпадение сюжетов через GROQ"
+        if "ai_plot_match" in reasons:
+            return "подтверждено локальным AI"
+        if "manual_choice" in reasons:
+            return "ручной выбор"
+        if "stored_tmdb_id" in reasons:
+            return "сохраненная привязка"
+        if "imdb_id_lookup" in reasons:
+            return "поиск по IMDb ID"
+        if reasons & {"title_exact", "original_exact"}:
+            return "уверенное совпадение названия"
+        return ""
 
     @classmethod
     def _log_sync_apply(cls, updated_fields: tuple[str, ...], cast_count: int, crew_count: int) -> None:

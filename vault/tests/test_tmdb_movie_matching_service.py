@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 
 from vault.models import Movie
 from vault.services.tmdb_ai_matching_service import AICandidateChoice, AIPlotComparison
+from vault.services.tmdb_groq_matching_service import GroqChoice
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService
 
 
@@ -150,13 +151,17 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertEqual(by_id[11].overview, "Другая версия про пустынную планету.")
 
     @patch(
+        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        return_value=None,
+    )
+    @patch(
         "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
         return_value=AIPlotComparison(same_work=True, confidence=0.92, reason="Сюжеты про Арракис совпадают."),
     )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ambiguous_case_can_auto_match_with_confident_ai_choice(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
     ):
         movie = Movie(
             title="Дюна",
@@ -220,13 +225,17 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertTrue(compare_mock.called)
 
     @patch(
+        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        return_value=None,
+    )
+    @patch(
         "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
         return_value=AIPlotComparison(same_work=True, confidence=0.81, reason="Сюжеты совместимы."),
     )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ai_choice_can_break_tie_when_deterministic_best_is_strong(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
     ):
         movie = Movie(
             title="Взрывные триггер счастье",
@@ -290,13 +299,17 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIn("ai_plot_verified", result.selected_candidate.score_reasons)
 
     @patch(
+        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        return_value=None,
+    )
+    @patch(
         "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
         return_value=AIPlotComparison(same_work=False, confidence=0.85, reason="Сюжеты про разное."),
     )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ai_choice_blocked_when_verify_rejects_winner(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
     ):
         movie = Movie(
             title="Дюна",
@@ -353,13 +366,17 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIsNone(result.selected_candidate)
 
     @patch(
+        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        return_value=None,
+    )
+    @patch(
         "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
         return_value=None,
     )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ai_choice_blocked_when_verify_unavailable(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
     ):
         movie = Movie(
             title="Дюна",
@@ -679,13 +696,17 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         compare_mock.assert_not_called()
 
     @patch(
+        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        return_value=None,
+    )
+    @patch(
         "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
         return_value=AIPlotComparison(same_work=True, confidence=0.9, reason="Сюжеты совпадают."),
     )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_two_literal_hits_fall_through_to_ai(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
     ):
         plot = (
             "Наследник великого дома оказывается на пустынной планете Арракис, "
@@ -747,3 +768,216 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertEqual(result.selected_candidate.tmdb_id, 10)
         self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
         self.assertNotIn("plot_literal_match", result.selected_candidate.score_reasons)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_groq_confident_match_skips_local_ai(
+        self, get_tmdb_client_mock, groq_mock, choose_best_mock, compare_mock
+    ):
+        movie = Movie(
+            title="Взрывные триггер счастье",
+            original_title="Trigger Happy",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+            description=(
+                "Джордж Декер мечтает сбежать от своей жизни и полететь на Багамы, "
+                "но чтобы попасть туда, ему придется найти способ сбежать от жены, долгов и унизительной работы."
+            ),
+        )
+        candidate_1 = SimpleNamespace(
+            id=1234422,
+            title="Триггер счастье",
+            original_title="Trigger Happy",
+            release_date=date(2025, 1, 1),
+            poster_path="/trigger.jpg",
+            popularity=12.0,
+            vote_average=6.0,
+            overview="Подавленный муж пытается убить свою кормильцу жену ради ее полиса страхования жизни.",
+        )
+        candidate_2 = SimpleNamespace(
+            id=1734125,
+            title="Trigger Happy",
+            original_title="Trigger Happy",
+            release_date=date(2026, 1, 1),
+            poster_path="/laser.jpg",
+            popularity=10.0,
+            vote_average=6.0,
+            overview="Influencers fight to the death at a live-streamed, lethal laser-tag match.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                1234422: SimpleNamespace(alternative_titles=[]),
+                1734125: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_confident(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return GroqChoice(
+                selected_candidate=by_id[1234422],
+                confidence=0.92,
+                runner_up_confidence=0.30,
+                reason="Совпали Джордж Декер, Багамы и долги.",
+            )
+
+        groq_mock.side_effect = choose_confident
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
+        self.assertIn("groq_plot_match", result.selected_candidate.score_reasons)
+        self.assertNotIn("ai_plot_match", result.selected_candidate.score_reasons)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()
+
+    @patch(
+        "vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots",
+        return_value=AIPlotComparison(same_work=True, confidence=0.9, reason="Сюжеты совпадают."),
+    )
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_unsure_groq_falls_through_to_local_ai(
+        self, get_tmdb_client_mock, groq_mock, choose_best_mock, compare_mock
+    ):
+        movie = Movie(
+            title="Взрывные триггер счастье",
+            original_title="Trigger Happy",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+            description=(
+                "Джордж Декер мечтает сбежать от своей жизни и полететь на Багамы, "
+                "но чтобы попасть туда, ему придется найти способ сбежать от жены, долгов и унизительной работы."
+            ),
+        )
+        candidate_1 = SimpleNamespace(
+            id=1234422,
+            title="Триггер счастье",
+            original_title="Trigger Happy",
+            release_date=date(2025, 1, 1),
+            poster_path="/trigger.jpg",
+            popularity=12.0,
+            vote_average=6.0,
+            overview="Подавленный муж пытается убить свою кормильцу жену ради ее полиса страхования жизни.",
+        )
+        candidate_2 = SimpleNamespace(
+            id=1734125,
+            title="Trigger Happy",
+            original_title="Trigger Happy",
+            release_date=date(2026, 1, 1),
+            poster_path="/laser.jpg",
+            popularity=10.0,
+            vote_average=6.0,
+            overview="Influencers fight to the death at a live-streamed, lethal laser-tag match.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                1234422: SimpleNamespace(alternative_titles=[]),
+                1734125: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_confident(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return GroqChoice(
+                selected_candidate=by_id[1234422],
+                confidence=0.60,
+                runner_up_confidence=0.55,
+                reason="Похоже, но без уникальных имен.",
+            )
+
+        def choose_best(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return AICandidateChoice(
+                selected_candidate=by_id[1234422],
+                confidence=0.96,
+                runner_up_confidence=0.40,
+                reason="Локальный AI подтверждает.",
+                needs_human=False,
+            )
+
+        groq_mock.side_effect = choose_confident
+        choose_best_mock.side_effect = choose_best
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        # GROQ не уверен — решает локальный AI.
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
+        self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
+        self.assertNotIn("groq_plot_match", result.selected_candidate.score_reasons)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_groq_trope_level_match_without_names_auto_matches(
+        self, get_tmdb_client_mock, groq_mock, choose_best_mock, compare_mock
+    ):
+        movie = Movie(
+            title="Взрывные триггер счастье",
+            original_title="Trigger Happy",
+            year=2025,
+            movie_type=Movie.MovieType.MOVIE,
+            description=(
+                "Джордж Декер мечтает сбежать от своей жизни и полететь на Багамы, "
+                "но чтобы попасть туда, ему придется найти способ сбежать от жены, долгов и унизительной работы."
+            ),
+        )
+        candidate_1 = SimpleNamespace(
+            id=1234422,
+            title="Триггер счастье",
+            original_title="Trigger Happy",
+            release_date=date(2025, 1, 1),
+            poster_path="/trigger.jpg",
+            popularity=12.0,
+            vote_average=6.0,
+            overview="Подавленный муж пытается убить свою кормильцу жену ради ее полиса страхования жизни.",
+        )
+        candidate_2 = SimpleNamespace(
+            id=1734125,
+            title="Trigger Happy",
+            original_title="Trigger Happy",
+            release_date=date(2026, 1, 1),
+            poster_path="/laser.jpg",
+            popularity=10.0,
+            vote_average=6.0,
+            overview="Influencers fight to the death at a live-streamed, lethal laser-tag match.",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate_1, candidate_2],
+            movie_details={
+                1234422: SimpleNamespace(alternative_titles=[]),
+                1734125: SimpleNamespace(alternative_titles=[]),
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        def choose_confident(movie_arg, candidates):
+            by_id = {candidate.tmdb_id: candidate for candidate in candidates}
+            return GroqChoice(
+                selected_candidate=by_id[1234422],
+                confidence=0.68,
+                runner_up_confidence=0.30,
+                reason="Имен нет, но совпали значимые тропы: побег от жены, долгов и работы.",
+            )
+
+        groq_mock.side_effect = choose_confident
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
+        self.assertIn("groq_plot_match", result.selected_candidate.score_reasons)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()
