@@ -1,6 +1,6 @@
 [project]
 name = "moviefilterpro"
-version = "0.1.177"
+version = "0.1.178"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -26,6 +26,7 @@ dependencies = [
     "python-slugify>=8.0.4",
     "rapidfuzz>=3.14.5",
     "starlette>=0.47.0",
+    "tavily>=1.1.0",
     "tmdbapis",
     "whitenoise>=6.8.0",
 ]
@@ -35,6 +36,7 @@ dev = [
     "django-browser-reload>=1.21.0",
     "django-debug-toolbar>=6.1.0",
     "django-watchfiles>=1.4.0",
+    "python-dotenv>=1.2.3",
 ]
 
 [tool.uv.sources]
