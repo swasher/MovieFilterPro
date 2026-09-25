@@ -205,15 +205,15 @@ def _rank_candidates(candidates: list, clean_title: str, llm_year: int | None) -
     norm_clean = _normalize_title(clean_title)
     scored = []
     for order, (movie, qi, pos) in enumerate(candidates):
-        norm_title = _normalize_title(movie.get("title", ""))
-        norm_orig = _normalize_title(movie.get("original_title", ""))
+        norms = []
+        for variant in [movie.get("title", ""), movie.get("original_title", "")] + list(movie.get("_alt_titles") or []):
+            norm = _normalize_title(variant)
+            if norm and norm not in norms:
+                norms.append(norm)
         title_bonus = 0
-        if norm_clean and (norm_clean == norm_title or norm_clean == norm_orig):
+        if norm_clean and norm_clean in norms:
             title_bonus = 3
-        elif norm_clean and (
-            (norm_title and (norm_clean in norm_title or norm_title in norm_clean))
-            or (norm_orig and (norm_clean in norm_orig or norm_orig in norm_clean))
-        ):
+        elif norm_clean and any(norm_clean in n or n in norm_clean for n in norms):
             title_bonus = 1
         cand_year = _release_year(movie.get("release_date"))
         if llm_year is not None and cand_year is not None:
@@ -422,9 +422,10 @@ def step2_extract_data_with_llm(title: str, original_title: str, plot: str, web_
         return {"clean_title": original_title, "year": None, "tmdb_queries": [original_title, title]}
 
 
-def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold: float = 0.6, provider: LLMProvider | None = None) -> int | None:
+def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold: float = 0.6, provider: LLMProvider | None = None, title: str = "", original_title: str = "") -> int | None:
     """
     ШАГ 3 и 4: Поиск по чистым запросам в TMDb и валидация сюжета.
+    Поиск — по исходным названиям + запросам LLM, на ru-RU и en-US, слияние по id.
     Год используется только для ранжирования кандидатов, а не для фильтра.
     Если год кандидата расходится с годом LLM больше чем на 1 — требуем
     сюжет >= PLOT_STRICT_THRESHOLD. Вердикт — аргмакс по скорам топа,
@@ -435,13 +436,11 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
     clean_title = llm_data.get("clean_title", "") or ""
     llm_year = _coerce_year(llm_data.get("year"))
 
-    # --- ШАГ 3: сбор кандидатов без фильтра по году ---
-    collected: list = []  # (movie, query_index, position)
-    seen_ids = set()
-
+    # --- ШАГ 3: сбор кандидатов без фильтра по году, ru + en ---
     # Чистим запросы: TMDB не понимает год внутри query, а LLM его туда клеит.
+    # Исходные названия добавляем всегда — страховка на случай капризов LLM.
     searched: list = []
-    for raw in queries:
+    for raw in [original_title, title, *queries]:
         cleaned = _clean_tmdb_query(raw)
         if not cleaned:
             continue
@@ -452,36 +451,67 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
             print(f"  [TMDb] запрос '{raw}' -> очищен '{cleaned}'")
         searched.append(cleaned)
 
+    merged: dict = {}  # tmdb_id -> record
     for qi, query in enumerate(searched):
+        for lang in ("ru-RU", "en-US"):
+            url = "https://api.themoviedb.org/3/search/movie"
+            params = {
+                "api_key": TMDB_API_KEY,
+                "query": query,
+                "language": lang
+            }
 
-        url = "https://api.themoviedb.org/3/search/movie"
-        params = {
-            "api_key": TMDB_API_KEY,
-            "query": query,
-            "language": "ru-RU"
-        }
-
-        try:
-            print(f"  [TMDb] запрос '{query}'")
-            resp = requests.get(url, params=params, timeout=5)
-            res = resp.json()
-            if "results" not in res:
-                print(f"  [TMDb] запрос '{query}': ошибка API http={resp.status_code} body={str(res)[:500]}")
-                continue
-            results = res.get("results", [])
-            print(f"  [TMDb] запрос '{query}' -> кандидатов: {len(results)}")
-            for pos, movie in enumerate(results):
-                movie_id = movie.get("id")
-                if movie_id in seen_ids:
+            try:
+                print(f"  [TMDb] запрос '{query}' [{lang}]")
+                resp = requests.get(url, params=params, timeout=5)
+                res = resp.json()
+                if "results" not in res:
+                    print(f"  [TMDb] запрос '{query}' [{lang}]: ошибка API http={resp.status_code} body={str(res)[:500]}")
                     continue
-                seen_ids.add(movie_id)
-                collected.append((movie, qi, pos))
-        except Exception as e:
-            print(f"Ошибка TMDb API: {e}")
+                results = res.get("results", [])
+                print(f"  [TMDb] запрос '{query}' [{lang}] -> кандидатов: {len(results)}")
+                overview_key = "overview_ru" if lang == "ru-RU" else "overview_en"
+                for pos, movie in enumerate(results):
+                    movie_id = movie.get("id")
+                    rec = merged.get(movie_id)
+                    if rec is None:
+                        rec = {
+                            "id": movie_id,
+                            "title": movie.get("title", ""),
+                            "original_title": movie.get("original_title", ""),
+                            "alt_titles": [],
+                            "overview_ru": "",
+                            "overview_en": "",
+                            "release_date": movie.get("release_date"),
+                            "qi": qi,
+                            "pos": pos,
+                        }
+                        merged[movie_id] = rec
+                    for variant in (movie.get("title", ""), movie.get("original_title", "")):
+                        if variant and variant not in rec["alt_titles"] and variant != rec["title"] and variant != rec["original_title"]:
+                            rec["alt_titles"].append(variant)
+                    overview = movie.get("overview", "") or ""
+                    if overview and not rec[overview_key]:
+                        rec[overview_key] = overview
+            except Exception as e:
+                print(f"Ошибка TMDb API: {e}")
 
-    if not collected:
+    if not merged:
         print("  [TMDb] итог: кандидаты не найдены")
         return None
+
+    collected = [
+        ({
+            "id": rec["id"],
+            "title": rec["title"],
+            "original_title": rec["original_title"],
+            "_alt_titles": rec["alt_titles"],
+            "overview": rec["overview_ru"],
+            "_en_overview": rec["overview_en"],
+            "release_date": rec["release_date"],
+        }, rec["qi"], rec["pos"])
+        for rec in merged.values()
+    ]
 
     # --- Ранжирование по дешёвым признакам (название, год) ---
     ranked = _rank_candidates(collected, clean_title, llm_year)
@@ -499,8 +529,9 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
         else:
             eff_threshold = threshold
 
-        tmdb_overview = movie.get("overview", "")
-        print(f"  [TMDb] Проверка ID {movie_id}: '{movie.get('title')}' ({movie.get('original_title')}, {movie.get('release_date')}) бонусы title={title_bonus} year={year_bonus} overview_len={len(tmdb_overview or '')}")
+        tmdb_overview = movie.get("overview", "") or movie.get("_en_overview", "")
+        used_lang = "ru" if movie.get("overview", "") else "en"
+        print(f"  [TMDb] Проверка ID {movie_id}: '{movie.get('title')}' ({movie.get('original_title')}, {movie.get('release_date')}) бонусы title={title_bonus} year={year_bonus} overview_len={len(tmdb_overview or '')} lang={used_lang}")
 
         # Запасной запрос сюжета на английском, если на русском пусто
         if not tmdb_overview:
@@ -588,7 +619,7 @@ def run_pipeline(filename: str, provider: LLMProvider | None = None) -> int | No
     print(f"   Результат LLM: {llm_data}")
 
     print("3 & 4. Поиск на TMDb и сверка сюжетов...")
-    found_id = step3_and_4_tmdb_and_validate(llm_data, plot, provider=provider)
+    found_id = step3_and_4_tmdb_and_validate(llm_data, plot, provider=provider, title=title, original_title=original_title)
 
     print("-" * 40)
     if expected_id is not None:
