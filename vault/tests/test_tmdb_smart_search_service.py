@@ -231,6 +231,37 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
         result = smart_search(_smart_movie(year=2024))
         self.assertEqual(result.status, "not_found")
 
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    def test_confident_different_is_not_a_match(self, _ai_mock, ru_mock, en_mock, compare_mock):
+        # Регрессия: confidence — уверенность в вердикте, а не похожесть.
+        # same_work=False + confidence=1.0 означает «точно разные», а не скор 1.0.
+        compare_mock.return_value = AIPlotComparison(
+            same_work=False, confidence=1.0, reason="Разные жанры.", red_flags=("разные жанры",),
+        )
+        ru_mock.return_value, en_mock.return_value = self._clients(
+            [_overview_item(1, "Анонс турнира по единоборствам KSW в Польше.")]
+        )
+        result = smart_search(_smart_movie())
+        self.assertEqual(result.status, "not_found")
+        self.assertIsNone(result.selected_candidate)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    def test_same_work_with_red_flags_is_not_a_match(self, _ai_mock, ru_mock, en_mock, compare_mock):
+        compare_mock.return_value = AIPlotComparison(
+            same_work=True, confidence=0.95, reason="Сомнительно.", red_flags=("сиквел?",),
+        )
+        ru_mock.return_value, en_mock.return_value = self._clients(
+            [_overview_item(1, "Азиз и Карина побеждают в кулинарном конкурсе вопреки завещанию мамы.")]
+        )
+        result = smart_search(_smart_movie())
+        self.assertEqual(result.status, "not_found")
+
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     def test_no_candidates_is_not_found(self, ru_mock, en_mock):

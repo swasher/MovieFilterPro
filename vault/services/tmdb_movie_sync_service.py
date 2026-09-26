@@ -259,7 +259,9 @@ class TMDBMovieSyncService:
 
         set_field("title", getattr(details, "title", None) or movie.title)
         set_field("original_title", getattr(details, "original_title", None) or "")
-        set_field("description", getattr(details, "overview", None) or "")
+        overview = (getattr(details, "overview", None) or "").strip()
+        if overview:
+            set_field("description", overview)
         set_field("release_date", release_date)
         if release_year:
             set_field("year", release_year)
@@ -304,7 +306,9 @@ class TMDBMovieSyncService:
 
         set_field("title", getattr(details, "name", None) or movie.title)
         set_field("original_title", getattr(details, "original_name", None) or "")
-        set_field("description", getattr(details, "overview", None) or "")
+        overview = (getattr(details, "overview", None) or "").strip()
+        if overview:
+            set_field("description", overview)
         set_field("release_date", first_air_date)
         if first_air_year:
             set_field("year", first_air_year)

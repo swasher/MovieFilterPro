@@ -247,9 +247,18 @@ def score_candidates(
             continue
         if not allow_ai:
             continue
+        # ВАЖНО: confidence у локального AI — это уверенность в вердикте,
+        # а не похожесть сюжетов. same_work=False + confidence=1.0 означает
+        # «точно РАЗНЫЕ фильмы». Проверяем вердикт, а не число.
         comparison = TMDBAIMatchingService.compare_plots(source_plot, overview)
         if comparison is None:
             logger.info("SMART_SEARCH_SKIP | tmdb_id=%s | reason=ai_unavailable", candidate.tmdb_id)
+            continue
+        if not comparison.same_work or comparison.red_flags:
+            logger.info(
+                "SMART_SEARCH_REJECTED | tmdb_id=%s | same_work=%s | red_flags=%s",
+                candidate.tmdb_id, comparison.same_work, ";".join(comparison.red_flags),
+            )
             continue
         scored.append({
             "candidate": candidate, "score": comparison.confidence, "eff": eff,
