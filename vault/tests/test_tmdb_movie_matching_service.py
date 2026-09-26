@@ -1080,3 +1080,57 @@ class SmartSearchFallbackTests(SimpleTestCase):
 
         self.assertEqual(result.status, "not_found")
         self.assertEqual(result.message, "Кандидаты TMDB не найдены")
+
+
+class MainYearFreeFallbackTests(SimpleTestCase):
+    plot = (
+        "Тридцатилетний Азиз мечтает о кулинарном конкурсе, но странное завещание мамы "
+        "ставит победу под угрозу, и ради неё он готов жениться на случайной попутчице Карине."
+    )
+
+    def _movie(self):
+        return Movie(
+            title="Про секс спроси у мамы",
+            original_title="Ask Mom about Sex",
+            year=2024,
+            movie_type=Movie.MovieType.MOVIE,
+            description=self.plot,
+        )
+
+    def _candidate(self):
+        return SimpleNamespace(
+            id=1271103,
+            title="Про секс спроси у мамы",
+            original_title="Про секс спроси у мамы",
+            release_date=date(2024, 1, 1),
+            poster_path="/p.jpg",
+            popularity=5.0,
+            vote_average=6.0,
+            overview=self.plot,
+        )
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_collect_retries_without_year_when_window_is_empty(self, client_mock):
+        client_mock.return_value = _YearFilterFakeTMDB(self._candidate())
+
+        collected = TMDBMovieMatchingService._collect_candidates(
+            client_mock.return_value, self._movie()
+        )
+
+        self.assertIn(("movie", 1271103), collected)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_year_filtered_main_flow_recovers_without_smart(
+        self, client_mock, _ai_mock, choose_best_mock, compare_mock
+    ):
+        client_mock.return_value = _YearFilterFakeTMDB(self._candidate())
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertEqual(result.selected_candidate.tmdb_id, 1271103)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()

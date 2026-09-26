@@ -32,6 +32,7 @@ SMART_MIN_PLOT_CHARS = 40
 SMART_REASON_PLOT_MATCH = "smart_search_plot_match"
 
 MSG_NO_QUERIES = "Умный поиск: нет названий для запроса"
+MSG_SHORT_PLOT = "Умный поиск: описание слишком короткое для сверки"
 MSG_NO_CANDIDATES = "Умный поиск: кандидаты TMDB не найдены"
 MSG_AI_UNAVAILABLE = "Умный поиск TMDB: локальный AI недоступен"
 MSG_NO_PLOT_MATCH = "Умный поиск: совпадение по сюжетам не найдено"
@@ -309,7 +310,10 @@ def smart_search(movie: Movie) -> TMDBMatchingResult:
 
     Groq здесь не используется по решению владельца — только локальный AI.
     Без локального AI возможен лишь дословный матч, иначе not_found.
+    Без описания (короче SMART_MIN_PLOT_CHARS) сверять нечего — поиск не запускаем.
     """
+    if len((movie.description or "").strip()) < SMART_MIN_PLOT_CHARS:
+        return _not_found(MSG_SHORT_PLOT)
     queries = TMDBMovieMatchingService._build_queries(movie)
     if not queries:
         return _not_found(MSG_NO_QUERIES)

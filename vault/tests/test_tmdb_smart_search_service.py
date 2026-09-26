@@ -269,6 +269,15 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
         result = smart_search(_smart_movie())
         self.assertEqual(result.status, "not_found")
 
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    def test_short_plot_skips_search_entirely(self, ru_mock, en_mock):
+        result = smart_search(_smart_movie(description="Коротко."))
+        self.assertEqual(result.status, "not_found")
+        self.assertIn("короткое", result.message)
+        ru_mock.assert_not_called()
+        en_mock.assert_not_called()
+
     def test_pick_winner_tie_breaks_by_rank(self):
         def entry(i, score, tb=0, yb=0, order=0, eff=0.6):
             return {"movie_id": i, "score": score, "eff": eff, "tb": tb, "yb": yb, "order": order}

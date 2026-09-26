@@ -344,22 +344,30 @@ class TMDBMovieMatchingService:
         years = cls._build_year_window(movie.year)
         media_order = cls._media_search_order(movie)
 
-        for query in queries:
-            for media_type in media_order:
-                for year in years:
-                    items = cls._search_once(tmdb=tmdb, media_type=media_type, query=query, year=year)
-                    if not items:
-                        continue
-
-                    for item in items[: cls.SEARCH_RESULTS_PER_REQUEST]:
-                        raw = cls._to_raw_candidate(item, media_type)
-                        if raw is None:
-                            continue
-                        key = (raw.media_type, raw.tmdb_id)
-                        existing = result.get(key)
-                        if existing is None or cls._is_better_raw(raw, existing):
-                            result[key] = raw
+        rounds = [(query, media_type, year) for query in queries for media_type in media_order for year in years]
+        cls._run_search_rounds(tmdb, rounds, result)
+        if not result and any(year is not None for year in years):
+            # Год в базе может врать и вырезать всё фильтром: повтор без года.
+            # Год при этом не пропадает — он отработает бонусами скоринга.
+            fallback_rounds = [(query, media_type, None) for query in queries for media_type in media_order]
+            cls._run_search_rounds(tmdb, fallback_rounds, result)
         return result
+
+    @classmethod
+    def _run_search_rounds(cls, tmdb, rounds: list, result: dict[tuple[str, int], _RawCandidate]) -> None:
+        for query, media_type, year in rounds:
+            items = cls._search_once(tmdb=tmdb, media_type=media_type, query=query, year=year)
+            if not items:
+                continue
+
+            for item in items[: cls.SEARCH_RESULTS_PER_REQUEST]:
+                raw = cls._to_raw_candidate(item, media_type)
+                if raw is None:
+                    continue
+                key = (raw.media_type, raw.tmdb_id)
+                existing = result.get(key)
+                if existing is None or cls._is_better_raw(raw, existing):
+                    result[key] = raw
 
     # Год, приклеенный к названию ("... 2023", "... (2023)"): TMDB ищет query
     # как литеральный текст, и год только убивает выдачу (обкатан в find_tmdb_id.py).
