@@ -118,16 +118,17 @@ class TMDBMatchResolver:
 
     @classmethod
     def _plots_match_literally(cls, source: str, overview: str) -> bool:
-        """Дословно: нормализованные тексты равны либо один содержит другой."""
+        """Дословно: только равенство нормализованных текстов.
+
+        Вхождение одного текста в другой НЕ засчитывается: короткий синопсис
+        может целиком входить в длинное описание совершенно другого фильма.
+        Спорные пары «аннотация внутри пересказа» решает AI-стадия конвейера.
+        """
         left = cls._normalize_plot(source)
         right = cls._normalize_plot(overview)
         if len(left) < cls.LITERAL_MIN_CHARS or len(right) < cls.LITERAL_MIN_CHARS:
             return False
-        if left == right:
-            return True
-        if len(left) <= len(right):
-            return left in right
-        return right in left
+        return left == right
 
     @staticmethod
     def _normalize_plot(value: str) -> str:

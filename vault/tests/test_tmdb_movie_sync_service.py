@@ -351,6 +351,7 @@ class TMDBMovieSyncServiceTests(TestCase):
             return TMDBMovieSyncService._match_source_label(candidate)
 
         self.assertEqual(label(("plot_literal_match",)), "дословное совпадение описаний")
+        self.assertEqual(label(("smart_search_plot_match",)), "умный поиск: совпадение сюжетов")
         self.assertEqual(label(("groq_plot_match",)), "совпадение сюжетов через GROQ")
         self.assertEqual(
             label(("ai_plot_match", "ai_plot_verified")), "подтверждено локальным AI"

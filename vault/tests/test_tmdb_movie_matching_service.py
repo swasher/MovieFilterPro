@@ -667,8 +667,8 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
             original_title="",
             year=2025,
             movie_type=Movie.MovieType.MOVIE,
-            description="Кратко:  НАСЛЕДНИК Великого Дома!!! оказывается на пустынной планете Арракис, "
-            "где добывают ценную пряность — и возглавляет восстание фременов против империи... Смотрите в кино.",
+            description="НАСЛЕДНИК Великого Дома!!! оказывается на пустынной планете Арракис, "
+            "где добывают ценную пряность — и возглавляет восстание фременов против империи...",
         )
         candidate = SimpleNamespace(
             id=1591602,
@@ -981,3 +981,102 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIn("groq_plot_match", result.selected_candidate.score_reasons)
         choose_best_mock.assert_not_called()
         compare_mock.assert_not_called()
+
+
+class _YearFilterFakeTMDB:
+    """Годовой фильтр убивает выдачу: с годом — пусто, без года — кандидат."""
+
+    def __init__(self, candidate):
+        self.candidate = candidate
+
+    def movie_search(self, query, include_adult=True, primary_release_year=None):
+        if primary_release_year is not None:
+            return _FakeSearchResponse([])
+        return _FakeSearchResponse([self.candidate] if self.candidate else [])
+
+    def tv_search(self, query, include_adult=True, first_air_date_year=None):
+        return _FakeSearchResponse([])
+
+    def movie(self, movie_id):
+        return SimpleNamespace(alternative_titles=[])
+
+    def tv_show(self, tv_id):
+        return SimpleNamespace(alternative_titles=[])
+
+
+class SmartSearchFallbackTests(SimpleTestCase):
+    plot = (
+        "Тридцатилетний Азиз мечтает о кулинарном конкурсе, но странное завещание мамы "
+        "ставит победу под угрозу, и ради неё он готов жениться на случайной попутчице Карине."
+    )
+
+    def _movie(self, **kwargs):
+        params = {
+            "title": "Про секс спроси у мамы",
+            "original_title": "Ask Mom about Sex",
+            "year": 2024,
+            "movie_type": Movie.MovieType.MOVIE,
+            "description": self.plot,
+        }
+        params.update(kwargs)
+        return Movie(**params)
+
+    def _candidate(self, overview=None, title="Про секс спроси у мамы"):
+        return SimpleNamespace(
+            id=1271103,
+            title=title,
+            original_title=title,
+            release_date=date(2021, 1, 1),
+            poster_path="/p.jpg",
+            popularity=5.0,
+            vote_average=6.0,
+            overview=overview if overview is not None else self.plot,
+        )
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_empty_main_search_is_rescued_by_smart_literal(
+        self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, choose_best_mock, compare_mock
+    ):
+        fake = _YearFilterFakeTMDB(self._candidate())
+        main_client_mock.return_value = fake
+        smart_ru_mock.return_value = fake
+        smart_en_mock.return_value = fake
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertEqual(result.selected_candidate.tmdb_id, 1271103)
+        self.assertIn("plot_literal_match", result.selected_candidate.score_reasons)
+        choose_best_mock.assert_not_called()
+        compare_mock.assert_not_called()
+
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_smart_finds_nothing_keeps_not_found(self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock):
+        fake = _YearFilterFakeTMDB(None)
+        main_client_mock.return_value = fake
+        smart_ru_mock.return_value = fake
+        smart_en_mock.return_value = fake
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "not_found")
+        self.assertIsNone(result.selected_candidate)
+        self.assertIn("Умный поиск", result.message)
+
+    @patch("vault.services.tmdb_smart_search_service.smart_search", side_effect=RuntimeError("бум"))
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_smart_exception_falls_back_to_original(self, main_client_mock, _smart_mock):
+        main_client_mock.return_value = _YearFilterFakeTMDB(None)
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "not_found")
+        self.assertEqual(result.message, "Кандидаты TMDB не найдены")

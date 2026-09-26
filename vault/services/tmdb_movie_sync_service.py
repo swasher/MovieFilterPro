@@ -1408,6 +1408,8 @@ class TMDBMovieSyncService:
         reasons = set(getattr(candidate, "score_reasons", None) or ())
         if "plot_literal_match" in reasons:
             return "дословное совпадение описаний"
+        if "smart_search_plot_match" in reasons:
+            return "умный поиск: совпадение сюжетов"
         if "groq_plot_match" in reasons:
             return "совпадение сюжетов через GROQ"
         if "ai_plot_match" in reasons:

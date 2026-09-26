@@ -48,14 +48,14 @@ LOCAL = LLMProvider(
 # Переключение одной строкой: ACTIVE_PROVIDER = LOCAL
 ACTIVE_PROVIDER = LOCAL
 
-LLM_REQUEST_TIMEOUT_SECONDS = 15
+LLM_REQUEST_TIMEOUT_SECONDS = 60
 
 PLOT_MIN_PLOT_CHARS = 40
 PLOT_REQUEST_TIMEOUT_SECONDS = 30
-PLOT_STRICT_THRESHOLD = 0.75
-PLOT_WIN_MARGIN = 0.10
+# Базовый порог 0.6 берут score 4 и 5; строгий 0.9 — только score 5 («сюжет ТОЧНО ТОТ»).
+PLOT_STRICT_THRESHOLD = 0.9
 MAX_PLOT_VALIDATIONS = 10
-# Дискретная шкала LLM -> confidence: 4 проходит оба порога, 3 не проходит ни один.
+# Дискретная шкала LLM -> confidence.
 PLOT_SCORE_MAP = {5: 1.0, 4: 0.8, 3: 0.45, 2: 0.2, 1: 0.0}
 
 PLOT_SYSTEM_PROMPT = """
@@ -187,14 +187,11 @@ def _normalize_title(value: object) -> str:
 
 
 def _clean_tmdb_query(query: object) -> str:
-    """Убирает мусор, который LLM иногда клеит к названию: год, кавычки."""
+    """Убирает мусор, который LLM иногда клеит к названию: год-суффикс, кавычки."""
     text = str(query or "").strip().strip("\"'«»").strip()
     text = re.sub(r"\s*\(\s*(19\d{2}|20\d{2})\s*\)\s*$", "", text).strip()
     text = re.sub(r"\s+(19\d{2}|20\d{2})\s*$", "", text).strip()
-    text = re.sub(r"\s+", " ", text).strip()
-    if re.fullmatch(r"19\d{2}|20\d{2}", text):
-        return ""  # один год без названия — искать бессмысленно
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _coerce_year(value: object) -> int | None:
@@ -236,27 +233,28 @@ def _rank_candidates(candidates: list, clean_title: str, llm_year: int | None) -
     return [(movie, title_bonus, year_bonus) for _, _, _, _, movie, title_bonus, year_bonus in scored]
 
 
-def compare_plots(target_plot: str, candidate_plot: str, provider: LLMProvider | None = None) -> float:
+def compare_plots(target_plot: str, candidate_plot: str, provider: LLMProvider | None = None) -> float | None:
     """
     Сравнение сюжетов через ACTIVE_PROVIDER (как TMDBGROQMatchingService.compare_pair).
     provider: None (= ACTIVE_PROVIDER), либо OPENROUTER / LOCAL.
-    Возвращает confidence 0.0..1.0. 0.0 — разные фильмы / ошибка / короткие описания.
+    Возвращает confidence 0.0..1.0; None — сравнить не удалось (короткий текст,
+    нет модели/ключа, ошибка сети, не-JSON). «Не удалось» и «разные» — разное.
     """
     cfg = provider or ACTIVE_PROVIDER
     label = cfg.name
     if len((target_plot or "").strip()) < PLOT_MIN_PLOT_CHARS:
-        return 0.0
+        return None
     if len((candidate_plot or "").strip()) < PLOT_MIN_PLOT_CHARS:
-        return 0.0
+        return None
     if _plots_match_literally(target_plot, candidate_plot):
         print(f"  [{label}] дословное совпадение сюжетов — LLM не вызываю")
         return 1.0
     if not cfg.model:
         print(f"Ошибка сравнения сюжетов [{label}]: не задана модель.")
-        return 0.0
+        return None
     if cfg.needs_auth and not cfg.api_key:
         print(f"Ошибка сравнения сюжетов [{label}]: не задан API-ключ.")
-        return 0.0
+        return None
 
     user_prompt = (
         f"Описание 1:\n{_clip_plot(target_plot)}\n\n"
@@ -292,22 +290,22 @@ def compare_plots(target_plot: str, candidate_plot: str, provider: LLMProvider |
         payload = response.json()
     except Exception as e:
         print(f"Ошибка сравнения сюжетов [{label}]: {e}")
-        return 0.0
+        return None
 
     choices = payload.get("choices") if isinstance(payload, dict) else None
     if not choices:
         print(f"Ошибка сравнения сюжетов [{label}]: пустой choices в ответе")
-        return 0.0
+        return None
     message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
     content = message.get("content", "")
     if not isinstance(content, str) or not content.strip():
         print(f"Ошибка сравнения сюжетов [{label}]: пустой content в ответе")
-        return 0.0
+        return None
 
     parsed = _parse_json_object(content)
     if parsed is None:
         print(f"Ошибка сравнения сюжетов [{label}]: не JSON в ответе: {content[:500]}")
-        return 0.0
+        return None
 
     if "score" in parsed:
         confidence = _map_plot_score(parsed.get("score"))
@@ -323,21 +321,34 @@ def compare_plots(target_plot: str, candidate_plot: str, provider: LLMProvider |
     return confidence
 
 
-def step1_search_web(title: str, original_title: str) -> str:
+def step1_search_web(title: str, original_title: str, plot: str = "") -> str:
     """
     ШАГ 1: Поиск в интернете по исходным данным.
+    Два запроса: по названиям и по фрагменту сюжета (самый дискриминативный сигнал).
     """
-    query = f"{title} {original_title} movie film"
-    try:
-        response = tavily_client.search(query=query, search_depth="basic", max_results=5)
+    name_parts = []
+    for part in (title, original_title):
+        part = (part or "").strip()
+        if part and part not in name_parts:
+            name_parts.append(part)
+    queries = [("название", f"{' '.join(name_parts)} movie film")]
+    fragment = _clip_plot(plot, 500).strip() if (plot or "").strip() else ""
+    if fragment:
+        queries.append(("сюжет", f"{fragment} movie film"))
 
-        web_context = ""
-        for r in response.get("results", []):
-            web_context += f"Заголовок: {r.get('title')}\nКонтент: {r.get('content')}\n\n"
-        return web_context
-    except Exception as e:
-        print(f"Ошибка веб-поиска: {e}")
-        return ""
+    web_context = ""
+    for label, query in queries:
+        if not query.strip():
+            continue
+        try:
+            print(f"  [Web] поиск по {label}: {query[:120]}")
+            response = tavily_client.search(query=query, search_depth="basic", max_results=5)
+            web_context += f"--- Поиск по {label} ---\n"
+            for r in response.get("results", []):
+                web_context += f"Заголовок: {r.get('title')}\nКонтент: {r.get('content')}\n\n"
+        except Exception as e:
+            print(f"Ошибка веб-поиска ({label}): {e}")
+    return web_context
 
 
 def step2_extract_data_with_llm(title: str, original_title: str, plot: str, web_context: str, provider: LLMProvider | None = None) -> dict:
@@ -366,6 +377,8 @@ def step2_extract_data_with_llm(title: str, original_title: str, plot: str, web_
       "tmdb_queries": ["Запрос 1", "Запрос 2"]
     }}
     """
+    if not (web_context or "").strip():
+        prompt += "\nВАЖНО: результаты веб-поиска ПУСТЫ — не выдумывай данные: поставь year null, а в tmdb_queries верни исходные названия."
 
     cfg = provider or ACTIVE_PROVIDER
     label, url, model, api_key = cfg.name, _chat_completions_url(cfg.base_url), cfg.model, cfg.api_key
@@ -445,8 +458,8 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
     Поиск — по исходным названиям + запросам LLM, на ru-RU и en-US, слияние по id.
     Год используется только для ранжирования кандидатов, а не для фильтра.
     Если год кандидата расходится с годом LLM больше чем на 1 — требуем
-    сюжет >= PLOT_STRICT_THRESHOLD. Вердикт — аргмакс по скорам топа,
-    без раннего return: PLOT_WIN_MARGIN решает, нужен ли тай-брейк по рангу.
+    сюжет >= PLOT_STRICT_THRESHOLD (только score 5). Вердикт — аргмакс
+    по скорам топа без раннего return; ничья на первом месте — тай-брейк по рангу.
     provider: None (= ACTIVE_PROVIDER).
     """
     queries = llm_data.get("tmdb_queries", []) or []
@@ -457,13 +470,16 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
     # Чистим запросы: TMDB не понимает год внутри query, а LLM его туда клеит.
     # Исходные названия добавляем всегда — страховка на случай капризов LLM.
     searched: list = []
-    for raw in [original_title, title, *queries]:
+    seen_keys: set = set()
+    for raw in [*queries, original_title, title]:
         cleaned = _clean_tmdb_query(raw)
         if not cleaned:
             continue
-        if cleaned in searched:
+        key = cleaned.lower()
+        if key in seen_keys:
             print(f"  [TMDb] запрос '{raw}': дубль, пропускаю")
             continue
+        seen_keys.add(key)
         if cleaned != str(raw or "").strip():
             print(f"  [TMDb] запрос '{raw}' -> очищен '{cleaned}'")
         searched.append(cleaned)
@@ -570,6 +586,9 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
             continue
 
         score = compare_plots(original_plot, tmdb_overview, provider=provider)
+        if score is None:
+            print(f"  [TMDb] ID {movie_id}: пропуск — сюжет сравнить не удалось (ошибка LLM/короткий текст)")
+            continue
         print(f"  [TMDb] Проверка ID {movie_id}: '{movie.get('title')}' -> Совпадение сюжета: {score:.2f} (порог {eff_threshold:.2f})")
         scored.append({
             "movie": movie, "movie_id": movie_id, "score": score,
@@ -580,6 +599,9 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
     contenders = [s for s in scored if s["score"] >= s["eff"]]
     if not contenders:
         print(f"  [TMDb] итог: проверено {len(scored)} из {len(ranked)} кандидатов, порог никто не взял")
+        best = ranked[0]
+        print(f"  [TMDb] лучший по рангу БЕЗ валидации сюжета: ID {best[0].get('id')} "
+              f"('{best[0].get('title')}', {best[0].get('release_date')}) — кандидат для ручной проверки")
         return None
 
     # --- Аргмакс + margin ---
@@ -592,23 +614,18 @@ def step3_and_4_tmdb_and_validate(llm_data: dict, original_plot: str, threshold:
 
 
 def _pick_winner(contenders: list) -> int:
-    """Аргмакс по скорам; при зазоре < PLOT_WIN_MARGIN — тай-брейк по бонусам ранга."""
+    """Аргмакс по скорам; при ничьей на первом месте — тай-брейк по бонусам ранга."""
     ordered = sorted(contenders, key=lambda s: -s["score"])  # stable: равные скоры сохраняют порядок ранга
-    if len(ordered) == 1:
-        print(f"  [TMDb] единственный претендент: ID {ordered[0]['movie_id']}")
-        return ordered[0]["movie_id"]
-
-    top, runner = ordered[0], ordered[1]
-    gap = top["score"] - runner["score"]
-    if gap >= PLOT_WIN_MARGIN:
-        print(f"  [TMDb] зазор {gap:.2f} >= {PLOT_WIN_MARGIN:.2f} — побеждает ID {top['movie_id']}")
+    if len(ordered) == 1 or ordered[0]["score"] > ordered[1]["score"]:
+        top = ordered[0]
+        print(f"  [TMDb] побеждает ID {top['movie_id']} (score={top['score']:.2f})")
         return top["movie_id"]
 
-    cluster = [c for c in ordered if top["score"] - c["score"] < PLOT_WIN_MARGIN]
-    cluster.sort(key=lambda c: (-(c["tb"] + c["yb"]), c["order"]))
-    winner = cluster[0]
-    print(f"  [TMDb] зазор мал ({gap:.2f} < {PLOT_WIN_MARGIN:.2f}), выбран по рангу: ID {winner['movie_id']} "
-          f"(бонусы title={winner['tb']} year={winner['yb']}) среди {','.join(str(c['movie_id']) for c in cluster)}")
+    tied = [c for c in ordered if c["score"] == ordered[0]["score"]]
+    tied.sort(key=lambda c: (-(c["tb"] + c["yb"]), c["order"]))
+    winner = tied[0]
+    print(f"  [TMDb] ничья по скору ({ordered[0]['score']:.2f}), выбран по рангу: ID {winner['movie_id']} "
+          f"(бонусы title={winner['tb']} year={winner['yb']}) среди {','.join(str(c['movie_id']) for c in tied)}")
     return winner["movie_id"]
 
 
@@ -624,12 +641,12 @@ def run_pipeline(filename: str, provider: LLMProvider | None = None) -> int | No
     title = data.get("title", "")
     original_title = data.get("original_title", "")
     plot = data.get("plot", "")
-    expected_id = data.get("tmdbid")
+    expected_id = _coerce_year(data.get("tmdbid"))
 
     print(f"\n--- Старт обработки: {filename} ---")
 
     print("1. Поиск информации в вебе (Tavily)...")
-    web_context = step1_search_web(title, original_title)
+    web_context = step1_search_web(title, original_title, plot)
 
     print("2. Извлечение чистых данных через LLM...")
     llm_data = step2_extract_data_with_llm(title, original_title, plot, web_context, provider=provider)
@@ -640,7 +657,7 @@ def run_pipeline(filename: str, provider: LLMProvider | None = None) -> int | No
 
     print("-" * 40)
     if expected_id is not None:
-        if found_id == int(expected_id):
+        if found_id == expected_id:
             print(f"УСПЕХ: Найден верный ID ({found_id})")
         else:
             print(f"ОШИБКА: Ожидался {expected_id}, но найден {found_id}")
@@ -650,35 +667,39 @@ def run_pipeline(filename: str, provider: LLMProvider | None = None) -> int | No
 
 
 def run_all(provider: LLMProvider | None = None) -> dict:
-    """Прогон по всем test_movies/*.json с компактной сводкой НАЗВАНИЕ - ОК/НЕ ОК."""
+    """Прогон по всем test_movies/*.json: ОК / НЕ ОК / БЕЗ ЭТАЛОНА."""
     files = sorted(glob.glob(os.path.join("test_movies", "*.json")))
     if not files:
         print("В test_movies/*.json файлов нет!")
         return {}
 
-    verdicts: list = []  # (filename, ok)
+    verdicts: list = []  # (filename, status)
     for filepath in files:
         filename = os.path.basename(filepath)
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                expected = json.load(f).get("tmdbid")
+                expected = _coerce_year(json.load(f).get("tmdbid"))
         except Exception as e:
             print(f"\n{filename} - НЕ ОК (файл не читается: {e})")
-            verdicts.append((filename, False))
+            verdicts.append((filename, "НЕ ОК"))
             continue
         found = run_pipeline(filename, provider=provider)
-        ok = expected is not None and found == int(expected)
-        verdicts.append((filename, ok))
-        if ok:
+        if expected is None:
+            print(f"{filename} - БЕЗ ЭТАЛОНА (найден {found})")
+            verdicts.append((filename, "БЕЗ ЭТАЛОНА"))
+        elif found == expected:
             print(f"{filename} - ОК")
+            verdicts.append((filename, "ОК"))
         else:
             print(f"{filename} - НЕ ОК (ожидался {expected}, найден {found})")
+            verdicts.append((filename, "НЕ ОК"))
 
     print("-" * 40)
-    good = sum(1 for _, ok in verdicts if ok)
-    for filename, ok in verdicts:
-        print(f"{filename} - {'ОК' if ok else 'НЕ ОК'}")
-    print(f"ИТОГ: {good}/{len(verdicts)}")
+    for filename, status in verdicts:
+        print(f"{filename} - {status}")
+    gold = [(f, s) for f, s in verdicts if s in ("ОК", "НЕ ОК")]
+    good = sum(1 for _, s in gold if s == "ОК")
+    print(f"ИТОГ: {good}/{len(gold)}" + (f" (+ без эталона: {len(verdicts) - len(gold)})" if len(verdicts) != len(gold) else ""))
     return dict(verdicts)
 
 

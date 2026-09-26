@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 import re
 from typing import Literal
 
@@ -8,6 +9,9 @@ from tmdbapis.exceptions import NotFound
 
 from tmdb_adapter.client_singleton import get_tmdb_client
 from vault.models import Movie
+
+
+logger = logging.getLogger("vault.tmdb_sync")
 
 
 MatchStatus = Literal["auto_match", "needs_confirmation", "needs_user_choice", "not_found"]
@@ -76,11 +80,14 @@ class TMDBMovieMatchingService:
 
         raw_candidates = cls._collect_candidates(tmdb, movie)
         if not raw_candidates:
-            return TMDBMatchingResult(
-                status="not_found",
-                selected_candidate=None,
-                candidates=tuple(),
-                message="Кандидаты TMDB не найдены",
+            return cls._smart_search_fallback(
+                movie,
+                TMDBMatchingResult(
+                    status="not_found",
+                    selected_candidate=None,
+                    candidates=tuple(),
+                    message="Кандидаты TMDB не найдены",
+                ),
             )
 
         expected_media_type = cls._expected_media_type(movie)
@@ -105,11 +112,14 @@ class TMDBMovieMatchingService:
 
         relevant = [candidate for candidate in scored_candidates if candidate.score >= cls.MIN_RELEVANT_SCORE]
         if not relevant:
-            return TMDBMatchingResult(
-                status="not_found",
-                selected_candidate=None,
-                candidates=tuple(scored_candidates[:top_n]),
-                message="Релевантные кандидаты TMDB не найдены",
+            return cls._smart_search_fallback(
+                movie,
+                TMDBMatchingResult(
+                    status="not_found",
+                    selected_candidate=None,
+                    candidates=tuple(scored_candidates[:top_n]),
+                    message="Релевантные кандидаты TMDB не найдены",
+                ),
             )
 
         best = relevant[0]
@@ -172,6 +182,22 @@ class TMDBMovieMatchingService:
             result,
             auto_match_min_score=cls.AUTO_MATCH_MIN_SCORE,
         )
+
+    @classmethod
+    def _smart_search_fallback(cls, movie: Movie, fallback: TMDBMatchingResult) -> TMDBMatchingResult:
+        """План Б: обычный конвейер ничего не нашёл — пробуем умный поиск.
+
+        Ленивый импорт: smart-модуль зависит от этого сервиса сверху.
+        Вердикт умного поиска (включая его not_found) замещает исходный,
+        т.к. он проделал более глубокую попытку. При исключении — исходный fallback.
+        """
+        from vault.services.tmdb_smart_search_service import smart_search
+
+        try:
+            return smart_search(movie)
+        except Exception as exc:
+            logger.warning("SMART_SEARCH_FAILED | movie_id=%s | %s", getattr(movie, "id", None), exc)
+            return fallback
 
     @classmethod
     def find_by_imdb_id(
@@ -335,6 +361,19 @@ class TMDBMovieMatchingService:
                             result[key] = raw
         return result
 
+    # Год, приклеенный к названию ("... 2023", "... (2023)"): TMDB ищет query
+    # как литеральный текст, и год только убивает выдачу (обкатан в find_tmdb_id.py).
+    _TRAILING_YEAR_PAREN_RE = re.compile(r"\s*\(\s*(19\d{2}|20\d{2})\s*\)\s*$")
+    _TRAILING_YEAR_RE = re.compile(r"\s+(19\d{2}|20\d{2})\s*$")
+
+    @classmethod
+    def _clean_query(cls, value: str) -> str:
+        """Срезает приклеенный к названию год и кавычки по краям."""
+        text = (value or "").strip().strip("\"'«»").strip()
+        text = cls._TRAILING_YEAR_PAREN_RE.sub("", text).strip()
+        text = cls._TRAILING_YEAR_RE.sub("", text).strip()
+        return re.sub(r"\s+", " ", text).strip()
+
     @classmethod
     def _build_queries(cls, movie: Movie) -> list[str]:
         queries: list[str] = []
@@ -342,10 +381,13 @@ class TMDBMovieMatchingService:
         for raw in (movie.original_title, movie.title):
             if not raw:
                 continue
-            norm = cls.normalize_title(raw)
+            cleaned = cls._clean_query(raw)
+            if not cleaned:
+                continue
+            norm = cls.normalize_title(cleaned)
             if not norm or norm in seen:
                 continue
-            queries.append(raw.strip())
+            queries.append(cleaned)
             seen.add(norm)
         return queries
 
