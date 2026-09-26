@@ -55,6 +55,8 @@ PLOT_REQUEST_TIMEOUT_SECONDS = 30
 PLOT_STRICT_THRESHOLD = 0.75
 PLOT_WIN_MARGIN = 0.10
 MAX_PLOT_VALIDATIONS = 10
+# Дискретная шкала LLM -> confidence: 4 проходит оба порога, 3 не проходит ни один.
+PLOT_SCORE_MAP = {5: 1.0, 4: 0.8, 3: 0.45, 2: 0.2, 1: 0.0}
 
 PLOT_SYSTEM_PROMPT = """
 Ты — система анализа сходства текстов.
@@ -62,20 +64,22 @@ PLOT_SYSTEM_PROMPT = """
 
 Правила анализа:
 1. Имена собственные и уникальные детали:
-   - Совпадение редких имен персонажей, специфических топонимов (названий городов, заведений), нестандартных предметов или уникальных комбинаций имен существенно повышает вероятность того, что это один фильм. Наличие таких совпадений должно давать оценку уверенности близкую к 1.0 (0.85 – 1.0), даже если одно из описаний гораздо короче другого.
-   - Частые имена или общеизвестные локации сами по себе не гарантируют совпадение и требуют анализа сюжетного контекста.
+   - Совпадение редких имен персонажей, специфических топонимов (названий городов, заведений), нестандартных предметов или уникальных комбинаций имен — сильный признак одного фильма, даже если одно из описаний гораздо короче другого.
+   - Частые имена или общеизвестные локации сами по себе совпадения не доказывают, смотри на сюжетный контекст.
 
 2. Сюжетный контекст:
    - Сравнивай ключевые действия, роли персонажей и завязку конфликта.
    - Одно описание может быть краткой аннотацией, а второе — подробным пересказом. Игнорируй разницу в объеме, стиле и детализации, если ключевые факты совпадают.
 
-Оценка уверенности (confidence):
-- 0.85 – 1.0: Есть совпадения по уникальным именам собственным, топонимам или специфическим сюжетным ходам.
-- 0.50 – 0.84: Сюжетные линии похожи, но имена отсутствуют или различаются, либо совпадения касаются только базовых штампов.
-- 0.00 – 0.49: Описания содержат прямые противоречия в ключевых фактах или рассказывают о совершенно разных событиях и персонажах.
+Оцени пару целой оценкой от 1 до 5:
+- 5 — точно один фильм: совпадают уникальные имена/топонимы и ключевые события.
+- 4 — тот же сюжет, но детали расходятся или их не хватает для полной уверенности.
+- 3 — похожая завязка или жанр, но это вполне могут быть разные фильмы.
+- 2 — описания противоречат друг другу в ключевых фактах.
+- 1 — совершенно разные события и персонажи.
 
 Верни ответ строго в формате JSON:
-- 'confidence': число от 0.0 до 1.0.
+- 'score': целое число от 1 до 5.
 - 'reason': краткое объяснение, какие именно элементы (имена, локации, события) повлияли на оценку.
 """
 
@@ -103,16 +107,12 @@ def _normalize_plot(value: object) -> str:
 
 
 def _plots_match_literally(plot1: str, plot2: str) -> bool:
-    """Дословно (как TMDBMatchResolver): нормализованные тексты равны либо один содержит другой."""
+    """Только дословное равенство нормализованных текстов (сайты копируют описания друг у друга)."""
     left = _normalize_plot(plot1)
     right = _normalize_plot(plot2)
     if len(left) < LITERAL_MIN_CHARS or len(right) < LITERAL_MIN_CHARS:
         return False
-    if left == right:
-        return True
-    if len(left) <= len(right):
-        return left in right
-    return right in left
+    return left == right
 
 
 def _clamp_confidence(value: object) -> float:
@@ -121,6 +121,16 @@ def _clamp_confidence(value: object) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, result))
+
+
+def _map_plot_score(value: object) -> float:
+    """Дискретная оценка 1-5 -> confidence. Мусор -> 0.0."""
+    try:
+        level = int(round(float(value)))
+    except (TypeError, ValueError):
+        return 0.0
+    level = max(1, min(5, level))
+    return PLOT_SCORE_MAP[level]
 
 
 def _parse_json_object(content: str) -> dict | None:
@@ -299,10 +309,17 @@ def compare_plots(target_plot: str, candidate_plot: str, provider: LLMProvider |
         print(f"Ошибка сравнения сюжетов [{label}]: не JSON в ответе: {content[:500]}")
         return 0.0
 
-    confidence = _clamp_confidence(parsed.get("confidence"))
+    if "score" in parsed:
+        confidence = _map_plot_score(parsed.get("score"))
+        raw_mark = f"score={parsed.get('score')}"
+    else:  # fallback на старый формат с непрерывным confidence
+        confidence = _clamp_confidence(parsed.get("confidence"))
+        raw_mark = f"confidence={parsed.get('confidence')}"
     reason = str(parsed.get("reason", "") or "").strip()[:500]
     if reason:
-        print(f"  [{label}] confidence={confidence:.2f} reason={reason}")
+        print(f"  [{label}] {raw_mark} -> confidence={confidence:.2f} reason={reason}")
+    else:
+        print(f"  [{label}] {raw_mark} -> confidence={confidence:.2f}")
     return confidence
 
 
