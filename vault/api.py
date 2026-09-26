@@ -325,6 +325,7 @@ class TMDBSyncQueueStateOut(Schema):
     counters: dict[str, int]  # pending, in_progress, synced, confirm, not_found, error
     total_unsynced: int  # сколько в базе вообще несинхронизированных (source=KINORIUM, tmdb_id IS NULL)
     missing_keys: list[str] = []  # незаполненные API-ключи, блокирующие старт очереди
+    stop_reason: str | None = None  # причина авто-остановки очереди (фронт показывает красным тостом)
 
 
 class TMDBSyncQueueItemOut(Schema):
@@ -1066,7 +1067,7 @@ def movie_fetch_tmdb(request, slug: str, payload: TMDBSyncIn):
             force_rematch=payload.force_rematch,
         )
     except Exception as exc:
-        raise HttpError(400, str(exc))
+        raise HttpError(400, TMDBMovieSyncService.describe_exception(exc))
 
     # §20.1: после успешного READ-синка сразу пушим локальные статусы в TMDB (точечно, без bulk)
     if getattr(result, "status", None) == "ok":
@@ -1116,7 +1117,7 @@ def movie_fetch_tmdb_confirm(request, slug: str, payload: TMDBCandidateConfirmIn
             selected_candidate=candidate,
         )
     except Exception as exc:
-        raise HttpError(400, str(exc))
+        raise HttpError(400, TMDBMovieSyncService.describe_exception(exc))
 
     # §20.1: confirm также пушит
     if getattr(result, "status", None) == "ok":

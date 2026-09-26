@@ -32,6 +32,7 @@ class TMDBSyncQueueServiceTests(TestCase):
         # Ключи нужны для start(): без них очередь блокируется
         prefs.tmdb_api_key = "test-tmdb-key"
         prefs.omdb_api_key = "test-omdb-key"
+        prefs.tavily_api_key = "test-tavily-key"
         prefs.save()  # save() принудительно ставит pk=1 (синглтон)
 
         schedule_patcher = patch.object(TMDBSyncQueueService, "_schedule_tick")
@@ -343,9 +344,10 @@ class TMDBSyncQueueServiceTests(TestCase):
         prefs = UserPreferences.get()
         prefs.tmdb_api_key = None
         prefs.omdb_api_key = None
-        prefs.save(update_fields=["tmdb_api_key", "omdb_api_key"])
+        prefs.tavily_api_key = None
+        prefs.save(update_fields=["tmdb_api_key", "omdb_api_key", "tavily_api_key"])
 
-    @override_settings(OMDB_API_KEY="")
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_get_missing_keys_lists_unconfigured_keys(self):
         self.assertEqual(TMDBSyncQueueService.get_missing_keys(), [])
 
@@ -354,30 +356,47 @@ class TMDBSyncQueueServiceTests(TestCase):
         prefs.save(update_fields=["omdb_api_key"])
         self.assertEqual(TMDBSyncQueueService.get_missing_keys(), ["omdb_api_key"])
 
-        self._clear_keys()
+        prefs.tavily_api_key = None
+        prefs.save(update_fields=["tavily_api_key"])
         self.assertEqual(
-            TMDBSyncQueueService.get_missing_keys(), ["tmdb_api_key", "omdb_api_key"]
+            TMDBSyncQueueService.get_missing_keys(), ["omdb_api_key", "tavily_api_key"]
         )
 
-    @override_settings(OMDB_API_KEY="")
+        self._clear_keys()
+        self.assertEqual(
+            TMDBSyncQueueService.get_missing_keys(),
+            ["tmdb_api_key", "omdb_api_key", "tavily_api_key"],
+        )
+
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="env-tavily-key")
+    def test_get_missing_keys_accepts_tavily_env_fallback(self):
+        # Dev-сценарий: ключ в Preferences пуст, но есть TAVILY_API_KEY в .env
+        prefs = UserPreferences.get()
+        prefs.tavily_api_key = None
+        prefs.save(update_fields=["tavily_api_key"])
+        self.assertEqual(TMDBSyncQueueService.get_missing_keys(), [])
+
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_get_state_reports_missing_keys(self):
         self.assertEqual(TMDBSyncQueueService.get_state()["missing_keys"], [])
         self._clear_keys()
         self.assertEqual(
             TMDBSyncQueueService.get_state()["missing_keys"],
-            ["tmdb_api_key", "omdb_api_key"],
+            ["tmdb_api_key", "omdb_api_key", "tavily_api_key"],
         )
 
-    @override_settings(OMDB_API_KEY="")
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_start_raises_when_keys_missing(self):
         self._clear_keys()
         with self.assertRaises(TMDBSyncKeysMissingError) as ctx:
             TMDBSyncQueueService.start()
-        self.assertEqual(ctx.exception.missing_keys, ["tmdb_api_key", "omdb_api_key"])
+        self.assertEqual(
+            ctx.exception.missing_keys, ["tmdb_api_key", "omdb_api_key", "tavily_api_key"]
+        )
         self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
         self.mock_schedule_tick.assert_not_called()
 
-    @override_settings(OMDB_API_KEY="")
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_start_raises_when_only_omdb_missing(self):
         prefs = UserPreferences.get()
         prefs.omdb_api_key = None
@@ -387,7 +406,18 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertEqual(ctx.exception.missing_keys, ["omdb_api_key"])
         self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
 
-    @override_settings(OMDB_API_KEY="")
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
+    def test_start_raises_when_only_tavily_missing(self):
+        prefs = UserPreferences.get()
+        prefs.tavily_api_key = None
+        prefs.save(update_fields=["tavily_api_key"])
+        with self.assertRaises(TMDBSyncKeysMissingError) as ctx:
+            TMDBSyncQueueService.start()
+        self.assertEqual(ctx.exception.missing_keys, ["tavily_api_key"])
+        self.assertIn("Tavily API key", str(ctx.exception))
+        self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
+
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     @patch.object(TMDBMovieSyncService, "sync_movie")
     def test_process_one_stops_queue_when_keys_removed_midrun(self, sync_mock):
         movie = self._movie(title="Target")
@@ -403,3 +433,57 @@ class TMDBSyncQueueServiceTests(TestCase):
         sync_mock.assert_not_called()
         item = TMDBSyncQueueItem.objects.get(movie=movie)
         self.assertEqual(item.state, TMDBSyncQueueItem.State.PENDING)
+
+    # ------------------------------------------------------------------ #
+    #              stop_reason / tavily fatal: не молча!                  #
+    # ------------------------------------------------------------------ #
+
+    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_auto_stop_persists_reason_and_start_clears_it(self, sync_mock):
+        TMDBSyncQueueService.enqueue_unsynced()
+        TMDBSyncQueueService.start()
+        self.assertIsNone(UserPreferences.get().tmdb_sync_stop_reason)
+
+        self._clear_keys()
+        result = TMDBSyncQueueService.process_one()
+        self.assertEqual(result["state"], "stopped")
+        prefs = UserPreferences.get()
+        self.assertFalse(prefs.tmdb_sync_enabled)
+        self.assertIn("Tavily API key", prefs.tmdb_sync_stop_reason)
+        self.assertEqual(TMDBSyncQueueService.get_state()["stop_reason"], prefs.tmdb_sync_stop_reason)
+
+        # ключи вернули, старт — причина очищена
+        prefs.tavily_api_key = "test-tavily-key"
+        prefs.tmdb_api_key = "test-tmdb-key"
+        prefs.omdb_api_key = "test-omdb-key"
+        prefs.save(update_fields=["tmdb_api_key", "omdb_api_key", "tavily_api_key"])
+        TMDBSyncQueueService.start()
+        self.assertIsNone(UserPreferences.get().tmdb_sync_stop_reason)
+        self.assertIsNone(TMDBSyncQueueService.get_state()["stop_reason"])
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_tavily_failure_stops_queue_with_reason(self, sync_mock):
+        from vault.services.tavily_service import TavilySearchError
+
+        movie = self._movie(title="Target")
+        TMDBSyncQueueService.enqueue_unsynced()
+        sync_mock.side_effect = TavilySearchError("Tavily веб-поиск (сюжет) не сработал: Invalid API key")
+
+        TMDBSyncQueueService.start()
+        result = TMDBSyncQueueService.process_one()
+
+        self.assertEqual(result["bulk_stopped"], "tavily")
+        self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
+        stop_reason = UserPreferences.get().tmdb_sync_stop_reason
+        self.assertIn("Tavily", stop_reason)
+        item = TMDBSyncQueueItem.objects.get(movie=movie)
+        self.assertEqual(item.state, TMDBSyncQueueItem.State.ERROR)
+        self.assertIn("Tavily веб-поиск не работает", item.result_message)
+
+    @patch.object(TMDBMovieSyncService, "sync_movie")
+    def test_manual_stop_does_not_set_reason(self, sync_mock):
+        TMDBSyncQueueService.start()
+        TMDBSyncQueueService.stop()
+        self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
+        self.assertIsNone(UserPreferences.get().tmdb_sync_stop_reason)

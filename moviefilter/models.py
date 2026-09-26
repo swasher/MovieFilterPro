@@ -173,10 +173,22 @@ class UserPreferences(models.Model):
 
     tmdb_api_key = models.CharField(max_length=50, blank=True, null=True)
     omdb_api_key = models.CharField(max_length=50, blank=True, null=True)
+    tavily_api_key = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text='API-ключ Tavily для веб-поиска в умном поиске TMDB (на проде обязателен)',
+    )
     tmdb_v4_read_access_token = models.CharField(max_length=400, blank=True, null=True)
     tmdb_v4_authenticated_access_token = models.CharField(max_length=400, blank=True, null=True)
 
     tmdb_sync_enabled = models.BooleanField('Обработка очереди TMDB включена', default=False)
+    tmdb_sync_stop_reason = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text='Причина автоматической остановки очереди TMDB sync (показывается красным тостом)',
+    )
 
     tmdb_writeback_enabled = models.BooleanField(
         'Обратная синхронизация в TMDB',

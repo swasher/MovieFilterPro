@@ -178,6 +178,15 @@ def _overview_item(tmdb_id, overview, title="Про секс спроси у м�
 
 
 class SmartSearchOrchestrationTests(SimpleTestCase):
+    def setUp(self):
+        # Tavily — внешний сервис: в orchestration-тестах по умолчанию пустой контекст.
+        patcher = patch(
+            "vault.services.tmdb_smart_search_service.TavilyService.search_web",
+            return_value="",
+        )
+        self.search_web_mock = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _clients(self, items):
         by_query = {"Ask Mom about Sex": items, "Про секс спроси у мамы": items}
         return _FakeLangClient(by_query), _FakeLangClient(by_query)
@@ -278,6 +287,52 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
         ru_mock.assert_not_called()
         en_mock.assert_not_called()
 
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    def test_tavily_failure_propagates_and_stops_nothing_silently(self, ru_mock, en_mock):
+        # Если Tavily не работает — smart_search обязан поднять ошибку наверх,
+        # чтобы очередь TMDB sync остановилась, а не молча продолжала.
+        from vault.services.tavily_service import TavilySearchError
+
+        self.search_web_mock.side_effect = TavilySearchError("Invalid API key")
+        with self.assertRaises(TavilySearchError):
+            smart_search(_smart_movie())
+        ru_mock.assert_not_called()
+        en_mock.assert_not_called()
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.extract_web_hints")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    def test_web_hints_extend_queries(self, _ai_mock, ru_mock, en_mock, hints_mock):
+        self.search_web_mock.return_value = "--- Поиск по название ---\nЗаголовок: X\nКонтент: Y\n"
+        hints_mock.return_value = {
+            "clean_title": "Ask Mom about Sex",
+            "year": 2024,
+            "tmdb_queries": ["Ask Mom about Sex International Cut"],
+        }
+        ru_mock.return_value = _FakeLangClient({})
+        en_mock.return_value = _FakeLangClient({})
+
+        result = smart_search(_smart_movie())
+
+        self.assertEqual(result.status, "not_found")
+        queried = {query for _, query, _ in ru_mock.return_value.calls}
+        self.assertIn("Ask Mom about Sex International Cut", queried)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.extract_web_hints")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    def test_empty_web_context_skips_hints(self, _ai_mock, ru_mock, en_mock, hints_mock):
+        self.search_web_mock.return_value = ""
+        ru_mock.return_value = _FakeLangClient({})
+        en_mock.return_value = _FakeLangClient({})
+
+        smart_search(_smart_movie())
+
+        hints_mock.assert_not_called()
+
     def test_pick_winner_tie_breaks_by_rank(self):
         def entry(i, score, tb=0, yb=0, order=0, eff=0.6):
             return {"movie_id": i, "score": score, "eff": eff, "tb": tb, "yb": yb, "order": order}
@@ -286,3 +341,29 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
         self.assertEqual(pick_winner([entry(1, 1.0), entry(2, 0.8)])["movie_id"], 1)
         tied = [entry(1, 1.0, tb=1, order=0), entry(2, 1.0, tb=3, yb=2, order=1)]
         self.assertEqual(pick_winner(tied)["movie_id"], 2)
+
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
+    @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
+    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    def test_score_candidates_passes_dual_overview_and_context_to_ai(
+        self, _ai_mock, ru_mock, en_mock, compare_mock
+    ):
+        compare_mock.return_value = AIPlotComparison(same_work=True, confidence=0.95, reason="Комплементарные сюжеты.")
+        movie = _smart_movie()
+        ru_mock.return_value = _FakeLangClient({
+            "Ask Mom about Sex": [_overview_item(1, "Русское описание фильма.", release_date="2024-01-01")]
+        })
+        en_mock.return_value = _FakeLangClient({
+            "Ask Mom about Sex": [_overview_item(1, "English overview of the film.", release_date="2024-01-01")]
+        })
+        result = smart_search(movie)
+        self.assertEqual(result.status, "auto_match")
+        self.assertEqual(result.selected_candidate.tmdb_id, 1)
+        self.assertTrue(compare_mock.called)
+        args, kwargs = compare_mock.call_args
+        self.assertEqual(kwargs.get("title"), "Про секс спроси у мамы")
+        self.assertEqual(kwargs.get("original_title"), "Ask Mom about Sex")
+        self.assertEqual(kwargs.get("year"), 2024)
+        self.assertIn("[English overview]:", args[1])
+

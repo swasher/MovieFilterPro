@@ -49,22 +49,25 @@ class TMDBSyncQueueService:
 
     # Ключи, без которых очередь нельзя стартовать:
     # tmdb_api_key — сам TMDB sync, omdb_api_key — рейтинги IMDb/RT/Metacritic
-    # (OMDB тянется внутри каждого синка по imdb_id).
-    REQUIRED_KEY_FIELDS = ("tmdb_api_key", "omdb_api_key")
+    # (OMDB тянется внутри каждого синка по imdb_id), tavily_api_key — веб-поиск
+    # в умном поиске TMDB (smart_search без него не работает).
+    REQUIRED_KEY_FIELDS = ("tmdb_api_key", "omdb_api_key", "tavily_api_key")
     KEY_LABELS = {
         "tmdb_api_key": "TMDB API key",
         "omdb_api_key": "OMDB API key",
+        "tavily_api_key": "Tavily API key",
     }
 
     @classmethod
     def get_missing_keys(cls, prefs=None) -> list[str]:
         """Список незаполненных API-ключей, нужных для TMDB sync.
 
-        OMDB считается настроенным, если ключ есть хотя бы где-то
-        (UserPreferences.omdb_api_key или legacy OMDB_API_KEY в .env),
-        т.к. OMDBService умеет оба источника.
+        OMDB/Tavily считаются настроенными, если ключ есть хотя бы где-то
+        (UserPreferences.*_api_key или legacy *_API_KEY в .env),
+        т.к. OMDBService/TavilyService умеют оба источника.
         """
         from vault.services.omdb_service import OMDBService
+        from vault.services.tavily_service import TavilyService
 
         prefs = prefs if prefs is not None else UserPreferences.get()
         missing: list[str] = []
@@ -72,6 +75,8 @@ class TMDBSyncQueueService:
             missing.append("tmdb_api_key")
         if not OMDBService.is_configured():
             missing.append("omdb_api_key")
+        if not TavilyService.is_configured():
+            missing.append("tavily_api_key")
         return missing
 
     # ТЗ 6d: стоп-кран — 3 подряд фейла, bulk_stats каждые 100
@@ -184,9 +189,15 @@ class TMDBSyncQueueService:
         missing = cls.get_missing_keys(prefs)
         if missing:
             raise TMDBSyncKeysMissingError(missing)
+        update_fields = []
         if not prefs.tmdb_sync_enabled:
             prefs.tmdb_sync_enabled = True
-            prefs.save(update_fields=["tmdb_sync_enabled"])
+            update_fields.append("tmdb_sync_enabled")
+        if prefs.tmdb_sync_stop_reason:
+            prefs.tmdb_sync_stop_reason = None
+            update_fields.append("tmdb_sync_stop_reason")
+        if update_fields:
+            prefs.save(update_fields=update_fields)
         # ТЗ 6d: сброс стоп-крана и статистики bulk
         cls._consecutive_failures = 0
         cls._last_errors = []
@@ -210,13 +221,22 @@ class TMDBSyncQueueService:
         cls._schedule_tick(delay=1)
 
     @classmethod
-    def stop(cls) -> None:
+    def stop(cls, reason: str | None = None) -> None:
+        """Остановить очередь. reason persists — фронт покажет его красным тостом.
+
+        reason=None — ручная остановка пользователем (тост не нужен).
+        """
         prefs = UserPreferences.get()
+        normalized_reason = (reason or "").strip()[:500] or None
         if not prefs.tmdb_sync_enabled:
+            if normalized_reason and prefs.tmdb_sync_stop_reason != normalized_reason:
+                prefs.tmdb_sync_stop_reason = normalized_reason
+                prefs.save(update_fields=["tmdb_sync_stop_reason"])
             return
         prefs.tmdb_sync_enabled = False
-        prefs.save(update_fields=["tmdb_sync_enabled"])
-        logger.info("TMDB_SYNC_STOP")
+        prefs.tmdb_sync_stop_reason = normalized_reason
+        prefs.save(update_fields=["tmdb_sync_enabled", "tmdb_sync_stop_reason"])
+        logger.info("TMDB_SYNC_STOP | reason=%s", normalized_reason)
 
     @classmethod
     def remove_all(cls) -> int:
@@ -261,6 +281,7 @@ class TMDBSyncQueueService:
             "counters": counters,
             "total_unsynced": cls._unsynced_count(),
             "missing_keys": cls.get_missing_keys(prefs),
+            "stop_reason": prefs.tmdb_sync_stop_reason if not prefs.tmdb_sync_enabled else None,
         }
 
     # ------------------------------------------------------------------ #
@@ -277,16 +298,19 @@ class TMDBSyncQueueService:
         missing = cls.get_missing_keys(prefs)
         if missing:
             labels = [cls.KEY_LABELS.get(k, k) for k in missing]
+            message = (
+                "Очередь остановлена: не настроены ключи: "
+                + ", ".join(labels)
+                + ". Заполни их в Preferences."
+            )
             logger.critical(
                 "TMDB_SYNC_STOP | reason=missing_keys | missing=%s", ",".join(missing)
             )
-            cls.stop()
+            cls.stop(reason=message)
             return {
                 "state": "stopped",
                 "movie_id": None,
-                "result_message": "Очередь остановлена: не настроены ключи: "
-                + ", ".join(labels)
-                + ". Заполни их в Preferences.",
+                "result_message": message,
             }
 
         item = cls._next_pending_item()
@@ -320,12 +344,24 @@ class TMDBSyncQueueService:
         # ТЗ 6d: bulk_stats + стоп-кран 3 подряд + лог каждые 100
         cls._processed_count += 1
         cls._update_bulk_stats(item.state, outcome)
+        # Tavily сломался на ходу — глушим очередь сразу, без 3 подряд (не молча!).
+        if outcome.get("tavily_fatal"):
+            logger.critical(
+                "BULK_STOP | reason=tavily_failure | movie=%s msg=%s", movie.id, item.result_message[:300]
+            )
+            cls.stop(reason=item.result_message[:500])
+            return {
+                "state": item.state,
+                "movie_id": movie.id,
+                "result_message": item.result_message,
+                "bulk_stopped": "tavily",
+            }
         if cls._is_critical_outcome(outcome):
             cls._bulk_stats["critical"] = cls._bulk_stats.get("critical", 0) + 1
             cls._last_errors.append(f"critical movie={movie.id} msg={item.result_message[:200]}")
             cls._last_errors = cls._last_errors[-5:]
             logger.critical("BULK_STOP | reason=critical_401 | movie=%s msg=%s", movie.id, item.result_message[:300])
-            cls.stop()
+            cls.stop(reason=f"Критическая ошибка авторизации: {item.result_message[:300]}")
             # стоп обеих очередей: writeback тоже
             try:
                 from moviefilter.models import UserPreferences as _UP
@@ -350,7 +386,7 @@ class TMDBSyncQueueService:
                 cls._bulk_stats["rate_limited"] += 1
             if cls._consecutive_failures >= 3:
                 logger.critical("BULK_STOP | reason=3_consecutive_failures | last_errors=%s", cls._last_errors)
-                cls.stop()
+                cls.stop(reason=f"3 ошибки подряд. Последняя: {item.result_message[:300]}")
                 return {
                     "state": item.state,
                     "movie_id": movie.id,
@@ -411,13 +447,24 @@ class TMDBSyncQueueService:
 
     @classmethod
     def _run_sync(cls, item: TMDBSyncQueueItem, movie: Movie) -> dict:
+        from vault.services.tavily_service import TavilySearchError
+
         try:
             result: TMDBSyncResult = TMDBMovieSyncService.sync_movie(movie=movie)
+        except TavilySearchError as exc:
+            # Фатально для очереди: process_one остановит её и сохранит stop_reason.
+            return {
+                "state": TMDBSyncQueueItem.State.ERROR,
+                "result_status": "error",
+                "result_message": f"Tavily веб-поиск не работает: {exc}",
+                "tavily_fatal": True,
+                "error_trace": traceback.format_exc(),
+            }
         except Exception as exc:
             return {
                 "state": TMDBSyncQueueItem.State.ERROR,
                 "result_status": "error",
-                "result_message": f"Исключение: {exc}",
+                "result_message": f"Исключение: {TMDBMovieSyncService.describe_exception(exc)}",
                 "error_trace": traceback.format_exc(),
             }
 
@@ -530,9 +577,15 @@ class TMDBSyncQueueService:
         """Периодическая подстраховка: тик давно не перепланирован — подтолкнуть."""
         if not UserPreferences.get().tmdb_sync_enabled:
             return False
-        if cls.get_missing_keys():
+        missing = cls.get_missing_keys()
+        if missing:
             # Ключи снесли на ходу — глушим очередь, а не дёргаем тики впустую.
-            cls.stop()
+            labels = [cls.KEY_LABELS.get(k, k) for k in missing]
+            cls.stop(
+                reason="Очередь остановлена: не настроены ключи: "
+                + ", ".join(labels)
+                + ". Заполни их в Preferences."
+            )
             return False
         # Реанимация оборванных тиков — иначе очередь мертва навсегда.
         cls._reclaim_stale_in_progress()

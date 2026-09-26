@@ -48,7 +48,7 @@ class TMDBAIMatchingService:
     a clear, high-confidence winner.
     """
 
-    PROMPT_VERSION = "tmdb_plot_match_v2"
+    PROMPT_VERSION = "tmdb_plot_match_v3"
     REQUEST_TIMEOUT_SECONDS = 45
     MIN_PLOT_CHARS = 40
     AUTO_MATCH_MIN_CONFIDENCE = 0.88
@@ -59,18 +59,46 @@ class TMDBAIMatchingService:
     VERIFY_MIN_CONFIDENCE = 0.70
 
     @classmethod
-    def compare_plots(cls, plot1: str, plot2: str) -> AIPlotComparison | None:
+    def compare_plots(
+        cls,
+        plot1: str,
+        plot2: str,
+        *,
+        title: str = "",
+        original_title: str = "",
+        year: int | None = None,
+    ) -> AIPlotComparison | None:
         """Compare two plot descriptions and return an AI confidence verdict."""
         if not cls._has_meaningful_plot(plot1) or not cls._has_meaningful_plot(plot2):
             return None
 
+        context_parts: list[str] = []
+        if title:
+            context_parts.append(f"Название: {title}")
+        if original_title:
+            context_parts.append(f"Оригинальное название: {original_title}")
+        if year:
+            context_parts.append(f"Год: {year}")
+        context_block = ""
+        if context_parts:
+            context_block = "Контекст проверяемого произведения:\n" + "\n".join(context_parts) + "\n\n"
+
         response = cls._chat_json(
             system_prompt=(
-                "Ты сравниваешь описания фильмов/сериалов. Отвечай только JSON. "
-                "Не угадывай: если описания слишком общие или противоречат друг другу, "
+                "Ты сравниваешь описания фильмов/сериалов и определяешь, относятся ли они к одному произведению. "
+                "Отвечай только JSON.\n\n"
+                "Правила анализа:\n"
+                "1. Комплементарные описания: описания одного и того же фильма часто пишутся с разных точек "
+                "зрения (например, одно фокусируется на антагонисте/преступнике, а второе — на следователе/полиции; "
+                "либо одно описывает завязку, а второе — развитие событий или конфликт). Если описания дополняют "
+                "друг друга в рамках одного сеттинга, эпохи или конфликта — это одно произведение (same_work: true).\n"
+                "2. Разные произведения: считай разными (same_work: false) только если описания содержат взаимоисключающие "
+                "факты (совершенно разные жанры, разные исторические эпохи, несовместимые сеттинги, разные вымышленные вселенные).\n"
+                "3. Не угадывай при полном отсутствии информации: если описания слишком общие или бессмысленные, "
                 "понижай confidence и укажи red_flags."
             ),
             user_prompt=(
+                f"{context_block}"
                 "Сравни два описания и реши, один и тот же это фильм/сериал или нет.\n\n"
                 "Верни JSON строго такого вида:\n"
                 '{"same_work": true, "confidence": 0.0, "reason": "...", "red_flags": []}\n\n'
@@ -95,6 +123,66 @@ class TMDBAIMatchingService:
             comparison.reason,
         )
         return comparison
+
+    @classmethod
+    def extract_web_hints(
+        cls,
+        title: str,
+        original_title: str,
+        plot: str,
+        web_context: str,
+    ) -> dict[str, Any] | None:
+        """ШАГ 2 (урок find_tmdb_id.py): LLM извлекает чистые данные из веб-контекста.
+
+        Возвращает {"clean_title": str, "year": int|None, "tmdb_queries": [str, ...]}
+        или None, если локальный AI недоступен/ответ не распознан.
+        """
+        if not (web_context or "").strip():
+            return None
+
+        response = cls._chat_json(
+            system_prompt=(
+                "Ты определяешь точное оригинальное название фильма/сериала по искажённым "
+                "данным и результатам веб-поиска. Отвечай только JSON. Не выдумывай данные: "
+                "если веб-поиск пуст или неоднозначен, верни исходные названия и year null."
+            ),
+            user_prompt=(
+                "Тебе даны искаженные данные фильма и результаты поиска в интернете по этим данным.\n\n"
+                "Исходные данные:\n"
+                f"Title: {title}\n"
+                f"Original Title: {original_title}\n"
+                f"Plot: {cls._clip(plot, 1800)}\n\n"
+                "Результаты веб-поиска:\n"
+                f"{cls._clip(web_context, 6000)}\n\n"
+                "Задача: На основе веб-поиска определи точное официальное оригинальное название "
+                "фильма и год выхода. Сформируй 2-3 точных запроса для базы данных TMDb "
+                "(только названия, без года и лишних слов).\n\n"
+                "Верни ответ СТРОГО в формате JSON:\n"
+                '{"clean_title": "Точное оригинальное/международное название", '
+                '"year": 2024, '
+                '"tmdb_queries": ["Запрос 1", "Запрос 2"]}'
+            ),
+        )
+        if response is None:
+            return None
+
+        clean_title = cls._safe_text(response.get("clean_title"), 300)
+        year = cls._safe_int(response.get("year"))
+        raw_queries = response.get("tmdb_queries")
+        queries = [
+            cls._safe_text(query, 300)
+            for query in raw_queries
+            if cls._safe_text(query, 300)
+        ] if isinstance(raw_queries, list) else []
+        hints = {"clean_title": clean_title, "year": year, "tmdb_queries": queries}
+        logger.info(
+            "TMDB_AI_WEB_HINTS | prompt=%s | clean_title=%s | year=%s | queries=%s",
+            cls.PROMPT_VERSION,
+            hints["clean_title"],
+            hints["year"],
+            hints["tmdb_queries"],
+        )
+        return hints
 
     @classmethod
     def choose_best_candidate(cls, movie: Movie, candidates: tuple[TMDBCandidate, ...]) -> AICandidateChoice | None:

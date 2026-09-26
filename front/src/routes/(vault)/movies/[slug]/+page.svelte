@@ -224,6 +224,7 @@
       const payload = (await response.json()) as {
         status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
         message?: string;
+        detail?: string;
         updated_fields?: string[];
         candidates?: Array<{
           tmdb_id: number;
@@ -241,10 +242,10 @@
       };
 
       if (!response.ok) {
-        if (await handleUnauthorized(response.status, payload.message)) {
+        if (await handleUnauthorized(response.status, payload.message ?? payload.detail)) {
           return;
         }
-        toast.error(payload.message ?? `HTTP ${response.status}`);
+        toast.error(payload.message ?? payload.detail ?? `HTTP ${response.status}`);
         return;
       }
 
@@ -292,11 +293,12 @@
       const payload = (await response.json()) as {
         status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
         message?: string;
+        detail?: string;
         candidates?: typeof tmdbCandidates;
       };
 
       if (!response.ok) {
-        toast.error(payload.message ?? `HTTP ${response.status}`);
+        toast.error(payload.message ?? payload.detail ?? `HTTP ${response.status}`);
         return;
       }
 
@@ -460,14 +462,15 @@
       const payload = (await response.json()) as {
         status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
         message?: string;
+        detail?: string;
         candidates?: typeof tmdbCandidates;
       };
 
       if (!response.ok) {
-        if (await handleUnauthorized(response.status, payload.message)) {
+        if (await handleUnauthorized(response.status, payload.message ?? payload.detail)) {
           return;
         }
-        toast.error(payload.message ?? `HTTP ${response.status}`);
+        toast.error(payload.message ?? payload.detail ?? `HTTP ${response.status}`);
         return;
       }
 

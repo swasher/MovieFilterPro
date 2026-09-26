@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from moviefilter.models import UserPreferences
 from tmdb_adapter.client_singleton import get_tmdb_client, get_tmdb_client_en
 from vault.models import Movie
+from vault.services.tavily_service import TavilyService
 from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
 from vault.services.tmdb_match_resolver import TMDBMatchResolver
 from vault.services.tmdb_movie_matching_service import (
@@ -233,12 +234,14 @@ def score_candidates(
     source_plot = movie.description or ""
     scored: list[dict] = []
     for order, (candidate, title_bonus, year_bonus) in enumerate(ranked[:SMART_MAX_VALIDATIONS]):
-        overview = (candidate.overview_ru or "").strip() or (candidate.overview_en or "").strip()
+        ru = (candidate.overview_ru or "").strip()
+        en = (candidate.overview_en or "").strip()
+        overview = ru or en
         if not overview:
             logger.info("SMART_SEARCH_SKIP | tmdb_id=%s | reason=overview_empty", candidate.tmdb_id)
             continue
         eff = _effective_threshold(movie.year, candidate.year)
-        if plots_match_literally(source_plot, overview):
+        if (ru and plots_match_literally(source_plot, ru)) or (en and plots_match_literally(source_plot, en)):
             logger.info("SMART_SEARCH_LITERAL | tmdb_id=%s", candidate.tmdb_id)
             scored.append({
                 "candidate": candidate, "score": 1.0, "eff": eff,
@@ -248,10 +251,22 @@ def score_candidates(
             continue
         if not allow_ai:
             continue
+        # Если есть оба описания и они не идентичны, передаем оба для полноты контекста
+        if ru and en and ru != en:
+            overview_for_ai = f"{ru}\n\n[English overview]:\n{en}"
+        else:
+            overview_for_ai = overview
+
         # ВАЖНО: confidence у локального AI — это уверенность в вердикте,
         # а не похожесть сюжетов. same_work=False + confidence=1.0 означает
         # «точно РАЗНЫЕ фильмы». Проверяем вердикт, а не число.
-        comparison = TMDBAIMatchingService.compare_plots(source_plot, overview)
+        comparison = TMDBAIMatchingService.compare_plots(
+            source_plot,
+            overview_for_ai,
+            title=movie.title or candidate.title or "",
+            original_title=movie.original_title or candidate.original_title or "",
+            year=movie.year or candidate.year,
+        )
         if comparison is None:
             logger.info("SMART_SEARCH_SKIP | tmdb_id=%s | reason=ai_unavailable", candidate.tmdb_id)
             continue
@@ -305,18 +320,56 @@ def _not_found(message: str) -> TMDBMatchingResult:
     )
 
 
+def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str], str, int | None]:
+    """Шаги 1-2 (урок find_tmdb_id.py): Tavily веб-поиск + извлечение подсказок локальным AI.
+
+    Возвращает (queries, clean_title, llm_year). TavilySearchError намеренно
+    пробрасывается наверх: если веб-поиск не работает, очередь TMDB sync должна
+    остановиться с красным тостом, а не молча продолжать.
+    """
+    web_context = TavilyService.search_web(
+        movie.title or "",
+        movie.original_title or "",
+        movie.description or "",
+    )
+    clean_title = movie.original_title or movie.title or ""
+    llm_year = movie.year
+    if not (web_context or "").strip():
+        return queries, clean_title, llm_year
+
+    hints = TMDBAIMatchingService.extract_web_hints(
+        title=movie.title or "",
+        original_title=movie.original_title or "",
+        plot=movie.description or "",
+        web_context=web_context,
+    )
+    if hints:
+        for raw_query in hints.get("tmdb_queries") or []:
+            cleaned = TMDBMovieMatchingService._clean_query(raw_query)
+            if cleaned and cleaned not in queries:
+                queries.append(cleaned)
+        if (hints.get("clean_title") or "").strip():
+            clean_title = hints["clean_title"].strip()
+        if hints.get("year") is not None:
+            llm_year = hints["year"]
+    return queries, clean_title, llm_year
+
+
 def smart_search(movie: Movie) -> TMDBMatchingResult:
-    """Fallback матчинга: year-free поиск ru+en, ранг, проверка сюжетов локальным AI.
+    """Fallback матчинга: веб-подсказки Tavily, year-free поиск ru+en, ранг, проверка сюжетов локальным AI.
 
     Groq здесь не используется по решению владельца — только локальный AI.
     Без локального AI возможен лишь дословный матч, иначе not_found.
     Без описания (короче SMART_MIN_PLOT_CHARS) сверять нечего — поиск не запускаем.
+    Tavily обязателен: сбой веб-поиска (TavilySearchError) останавливает очередь.
     """
     if len((movie.description or "").strip()) < SMART_MIN_PLOT_CHARS:
         return _not_found(MSG_SHORT_PLOT)
     queries = TMDBMovieMatchingService._build_queries(movie)
     if not queries:
         return _not_found(MSG_NO_QUERIES)
+
+    queries, clean_title, llm_year = enrich_queries_from_web(movie, queries)
 
     media_order = TMDBMovieMatchingService._media_search_order(movie)
     collected = collect_candidates(
@@ -328,8 +381,7 @@ def smart_search(movie: Movie) -> TMDBMatchingResult:
     if not collected:
         return _not_found(MSG_NO_CANDIDATES)
 
-    clean_title = movie.original_title or movie.title or ""
-    ranked = rank_candidates(collected, clean_title, movie.year)
+    ranked = rank_candidates(collected, clean_title, llm_year)
     allow_ai = is_local_ai_available()
     scored = score_candidates(movie, ranked, allow_ai=allow_ai)
     winner = pick_winner(scored)

@@ -39,6 +39,7 @@ class PreferencesOut(Schema):
     ignore_title: str
     tmdb_api_key: str | None = None
     omdb_api_key: str | None = None
+    tavily_api_key: str | None = None
     tmdb_v4_read_access_token: str | None = None
     tmdb_v4_authenticated_access_token: str | None = None
     ai_enabled: bool = False
@@ -69,6 +70,7 @@ class PreferencesUpdateIn(Schema):
     ignore_title: str = ""
     tmdb_api_key: str | None = None
     omdb_api_key: str | None = None
+    tavily_api_key: str | None = None
     tmdb_v4_read_access_token: str | None = None
     ai_enabled: bool = False
     ai_base_url: str | None = None
@@ -132,6 +134,7 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         ignore_title=preferences.ignore_title or "",
         tmdb_api_key=preferences.tmdb_api_key or None,
         omdb_api_key=preferences.omdb_api_key or None,
+        tavily_api_key=preferences.tavily_api_key or None,
         tmdb_v4_read_access_token=preferences.tmdb_v4_read_access_token or None,
         tmdb_v4_authenticated_access_token=preferences.tmdb_v4_authenticated_access_token or None,
         ai_enabled=preferences.ai_enabled,
@@ -163,6 +166,7 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.ignore_title = payload.ignore_title
     preferences.tmdb_api_key = _normalized_optional_string(payload.tmdb_api_key)
     preferences.omdb_api_key = _normalized_optional_string(payload.omdb_api_key)
+    preferences.tavily_api_key = _normalized_optional_string(payload.tavily_api_key)
     preferences.tmdb_v4_read_access_token = _normalized_optional_string(payload.tmdb_v4_read_access_token)
     preferences.ai_enabled = payload.ai_enabled
     preferences.ai_base_url = _normalized_optional_string(payload.ai_base_url)

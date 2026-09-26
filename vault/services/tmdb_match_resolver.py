@@ -255,6 +255,9 @@ class TMDBMatchResolver:
         comparison: AIPlotComparison | None = TMDBAIMatchingService.compare_plots(
             movie.description or "",
             selected.overview or "",
+            title=movie.title or selected.title or "",
+            original_title=movie.original_title or selected.original_title or "",
+            year=movie.year or selected.year,
         )
         return comparison
 

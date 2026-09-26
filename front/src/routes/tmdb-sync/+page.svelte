@@ -76,11 +76,13 @@
     counters: Record<string, number>;
     total_unsynced: number;
     missing_keys?: string[];
+    stop_reason?: string | null;
   };
 
   const KEY_LABELS: Record<string, string> = {
     tmdb_api_key: "TMDB API key",
-    omdb_api_key: "OMDB API key"
+    omdb_api_key: "OMDB API key",
+    tavily_api_key: "Tavily API key"
   };
   const keyLabel = (key: string) => KEY_LABELS[key] ?? key;
 
@@ -88,6 +90,7 @@
   let counters = $state<Record<string, number>>(data.state?.counters ?? {});
   let totalUnsynced = $state(data.state?.total_unsynced ?? 0);
   let missingKeys = $state<string[]>(data.state?.missing_keys ?? []);
+  let stopReason = $state<string | null>(data.state?.stop_reason ?? null);
   let items = $state<QueueItem[]>(data.items ?? []);
   let total = $state(data.total ?? 0);
   let page = $state(data.page ?? 1);
@@ -121,15 +124,26 @@
   // Лёгкий опрос состояния (без тяжёлого items+count) — для авто-таймера.
   // Полный refresh (state + items) — только по ручным действиям;
   // смена страницы идёт через навигацию с ?page= (данные подтягивает load).
+  // Авто-остановка очереди воркером (ключи снесли / Tavily сломался / критическая
+  // ошибка) — показываем красный тост один раз на переход enabled -> disabled.
+  const applyQueueState = (payload: QueueState) => {
+    const wasEnabled = enabled;
+    enabled = payload.enabled;
+    counters = payload.counters;
+    totalUnsynced = payload.total_unsynced;
+    missingKeys = payload.missing_keys ?? [];
+    stopReason = payload.stop_reason ?? null;
+    if (wasEnabled && !enabled && stopReason) {
+      toast.error(stopReason);
+    }
+  };
+
   const refreshState = async () => {
     const stateResponse = await fetch("/api/vault/tmdb-sync/state");
 
     if (stateResponse.ok) {
       const payload = (await stateResponse.json()) as QueueState;
-      enabled = payload.enabled;
-      counters = payload.counters;
-      totalUnsynced = payload.total_unsynced;
-      missingKeys = payload.missing_keys ?? [];
+      applyQueueState(payload);
     } else if (stateResponse.status === 401) {
       await handleUnauthorized(401);
     }
@@ -155,10 +169,7 @@
 
     if (stateResponse.ok) {
       const payload = (await stateResponse.json()) as QueueState;
-      enabled = payload.enabled;
-      counters = payload.counters;
-      totalUnsynced = payload.total_unsynced;
-      missingKeys = payload.missing_keys ?? [];
+      applyQueueState(payload);
     } else if (stateResponse.status === 401) {
       await handleUnauthorized(401);
       return;
@@ -230,6 +241,7 @@
     counters = data.state?.counters ?? {};
     totalUnsynced = data.state?.total_unsynced ?? totalUnsynced;
     missingKeys = data.state?.missing_keys ?? missingKeys;
+    stopReason = data.state?.stop_reason ?? null;
   });
 
   // Смена страницы пагинации — навигация с ?page= в URL (переживает reload, шарится ссылкой).
@@ -576,6 +588,13 @@
         <div class="rounded-xl border border-amber-600/40 bg-amber-500/10 px-4 py-3 text-sm">
           Не настроены ключи: {missingKeys.map(keyLabel).join(", ")}. Заполни их в
           <a href="/preferences" class="font-medium underline">Preferences</a>, иначе очередь нельзя запустить.
+        </div>
+      </div>
+    {/if}
+    {#if !enabled && stopReason}
+      <div class="px-6 pb-2">
+        <div class="rounded-xl border border-red-600/50 bg-red-500/10 px-4 py-3 text-sm text-red-500 dark:text-red-400">
+          Очередь остановлена автоматически: {stopReason}
         </div>
       </div>
     {/if}

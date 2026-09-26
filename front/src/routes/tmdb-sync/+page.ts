@@ -32,6 +32,7 @@ type QueueStateResp = {
   counters: Record<string, number>;
   total_unsynced: number;
   missing_keys?: string[];
+  stop_reason?: string | null;
 };
 
 const PAGE_SIZE = 100;

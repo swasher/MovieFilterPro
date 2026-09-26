@@ -21,6 +21,7 @@ export type PreferencesData = {
   ignore_title: string;
   tmdb_api_key: string | null;
   omdb_api_key: string | null;
+  tavily_api_key: string | null;
   tmdb_v4_read_access_token: string | null;
   tmdb_v4_authenticated_access_token: string | null;
   ai_enabled: boolean;
@@ -51,6 +52,7 @@ export type PreferencesUpdatePayload = {
   ignore_title: string;
   tmdb_api_key: string | null;
   omdb_api_key: string | null;
+  tavily_api_key: string | null;
   tmdb_v4_read_access_token: string | null;
   ai_enabled: boolean;
   ai_base_url: string | null;
@@ -87,6 +89,7 @@ export const emptyPreferences = (): PreferencesData => ({
   ignore_title: "",
   tmdb_api_key: null,
   omdb_api_key: null,
+  tavily_api_key: null,
   tmdb_v4_read_access_token: null,
   tmdb_v4_authenticated_access_token: null,
   ai_enabled: false,

@@ -56,6 +56,24 @@ class _RawCandidate:
     alternative_titles: set[str] = field(default_factory=set)
 
 
+@dataclass(slots=True, frozen=True)
+class TitleVariants:
+    raw: str
+    primary_raw: str
+    aliases_raw: tuple[str, ...]
+    primary_norm: str
+    aliases_norm: tuple[str, ...]
+    full_norm: str
+
+    @property
+    def all_norms(self) -> tuple[str, ...]:
+        result: list[str] = []
+        for n in (self.primary_norm, *self.aliases_norm, self.full_norm):
+            if n and n not in result:
+                result.append(n)
+        return tuple(result)
+
+
 class TMDBMovieMatchingService:
     SCORE_ORIGINAL_EXACT = 60
     SCORE_LOCAL_EXACT = 50
@@ -93,6 +111,8 @@ class TMDBMovieMatchingService:
         expected_media_type = cls._expected_media_type(movie)
         movie_title_norm = cls.normalize_title(movie.title or "")
         original_title_norm = cls.normalize_title(movie.original_title or "")
+        movie_title_variants = cls.extract_title_variants(movie.title or "")
+        original_title_variants = cls.extract_title_variants(movie.original_title or "")
 
         cls._pre_score_candidates(
             raw_candidates=raw_candidates,
@@ -100,6 +120,8 @@ class TMDBMovieMatchingService:
             movie_title_norm=movie_title_norm,
             original_title_norm=original_title_norm,
             expected_media_type=expected_media_type,
+            movie_title_variants=movie_title_variants,
+            original_title_variants=original_title_variants,
         )
         cls._enrich_with_alternative_titles(tmdb, raw_candidates)
         scored_candidates = cls._build_scored_candidates(
@@ -108,6 +130,8 @@ class TMDBMovieMatchingService:
             movie_title_norm=movie_title_norm,
             original_title_norm=original_title_norm,
             expected_media_type=expected_media_type,
+            movie_title_variants=movie_title_variants,
+            original_title_variants=original_title_variants,
         )
 
         relevant = [candidate for candidate in scored_candidates if candidate.score >= cls.MIN_RELEVANT_SCORE]
@@ -190,11 +214,16 @@ class TMDBMovieMatchingService:
         Ленивый импорт: smart-модуль зависит от этого сервиса сверху.
         Вердикт умного поиска (включая его not_found) замещает исходный,
         т.к. он проделал более глубокую попытку. При исключении — исходный fallback.
+        TavilySearchError НЕ глотается: веб-поиск сломан — очередь должна
+        остановиться с красным тостом, а не молча продолжать.
         """
+        from vault.services.tavily_service import TavilySearchError
         from vault.services.tmdb_smart_search_service import smart_search
 
         try:
             return smart_search(movie)
+        except TavilySearchError:
+            raise
         except Exception as exc:
             logger.warning("SMART_SEARCH_FAILED | movie_id=%s | %s", getattr(movie, "id", None), exc)
             return fallback
@@ -312,7 +341,14 @@ class TMDBMovieMatchingService:
     _EDITION_KEYWORD_RE = re.compile(
         r"\b(imax|extended|director|unrated|uncut|remaster|anniversary|theatrical|redux"
         r"|special edition|dolby|расширенная|расширенный|режиссерская|режиссерский"
-        r"|полная версия|без цензуры|юбилейн|3d|4k)\b"
+        r"|полная версия|без цензуры|юбилейн|3d|4k)\b",
+        re.IGNORECASE,
+    )
+    _PAREN_OR_BRACKET_RE = re.compile(r"[\(\[]([^()\[\]]+)[\)\]]")
+    _MEDIA_FORMAT_KEYWORD_RE = re.compile(
+        r"^(сериал|мини-сериал|телесериал|мультсериал|мультфильм|аниме|короткометражка|тв|фильм"
+        r"|сезон\s*\d+|часть\s*\d+|season\s*\d+|part\s*\d+|series|tv series|movie|short|mini-series)$",
+        re.IGNORECASE,
     )
 
     @classmethod
@@ -328,6 +364,79 @@ class TMDBMovieMatchingService:
             value = value[: match.start()].rstrip()
             if not value:
                 return value
+
+    @classmethod
+    def extract_title_variants(cls, raw: str) -> TitleVariants:
+        """Раскладывает название на основное (primary) и альтернативные (aliases).
+
+        Поддерживает:
+        - Скобки: 'Голдфингер (Золотой палец)' -> primary 'Голдфингер', alias 'Золотой палец'
+        - Слэши: 'Дюна / Dune' -> primary 'Дюна', alias 'Dune'
+        - Игнорирует маркеры изданий (IMAX, Extended...) и типов медиа (сериал, фильм...).
+        """
+        cleaned = cls._clean_query(raw)
+        if not cleaned:
+            return TitleVariants(
+                raw=raw or "",
+                primary_raw="",
+                aliases_raw=(),
+                primary_norm="",
+                aliases_norm=(),
+                full_norm="",
+            )
+
+        full_norm = cls.normalize_title(cleaned)
+
+        bracket_matches = [m.strip() for m in cls._PAREN_OR_BRACKET_RE.findall(cleaned) if m.strip()]
+        outside = cls._PAREN_OR_BRACKET_RE.sub(" ", cleaned)
+        outside = re.sub(r"\s+", " ", outside).strip()
+
+        slash_parts = [p.strip() for p in outside.split("/") if p.strip()] if "/" in outside else [outside]
+        if slash_parts and slash_parts[0]:
+            primary_candidate = slash_parts[0]
+            candidate_aliases = [*bracket_matches, *slash_parts[1:]]
+        elif bracket_matches:
+            primary_candidate = bracket_matches[0]
+            candidate_aliases = bracket_matches[1:]
+        else:
+            primary_candidate = cleaned
+            candidate_aliases = []
+
+        primary_candidate = cls._strip_edition_suffix(primary_candidate).strip()
+        primary_norm = cls.normalize_title(primary_candidate)
+
+        valid_aliases_raw: list[str] = []
+        valid_aliases_norm: list[str] = []
+
+        for alias_item in candidate_aliases:
+            alias_item_clean = cls._strip_edition_suffix(alias_item).strip()
+            if not alias_item_clean:
+                continue
+            if cls._MEDIA_FORMAT_KEYWORD_RE.match(alias_item_clean):
+                continue
+            if cls._EDITION_KEYWORD_RE.search(alias_item_clean):
+                continue
+            if re.match(r"^(19\d{2}|20\d{2})$", alias_item_clean):
+                continue
+            alias_norm = cls.normalize_title(alias_item_clean)
+            if alias_norm and alias_norm != primary_norm and alias_norm not in valid_aliases_norm:
+                valid_aliases_raw.append(alias_item_clean)
+                valid_aliases_norm.append(alias_norm)
+
+        if not primary_norm and valid_aliases_norm:
+            primary_candidate = valid_aliases_raw[0]
+            primary_norm = valid_aliases_norm[0]
+            valid_aliases_raw = valid_aliases_raw[1:]
+            valid_aliases_norm = valid_aliases_norm[1:]
+
+        return TitleVariants(
+            raw=raw,
+            primary_raw=primary_candidate,
+            aliases_raw=tuple(valid_aliases_raw),
+            primary_norm=primary_norm,
+            aliases_norm=tuple(valid_aliases_norm),
+            full_norm=full_norm,
+        )
 
     @staticmethod
     def _is_confident_singleton(candidate: TMDBCandidate) -> bool:
@@ -392,11 +501,17 @@ class TMDBMovieMatchingService:
             cleaned = cls._clean_query(raw)
             if not cleaned:
                 continue
-            norm = cls.normalize_title(cleaned)
-            if not norm or norm in seen:
-                continue
-            queries.append(cleaned)
-            seen.add(norm)
+            variants = cls.extract_title_variants(cleaned)
+            candidate_texts = [variants.primary_raw, *variants.aliases_raw, cleaned]
+            for text in candidate_texts:
+                clean_item = cls._clean_query(text)
+                if not clean_item:
+                    continue
+                norm = cls.normalize_title(clean_item)
+                if not norm or norm in seen:
+                    continue
+                queries.append(clean_item)
+                seen.add(norm)
         return queries
 
     @staticmethod
@@ -537,7 +652,14 @@ class TMDBMovieMatchingService:
         movie_title_norm: str,
         original_title_norm: str,
         expected_media_type: MediaType | None,
+        movie_title_variants: TitleVariants | None = None,
+        original_title_variants: TitleVariants | None = None,
     ) -> None:
+        if movie_title_variants is None:
+            movie_title_variants = cls.extract_title_variants(movie.title or movie_title_norm or "")
+        if original_title_variants is None:
+            original_title_variants = cls.extract_title_variants(movie.original_title or original_title_norm or "")
+
         for raw in raw_candidates.values():
             score, _ = cls._score_candidate(
                 raw=raw,
@@ -546,6 +668,8 @@ class TMDBMovieMatchingService:
                 original_title_norm=original_title_norm,
                 expected_media_type=expected_media_type,
                 include_alternative_titles=False,
+                movie_title_variants=movie_title_variants,
+                original_title_variants=original_title_variants,
             )
             raw.quick_score = score
 
@@ -586,7 +710,14 @@ class TMDBMovieMatchingService:
         movie_title_norm: str,
         original_title_norm: str,
         expected_media_type: MediaType | None,
+        movie_title_variants: TitleVariants | None = None,
+        original_title_variants: TitleVariants | None = None,
     ) -> list[TMDBCandidate]:
+        if movie_title_variants is None:
+            movie_title_variants = cls.extract_title_variants(movie.title or movie_title_norm or "")
+        if original_title_variants is None:
+            original_title_variants = cls.extract_title_variants(movie.original_title or original_title_norm or "")
+
         scored: list[TMDBCandidate] = []
         for raw in raw_candidates.values():
             score, reasons = cls._score_candidate(
@@ -596,6 +727,8 @@ class TMDBMovieMatchingService:
                 original_title_norm=original_title_norm,
                 expected_media_type=expected_media_type,
                 include_alternative_titles=True,
+                movie_title_variants=movie_title_variants,
+                original_title_variants=original_title_variants,
             )
             scored.append(
                 TMDBCandidate(
@@ -633,28 +766,52 @@ class TMDBMovieMatchingService:
         original_title_norm: str,
         expected_media_type: MediaType | None,
         include_alternative_titles: bool,
+        movie_title_variants: TitleVariants | None = None,
+        original_title_variants: TitleVariants | None = None,
     ) -> tuple[int, list[str]]:
+        if movie_title_variants is None:
+            movie_title_variants = cls.extract_title_variants(movie.title or movie_title_norm or "")
+        if original_title_variants is None:
+            original_title_variants = cls.extract_title_variants(movie.original_title or original_title_norm or "")
+
         score = 0
         reasons: list[str] = []
 
         candidate_title_norm = cls.normalize_title(raw.title)
         candidate_original_norm = cls.normalize_title(raw.original_title)
 
-        if original_title_norm and candidate_original_norm == original_title_norm:
+        if candidate_original_norm and (
+            (original_title_variants.primary_norm and candidate_original_norm == original_title_variants.primary_norm)
+            or (original_title_variants.full_norm and candidate_original_norm == original_title_variants.full_norm)
+            or (candidate_original_norm in original_title_variants.aliases_norm)
+        ):
+            score += cls.SCORE_ORIGINAL_EXACT
+            reasons.append("original_exact")
+        elif (
+            candidate_title_norm
+            and candidate_title_norm in original_title_variants.all_norms
+            and candidate_title_norm not in movie_title_variants.all_norms
+        ):
             score += cls.SCORE_ORIGINAL_EXACT
             reasons.append("original_exact")
 
-        if movie_title_norm and candidate_title_norm == movie_title_norm:
+        if candidate_title_norm and (
+            (movie_title_variants.primary_norm and candidate_title_norm == movie_title_variants.primary_norm)
+            or (movie_title_variants.full_norm and candidate_title_norm == movie_title_variants.full_norm)
+            or (candidate_title_norm in movie_title_variants.aliases_norm)
+        ):
             score += cls.SCORE_LOCAL_EXACT
             reasons.append("title_exact")
 
         if include_alternative_titles:
-            if movie_title_norm and movie_title_norm in raw.alternative_titles:
-                score += cls.SCORE_ALTERNATIVE_TITLE
-                reasons.append("title_in_alternative")
-            if original_title_norm and original_title_norm in raw.alternative_titles:
-                score += cls.SCORE_ALTERNATIVE_TITLE
-                reasons.append("original_in_alternative")
+            if "title_exact" not in reasons:
+                if any(norm in raw.alternative_titles for norm in movie_title_variants.all_norms if norm):
+                    score += cls.SCORE_ALTERNATIVE_TITLE
+                    reasons.append("title_in_alternative")
+            if "original_exact" not in reasons:
+                if any(norm in raw.alternative_titles for norm in original_title_variants.all_norms if norm):
+                    score += cls.SCORE_ALTERNATIVE_TITLE
+                    reasons.append("original_in_alternative")
 
         if movie.year and raw.year:
             delta = abs(movie.year - raw.year)

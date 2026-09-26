@@ -9,7 +9,8 @@ class PreferencesForm(forms.ModelForm):
         model = UserPreferences
         fields = ['last_scan', 'scan_from_page', 'plex_address', 'plex_token', 'countries', 'genres', 'max_year',
                   'min_rating', 'kinozal_domain', 'low_countries', 'low_genres', 'low_max_year', 'low_min_rating',
-                  'tmdb_api_key', 'omdb_api_key', 'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
+                  'tmdb_api_key', 'omdb_api_key', 'tavily_api_key',
+                  'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
                   'ignore_title', 'cookie_pass', 'cookie_uid',
                   'torrents_hotfolder',
                   'ai_enabled', 'ai_base_url', 'ai_api_key', 'ai_model',
@@ -59,6 +60,12 @@ class PreferencesForm(forms.ModelForm):
                 <hr>
             """),
             Field("omdb_api_key"),
+            HTML("""
+                <h3>Tavily</h3>
+                <i>Ключ Tavily API для веб-поиска в умном поиске TMDB. На проде обязателен: без него очередь TMDB sync не стартует.</i>
+                <hr>
+            """),
+            Field("tavily_api_key"),
             HTML("""<h3>Strict rules</h3>
                 <i>Сначала из всего списка удаляеся все, что содержит эти страны/жанры или менее года/рейтинга</i>
                 <hr>

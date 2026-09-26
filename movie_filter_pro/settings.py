@@ -376,3 +376,7 @@ TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/"  # Но по феншую э
 # OMDB
 # Legacy fallback: основной источник — UserPreferences.omdb_api_key (см. OMDBService.get_api_key).
 OMDB_API_KEY = config("OMDB_API_KEY", default="")
+
+# Tavily
+# Legacy/dev fallback: основной источник — UserPreferences.tavily_api_key (см. TavilyService.get_api_key).
+TAVILY_API_KEY = config("TAVILY_API_KEY", default="")

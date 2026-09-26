@@ -59,6 +59,29 @@ class TMDBMovieSyncService:
     """Синхронизация локального vault.Movie с данными TMDB."""
 
     @classmethod
+    def describe_exception(cls, exc: Exception) -> str:
+        """Понятный пользователю текст ошибки sync вместо сырого SQL/стектрейса.
+
+        Частые случаи:
+        - Tavily не работает -> отдаём его сообщение (очередь глушится через stop_reason);
+        - БД не соответствует коду (не применены миграции) -> прямо говорим, что делать.
+        """
+        from django.db import DatabaseError
+
+        from vault.services.tavily_service import TavilySearchError
+
+        if isinstance(exc, TavilySearchError):
+            return str(exc)
+        message = str(exc)
+        if isinstance(exc, DatabaseError) or "does not exist" in message:
+            return (
+                "Схема БД не соответствует коду приложения — похоже, не применены миграции. "
+                "Выполни `uv run python manage.py migrate` и повтори. "
+                f"Детали: {message.splitlines()[0][:200]}"
+            )
+        return message
+
+    @classmethod
     def sync_movie(
         cls,
         movie: Movie,

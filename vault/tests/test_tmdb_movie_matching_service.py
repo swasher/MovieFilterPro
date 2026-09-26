@@ -1035,12 +1035,13 @@ class SmartSearchFallbackTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
+    @patch("vault.services.tavily_service.TavilyService.search_web", return_value="")
     @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_empty_main_search_is_rescued_by_smart_literal(
-        self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, choose_best_mock, compare_mock
+        self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, _tavily_mock, choose_best_mock, compare_mock
     ):
         fake = _YearFilterFakeTMDB(self._candidate())
         main_client_mock.return_value = fake
@@ -1055,11 +1056,12 @@ class SmartSearchFallbackTests(SimpleTestCase):
         choose_best_mock.assert_not_called()
         compare_mock.assert_not_called()
 
+    @patch("vault.services.tavily_service.TavilyService.search_web", return_value="")
     @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_smart_finds_nothing_keeps_not_found(self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock):
+    def test_smart_finds_nothing_keeps_not_found(self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, _tavily_mock):
         fake = _YearFilterFakeTMDB(None)
         main_client_mock.return_value = fake
         smart_ru_mock.return_value = fake
@@ -1134,3 +1136,70 @@ class MainYearFreeFallbackTests(SimpleTestCase):
         self.assertEqual(result.selected_candidate.tmdb_id, 1271103)
         choose_best_mock.assert_not_called()
         compare_mock.assert_not_called()
+
+    def test_extract_title_variants(self):
+        v1 = TMDBMovieMatchingService.extract_title_variants("Голдфингер (Золотой палец)")
+        self.assertEqual(v1.primary_raw, "Голдфингер")
+        self.assertEqual(v1.primary_norm, "голдфингер")
+        self.assertEqual(v1.aliases_norm, ("золотой палец",))
+        self.assertIn("голдфингер", v1.all_norms)
+        self.assertIn("золотой палец", v1.all_norms)
+
+        v2 = TMDBMovieMatchingService.extract_title_variants("Gam sau zi (The Goldfinger)")
+        self.assertEqual(v2.primary_raw, "Gam sau zi")
+        self.assertEqual(v2.primary_norm, "gam sau zi")
+        self.assertEqual(v2.aliases_norm, ("the goldfinger",))
+
+        v3 = TMDBMovieMatchingService.extract_title_variants("Дюна / Dune")
+        self.assertEqual(v3.primary_norm, "дюна")
+        self.assertEqual(v3.aliases_norm, ("dune",))
+
+        v4 = TMDBMovieMatchingService.extract_title_variants("Captain America: Brave New World (IMAX)")
+        self.assertEqual(v4.primary_norm, "captain america brave new world")
+        self.assertEqual(v4.aliases_norm, ())
+
+        v5 = TMDBMovieMatchingService.extract_title_variants("Онегин (сериал)")
+        self.assertEqual(v5.primary_norm, "онегин")
+        self.assertEqual(v5.aliases_norm, ())
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_composite_parenthetical_titles_auto_match(self, get_tmdb_client_mock):
+        movie = Movie(
+            title="Голдфингер (Золотой палец)",
+            original_title="Gam sau zi (The Goldfinger)",
+            year=2023,
+            movie_type=Movie.MovieType.MOVIE,
+        )
+        candidate = SimpleNamespace(
+            id=823598,
+            title="Голдфингер",
+            original_title="金手指",
+            release_date=date(2023, 12, 30),
+            poster_path="/goldfinger.jpg",
+            popularity=50.0,
+            vote_average=7.0,
+            overview="В 1980-х в Гонконге...",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[candidate],
+            movie_details={
+                823598: SimpleNamespace(
+                    alternative_titles=[
+                        SimpleNamespace(title="The Goldfinger"),
+                        SimpleNamespace(title="Gam sau zi"),
+                    ]
+                )
+            },
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 823598)
+        self.assertIn("title_exact", result.selected_candidate.score_reasons)
+        self.assertIn("original_in_alternative", result.selected_candidate.score_reasons)
+        self.assertIn("year_exact", result.selected_candidate.score_reasons)
+        self.assertIn("media_type_match", result.selected_candidate.score_reasons)
+        self.assertEqual(result.selected_candidate.score, 115)
