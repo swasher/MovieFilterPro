@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 from vault.models import Movie
+from web_logger import send_match_log
 
 
 logger = logging.getLogger("vault.tmdb_sync")
@@ -113,6 +114,11 @@ class TMDBMatchResolver:
             getattr(movie, "id", None),
             winner.tmdb_id,
             ",".join(str(candidate.tmdb_id) for candidate in fuzzy_result.candidates),
+        )
+        send_match_log(
+            "literal_match",
+            movie_id=getattr(movie, "id", None),
+            tmdb_id=winner.tmdb_id,
         )
         return cls._promote_literal_match(fuzzy_result, winner, auto_match_min_score)
 
@@ -228,7 +234,15 @@ class TMDBMatchResolver:
     ) -> AICandidateChoice | None:
         from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
 
-        return TMDBAIMatchingService.choose_best_candidate(movie, candidates)
+        choice = TMDBAIMatchingService.choose_best_candidate(movie, candidates)
+        if choice is not None:
+            send_match_log(
+                "ai_choose",
+                movie_id=getattr(movie, "id", None),
+                selected_tmdb_id=getattr(choice.selected_candidate, "tmdb_id", None),
+                confidence=round(choice.confidence, 2),
+            )
+        return choice
 
     @classmethod
     def _stage_is_choice_confident(
@@ -258,6 +272,12 @@ class TMDBMatchResolver:
             title=movie.title or selected.title or "",
             original_title=movie.original_title or selected.original_title or "",
             year=movie.year or selected.year,
+        )
+        send_match_log(
+            "ai_verify",
+            movie_id=getattr(movie, "id", None),
+            same_work=comparison.same_work if comparison is not None else None,
+            confidence=round(comparison.confidence, 2) if comparison is not None else None,
         )
         return comparison
 

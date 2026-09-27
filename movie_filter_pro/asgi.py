@@ -6,6 +6,7 @@ from starlette.applications import Starlette
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from web_logger.routing import websocket_urlpatterns
+from web_logger.pg_bridge import start_listener_thread
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_filter_pro.settings')
 
@@ -31,3 +32,7 @@ application = ProtocolTypeRouter({
         URLRouter(websocket_urlpatterns)
     ),
 })
+
+# Мост PG LISTEN/NOTIFY: доставка событий из HUEY-процесса в WebSocket
+# (см. web_logger/pg_bridge.py и PLANS_MATCHING_LOG.md, Шаг 0).
+start_listener_thread()

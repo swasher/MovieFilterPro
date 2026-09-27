@@ -10,6 +10,7 @@ import requests
 
 from moviefilter.models import UserPreferences
 from vault.models import Movie
+from web_logger import send_match_log
 
 if TYPE_CHECKING:
     from vault.services.tmdb_movie_matching_service import TMDBCandidate
@@ -121,6 +122,13 @@ class TMDBGROQMatchingService:
         scored: list[GroqPlotScore] = []
         for candidate in viable:
             score = cls.compare_pair(source_plot, candidate.overview or "")
+            send_match_log(
+                "groq_call",
+                movie_id=getattr(movie, "id", None),
+                tmdb_id=candidate.tmdb_id,
+                confidence=round(score.confidence, 2) if score is not None else None,
+                ok=score is not None,
+            )
             if score is None:
                 continue
             scored.append(

@@ -13,6 +13,10 @@ class LogConsumer(AsyncWebsocketConsumer):
     #     self.LOG_FILE_PATH = os.path.join(settings.BASE_DIR, 'logs/full.log')
 
     async def connect(self):
+        # Страховка на случай, если asgi.py не импортировался (мост идемпотентен).
+        from web_logger.pg_bridge import start_listener_thread
+
+        start_listener_thread()
         await self.channel_layer.group_add('log_updates', self.channel_name)
         await self.accept()
         # await self.send_initial_log()  # отправляем стартовый лог после коннекта

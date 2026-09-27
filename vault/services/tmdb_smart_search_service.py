@@ -13,7 +13,8 @@ from vault.services.tmdb_movie_matching_service import (
     TMDBMatchingResult,
     TMDBMovieMatchingService,
 )
-from vault.services.web_search_service import WebSearchService
+from vault.services.web_search_service import WebSearchError, WebSearchService
+from web_logger import send_match_log
 
 
 logger = logging.getLogger("vault.tmdb_sync")
@@ -270,6 +271,12 @@ def score_candidates(
         if comparison is None:
             logger.info("SMART_SEARCH_SKIP | tmdb_id=%s | reason=ai_unavailable", candidate.tmdb_id)
             continue
+        send_match_log(
+            "ai_score",
+            tmdb_id=candidate.tmdb_id,
+            same_work=comparison.same_work,
+            confidence=round(comparison.confidence, 2),
+        )
         if not comparison.same_work or comparison.red_flags:
             logger.info(
                 "SMART_SEARCH_REJECTED | tmdb_id=%s | same_work=%s | red_flags=%s",
@@ -328,11 +335,18 @@ def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str]
     пробрасывается наверх: если веб-поиск не работает, очередь TMDB sync должна
     остановиться с красным тостом, а не молча продолжать.
     """
-    web_context = WebSearchService.search_web(
-        movie.title or "",
-        movie.original_title or "",
-        movie.description or "",
-    )
+    provider = WebSearchService.get_provider()
+    try:
+        web_context = WebSearchService.search_web(
+            movie.title or "",
+            movie.original_title or "",
+            movie.description or "",
+        )
+    except WebSearchError:
+        send_match_log("web_search", engine=provider or "none", ok=False)
+        raise
+    send_match_log("web_search", engine=provider or "none", ok=True)
+
     clean_title = movie.original_title or movie.title or ""
     llm_year = movie.year
     if not (web_context or "").strip():
@@ -345,6 +359,7 @@ def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str]
         web_context=web_context,
     )
     if hints:
+        queries_before = len(queries)
         for raw_query in hints.get("tmdb_queries") or []:
             cleaned = TMDBMovieMatchingService._clean_query(raw_query)
             if cleaned and cleaned not in queries:
@@ -353,6 +368,12 @@ def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str]
             clean_title = hints["clean_title"].strip()
         if hints.get("year") is not None:
             llm_year = hints["year"]
+        send_match_log(
+            "ai_web_hints",
+            clean_title=clean_title,
+            llm_year=llm_year,
+            queries_added=len(queries) - queries_before,
+        )
     return queries, clean_title, llm_year
 
 
@@ -364,6 +385,11 @@ def smart_search(movie: Movie) -> TMDBMatchingResult:
     Без описания (короче SMART_MIN_PLOT_CHARS) сверять нечего — поиск не запускаем.
     Веб-поиск обязателен: сбой (WebSearchError) останавливает очередь.
     """
+    send_match_log(
+        "smart_search_start",
+        movie_id=getattr(movie, "id", None),
+        title=movie.title or "",
+    )
     if len((movie.description or "").strip()) < SMART_MIN_PLOT_CHARS:
         return _not_found(MSG_SHORT_PLOT)
     queries = TMDBMovieMatchingService._build_queries(movie)

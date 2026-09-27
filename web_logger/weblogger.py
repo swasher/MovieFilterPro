@@ -6,6 +6,7 @@ import logging
 from enum import Enum
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from web_logger.pg_bridge import publish_notification
 
 
 class LogType(Enum):
@@ -50,6 +51,23 @@ async def asend_notification(payload: dict):
             "payload": payload,
         },
     )
+
+
+def send_match_log(event_type: str, **data):
+    """Структурированное событие шага матчинга → WebSocket.
+
+    Идёт через web_logger.pg_bridge (PG LISTEN/NOTIFY), потому что bulk-матчинг
+    работает в отдельном HUEY-процессе, куда in-memory channel layer не достаёт.
+    Никогда не бросает исключение: лог не должен ронять pipeline.
+    """
+    try:
+        publish_notification({
+            "type": "match_log",
+            "event": event_type,
+            **data,
+        })
+    except Exception:
+        debug_logger.debug("send_match_log failed: %s", event_type, exc_info=True)
 
 
 def log(message: str, logger_name: LogType = LogType.SCAN):

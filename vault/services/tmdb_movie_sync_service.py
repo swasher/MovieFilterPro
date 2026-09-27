@@ -15,6 +15,7 @@ from moviefilter.services.favorite_actor_matcher import (
     normalize_actor_name,
 )
 from tmdb_adapter.client_singleton import get_tmdb_client
+from web_logger import send_match_log
 from vault.models import Collection, Genre, Movie, MoviePerson, Episode, Person, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
     TMDBCandidate,
@@ -120,7 +121,7 @@ class TMDBMovieSyncService:
                     match_result = TMDBMovieMatchingService.match_movie(movie)
                     cls._log_match_found(match_result)
                     if match_result.status in {"needs_confirmation", "needs_user_choice"}:
-                        cls._log_done(match_result.status, match_result.message)
+                        cls._log_done(match_result.status, match_result.message, movie=movie)
                         return TMDBSyncResult(
                             status=match_result.status,
                             message=match_result.message,
@@ -128,7 +129,7 @@ class TMDBMovieSyncService:
                         )
                     if match_result.status == "not_found" or match_result.selected_candidate is None:
                         msg = match_result.message or "Не удалось подобрать TMDB фильм"
-                        cls._log_done("error", msg)
+                        cls._log_done("error", msg, movie=movie)
                         return TMDBSyncResult(
                             status="error",
                             message=msg,
@@ -142,7 +143,13 @@ class TMDBMovieSyncService:
             details, media_type = cls._load_details(tmdb, candidate)
             if details is None or media_type is None:
                 msg = "Не удалось загрузить детали фильма из TMDB"
-                cls._log_done("error", msg)
+                cls._log_done(
+                    "error",
+                    msg,
+                    movie=movie,
+                    tmdb_id=candidate.tmdb_id,
+                    media_type=candidate.media_type,
+                )
                 return TMDBSyncResult(
                     status="error",
                     message=msg,
@@ -223,7 +230,14 @@ class TMDBMovieSyncService:
                 crew_count = len(list(getattr(details, "crew", None) or []))
                 cls._log_sync_apply(all_updates, cast_count, crew_count)
                 cls._log_orphan_cleanup(orphan_deleted_count)
-                cls._log_done("ok", "sync completed")
+                cls._log_done(
+                    "ok",
+                    "sync completed",
+                    movie=movie,
+                    tmdb_id=candidate.tmdb_id,
+                    media_type=candidate.media_type,
+                    score=candidate.score,
+                )
 
             match_label = cls._match_source_label(candidate)
             ok_message = "Данные фильма обновлены из TMDB"
@@ -238,7 +252,7 @@ class TMDBMovieSyncService:
                 selected_candidate=candidate,
             )
         except Exception as exc:
-            cls._log_done("error", f"exception: {cls._log_text(str(exc), 180)}")
+            cls._log_done("error", f"exception: {cls._log_text(str(exc), 180)}", movie=movie)
             raise
 
     @classmethod
@@ -1409,6 +1423,13 @@ class TMDBMovieSyncService:
             f'SYNC_START | movie_id={movie.id} | title="{cls._log_text(movie.title, 90)}" '
             f'| orig="{cls._log_text(movie.original_title, 90)}" | year={movie.year or ""}'
         )
+        send_match_log(
+            "match_start",
+            movie_id=movie.id,
+            title=movie.title or "",
+            original_title=movie.original_title or "",
+            year=movie.year,
+        )
 
     @classmethod
     def _log_match_found(cls, match_result) -> None:
@@ -1464,8 +1485,29 @@ class TMDBMovieSyncService:
         cls._emit_log(f"ORPHAN_CLEANUP | deleted={deleted_count}")
 
     @classmethod
-    def _log_done(cls, status: str, msg: str) -> None:
+    def _log_done(
+        cls,
+        status: str,
+        msg: str,
+        *,
+        movie: Movie | None = None,
+        tmdb_id: int | None = None,
+        media_type: str | None = None,
+        score: int | None = None,
+    ) -> None:
         cls._emit_log(f'SYNC_DONE | status={status} | msg="{cls._log_text(msg, 220)}"')
+        if movie is None:
+            return
+        send_match_log(
+            "match_result",
+            movie_id=movie.id,
+            title=movie.title or "",
+            status=status,
+            tmdb_id=tmdb_id,
+            media_type=media_type,
+            score=score,
+            message=cls._log_text(msg, 220),
+        )
 
     @classmethod
     def _emit_log(cls, line: str) -> None:

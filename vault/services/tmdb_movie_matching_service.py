@@ -9,6 +9,7 @@ from tmdbapis.exceptions import NotFound
 
 from tmdb_adapter.client_singleton import get_tmdb_client
 from vault.models import Movie
+from web_logger import send_match_log
 
 
 logger = logging.getLogger("vault.tmdb_sync")
@@ -571,7 +572,15 @@ class TMDBMovieMatchingService:
         except Exception:
             return []
 
-        return response.results or []
+        results = response.results or []
+        send_match_log(
+            "tmdb_search",
+            query=query,
+            media_type=media_type,
+            year=year,
+            results_count=len(results),
+        )
+        return results
 
     @classmethod
     def _to_raw_candidate(cls, item, media_type: MediaType) -> _RawCandidate | None:
