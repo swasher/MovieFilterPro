@@ -214,15 +214,15 @@ class TMDBMovieMatchingService:
         Ленивый импорт: smart-модуль зависит от этого сервиса сверху.
         Вердикт умного поиска (включая его not_found) замещает исходный,
         т.к. он проделал более глубокую попытку. При исключении — исходный fallback.
-        TavilySearchError НЕ глотается: веб-поиск сломан — очередь должна
+        WebSearchError НЕ глотается: веб-поиск сломан — очередь должна
         остановиться с красным тостом, а не молча продолжать.
         """
-        from vault.services.tavily_service import TavilySearchError
         from vault.services.tmdb_smart_search_service import smart_search
+        from vault.services.web_search_service import WebSearchError
 
         try:
             return smart_search(movie)
-        except TavilySearchError:
+        except WebSearchError:
             raise
         except Exception as exc:
             logger.warning("SMART_SEARCH_FAILED | movie_id=%s | %s", getattr(movie, "id", None), exc)

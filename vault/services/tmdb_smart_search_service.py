@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from moviefilter.models import UserPreferences
 from tmdb_adapter.client_singleton import get_tmdb_client, get_tmdb_client_en
 from vault.models import Movie
-from vault.services.tavily_service import TavilyService
 from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
 from vault.services.tmdb_match_resolver import TMDBMatchResolver
 from vault.services.tmdb_movie_matching_service import (
@@ -14,6 +13,7 @@ from vault.services.tmdb_movie_matching_service import (
     TMDBMatchingResult,
     TMDBMovieMatchingService,
 )
+from vault.services.web_search_service import WebSearchService
 
 
 logger = logging.getLogger("vault.tmdb_sync")
@@ -321,13 +321,14 @@ def _not_found(message: str) -> TMDBMatchingResult:
 
 
 def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str], str, int | None]:
-    """Шаги 1-2 (урок find_tmdb_id.py): Tavily веб-поиск + извлечение подсказок локальным AI.
+    """Шаги 1-2 (урок find_tmdb_id.py): веб-поиск + извлечение подсказок локальным AI.
 
-    Возвращает (queries, clean_title, llm_year). TavilySearchError намеренно
+    Веб-поиск идёт через WebSearchService: SearXNG, если задан его URL, иначе Tavily.
+    Возвращает (queries, clean_title, llm_year). WebSearchError намеренно
     пробрасывается наверх: если веб-поиск не работает, очередь TMDB sync должна
     остановиться с красным тостом, а не молча продолжать.
     """
-    web_context = TavilyService.search_web(
+    web_context = WebSearchService.search_web(
         movie.title or "",
         movie.original_title or "",
         movie.description or "",
@@ -356,12 +357,12 @@ def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str]
 
 
 def smart_search(movie: Movie) -> TMDBMatchingResult:
-    """Fallback матчинга: веб-подсказки Tavily, year-free поиск ru+en, ранг, проверка сюжетов локальным AI.
+    """Fallback матчинга: веб-подсказки (SearXNG/Tavily), year-free поиск ru+en, ранг, проверка сюжетов локальным AI.
 
     Groq здесь не используется по решению владельца — только локальный AI.
     Без локального AI возможен лишь дословный матч, иначе not_found.
     Без описания (короче SMART_MIN_PLOT_CHARS) сверять нечего — поиск не запускаем.
-    Tavily обязателен: сбой веб-поиска (TavilySearchError) останавливает очередь.
+    Веб-поиск обязателен: сбой (WebSearchError) останавливает очередь.
     """
     if len((movie.description or "").strip()) < SMART_MIN_PLOT_CHARS:
         return _not_found(MSG_SHORT_PLOT)

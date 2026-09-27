@@ -11,6 +11,12 @@
 - При создании/редактировании файлов всегда использовать LF.
 - `core.autocrlf=false`, правила задаются через `.gitattributes`.
 
+### Конфигурация: .env vs Preferences
+- `.env` (и `config(...)` в `settings.py`) — только «системные» данные: SECRET_KEY, ALLOWED_HOSTS, DEBUG, подключения к БД, HUEY и т.п.
+- API-ключи и URL-ы внешних сервисов (TMDB, OMDB, Tavily, SearXNG, Plex, cookie Kinozal и пр.) настраиваются ИСКЛЮЧИТЕЛЬНО через пользовательский интерфейс (UserPreferences + страница Preferences).
+- Не добавляй для сервисных настроек fallback-и вида `*_API_KEY` / `*_URL` в `.env`/settings — код приложения их не читает.
+- Исключение — dev-машина: в локальном `.env` на самом деле есть все живые ключи, и их можно использовать во время разработки (отладка идей, standalone-скрипты). На продакшне в `.env` этих ключей нет — там только «системные» переменные; приложение в любом случае берёт сервисные настройки только из Preferences.
+
 ### Frontend Stack Rules
 - Новый frontend: `Svelte 5` с runes only.
 - Использовать только runes-синтаксис (`$state`, `$derived`, `$effect`, `$props`, snippets и т.д.).

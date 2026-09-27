@@ -82,7 +82,7 @@
   const KEY_LABELS: Record<string, string> = {
     tmdb_api_key: "TMDB API key",
     omdb_api_key: "OMDB API key",
-    tavily_api_key: "Tavily API key"
+    tavily_api_key: "Tavily API key / SearXNG URL"
   };
   const keyLabel = (key: string) => KEY_LABELS[key] ?? key;
 
@@ -124,7 +124,7 @@
   // Лёгкий опрос состояния (без тяжёлого items+count) — для авто-таймера.
   // Полный refresh (state + items) — только по ручным действиям;
   // смена страницы идёт через навигацию с ?page= (данные подтягивает load).
-  // Авто-остановка очереди воркером (ключи снесли / Tavily сломался / критическая
+  // Авто-остановка очереди воркером (ключи снесли / веб-поиск сломался / критическая
   // ошибка) — показываем красный тост один раз на переход enabled -> disabled.
   const applyQueueState = (payload: QueueState) => {
     const wasEnabled = enabled;

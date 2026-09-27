@@ -1035,13 +1035,13 @@ class SmartSearchFallbackTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
-    @patch("vault.services.tavily_service.TavilyService.search_web", return_value="")
+    @patch("vault.services.web_search_service.WebSearchService.search_web", return_value="")
     @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_empty_main_search_is_rescued_by_smart_literal(
-        self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, _tavily_mock, choose_best_mock, compare_mock
+        self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, _web_search_mock, choose_best_mock, compare_mock
     ):
         fake = _YearFilterFakeTMDB(self._candidate())
         main_client_mock.return_value = fake
@@ -1056,12 +1056,12 @@ class SmartSearchFallbackTests(SimpleTestCase):
         choose_best_mock.assert_not_called()
         compare_mock.assert_not_called()
 
-    @patch("vault.services.tavily_service.TavilyService.search_web", return_value="")
+    @patch("vault.services.web_search_service.WebSearchService.search_web", return_value="")
     @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_smart_finds_nothing_keeps_not_found(self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, _tavily_mock):
+    def test_smart_finds_nothing_keeps_not_found(self, main_client_mock, smart_ru_mock, smart_en_mock, _ai_mock, _web_search_mock):
         fake = _YearFilterFakeTMDB(None)
         main_client_mock.return_value = fake
         smart_ru_mock.return_value = fake

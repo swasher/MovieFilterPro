@@ -50,24 +50,23 @@ class TMDBSyncQueueService:
     # Ключи, без которых очередь нельзя стартовать:
     # tmdb_api_key — сам TMDB sync, omdb_api_key — рейтинги IMDb/RT/Metacritic
     # (OMDB тянется внутри каждого синка по imdb_id), tavily_api_key — веб-поиск
-    # в умном поиске TMDB (smart_search без него не работает).
+    # в умном поиске TMDB (WebSearchService: SearXNG URL или Tavily-ключ).
     REQUIRED_KEY_FIELDS = ("tmdb_api_key", "omdb_api_key", "tavily_api_key")
     KEY_LABELS = {
         "tmdb_api_key": "TMDB API key",
         "omdb_api_key": "OMDB API key",
-        "tavily_api_key": "Tavily API key",
+        "tavily_api_key": "Tavily API key или SearXNG URL",
     }
 
     @classmethod
     def get_missing_keys(cls, prefs=None) -> list[str]:
         """Список незаполненных API-ключей, нужных для TMDB sync.
 
-        OMDB/Tavily считаются настроенными, если ключ есть хотя бы где-то
-        (UserPreferences.*_api_key или legacy *_API_KEY в .env),
-        т.к. OMDBService/TavilyService умеют оба источника.
+        Все сервисные ключи/URL берутся только из Preferences (OMDB: omdb_api_key;
+        веб-поиск: searxng_url или tavily_api_key), без .env-fallback (см. AGENTS.md).
         """
         from vault.services.omdb_service import OMDBService
-        from vault.services.tavily_service import TavilyService
+        from vault.services.web_search_service import WebSearchService
 
         prefs = prefs if prefs is not None else UserPreferences.get()
         missing: list[str] = []
@@ -75,7 +74,7 @@ class TMDBSyncQueueService:
             missing.append("tmdb_api_key")
         if not OMDBService.is_configured():
             missing.append("omdb_api_key")
-        if not TavilyService.is_configured():
+        if not WebSearchService.is_configured():
             missing.append("tavily_api_key")
         return missing
 
@@ -344,17 +343,17 @@ class TMDBSyncQueueService:
         # ТЗ 6d: bulk_stats + стоп-кран 3 подряд + лог каждые 100
         cls._processed_count += 1
         cls._update_bulk_stats(item.state, outcome)
-        # Tavily сломался на ходу — глушим очередь сразу, без 3 подряд (не молча!).
-        if outcome.get("tavily_fatal"):
+        # Веб-поиск (SearXNG/Tavily) сломался на ходу — глушим очередь сразу, без 3 подряд (не молча!).
+        if outcome.get("web_search_fatal"):
             logger.critical(
-                "BULK_STOP | reason=tavily_failure | movie=%s msg=%s", movie.id, item.result_message[:300]
+                "BULK_STOP | reason=web_search_failure | movie=%s msg=%s", movie.id, item.result_message[:300]
             )
             cls.stop(reason=item.result_message[:500])
             return {
                 "state": item.state,
                 "movie_id": movie.id,
                 "result_message": item.result_message,
-                "bulk_stopped": "tavily",
+                "bulk_stopped": "web_search",
             }
         if cls._is_critical_outcome(outcome):
             cls._bulk_stats["critical"] = cls._bulk_stats.get("critical", 0) + 1
@@ -447,17 +446,17 @@ class TMDBSyncQueueService:
 
     @classmethod
     def _run_sync(cls, item: TMDBSyncQueueItem, movie: Movie) -> dict:
-        from vault.services.tavily_service import TavilySearchError
+        from vault.services.web_search_service import WebSearchError
 
         try:
             result: TMDBSyncResult = TMDBMovieSyncService.sync_movie(movie=movie)
-        except TavilySearchError as exc:
+        except WebSearchError as exc:
             # Фатально для очереди: process_one остановит её и сохранит stop_reason.
             return {
                 "state": TMDBSyncQueueItem.State.ERROR,
                 "result_status": "error",
-                "result_message": f"Tavily веб-поиск не работает: {exc}",
-                "tavily_fatal": True,
+                "result_message": f"Веб-поиск не работает: {exc}",
+                "web_search_fatal": True,
                 "error_trace": traceback.format_exc(),
             }
         except Exception as exc:

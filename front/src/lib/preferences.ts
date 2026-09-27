@@ -22,6 +22,7 @@ export type PreferencesData = {
   tmdb_api_key: string | null;
   omdb_api_key: string | null;
   tavily_api_key: string | null;
+  searxng_url: string | null;
   tmdb_v4_read_access_token: string | null;
   tmdb_v4_authenticated_access_token: string | null;
   ai_enabled: boolean;
@@ -53,6 +54,7 @@ export type PreferencesUpdatePayload = {
   tmdb_api_key: string | null;
   omdb_api_key: string | null;
   tavily_api_key: string | null;
+  searxng_url: string | null;
   tmdb_v4_read_access_token: string | null;
   ai_enabled: boolean;
   ai_base_url: string | null;
@@ -90,6 +92,7 @@ export const emptyPreferences = (): PreferencesData => ({
   tmdb_api_key: null,
   omdb_api_key: null,
   tavily_api_key: null,
+  searxng_url: null,
   tmdb_v4_read_access_token: null,
   tmdb_v4_authenticated_access_token: null,
   ai_enabled: false,

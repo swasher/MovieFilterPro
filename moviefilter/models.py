@@ -177,7 +177,13 @@ class UserPreferences(models.Model):
         max_length=200,
         blank=True,
         null=True,
-        help_text='API-ключ Tavily для веб-поиска в умном поиске TMDB (на проде обязателен)',
+        help_text='API-ключ Tavily для веб-поиска в умном поиске TMDB (не обязателен, если задан SearXNG URL)',
+    )
+    searxng_url = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text='URL локального SearXNG (/search). Если задан — веб-поиск идёт через него, Tavily-ключ не обязателен',
     )
     tmdb_v4_read_access_token = models.CharField(max_length=400, blank=True, null=True)
     tmdb_v4_authenticated_access_token = models.CharField(max_length=400, blank=True, null=True)

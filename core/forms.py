@@ -9,7 +9,7 @@ class PreferencesForm(forms.ModelForm):
         model = UserPreferences
         fields = ['last_scan', 'scan_from_page', 'plex_address', 'plex_token', 'countries', 'genres', 'max_year',
                   'min_rating', 'kinozal_domain', 'low_countries', 'low_genres', 'low_max_year', 'low_min_rating',
-                  'tmdb_api_key', 'omdb_api_key', 'tavily_api_key',
+                  'tmdb_api_key', 'omdb_api_key', 'tavily_api_key', 'searxng_url',
                   'tmdb_v4_read_access_token', 'tmdb_v4_authenticated_access_token',
                   'ignore_title', 'cookie_pass', 'cookie_uid',
                   'torrents_hotfolder',
@@ -33,6 +33,7 @@ class PreferencesForm(forms.ModelForm):
         self.fields["torrents_hotfolder"].widget.attrs["placeholder"] = (
             r"/torrents_hotfolder or \\qnap\TorrentsHotFolder"
         )
+        self.fields["searxng_url"].widget.attrs["placeholder"] = "http://localhost:8087/search"
 
         self.helper.layout = Layout(
             HTML("""<h3>Last scan</h3><hr>"""),
@@ -61,10 +62,12 @@ class PreferencesForm(forms.ModelForm):
             """),
             Field("omdb_api_key"),
             HTML("""
-                <h3>Tavily</h3>
-                <i>Ключ Tavily API для веб-поиска в умном поиске TMDB. На проде обязателен: без него очередь TMDB sync не стартует.</i>
+                <h3>Веб-поиск (умный поиск TMDB)</h3>
+                <i>SearXNG URL имеет приоритет: если задан — веб-поиск идёт через него. Иначе используется ключ Tavily API.
+                Без одного из них очередь TMDB sync не стартует.</i>
                 <hr>
             """),
+            Field("searxng_url"),
             Field("tavily_api_key"),
             HTML("""<h3>Strict rules</h3>
                 <i>Сначала из всего списка удаляеся все, что содержит эти страны/жанры или менее года/рейтинга</i>

@@ -23,8 +23,8 @@ import sys
 import time
 from dataclasses import dataclass
 
-# Адрес вашего запущенного инстанса SearXNG (можно переопределить --url или env SEARXNG_URL)
-DEFAULT_SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://localhost:8087/search")
+# Адрес инстанса SearXNG по умолчанию; переопределяется --url или Preferences.searxng_url
+DEFAULT_SEARXNG_URL = "http://localhost:8087/search"
 
 SEARXNG_TIMEOUT_SECONDS = 25
 SEARXNG_LANGUAGE_DEFAULT = "ru-RU"
@@ -117,20 +117,11 @@ def collect_db_cases(limit: int, movie_id: int | None = None) -> list[SearchCase
     return cases
 
 
-def build_queries(case: SearchCase, plot_fragment_chars: int, max_results: int) -> list[tuple[str, str]]:
-    """Повторяет построение запросов из TavilyService.search_web (чтобы сравнение было честным)."""
-    from vault.services.tavily_service import TavilyService
+def build_queries(case: SearchCase) -> list[tuple[str, str]]:
+    """Повторяет построение запросов из WebSearchService (чтобы сравнение было честным)."""
+    from vault.services.web_search_service import WebSearchService
 
-    name_parts: list[str] = []
-    for part in (case.title, case.original_title):
-        part = (part or "").strip()
-        if part and part not in name_parts:
-            name_parts.append(part)
-    queries = [("название", f"{' '.join(name_parts)} movie film")]
-    fragment = TavilyService._clip_plot(case.plot, plot_fragment_chars)
-    if fragment:
-        queries.append(("сюжет", f"{fragment} movie film"))
-    return queries
+    return WebSearchService._build_queries(case.title, case.original_title, case.plot)
 
 
 def print_section(title: str, symbol: str = "=") -> None:
@@ -167,16 +158,16 @@ def print_provider_result(result: ProviderResult) -> None:
 
 
 def run_tavily(case: SearchCase) -> ProviderResult:
-    from vault.services.tavily_service import TavilyService
+    from vault.services.web_search_service import WebSearchService
 
-    if not TavilyService.is_configured():
+    if not WebSearchService.get_tavily_api_key():
         return ProviderResult(
             "tavily", False,
-            error="TAVILY_API_KEY не настроен (UserPreferences.tavily_api_key или TAVILY_API_KEY в .env)",
+            error="Tavily API key не настроен (только Preferences: UserPreferences.tavily_api_key)",
         )
     t0 = time.perf_counter()
     try:
-        context = TavilyService.search_web(case.title, case.original_title, case.plot)
+        context = WebSearchService.search_web_via_tavily(case.title, case.original_title, case.plot)
     except Exception as exc:
         return ProviderResult(
             "tavily", False, elapsed=time.perf_counter() - t0,
@@ -198,12 +189,12 @@ def _format_unresponsive(items: object) -> str:
 def run_searxng(case: SearchCase, url: str, language: str, timeout: float) -> ProviderResult:
     import requests
 
-    from vault.services.tavily_service import TavilyService
+    from vault.services.web_search_service import WebSearchService
 
     t0 = time.perf_counter()
     context = ""
     notes: list[str] = []
-    queries = build_queries(case, TavilyService.PLOT_FRAGMENT_CHARS, TavilyService.MAX_RESULTS)
+    queries = build_queries(case)
 
     for label, query in queries:
         params: dict[str, str] = {"q": query, "format": "json"}
@@ -245,7 +236,7 @@ def run_searxng(case: SearchCase, url: str, language: str, timeout: float) -> Pr
         if not results:
             notes.append(f"пустая выдача по запросу «{label}»")
         context += f"--- Поиск по {label} ---\n"
-        for result in results[: TavilyService.MAX_RESULTS]:
+        for result in results[: WebSearchService.MAX_RESULTS]:
             title = (result.get("title") or "").strip()
             content = (result.get("content") or result.get("url") or "").strip()
             context += f"Заголовок: {title}\nКонтент: {content}\n\n"
@@ -332,7 +323,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Standalone-сравнение Tavily и локального SearXNG для умного поиска TMDB."
     )
-    parser.add_argument("--url", default=DEFAULT_SEARXNG_URL, help="URL SearXNG /search")
+    parser.add_argument("--url", default=None, help="URL SearXNG /search (по умолчанию из Preferences.searxng_url)")
     parser.add_argument(
         "--provider", choices=("both", "tavily", "searxng"), default="both",
         help="кого гонять (по умолчанию оба)",
@@ -375,6 +366,15 @@ def main() -> int:
         django_ready = False
         print(f"[!] Django setup failed: {exc}")
 
+    # URL: --url важнее Preferences, Preferences важнее localhost-заглушки
+    searxng_url = (args.url or "").strip()
+    if not searxng_url and django_ready:
+        from vault.services.web_search_service import WebSearchService
+
+        searxng_url = WebSearchService.get_searxng_url()
+    if not searxng_url:
+        searxng_url = DEFAULT_SEARXNG_URL
+
     if args.demo or not django_ready:
         if not args.demo:
             print("[!] БД недоступна — использую demo-кейсы.")
@@ -394,7 +394,7 @@ def main() -> int:
     run_searxng_flag = args.provider in ("both", "searxng")
 
     if run_searxng_flag:
-        probe_searxng(args.url, language, args.timeout)
+        probe_searxng(searxng_url, language, args.timeout)
 
     failures = 0
     for index, case in enumerate(cases, 1):
@@ -409,7 +409,7 @@ def main() -> int:
             if args.dump:
                 _dump_result(args.dump, index, results["tavily"])
         if run_searxng_flag:
-            results["searxng"] = run_searxng(case, args.url, language, args.timeout)
+            results["searxng"] = run_searxng(case, searxng_url, language, args.timeout)
             print_provider_result(results["searxng"])
             if args.dump:
                 _dump_result(args.dump, index, results["searxng"])

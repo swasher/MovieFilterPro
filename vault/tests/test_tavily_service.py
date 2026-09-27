@@ -14,27 +14,19 @@ class TavilyServiceTests(TestCase):
         prefs.tavily_api_key = "prefs-tavily-key"
         prefs.save()  # save() принудительно ставит pk=1 (синглтон)
 
-    @override_settings(TAVILY_API_KEY="env-tavily-key")
-    def test_prefers_key_from_preferences(self):
+    def test_key_read_from_preferences(self):
         self.assertEqual(TavilyService.get_api_key(), "prefs-tavily-key")
         self.assertTrue(TavilyService.is_configured())
 
-    @override_settings(TAVILY_API_KEY="env-tavily-key")
-    def test_falls_back_to_env_key(self):
+    def test_legacy_env_key_is_ignored(self):
+        # .env-fallback удалён: ключ берётся только из Preferences (см. AGENTS.md)
         prefs = UserPreferences.get()
         prefs.tavily_api_key = None
         prefs.save(update_fields=["tavily_api_key"])
-        self.assertEqual(TavilyService.get_api_key(), "env-tavily-key")
-        self.assertTrue(TavilyService.is_configured())
+        with override_settings(TAVILY_API_KEY="env-tavily-key"):
+            self.assertEqual(TavilyService.get_api_key(), "")
+            self.assertFalse(TavilyService.is_configured())
 
-    @override_settings(TAVILY_API_KEY="")
-    def test_not_configured_without_any_key(self):
-        prefs = UserPreferences.get()
-        prefs.tavily_api_key = None
-        prefs.save(update_fields=["tavily_api_key"])
-        self.assertFalse(TavilyService.is_configured())
-
-    @override_settings(TAVILY_API_KEY="")
     def test_search_web_raises_when_key_missing(self):
         prefs = UserPreferences.get()
         prefs.tavily_api_key = None

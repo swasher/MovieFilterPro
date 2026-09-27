@@ -41,6 +41,7 @@
     tmdb_api_key: string;
     omdb_api_key: string;
     tavily_api_key: string;
+    searxng_url: string;
     tmdb_v4_read_access_token: string;
     ai_enabled: boolean;
     ai_base_url: string;
@@ -87,6 +88,7 @@
     tmdb_api_key: preferences.tmdb_api_key ?? "",
     omdb_api_key: preferences.omdb_api_key ?? "",
     tavily_api_key: preferences.tavily_api_key ?? "",
+    searxng_url: preferences.searxng_url ?? "",
     tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? "",
     ai_enabled: preferences.ai_enabled ?? false,
     ai_base_url: preferences.ai_base_url ?? "",
@@ -117,6 +119,7 @@
     tmdb_api_key: asOptionalText(formState.tmdb_api_key),
     omdb_api_key: asOptionalText(formState.omdb_api_key),
     tavily_api_key: asOptionalText(formState.tavily_api_key),
+    searxng_url: asOptionalText(formState.searxng_url),
     tmdb_v4_read_access_token: asOptionalText(formState.tmdb_v4_read_access_token),
     ai_enabled: formState.ai_enabled,
     ai_base_url: asOptionalText(formState.ai_base_url),
@@ -531,10 +534,15 @@
 
         <Card class="border-border/70">
           <CardHeader>
-            <CardTitle class="text-xl">Tavily</CardTitle>
-            <CardDescription>Ключ Tavily API для веб-поиска в умном поиске TMDB. Без него очередь TMDB sync не стартует.</CardDescription>
+            <CardTitle class="text-xl">Веб-поиск (SearXNG / Tavily)</CardTitle>
+            <CardDescription>Веб-поиск для умного поиска TMDB. SearXNG URL имеет приоритет: если задан — Tavily не нужен. Без одного из них очередь TMDB sync не стартует.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">
+            <div class="space-y-2">
+              <div class="text-sm font-medium">SearXNG URL</div>
+              <Input bind:value={form.searxng_url} placeholder="http://localhost:8087/search" />
+              <div class="text-xs text-muted-foreground">{form.searxng_url.trim() ? "Активный провайдер: SearXNG" : "Пусто — используется Tavily"}</div>
+            </div>
             <div class="space-y-2">
               <div class="text-sm font-medium">Tavily API key</div>
               <Input bind:value={form.tavily_api_key} type="password" placeholder="tvly-..." />
@@ -683,8 +691,8 @@
               <span>{form.omdb_api_key.trim() ? "Configured" : "Missing"}</span>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
-              <span>Tavily API key</span>
-              <span>{form.tavily_api_key.trim() ? "Configured" : "Missing"}</span>
+              <span>Веб-поиск</span>
+              <span>{form.searxng_url.trim() ? "SearXNG" : form.tavily_api_key.trim() ? "Tavily" : "Missing"}</span>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>Plex token</span>

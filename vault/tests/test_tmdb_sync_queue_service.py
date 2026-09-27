@@ -345,9 +345,9 @@ class TMDBSyncQueueServiceTests(TestCase):
         prefs.tmdb_api_key = None
         prefs.omdb_api_key = None
         prefs.tavily_api_key = None
-        prefs.save(update_fields=["tmdb_api_key", "omdb_api_key", "tavily_api_key"])
+        prefs.searxng_url = None
+        prefs.save(update_fields=["tmdb_api_key", "omdb_api_key", "tavily_api_key", "searxng_url"])
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_get_missing_keys_lists_unconfigured_keys(self):
         self.assertEqual(TMDBSyncQueueService.get_missing_keys(), [])
 
@@ -368,15 +368,28 @@ class TMDBSyncQueueServiceTests(TestCase):
             ["tmdb_api_key", "omdb_api_key", "tavily_api_key"],
         )
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="env-tavily-key")
-    def test_get_missing_keys_accepts_tavily_env_fallback(self):
-        # Dev-сценарий: ключ в Preferences пуст, но есть TAVILY_API_KEY в .env
+    @override_settings(
+        OMDB_API_KEY="env-omdb-key", TAVILY_API_KEY="env-tavily-key", SEARXNG_URL="http://env-url/search"
+    )
+    def test_get_missing_keys_ignores_legacy_env_settings(self):
+        # .env-fallback удалён (см. AGENTS.md): все сервисные ключи/URL берутся
+        # только из Preferences, поэтому settings.*_API_KEY/*_URL игнорируются
+        prefs = UserPreferences.get()
+        prefs.omdb_api_key = None
+        prefs.tavily_api_key = None
+        prefs.save(update_fields=["omdb_api_key", "tavily_api_key"])
+        self.assertEqual(
+            TMDBSyncQueueService.get_missing_keys(), ["omdb_api_key", "tavily_api_key"]
+        )
+
+    def test_get_missing_keys_accepts_searxng_url(self):
+        # SearXNG заменяет Tavily: ключ не обязателен, если задан URL инстанса
         prefs = UserPreferences.get()
         prefs.tavily_api_key = None
-        prefs.save(update_fields=["tavily_api_key"])
+        prefs.searxng_url = "http://localhost:8087/search"
+        prefs.save(update_fields=["tavily_api_key", "searxng_url"])
         self.assertEqual(TMDBSyncQueueService.get_missing_keys(), [])
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_get_state_reports_missing_keys(self):
         self.assertEqual(TMDBSyncQueueService.get_state()["missing_keys"], [])
         self._clear_keys()
@@ -385,7 +398,6 @@ class TMDBSyncQueueServiceTests(TestCase):
             ["tmdb_api_key", "omdb_api_key", "tavily_api_key"],
         )
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_start_raises_when_keys_missing(self):
         self._clear_keys()
         with self.assertRaises(TMDBSyncKeysMissingError) as ctx:
@@ -396,7 +408,6 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
         self.mock_schedule_tick.assert_not_called()
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_start_raises_when_only_omdb_missing(self):
         prefs = UserPreferences.get()
         prefs.omdb_api_key = None
@@ -406,7 +417,6 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertEqual(ctx.exception.missing_keys, ["omdb_api_key"])
         self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     def test_start_raises_when_only_tavily_missing(self):
         prefs = UserPreferences.get()
         prefs.tavily_api_key = None
@@ -417,7 +427,6 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertIn("Tavily API key", str(ctx.exception))
         self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     @patch.object(TMDBMovieSyncService, "sync_movie")
     def test_process_one_stops_queue_when_keys_removed_midrun(self, sync_mock):
         movie = self._movie(title="Target")
@@ -435,10 +444,9 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertEqual(item.state, TMDBSyncQueueItem.State.PENDING)
 
     # ------------------------------------------------------------------ #
-    #              stop_reason / tavily fatal: не молча!                  #
+    #              stop_reason / web search fatal: не молча!               #
     # ------------------------------------------------------------------ #
 
-    @override_settings(OMDB_API_KEY="", TAVILY_API_KEY="")
     @patch.object(TMDBMovieSyncService, "sync_movie")
     def test_auto_stop_persists_reason_and_start_clears_it(self, sync_mock):
         TMDBSyncQueueService.enqueue_unsynced()
@@ -463,23 +471,23 @@ class TMDBSyncQueueServiceTests(TestCase):
         self.assertIsNone(TMDBSyncQueueService.get_state()["stop_reason"])
 
     @patch.object(TMDBMovieSyncService, "sync_movie")
-    def test_tavily_failure_stops_queue_with_reason(self, sync_mock):
-        from vault.services.tavily_service import TavilySearchError
+    def test_web_search_failure_stops_queue_with_reason(self, sync_mock):
+        from vault.services.web_search_service import WebSearchError
 
         movie = self._movie(title="Target")
         TMDBSyncQueueService.enqueue_unsynced()
-        sync_mock.side_effect = TavilySearchError("Tavily веб-поиск (сюжет) не сработал: Invalid API key")
+        sync_mock.side_effect = WebSearchError("SearXNG веб-поиск (сюжет) не сработал: HTTP 403")
 
         TMDBSyncQueueService.start()
         result = TMDBSyncQueueService.process_one()
 
-        self.assertEqual(result["bulk_stopped"], "tavily")
+        self.assertEqual(result["bulk_stopped"], "web_search")
         self.assertFalse(UserPreferences.get().tmdb_sync_enabled)
         stop_reason = UserPreferences.get().tmdb_sync_stop_reason
-        self.assertIn("Tavily", stop_reason)
+        self.assertIn("SearXNG", stop_reason)
         item = TMDBSyncQueueItem.objects.get(movie=movie)
         self.assertEqual(item.state, TMDBSyncQueueItem.State.ERROR)
-        self.assertIn("Tavily веб-поиск не работает", item.result_message)
+        self.assertIn("Веб-поиск не работает", item.result_message)
 
     @patch.object(TMDBMovieSyncService, "sync_movie")
     def test_manual_stop_does_not_set_reason(self, sync_mock):

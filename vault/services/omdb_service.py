@@ -5,7 +5,6 @@ from decimal import Decimal, InvalidOperation
 from typing import TypedDict
 
 import requests
-from django.conf import settings
 
 logger = logging.getLogger("vault.omdb_sync")
 
@@ -26,8 +25,8 @@ class OMDBRatings(TypedDict, total=False):
 class OMDBService:
     """Клиент OMDB API для получения рейтингов по IMDb ID.
 
-    Ключ читается из UserPreferences.omdb_api_key.
-    OMDB_API_KEY из settings (.env) оставлен только как legacy-fallback.
+    Ключ читается ТОЛЬКО из UserPreferences.omdb_api_key (см. AGENTS.md:
+    сервисные ключи — только через UI, без fallback в .env).
     Читает массив Ratings, а не верхнеуровневые поля.
     """
 
@@ -35,16 +34,14 @@ class OMDBService:
 
     @classmethod
     def get_api_key(cls) -> str:
-        """OMDB ключ: сначала UserPreferences, затем legacy settings (.env)."""
+        """OMDB ключ: только UserPreferences.omdb_api_key."""
         try:
             from moviefilter.models import UserPreferences
 
-            prefs_key = (UserPreferences.get().omdb_api_key or "").strip()
-            if prefs_key:
-                return prefs_key
+            return (UserPreferences.get().omdb_api_key or "").strip()
         except Exception:
-            logger.debug("OMDB prefs lookup failed, fallback to settings", exc_info=True)
-        return (getattr(settings, "OMDB_API_KEY", "") or "").strip()
+            logger.debug("OMDB prefs lookup failed", exc_info=True)
+            return ""
 
     @classmethod
     def is_configured(cls) -> bool:

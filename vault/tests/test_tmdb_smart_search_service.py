@@ -179,9 +179,9 @@ def _overview_item(tmdb_id, overview, title="Про секс спроси у м�
 
 class SmartSearchOrchestrationTests(SimpleTestCase):
     def setUp(self):
-        # Tavily — внешний сервис: в orchestration-тестах по умолчанию пустой контекст.
+        # Веб-поиск — внешний сервис: в orchestration-тестах по умолчанию пустой контекст.
         patcher = patch(
-            "vault.services.tmdb_smart_search_service.TavilyService.search_web",
+            "vault.services.tmdb_smart_search_service.WebSearchService.search_web",
             return_value="",
         )
         self.search_web_mock = patcher.start()
@@ -289,13 +289,13 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    def test_tavily_failure_propagates_and_stops_nothing_silently(self, ru_mock, en_mock):
-        # Если Tavily не работает — smart_search обязан поднять ошибку наверх,
+    def test_web_search_failure_propagates_and_stops_nothing_silently(self, ru_mock, en_mock):
+        # Если веб-поиск не работает — smart_search обязан поднять ошибку наверх,
         # чтобы очередь TMDB sync остановилась, а не молча продолжала.
-        from vault.services.tavily_service import TavilySearchError
+        from vault.services.web_search_service import WebSearchError
 
-        self.search_web_mock.side_effect = TavilySearchError("Invalid API key")
-        with self.assertRaises(TavilySearchError):
+        self.search_web_mock.side_effect = WebSearchError("Invalid API key")
+        with self.assertRaises(WebSearchError):
             smart_search(_smart_movie())
         ru_mock.assert_not_called()
         en_mock.assert_not_called()

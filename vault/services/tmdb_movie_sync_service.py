@@ -63,14 +63,15 @@ class TMDBMovieSyncService:
         """Понятный пользователю текст ошибки sync вместо сырого SQL/стектрейса.
 
         Частые случаи:
-        - Tavily не работает -> отдаём его сообщение (очередь глушится через stop_reason);
+        - веб-поиск (SearXNG/Tavily) не работает -> отдаём его сообщение
+          (очередь глушится через stop_reason);
         - БД не соответствует коду (не применены миграции) -> прямо говорим, что делать.
         """
         from django.db import DatabaseError
 
-        from vault.services.tavily_service import TavilySearchError
+        from vault.services.web_search_service import WebSearchError
 
-        if isinstance(exc, TavilySearchError):
+        if isinstance(exc, WebSearchError):
             return str(exc)
         message = str(exc)
         if isinstance(exc, DatabaseError) or "does not exist" in message:
