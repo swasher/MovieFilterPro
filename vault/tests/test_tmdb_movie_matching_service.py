@@ -1203,3 +1203,158 @@ class MainYearFreeFallbackTests(SimpleTestCase):
         self.assertIn("year_exact", result.selected_candidate.score_reasons)
         self.assertIn("media_type_match", result.selected_candidate.score_reasons)
         self.assertEqual(result.selected_candidate.score, 115)
+
+
+class YearFreeSearchTests(SimpleTestCase):
+    def _movie(self, **kwargs):
+        params = {
+            "title": "Воздушный шар",
+            "original_title": "Ballon",
+            "year": 2018,
+            "movie_type": Movie.MovieType.MOVIE,
+        }
+        params.update(kwargs)
+        return Movie(**params)
+
+    def _max_match_candidate(self):
+        return SimpleNamespace(
+            id=483983,
+            title="Воздушный шар",
+            original_title="Ballon",
+            release_date=date(2018, 9, 27),
+            poster_path="/ballon.jpg",
+            popularity=10.0,
+            vote_average=7.0,
+        )
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_collect_is_year_free_and_stops_after_strong_winner(self, client_mock):
+        candidate = self._max_match_candidate()
+        movie_calls = []
+        tv_calls = []
+
+        class RecordingTMDB:
+            def movie_search(self, query, include_adult=True, primary_release_year=None):
+                movie_calls.append((query, primary_release_year))
+                return _FakeSearchResponse([candidate])
+
+            def tv_search(self, query, include_adult=True, first_air_date_year=None):
+                tv_calls.append(query)
+                return _FakeSearchResponse([])
+
+        fake = RecordingTMDB()
+        client_mock.return_value = fake
+
+        collected = TMDBMovieMatchingService._collect_candidates(fake, self._movie())
+
+        self.assertIn(("movie", 483983), collected)
+        self.assertEqual(len(movie_calls), 1)
+        self.assertIsNone(movie_calls[0][1])
+        self.assertEqual(tv_calls, [])
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_collect_searches_tv_when_movie_match_is_weak(self, client_mock):
+        candidate = SimpleNamespace(
+            id=483983,
+            title="Воздушный шар",
+            original_title="Ballon",
+            release_date=date(2016, 9, 27),
+            poster_path="/ballon.jpg",
+            popularity=10.0,
+            vote_average=7.0,
+        )
+        movie_calls = []
+        tv_calls = []
+
+        class RecordingTMDB:
+            def movie_search(self, query, include_adult=True, primary_release_year=None):
+                movie_calls.append(query)
+                return _FakeSearchResponse([candidate])
+
+            def tv_search(self, query, include_adult=True, first_air_date_year=None):
+                tv_calls.append(query)
+                return _FakeSearchResponse([])
+
+        fake = RecordingTMDB()
+        client_mock.return_value = fake
+
+        collected = TMDBMovieMatchingService._collect_candidates(fake, self._movie())
+
+        self.assertIn(("movie", 483983), collected)
+        self.assertEqual(len(movie_calls), 2)
+        self.assertEqual(len(tv_calls), 2)
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_strong_winner_skips_details(self, client_mock):
+        candidate = self._max_match_candidate()
+        detail_calls = []
+
+        class RecordingTMDB:
+            def movie_search(self, query, include_adult=True, primary_release_year=None):
+                return _FakeSearchResponse([candidate])
+
+            def tv_search(self, query, include_adult=True, first_air_date_year=None):
+                return _FakeSearchResponse([])
+
+            def movie(self, movie_id):
+                detail_calls.append(movie_id)
+                return SimpleNamespace(alternative_titles=[], overview="")
+
+            def tv_show(self, tv_id):
+                detail_calls.append(tv_id)
+                return SimpleNamespace(alternative_titles=[], overview="")
+
+        fake = RecordingTMDB()
+        client_mock.return_value = fake
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertEqual(result.selected_candidate.tmdb_id, 483983)
+        self.assertEqual(detail_calls, [])
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_weak_match_still_enriches_with_details(self, client_mock):
+        candidate = SimpleNamespace(
+            id=823598,
+            title="Голдфингер",
+            original_title="金手指",
+            release_date=date(2023, 12, 30),
+            poster_path="/goldfinger.jpg",
+            popularity=50.0,
+            vote_average=7.0,
+        )
+        detail_calls = []
+
+        class RecordingTMDB:
+            def movie_search(self, query, include_adult=True, primary_release_year=None):
+                return _FakeSearchResponse([candidate])
+
+            def tv_search(self, query, include_adult=True, first_air_date_year=None):
+                return _FakeSearchResponse([])
+
+            def movie(self, movie_id):
+                detail_calls.append(movie_id)
+                return SimpleNamespace(
+                    alternative_titles=[SimpleNamespace(title="The Goldfinger")],
+                    overview="",
+                )
+
+            def tv_show(self, tv_id):
+                detail_calls.append(tv_id)
+                return SimpleNamespace(alternative_titles=[], overview="")
+
+        fake = RecordingTMDB()
+        client_mock.return_value = fake
+        movie = self._movie(
+            title="Голдфингер (Золотой палец)",
+            original_title="Gam sau zi (The Goldfinger)",
+            year=2023,
+        )
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertEqual(result.selected_candidate.tmdb_id, 823598)
+        self.assertIn("original_in_alternative", result.selected_candidate.score_reasons)
+        self.assertIn(823598, detail_calls)

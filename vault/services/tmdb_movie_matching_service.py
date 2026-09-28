@@ -124,6 +124,27 @@ class TMDBMovieMatchingService:
             movie_title_variants=movie_title_variants,
             original_title_variants=original_title_variants,
         )
+
+        # Быстрый путь: максимально сильный матч по quick-скорам. Детали кандидатов
+        # (альтернативные названия) тянуть не нужно — они не могут изменить вердикт.
+        if cls._max_confident_winner(movie, raw_candidates) is not None:
+            best = cls._build_scored_candidates(
+                raw_candidates=raw_candidates,
+                movie=movie,
+                movie_title_norm=movie_title_norm,
+                original_title_norm=original_title_norm,
+                expected_media_type=expected_media_type,
+                include_alternative_titles=False,
+                movie_title_variants=movie_title_variants,
+                original_title_variants=original_title_variants,
+            )[0]
+            return TMDBMatchingResult(
+                status="auto_match",
+                selected_candidate=best,
+                candidates=(best,),
+                message="Найден уверенный матч TMDB",
+            )
+
         cls._enrich_with_alternative_titles(tmdb, raw_candidates)
         scored_candidates = cls._build_scored_candidates(
             raw_candidates=raw_candidates,
@@ -131,6 +152,7 @@ class TMDBMovieMatchingService:
             movie_title_norm=movie_title_norm,
             original_title_norm=original_title_norm,
             expected_media_type=expected_media_type,
+            include_alternative_titles=True,
             movie_title_variants=movie_title_variants,
             original_title_variants=original_title_variants,
         )
@@ -451,17 +473,65 @@ class TMDBMovieMatchingService:
     def _collect_candidates(cls, tmdb, movie: Movie) -> dict[tuple[str, int], _RawCandidate]:
         result: dict[tuple[str, int], _RawCandidate] = {}
         queries = cls._build_queries(movie)
-        years = cls._build_year_window(movie.year)
         media_order = cls._media_search_order(movie)
 
-        rounds = [(query, media_type, year) for query in queries for media_type in media_order for year in years]
-        cls._run_search_rounds(tmdb, rounds, result)
-        if not result and any(year is not None for year in years):
-            # Год в базе может врать и вырезать всё фильтром: повтор без года.
-            # Год при этом не пропадает — он отработает бонусами скоринга.
-            fallback_rounds = [(query, media_type, None) for query in queries for media_type in media_order]
-            cls._run_search_rounds(tmdb, fallback_rounds, result)
+        # Год сознательно не передаём в поиск: TMDB и так возвращает год каждого
+        # кандидата, а разбор «год ± 1» локальный скоринг делает сам (year_exact /
+        # year_near). Сначала ищем по ожидаемому media-типу, query за query;
+        # максимально сильный матч обрезает остальные поиски (ранний выход).
+        for query in queries:
+            cls._run_search_rounds(tmdb, [(query, media_order[0], None)], result)
+            if result and cls._max_confident_winner(movie, result) is not None:
+                return result
+
+        # Без сильного матча доискиваем второй media-тип: тип в базе может врать,
+        # и расхождения должны всплывать как неоднозначность, а не как пустота.
+        for media_type in media_order[1:]:
+            for query in queries:
+                cls._run_search_rounds(tmdb, [(query, media_type, None)], result)
         return result
+
+    @classmethod
+    def _max_confident_winner(
+        cls, movie: Movie, raw_candidates: dict[tuple[str, int], _RawCandidate]
+    ) -> _RawCandidate | None:
+        """Максимальный уверенный матч по quick-скорам: все четыре точных совпадения
+        (название + оригинал + год + медиа) и отрыв от второго >= AMBIGUOUS_DELTA_THRESHOLD.
+
+        Это потолок скора (SCORE_ORIGINAL_EXACT + SCORE_LOCAL_EXACT + SCORE_YEAR_EXACT +
+        SCORE_MEDIA_TYPE_MATCH): альтернативные названия у конкурентов (их добавляет
+        только enrichment) и непроведённые поиски в принципе не могут ни перебить
+        такого победителя, ни обвалить отрыв. Поэтому детали можно не тянуть вовсе.
+        """
+        expected = cls._expected_media_type(movie)
+        if expected is None:
+            # Без media-бонуса потолок недостижим — быстрый выход невозможен.
+            return None
+        movie_title_norm = cls.normalize_title(movie.title or "")
+        original_title_norm = cls.normalize_title(movie.original_title or "")
+
+        scored: list[tuple[int, list[str], _RawCandidate]] = []
+        for raw in raw_candidates.values():
+            score, reasons = cls._score_candidate(
+                raw=raw,
+                movie=movie,
+                movie_title_norm=movie_title_norm,
+                original_title_norm=original_title_norm,
+                expected_media_type=expected,
+                include_alternative_titles=False,
+            )
+            scored.append((score, reasons, raw))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        if not scored:
+            return None
+
+        best_score, best_reasons, best_raw = scored[0]
+        required = {"title_exact", "original_exact", "year_exact", "media_type_match"}
+        if not required.issubset(set(best_reasons)):
+            return None
+        if len(scored) > 1 and best_score - scored[1][0] < cls.AMBIGUOUS_DELTA_THRESHOLD:
+            return None
+        return best_raw
 
     @classmethod
     def _run_search_rounds(cls, tmdb, rounds: list, result: dict[tuple[str, int], _RawCandidate]) -> None:
@@ -514,13 +584,6 @@ class TMDBMovieMatchingService:
                 queries.append(clean_item)
                 seen.add(norm)
         return queries
-
-    @staticmethod
-    def _build_year_window(year: int | None) -> list[int | None]:
-        if not year:
-            return [None]
-        window = [year, year - 1, year + 1]
-        return [y for y in window if y and y > 1800]
 
     @classmethod
     def _expected_media_type(cls, movie: Movie) -> MediaType | None:
@@ -719,6 +782,7 @@ class TMDBMovieMatchingService:
         movie_title_norm: str,
         original_title_norm: str,
         expected_media_type: MediaType | None,
+        include_alternative_titles: bool = True,
         movie_title_variants: TitleVariants | None = None,
         original_title_variants: TitleVariants | None = None,
     ) -> list[TMDBCandidate]:
@@ -735,7 +799,7 @@ class TMDBMovieMatchingService:
                 movie_title_norm=movie_title_norm,
                 original_title_norm=original_title_norm,
                 expected_media_type=expected_media_type,
-                include_alternative_titles=True,
+                include_alternative_titles=include_alternative_titles,
                 movie_title_variants=movie_title_variants,
                 original_title_variants=original_title_variants,
             )
