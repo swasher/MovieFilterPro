@@ -32,6 +32,7 @@ class TMDBCandidate:
     popularity: float | None = None
     vote_average: float | None = None
     overview: str = ""
+    cast_names: tuple[str, ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
@@ -55,6 +56,7 @@ class _RawCandidate:
     overview: str = ""
     quick_score: int = 0
     alternative_titles: set[str] = field(default_factory=set)
+    cast_names: tuple[str, ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
@@ -91,6 +93,8 @@ class TMDBMovieMatchingService:
     # было 30 (минуты сети внутри синка одного фильма), стало 10.
     MAX_CANDIDATES_FOR_DETAIL = 10
     TOP_CANDIDATES_LIMIT = 5
+    # Имена каста, которые везём на стадию сравнения актёрских составов (resolver).
+    MAX_CAST_NAMES = 10
 
     @classmethod
     def match_movie(cls, movie: Movie, top_n: int | None = None) -> TMDBMatchingResult:
@@ -774,6 +778,20 @@ class TMDBMovieMatchingService:
                     alt_set.add(normalized)
             raw.alternative_titles = alt_set
 
+            cast: list[str] = []
+            for credit in getattr(details, "cast", None) or []:
+                value = cls._first_non_empty(
+                    getattr(credit, "name", None),
+                    getattr(credit, "original_name", None),
+                )
+                text = str(value or "").strip()
+                if not text or text in cast:
+                    continue
+                cast.append(text)
+                if len(cast) >= cls.MAX_CAST_NAMES:
+                    break
+            raw.cast_names = tuple(cast)
+
     @classmethod
     def _build_scored_candidates(
         cls,
@@ -816,6 +834,7 @@ class TMDBMovieMatchingService:
                     popularity=raw.popularity,
                     vote_average=raw.vote_average,
                     overview=raw.overview,
+                    cast_names=raw.cast_names,
                 )
             )
 

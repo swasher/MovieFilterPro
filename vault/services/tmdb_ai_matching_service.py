@@ -27,6 +27,14 @@ class AIPlotComparison:
 
 
 @dataclass(slots=True, frozen=True)
+class AICastComparison:
+    overlap: int
+    matched_pairs: tuple[str, ...] = ()
+    confidence: float = 0.0
+    reason: str = ""
+
+
+@dataclass(slots=True, frozen=True)
 class AICandidateChoice:
     selected_candidate: TMDBCandidate | None
     confidence: float = 0.0
@@ -49,6 +57,7 @@ class TMDBAIMatchingService:
     """
 
     PROMPT_VERSION = "tmdb_plot_match_v3"
+    CAST_PROMPT_VERSION = "tmdb_cast_match_v1"
     REQUEST_TIMEOUT_SECONDS = 45
     MIN_PLOT_CHARS = 40
     AUTO_MATCH_MIN_CONFIDENCE = 0.88
@@ -57,6 +66,12 @@ class TMDBAIMatchingService:
     SUPPORTED_AUTO_MATCH_MIN_GAP = 0.05
     # Шаг 2 гибрида: независимая попарная проверка победителя.
     VERIFY_MIN_CONFIDENCE = 0.70
+
+    # Сравнение актёрских составов: меньше N имён с любой стороны — сигнал шумный,
+    # стадию пропускаем. Списки обрезаем до топ-N и без LLM не сравниваем.
+    CAST_MAX_NAMES_PER_SIDE = 10
+    CAST_MIN_LOCAL_NAMES = 3
+    CAST_MIN_CANDIDATE_NAMES = 5
 
     @classmethod
     def compare_plots(
@@ -123,6 +138,74 @@ class TMDBAIMatchingService:
             comparison.reason,
         )
         return comparison
+
+    @classmethod
+    def compare_casts(
+        cls,
+        local_names: list[str],
+        candidate_names: list[str],
+    ) -> AICastComparison | None:
+        """Пересечение актёрских составов: локальный каст (обычно кириллица) против каста TMDB-кандидата.
+
+        Имена на разных языках/системах письма LLM матчит сама (транслитерация,
+        порядок имя/фамилия, опечатки). Слишком короткий список с любой стороны —
+        сигнал ненадёжный, возвращаем None без вызова LLM.
+        """
+        clean_local = cls._clean_names(local_names)[: cls.CAST_MAX_NAMES_PER_SIDE]
+        clean_candidate = cls._clean_names(candidate_names)[: cls.CAST_MAX_NAMES_PER_SIDE]
+        if len(clean_local) < cls.CAST_MIN_LOCAL_NAMES or len(clean_candidate) < cls.CAST_MIN_CANDIDATE_NAMES:
+            return None
+
+        response = cls._chat_json(
+            system_prompt=(
+                "Ты сравниваешь актёрские составы двух карточек фильмов/сериалов. "
+                "Имена могут быть на разных языках и в разных системах письма (кириллица/латиница), "
+                "с опечатками, в разном порядке имя/фамилия. Отвечай только JSON.\n\n"
+                "Правила:\n"
+                "1. Сопоставляй только если это явно один и тот же человек (учитывай транслитерацию, "
+                "варианты имени, случайную перестановку имя/фамилия).\n"
+                "2. Разных людей не связывай из-за схожести фамилий. Не выдумывай совпадений.\n"
+                "3. overlap — количество пар, однозначно указывающих на одного человека."
+            ),
+            user_prompt=(
+                "Оцени пересечение двух списков актёров.\n\n"
+                f"Список A (локальная карточка):\n{cls._bullet_names(clean_local)}\n\n"
+                f"Список B (карточка TMDB):\n{cls._bullet_names(clean_candidate)}\n\n"
+                "Верни JSON строго такого вида:\n"
+                '{"overlap": 0, "matched_pairs": ["Имя A — Имя B"], "confidence": 0.0, "reason": "..."}'
+            ),
+        )
+        if response is None:
+            return None
+
+        comparison = AICastComparison(
+            overlap=max(0, cls._safe_int(response.get("overlap")) or 0),
+            matched_pairs=cls._safe_text_tuple(response.get("matched_pairs")),
+            confidence=cls._clamp_confidence(response.get("confidence")),
+            reason=cls._safe_text(response.get("reason"), 500),
+        )
+        logger.info(
+            "TMDB_AI_MATCH_CAST | prompt=%s | overlap=%s | confidence=%.2f | pairs=%s | reason=%s",
+            cls.CAST_PROMPT_VERSION,
+            comparison.overlap,
+            comparison.confidence,
+            ";".join(comparison.matched_pairs),
+            comparison.reason,
+        )
+        return comparison
+
+    @staticmethod
+    def _clean_names(names: list[str]) -> list[str]:
+        result: list[str] = []
+        for name in names or []:
+            text = str(name or "").strip()
+            if text and text not in result:
+                result.append(text)
+        return result
+
+    @staticmethod
+    def _bullet_names(names: list[str]) -> str:
+        return "\n".join(f"- {name}" for name in names)
 
     @classmethod
     def extract_web_hints(

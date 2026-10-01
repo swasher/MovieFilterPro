@@ -29,11 +29,12 @@ class TMDBMatchResolver:
     Порядок стадий (дешевые первые, дорогие последние):
       1. eligibility (только needs_confirmation / needs_user_choice),
       2. pre-AI правила (_apply_pre_ai_rules: дословное совпадение описаний),
-      3. GROQ-стадия (семантическое попарное сравнение сюжетов через облако),
-      4. локальный AI-выбор лучшего из всей кучи,
-      5. проверка уверенности выбора,
-      6. независимая попарная проверка победителя по сюжетам,
-      7. повышение до auto_match.
+      3. стадия актёрских составов (_stage_cast_overlap: пересечение каста через локальный AI),
+      4. GROQ-стадия (семантическое попарное сравнение сюжетов через облако),
+      5. локальный AI-выбор лучшего из всей кучи,
+      6. проверка уверенности выбора,
+      7. независимая попарная проверка победителя по сюжетам,
+      8. повышение до auto_match.
 
     Новые промежуточные правила между детерминированным алгоритмом и AI
     добавляются в _apply_pre_ai_rules и не трогают остальные стадии.
@@ -44,6 +45,11 @@ class TMDBMatchResolver:
     # Дословное совпадение описаний: сайты копируют синопсисы друг у друга.
     # Короткие фразы слишком общие, поэтому требуем минимум значимого текста.
     LITERAL_MIN_CHARS = 50
+
+    # Стадия актёрских составов: промоут только при уникальном победителе
+    # с этим числом общих актёров. Локальный каст берём топ-10 по популярности.
+    CAST_MIN_OVERLAP = 2
+    CAST_TOP_LOCAL_NAMES = 10
 
     @classmethod
     def resolve_with_ai_if_confident(
@@ -59,6 +65,10 @@ class TMDBMatchResolver:
         early = cls._apply_pre_ai_rules(movie, fuzzy_result, auto_match_min_score=auto_match_min_score)
         if early is not None:
             return early
+
+        cast_early = cls._stage_cast_overlap(movie, fuzzy_result, auto_match_min_score=auto_match_min_score)
+        if cast_early is not None:
+            return cast_early
 
         groq_early = cls._stage_groq_if_confident(movie, fuzzy_result, auto_match_min_score)
         if groq_early is not None:
@@ -171,6 +181,94 @@ class TMDBMatchResolver:
             selected_candidate=promoted,
             candidates=candidates,
             message="Точное совпадение описаний — фильм тот же, AI не понадобился.",
+        )
+
+    @classmethod
+    def _stage_cast_overlap(
+        cls,
+        movie: Movie,
+        fuzzy_result: TMDBMatchingResult,
+        auto_match_min_score: int,
+    ) -> TMDBMatchingResult | None:
+        """Стадия актёрских составов: уникальный кандидат с общим кастом >= CAST_MIN_OVERLAP.
+
+        Работает без описаний (спасает source_plot_too_short) и при названиях-
+        неоднозначностях: одно произведение почти наверняка делит актёров, разные —
+        почти никогда. Сравнение имён через LLM (кириллица vs латиница).
+        Только позитивный промоут: нулевое пересечение не демоутит кандидата —
+        каст Kinorium бывает неполным для нишевых фильмов.
+        """
+        local_names = cls._local_actor_names(movie)
+        if not local_names:
+            return None
+
+        from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
+
+        winners: list[tuple] = []
+        for candidate in fuzzy_result.candidates:
+            comparison = TMDBAIMatchingService.compare_casts(local_names, list(candidate.cast_names or ()))
+            send_match_log(
+                "ai_cast",
+                movie_id=getattr(movie, "id", None),
+                tmdb_id=candidate.tmdb_id,
+                overlap=comparison.overlap if comparison is not None else None,
+            )
+            if comparison is not None and comparison.overlap >= cls.CAST_MIN_OVERLAP:
+                winners.append((candidate, comparison))
+
+        if len(winners) != 1:
+            return None
+        winner, comparison = winners[0]
+        return cls._promote_cast_match(fuzzy_result, winner, comparison, auto_match_min_score)
+
+    @classmethod
+    def _local_actor_names(cls, movie: Movie) -> list[str]:
+        """Топ-N локальных актёров по популярности. Пусто для unsaved Movie (guard для тестов)."""
+        if getattr(movie, "pk", None) is None:
+            return []
+        names: list[str] = []
+        items = (
+            movie.movie_persons.filter(role="actor")
+            .select_related("person")
+            .order_by("-popularity", "order", "id")[: cls.CAST_TOP_LOCAL_NAMES]
+        )
+        for item in items:
+            value = (getattr(item.person, "name", "") or "").strip()
+            if value and value not in names:
+                names.append(value)
+        return names
+
+    @classmethod
+    def _promote_cast_match(
+        cls,
+        fuzzy_result: TMDBMatchingResult,
+        winner: TMDBCandidate,
+        comparison,
+        auto_match_min_score: int,
+    ) -> TMDBMatchingResult:
+        from vault.services.tmdb_movie_matching_service import TMDBMatchingResult
+
+        promoted = replace(
+            winner,
+            score=max(winner.score, auto_match_min_score),
+            score_reasons=tuple(winner.score_reasons or ()) + ("cast_match",),
+        )
+        candidates = tuple(
+            promoted
+            if candidate.tmdb_id == promoted.tmdb_id and candidate.media_type == promoted.media_type
+            else candidate
+            for candidate in fuzzy_result.candidates
+        )
+        pairs_text = "; ".join(comparison.matched_pairs) if comparison.matched_pairs else ""
+        suffix = f" Пары: {pairs_text}." if pairs_text else ""
+        return TMDBMatchingResult(
+            status="auto_match",
+            selected_candidate=promoted,
+            candidates=candidates,
+            message=(
+                f"Совпадение актёрского состава подтвердило матч "
+                f"(общих актёров: {comparison.overlap}).{suffix}"
+            ),
         )
 
     @classmethod

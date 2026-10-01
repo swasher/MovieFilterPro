@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from vault.models import Movie
-from vault.services.tmdb_ai_matching_service import AICandidateChoice, AIPlotComparison
+from vault.services.tmdb_ai_matching_service import AICandidateChoice, AICastComparison, AIPlotComparison
 from vault.services.tmdb_groq_matching_service import GroqChoice
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService
 
@@ -1358,3 +1358,152 @@ class YearFreeSearchTests(SimpleTestCase):
         self.assertEqual(result.selected_candidate.tmdb_id, 823598)
         self.assertIn("original_in_alternative", result.selected_candidate.score_reasons)
         self.assertIn(823598, detail_calls)
+
+
+class CastOverlapStageTests(SimpleTestCase):
+    def _movie(self):
+        return Movie(
+            title="Дюна",
+            original_title="",
+            year=2021,
+            movie_type=Movie.MovieType.MOVIE,
+        )
+
+    def _candidate(self, tmdb_id, popularity, cast_names):
+        return SimpleNamespace(
+            id=tmdb_id,
+            title="Дюна",
+            original_title="Dune",
+            release_date=date(2021, 9, 3),
+            poster_path="/d.jpg",
+            popularity=popularity,
+            vote_average=8.0,
+        ), cast_names
+
+    def _fake_tmdb(self, candidates_with_casts):
+        first, first_cast = candidates_with_casts[0]
+        second, second_cast = candidates_with_casts[1]
+
+        class CastTMDB:
+            cast_map = {first.id: first_cast, second.id: second_cast}
+
+            def movie_search(self, query, include_adult=True, primary_release_year=None):
+                return _FakeSearchResponse([first, second])
+
+            def tv_search(self, query, include_adult=True, first_air_date_year=None):
+                return _FakeSearchResponse([])
+
+            def movie(self, movie_id):
+                cast = [
+                    SimpleNamespace(name=name)
+                    for name in self.cast_map.get(movie_id, [])
+                ]
+                return SimpleNamespace(alternative_titles=[], cast=cast)
+
+            def tv_show(self, tv_id):
+                return SimpleNamespace(alternative_titles=[], cast=[])
+
+        return CastTMDB()
+
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
+    @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_cast_overlap_promotes_unique_winner(
+        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+    ):
+        first, first_cast = self._candidate(
+            10,
+            90.0,
+            ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"],
+        )
+        second, second_cast = self._candidate(
+            11,
+            89.0,
+            ["Joey Batey", "Anya Chalotra", "Freya Allan", "Mimi Ndiweni", "Wilson Radjou-Pujalte"],
+        )
+        local_names_mock.return_value = ["Тимоти Шаламе", "Ребекка Фергюсон", "Зендая"]
+
+        def fake_compare(local_names, candidate_names):
+            if "Timothée Chalamet" in candidate_names:
+                return AICastComparison(
+                    overlap=3,
+                    matched_pairs=("Тимоти Шаламе — Timothée Chalamet",),
+                    confidence=0.9,
+                )
+            return AICastComparison(overlap=0, matched_pairs=(), confidence=0.1)
+
+        compare_casts_mock.side_effect = fake_compare
+        client_mock.return_value = self._fake_tmdb([(first, first_cast), (second, second_cast)])
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertEqual(result.selected_candidate.tmdb_id, 10)
+        self.assertIn("cast_match", result.selected_candidate.score_reasons)
+        self.assertEqual(result.selected_candidate.cast_names, tuple(first_cast))
+
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
+    @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_two_cast_winning_candidates_stay_ambiguous(
+        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+    ):
+        first, first_cast = self._candidate(
+            10, 90.0, ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"]
+        )
+        second, second_cast = self._candidate(
+            11, 89.0, ["Jim Carrey", "Jeff Daniels", "Lauren Holly", "Charles Rocket", "Teri Garr"]
+        )
+        local_names_mock.return_value = ["Тимоти Шаламе", "Джим Керри", "Зендая"]
+        compare_casts_mock.return_value = AICastComparison(overlap=2, matched_pairs=(), confidence=0.8)
+        client_mock.return_value = self._fake_tmdb([(first, first_cast), (second, second_cast)])
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "needs_user_choice")
+        self.assertIsNone(result.selected_candidate)
+        self.assertFalse(any("cast_match" in c.score_reasons for c in result.candidates))
+
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
+    @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_zero_cast_overlap_does_not_demote(
+        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+    ):
+        first, first_cast = self._candidate(
+            10, 90.0, ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"]
+        )
+        second, second_cast = self._candidate(
+            11, 89.0, ["Jim Carrey", "Jeff Daniels", "Lauren Holly", "Charles Rocket", "Teri Garr"]
+        )
+        local_names_mock.return_value = ["Тимоти Шаламе", "Ребекка Фергюсон", "Зендая"]
+        compare_casts_mock.return_value = AICastComparison(overlap=0, matched_pairs=(), confidence=0.1)
+        client_mock.return_value = self._fake_tmdb([(first, first_cast), (second, second_cast)])
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "needs_user_choice")
+
+    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
+    @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_no_local_actors_skips_cast_stage(
+        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+    ):
+        first, first_cast = self._candidate(
+            10, 90.0, ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"]
+        )
+        second, second_cast = self._candidate(
+            11, 89.0, ["Jim Carrey", "Jeff Daniels", "Lauren Holly", "Charles Rocket", "Teri Garr"]
+        )
+        local_names_mock.return_value = []
+        client_mock.return_value = self._fake_tmdb([(first, first_cast), (second, second_cast)])
+
+        result = TMDBMovieMatchingService.match_movie(self._movie())
+
+        self.assertEqual(result.status, "needs_user_choice")
+        compare_casts_mock.assert_not_called()
