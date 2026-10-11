@@ -40,18 +40,21 @@ LABEL_TO_WATCH_STATUS: dict[str, int] = {
     WONT_WATCH_LABEL: 3,
 }
 
-# Маппинг list_title из CSV -> watch_status (для import_kinorium_csv)
+# Маппинг status из CSV Kinorium -> watch_status (для import_kinorium_csv)
 CSV_LIST_TITLE_TO_WATCH_STATUS: dict[str, int] = {
     WILL_WATCH_LABEL: 2,
-    'Просмотрен': 1,
-    WONT_WATCH_LABEL: 3,
+    WATCHED_LABEL: 1,
+    # В выгрузке Kinorium статус называется «Не буду смотреть»,
+    # а UI-имя WONT_WATCH_LABEL — «Не интересует».
+    'Не буду смотреть': 3,
 }
 
 # Набор имён системных списков (для import_kinorium_csv)
 SYSTEM_LIST_TITLES: set[str] = {
     WATCHED_LABEL,
     WILL_WATCH_LABEL,
-    WONT_WATCH_LABEL,
+    # Имя списка в выгрузке Kinorium; в UI Vault он называется WONT_WATCH_LABEL.
+    'Не буду смотреть',
 }
 
 # Имя TMDB-зеркального списка для SKIP
