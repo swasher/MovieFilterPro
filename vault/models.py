@@ -320,22 +320,22 @@ class Movie(models.Model):
         return _build_tmdb_image_url(self.backdrop_path, size)
 
     def get_directors(self):
-        return self.movie_persons.filter(role='director').order_by('-popularity', 'order', 'id')
+        return self.movie_persons.filter(role='director').order_by('order', '-popularity', 'id')
 
     def get_actors(self):
-        return self.movie_persons.filter(role='actor').order_by('-popularity', 'order', 'id')
+        return self.movie_persons.filter(role='actor').order_by('order', '-popularity', 'id')
 
     def get_producers(self):
-        return self.movie_persons.filter(role='producer').order_by('-popularity', 'order', 'id')
+        return self.movie_persons.filter(role='producer').order_by('order', '-popularity', 'id')
 
     def get_screenplays(self):
-        return self.movie_persons.filter(role='screenplay').order_by('-popularity', 'order', 'id')
+        return self.movie_persons.filter(role='screenplay').order_by('order', '-popularity', 'id')
 
     def get_writers(self):
-        return self.movie_persons.filter(role='writer').order_by('-popularity', 'order', 'id')
+        return self.movie_persons.filter(role='writer').order_by('order', '-popularity', 'id')
 
     def get_showrunners(self):
-        return self.movie_persons.filter(role='showrunner').order_by('-popularity', 'order', 'id')
+        return self.movie_persons.filter(role='showrunner').order_by('order', '-popularity', 'id')
 
 
 class VaultConnectionEvent(models.Model):
