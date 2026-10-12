@@ -614,6 +614,17 @@ class KinozalDownloadImportService:
             if imdb_match.status == "auto_match":
                 return imdb_match
 
+            # IMDb ID есть — эвристики по названию/году не запускаем:
+            # если TMDB не знает этот идентификатор, синк честно обрывается.
+            if imdb_match.status == "not_found":
+                return TMDBMatchingResult(
+                    status="not_found",
+                    selected_candidate=None,
+                    candidates=tuple(),
+                    message=TMDBMovieMatchingService.IMDB_NOT_ON_TMDB_MESSAGE,
+                )
+            return imdb_match
+
         year = cls._parse_year(movie_rss.year)
         probe_movie = Movie(
             title=movie_rss.title,

@@ -234,6 +234,8 @@ class KinozalDownloadImportServiceTests(TestCase):
                 event_type="tmdb_resolution_stopped",
             ).exists()
         )
+        # IMDb ID есть — эвристики по названию не запускаются вовсе.
+        match_movie_mock.assert_not_called()
 
     @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.find_by_imdb_id")
     @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.match_movie")
@@ -267,6 +269,13 @@ class KinozalDownloadImportServiceTests(TestCase):
                 event_type="tmdb_resolution_stopped",
             ).exists()
         )
+        # IMDb ID есть — эвристики по названию не запускаются вовсе.
+        match_movie_mock.assert_not_called()
+        event = VaultConnectionEvent.objects.get(
+            operation_id=result.operation_id,
+            event_type="tmdb_resolution_stopped",
+        )
+        self.assertEqual(event.message, "Фильм есть на IMDb, но отсутствует на TMDB")
 
 
 class ConnectionEventsApiTests(TestCase):

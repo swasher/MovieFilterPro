@@ -485,11 +485,13 @@ class TMDBSyncQueueService:
                 "candidates_text": candidates_text,
             }
 
-        # not_found / прочие «error» из сопоставления
+        # not_found / прочие «error» из сопоставления.
+        # «Фильм есть на IMDb, но отсутствует на TMDB» — штатный бизнес-исход
+        # (не ошибка сети): кладём в NOT_FOUND, не останавливая очередь.
+        message_lower = (result.message or "").lower()
+        is_not_found = "не найден" in message_lower or "отсутствует на tmdb" in message_lower
         return {
-            "state": TMDBSyncQueueItem.State.NOT_FOUND
-            if "не найден" in (result.message or "").lower()
-            else TMDBSyncQueueItem.State.ERROR,
+            "state": TMDBSyncQueueItem.State.NOT_FOUND if is_not_found else TMDBSyncQueueItem.State.ERROR,
             "result_status": "error",
             "result_message": result.message or "Ошибка синхронизации",
         }

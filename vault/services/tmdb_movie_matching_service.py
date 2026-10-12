@@ -78,6 +78,10 @@ class TitleVariants:
 
 
 class TMDBMovieMatchingService:
+    # Фильм имеет IMDb ID, но TMDB не знает такой идентификатор.
+    # Эвристики по названию в этом случае не запускаются — синк обрывается.
+    IMDB_NOT_ON_TMDB_MESSAGE = "Фильм есть на IMDb, но отсутствует на TMDB"
+
     SCORE_ORIGINAL_EXACT = 60
     SCORE_LOCAL_EXACT = 50
     SCORE_ALTERNATIVE_TITLE = 35
@@ -99,6 +103,26 @@ class TMDBMovieMatchingService:
     @classmethod
     def match_movie(cls, movie: Movie, top_n: int | None = None) -> TMDBMatchingResult:
         top_n = top_n or cls.TOP_CANDIDATES_LIMIT
+
+        # Есть точный идентификатор — эвристики (поиск по названиям, AI и т.п.)
+        # не запускаем вовсе: единственный честный путь — lookup TMDB по IMDb ID.
+        # Фильмы из kinozal-скачиваний регулярно приходят с уже известным IMDb ID.
+        imdb_id = (getattr(movie, "imdb_id", None) or "").strip()
+        if imdb_id:
+            imdb_result = cls.find_by_imdb_id(
+                imdb_id,
+                expected_media_type=cls._expected_media_type(movie),
+                top_n=top_n,
+            )
+            if imdb_result.status == "not_found":
+                return TMDBMatchingResult(
+                    status="not_found",
+                    selected_candidate=None,
+                    candidates=tuple(),
+                    message=cls.IMDB_NOT_ON_TMDB_MESSAGE,
+                )
+            return imdb_result
+
         tmdb = get_tmdb_client()
 
         raw_candidates = cls._collect_candidates(tmdb, movie)

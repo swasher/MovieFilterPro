@@ -460,6 +460,88 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertEqual(result.selected_candidate.media_type, "movie")
 
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_match_movie_with_imdb_id_skips_heuristics_uses_find_by_id(self, get_tmdb_client_mock):
+        # Имя точно совпадает с результатом поиска, но поиск по названию вообще
+        # не должен запускаться: с IMDb ID работаем только через find_by_id.
+        movie = Movie(
+            title="Интерстеллар",
+            original_title="Interstellar",
+            year=2014,
+            movie_type=Movie.MovieType.MOVIE,
+            imdb_id="tt0816692",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[
+                SimpleNamespace(
+                    id=321,
+                    title="Интерстеллар",
+                    original_title="Interstellar",
+                    release_date=date(2014, 11, 7),
+                    poster_path="/poster.jpg",
+                    popularity=99.0,
+                    vote_average=8.7,
+                    overview="",
+                )
+            ],
+            find_results=SimpleNamespace(
+                movie_results=[
+                    SimpleNamespace(
+                        id=321,
+                        title="Интерстеллар",
+                        original_title="Interstellar",
+                        release_date=date(2014, 11, 7),
+                        poster_path="/poster.jpg",
+                        popularity=99.0,
+                        vote_average=8.7,
+                    )
+                ],
+                tv_results=[],
+            ),
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "auto_match")
+        self.assertIsNotNone(result.selected_candidate)
+        self.assertEqual(result.selected_candidate.tmdb_id, 321)
+        self.assertIn("imdb_id_lookup", result.selected_candidate.score_reasons)
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
+    def test_match_movie_with_imdb_id_absent_on_tmdb_returns_not_found(self, get_tmdb_client_mock):
+        # Эвристический поиск нашёл бы кандидата, но правило жёсткое: IMDb ID
+        # есть — только lookup по нему; раз TMDB его не знает, синк обрывается.
+        movie = Movie(
+            title="Редкий фильм",
+            original_title="Rare Film",
+            year=2001,
+            movie_type=Movie.MovieType.MOVIE,
+            imdb_id="tt9999999",
+        )
+        fake_tmdb = _FakeTMDB(
+            movie_results=[
+                SimpleNamespace(
+                    id=777,
+                    title="Редкий фильм",
+                    original_title="Rare Film",
+                    release_date=date(2001, 1, 1),
+                    poster_path="/r.jpg",
+                    popularity=50.0,
+                    vote_average=7.0,
+                    overview="",
+                )
+            ],
+            find_results=SimpleNamespace(movie_results=[], tv_results=[]),
+        )
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        result = TMDBMovieMatchingService.match_movie(movie)
+
+        self.assertEqual(result.status, "not_found")
+        self.assertIsNone(result.selected_candidate)
+        self.assertEqual(result.message, TMDBMovieMatchingService.IMDB_NOT_ON_TMDB_MESSAGE)
+
+    @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_singleton_title_year_exact_auto_matches_despite_dirty_original(self, get_tmdb_client_mock):
         # Кейс из prod-очереди: Kinorium хранит английский международный тайтл,
         # TMDB — настоящий оригинал. RU-название и год точные, кандидат один.
