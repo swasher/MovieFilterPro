@@ -377,7 +377,7 @@
               </div>
               <div class="space-y-2">
                 <div class="text-sm font-medium">Cookie PASS</div>
-                <Input bind:value={form.cookie_pass} type="password" placeholder="pass" />
+                <Input bind:value={form.cookie_pass} type="text" placeholder="pass" />
               </div>
               <div class="space-y-2">
                 <div class="text-sm font-medium">Torrents hotfolder</div>
