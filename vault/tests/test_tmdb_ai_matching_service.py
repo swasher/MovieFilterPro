@@ -108,7 +108,7 @@ class LocalActorNamesTests(TestCase):
             country=country,
         )
 
-    def test_returns_top_actor_names_by_popularity(self):
+    def test_returns_top_actor_names_by_order(self):
         movie = Movie.objects.create(
             title="Т",
             original_title="",
@@ -123,14 +123,14 @@ class LocalActorNamesTests(TestCase):
                 person=person,
                 role="actor",
                 order=i,
-                popularity=float(i),
+                popularity=float(4 - i),
             )
         director = self._person("2000", "nm0099", "Режиссёр")
         MoviePerson.objects.create(movie=movie, person=director, role="director", order=0)
 
         names = TMDBMatchResolver._local_actor_names(movie)
 
-        self.assertEqual(names, ["Актёр 3", "Актёр 2", "Актёр 1"])
+        self.assertEqual(names, ["Актёр 1", "Актёр 2", "Актёр 3"])
 
     def test_unsaved_movie_returns_empty(self):
         movie = Movie(title="Т", original_title="", year=1999, movie_type=Movie.MovieType.MOVIE)

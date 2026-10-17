@@ -230,7 +230,7 @@ class TMDBMatchResolver:
         items = (
             movie.movie_persons.filter(role="actor")
             .select_related("person")
-            .order_by("-popularity", "order", "id")[: cls.CAST_TOP_LOCAL_NAMES]
+            .order_by("order", "id")[: cls.CAST_TOP_LOCAL_NAMES]
         )
         for item in items:
             value = (getattr(item.person, "name", "") or "").strip()
