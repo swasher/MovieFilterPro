@@ -51,9 +51,8 @@
     }
     const topDirectors = (movie.directors ?? []).slice(0, 3).map((p) => ({ ...p, _roleLabel: "Режиссер" }));
     const topProducers = (movie.producers ?? []).slice(0, 3).map((p) => ({ ...p, _roleLabel: "Продюсер" }));
-    // Screenplay + Writer объединяем в общий пул "Сценарист", топ-3 по popularity
+    // Screenplay + Writer объединяем в общий пул "Сценарист"
     const writersPool = [...(movie.screenplays ?? []), ...(movie.writers ?? [])]
-      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
       .slice(0, 3)
       .map((p) => ({ ...p, _roleLabel: "Сценарист" }));
     return [...topDirectors, ...topProducers, ...writersPool];
