@@ -899,7 +899,7 @@
                   type="button"
                   class={`vd-status-icon rounded-full size-10 transition-all duration-200 flex items-center justify-center ${
                     isRated
-                      ? "vd-status-icon--active vd-status-icon--rated"
+                      ? "vd-status-icon--active"
                       : isActive
                         ? "vd-status-icon--active"
                         : "vd-status-icon--inactive"
@@ -935,7 +935,7 @@
                   <StarRating.Root
                     value={userState.rating ?? 0}
                     max={10}
-                    class="text-orange-400"
+                    class="text-emerald-500"
                     onValueChange={(value) => setRating(value)}
                   >
                     {#snippet children({ items })}

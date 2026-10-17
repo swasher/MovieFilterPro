@@ -80,13 +80,13 @@
           value={currentRating / 2}
           max={5}
           allowHalf
-          class="text-amber-500"
+          class="text-emerald-500"
           onValueChange={handleRatingChange}
         >
           {#snippet children({ items })}
             <div class="flex gap-1">
               {#each items as item (item.index)}
-                <StarRating.Star index={item.index} state={item.state} class="size-5 text-amber-500" />
+                <StarRating.Star index={item.index} state={item.state} class="size-5 text-emerald-500" />
               {/each}
             </div>
           {/snippet}

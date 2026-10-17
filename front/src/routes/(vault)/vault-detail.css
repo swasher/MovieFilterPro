@@ -69,10 +69,6 @@
     @apply bg-red-500 hover:bg-red-600;
   }
 
-  .vd-status-icon--active.vd-status-icon--rated {
-    @apply bg-orange-400 hover:bg-orange-500;
-  }
-
   .vd-status-icon-rating {
     @apply text-sm font-bold text-white;
   }
@@ -302,7 +298,7 @@
   }
 
   .vd-star {
-    color: #fb923c;
+    @apply text-emerald-500;
   }
 
   .vd-rating-clear {
