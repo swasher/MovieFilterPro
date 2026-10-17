@@ -45,6 +45,8 @@ class MovieOut(Schema):
     in_watched: bool = False
     in_wont_watch: bool = False
     in_favorites: bool = False
+    watch_status: str | None = None
+    rating: int | None = None
 
 
 class WritebackPerMovieOut(Schema):
@@ -596,15 +598,12 @@ def _build_connection_event_out(item: VaultConnectionEvent) -> ConnectionEventOu
     )
 
 
-def _build_movie_out(movie: Movie, user=None) -> MovieOut:
-    in_watched = False
-    in_wont_watch = False
-    in_favorites = False
-    if user is not None:
-        state = MovieStatusService.get_movie_status(user, movie)
-        in_watched = state["in_watched"]
-        in_wont_watch = state["in_wont_watch"]
-        in_favorites = state["in_favorites"]
+def _build_movie_out(movie: Movie, user=None, state: dict | None = None) -> MovieOut:
+    if state is None and user is not None:
+        state = MovieStatusService.get_movie_states_bulk(user, [movie]).get(movie.id)
+    watch_status = state.get("watch_status") if state else None
+    rating = state.get("rating") if state else None
+    is_favorite = bool(state.get("is_favorite")) if state else False
     return MovieOut(
         id=movie.id,
         title=movie.title,
@@ -613,9 +612,11 @@ def _build_movie_out(movie: Movie, user=None) -> MovieOut:
         slug=movie.slug,
         poster_url=movie.poster_url,
         movie_type=movie.movie_type,
-        in_watched=in_watched,
-        in_wont_watch=in_wont_watch,
-        in_favorites=in_favorites,
+        watch_status=watch_status,
+        rating=rating,
+        in_watched=watch_status == "watched",
+        in_wont_watch=watch_status == "wont_watch",
+        in_favorites=is_favorite,
     )
 
 
@@ -845,7 +846,9 @@ def list_movies(
         qs = qs.order_by("-rank", *ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
     else:
         qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
-    return [_build_movie_out(movie, user=user) for movie in qs]
+    movies = [movie for movie in qs]
+    states = MovieStatusService.get_movie_states_bulk(user, movies)
+    return [_build_movie_out(movie, user=user, state=states.get(movie.id)) for movie in movies]
 
 
 @api.get("/genres", response=list[NamedItemOut])

@@ -11,6 +11,7 @@ import { Switch } from "$lib/components/ui/switch";
 import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
+import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
 import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X } from "@lucide/svelte";
 
 type MovieCard = {
@@ -24,6 +25,8 @@ type MovieCard = {
   in_watched: boolean;
   in_wont_watch: boolean;
   in_favorites: boolean;
+  watch_status: "watched" | "will_watch" | "wont_watch" | null;
+  rating: number | null;
 };
 
 type Genre = {
@@ -685,31 +688,16 @@ type TmdbSearchResult = {
             >
               <Card class="relative h-[270px] w-[180px] flex-none overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
                 <CardContent class="h-full !p-0">
+                  <MovieStatusBadges
+                    watch_status={data.activeStatus === movie.watch_status ? null : movie.watch_status}
+                    rating={movie.rating}
+                    is_favorite={movie.in_favorites && data.activeStatus !== "favorites"}
+                    position="top-left"
+                  />
+
                   {#if movie.movie_type === "series" || movie.movie_type === "miniseries"}
-                    <Badge variant="secondary" class="absolute left-2 top-2 z-10 px-1.5 py-0.5 text-[10px]">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</Badge>
+                    <Badge variant="secondary" class="absolute bottom-2 left-2 z-10 px-1.5 py-0.5 text-[10px]">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</Badge>
                   {/if}
-
-                  {#if movie.in_wont_watch && data.activeStatus !== "wont_watch"}
-                    <span
-                      class="absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-red-500 text-white shadow-sm"
-                      title={data.systemLabels.wont_watch ?? "Не интересует"}
-                    >
-                      <X class="size-3.5" />
-                    </span>
-                  {/if}
-
-                  <div class="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
-                    {#if movie.in_favorites && data.activeStatus !== "favorites"}
-                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
-                        <Heart class="h-3 w-3 text-red-500" />
-                      </Badge>
-                    {/if}
-                    {#if movie.in_watched && data.activeStatus !== "watched"}
-                      <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Просмотрено">
-                        <Eye class="h-3 w-3" />
-                      </Badge>
-                    {/if}
-                  </div>
 
                   <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0.5 text-[10px]">
                     {movie.year ?? "?"}

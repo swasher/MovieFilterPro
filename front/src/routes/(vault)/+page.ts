@@ -11,6 +11,8 @@ type ApiMovie = {
   in_watched: boolean;
   in_wont_watch: boolean;
   in_favorites: boolean;
+  watch_status: "watched" | "will_watch" | "wont_watch" | null;
+  rating: number | null;
 };
 
 type ApiGenre = {

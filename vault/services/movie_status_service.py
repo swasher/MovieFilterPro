@@ -52,6 +52,35 @@ class MovieStatusService:
         }
 
     @classmethod
+    def get_movie_states_bulk(cls, user, movies):
+        """
+        Батч-загрузка статусов для списка фильмов одним запросом (анти-N+1).
+        Возвращает: {movie_id: {'watch_status': str|None, 'rating': int|None, 'is_favorite': bool}}
+        """
+        states: dict[int, dict] = {}
+        if user is None or not movies:
+            return states
+        movie_ids = [movie.id for movie in movies]
+        try:
+            rows = UserMovie.objects.filter(user=user, movie_id__in=movie_ids).values(
+                "movie_id", "watch_status", "is_favorite", "rating"
+            )
+        except Exception:
+            rows = ()
+        for row in rows:
+            try:
+                movie_id = int(row["movie_id"])
+            except Exception:
+                continue
+            status_value = row.get("watch_status")
+            states[movie_id] = {
+                "watch_status": cls.WATCH_STATUS_TO_STATUS_KEY.get(status_value),
+                "rating": row.get("rating"),
+                "is_favorite": bool(row.get("is_favorite")),
+            }
+        return states
+
+    @classmethod
     @transaction.atomic
     def set_status(cls, user, movie, status_key):
         """Включить системный статус (watch_status или favorites)."""
