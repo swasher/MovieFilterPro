@@ -113,6 +113,9 @@ class CollectionPartOut(Schema):
     poster_url: str | None = None
     in_vault: bool
     vault_slug: str | None = None
+    watch_status: str | None = None
+    rating: int | None = None
+    is_favorite: bool = False
 
 
 class CollectionBriefOut(Schema):
@@ -414,6 +417,9 @@ class PersonMovieOut(Schema):
     poster_url: str | None = None
     roles: list[str]
     character_names: list[str]
+    watch_status: str | None = None
+    rating: int | None = None
+    is_favorite: bool = False
 
 
 class PersonDetailOut(Schema):
@@ -645,7 +651,7 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
     )
 
 
-def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
+def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
     """Собирает CollectionBriefOut из movie.collection + parts_data. in_vault вычисляется на лету."""
     coll: Collection | None = getattr(movie, "collection", None)
     # Если relation не загружен — пробуем по FK
@@ -661,6 +667,7 @@ def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
     # Собираем карту tmdb_id -> Movie (slug) одним запросом
     tmdb_ids = [p.get("tmdb_id") for p in parts_raw if p.get("tmdb_id") is not None]
     vault_map: dict[int, str] = {}
+    user_state_map: dict[int, dict] = {}
     if tmdb_ids:
         try:
             # Фильтруем только те tmdb_id что в parts, чтобы не тянуть всё
@@ -671,6 +678,17 @@ def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
                     continue
         except Exception:
             vault_map = {}
+        if user is not None:
+            try:
+                for um in UserMovie.objects.filter(user=user, movie__tmdb_id__in=tmdb_ids).values(
+                    "movie__tmdb_id", "watch_status", "is_favorite", "rating"
+                ):
+                    try:
+                        user_state_map[int(um["movie__tmdb_id"])] = um
+                    except Exception:
+                        continue
+            except Exception:
+                user_state_map = {}
 
     parts_out: list[CollectionPartOut] = []
     for p in parts_raw:
@@ -679,6 +697,14 @@ def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
         except Exception:
             continue
         slug = vault_map.get(tmdb_id)
+        watch_status = None
+        rating = None
+        is_favorite = False
+        state = user_state_map.get(tmdb_id)
+        if state is not None:
+            watch_status = MovieStatusService.WATCH_STATUS_TO_STATUS_KEY.get(state.get("watch_status"))
+            rating = state.get("rating")
+            is_favorite = bool(state.get("is_favorite"))
         poster_url = _tmdb_image_url(p.get("poster_path"), size="w342") if p.get("poster_path") else None
         parts_out.append(
             CollectionPartOut(
@@ -689,6 +715,9 @@ def _build_collection_out(movie: Movie) -> CollectionBriefOut | None:
                 poster_url=poster_url,
                 in_vault=tmdb_id in vault_map,
                 vault_slug=slug,
+                watch_status=watch_status,
+                rating=rating,
+                is_favorite=is_favorite,
             )
         )
 
@@ -986,7 +1015,7 @@ def movie_detail(request, slug: str):
             _build_season_out(season, user=user)
             for season in movie.seasons.all().order_by("season_number")
         ],
-        collection=_build_collection_out(movie),
+        collection=_build_collection_out(movie, user=user),
         writeback=_build_writeback_out(movie),
     )
 
@@ -1396,7 +1425,37 @@ def person_detail(request, person_id: int):
         if item.character_name and item.character_name not in entry["character_names"]:
             entry["character_names"].append(item.character_name)
 
-    filmography = [PersonMovieOut(**data) for data in grouped.values()]
+    user_state_map: dict[int, dict] = {}
+    if user is not None and grouped:
+        try:
+            for um in UserMovie.objects.filter(user=user, movie_id__in=list(grouped.keys())).values(
+                "movie_id", "watch_status", "is_favorite", "rating"
+            ):
+                try:
+                    user_state_map[int(um["movie_id"])] = um
+                except Exception:
+                    continue
+        except Exception:
+            user_state_map = {}
+
+    filmography = []
+    for data in grouped.values():
+        state = user_state_map.get(data["id"])
+        watch_status = None
+        rating = None
+        is_favorite = False
+        if state is not None:
+            watch_status = MovieStatusService.WATCH_STATUS_TO_STATUS_KEY.get(state.get("watch_status"))
+            rating = state.get("rating")
+            is_favorite = bool(state.get("is_favorite"))
+        filmography.append(
+            PersonMovieOut(
+                **data,
+                watch_status=watch_status,
+                rating=rating,
+                is_favorite=is_favorite,
+            )
+        )
 
     years = [item.movie.year for item in filmography_qs if item.movie.year is not None]
 
@@ -2208,7 +2267,7 @@ def tmdb_auth_logout(request):
 
 @api.post("/collections/{tmdb_id}/refresh", response=CollectionBriefOut)
 def collection_refresh(request, tmdb_id: int):
-    _require_api_user(request)
+    user = _require_api_user(request)
     coll = Collection.objects.filter(tmdb_id=tmdb_id).first()
     if coll is None:
         raise HttpError(404, "Collection not found")
@@ -2248,7 +2307,7 @@ def collection_refresh(request, tmdb_id: int):
             backdrop_url=_tmdb_image_url(coll.backdrop_path, size="w780") if coll.backdrop_path else None,
             parts=parts_out,
         )
-    out = _build_collection_out(movie)
+    out = _build_collection_out(movie, user=user)
     if out is None:
         raise HttpError(400, "Failed to build collection")
     return out

@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { Check } from "@lucide/svelte";
+  import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
 
   type Part = {
     tmdb_id: number;
@@ -10,6 +10,9 @@
     poster_url: string | null;
     in_vault: boolean;
     vault_slug: string | null;
+    watch_status: "watched" | "will_watch" | "wont_watch" | null;
+    rating: number | null;
+    is_favorite: boolean;
   };
 
   let {
@@ -60,9 +63,11 @@
                 {:else}
                   <div class="vd-collection-poster-fallback text-[10px]">no poster</div>
                 {/if}
-                <span class="vd-collection-badge vd-collection-badge--check">
-                  <Check class="size-3" />
-                </span>
+                <MovieStatusBadges
+                  watch_status={part.watch_status}
+                  rating={part.rating}
+                  is_favorite={part.is_favorite}
+                />
               </div>
             </a>
           {:else}

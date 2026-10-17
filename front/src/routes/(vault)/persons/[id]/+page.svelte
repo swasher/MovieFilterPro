@@ -5,6 +5,7 @@
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
   import { ArrowLeft, Heart } from "@lucide/svelte";
+  import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
 
   let { data } = $props();
   const person = $derived(data.person);
@@ -219,13 +220,20 @@
               {#each person.filmography as item (`${item.id}`)}
                 <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
                   <div class="vd-filmography-card">
-                    {#if item.poster_url}
-                      <img src={item.poster_url} alt={item.title} class="vd-poster" />
-                    {:else}
-                      <div class="vd-poster-fallback">
-                        no poster
-                      </div>
-                    {/if}
+                    <div class="relative">
+                      {#if item.poster_url}
+                        <img src={item.poster_url} alt={item.title} class="vd-poster" />
+                      {:else}
+                        <div class="vd-poster-fallback">
+                          no poster
+                        </div>
+                      {/if}
+                      <MovieStatusBadges
+                        watch_status={item.watch_status}
+                        rating={item.rating}
+                        is_favorite={item.is_favorite}
+                      />
+                    </div>
 
                     <div class="vd-filmography-copy">
                       <p class="vd-related-title">{item.title}</p>

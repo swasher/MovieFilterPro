@@ -9,6 +9,9 @@ type PersonMovie = {
   poster_url: string | null;
   roles: string[];
   character_names: string[];
+  watch_status: "watched" | "will_watch" | "wont_watch" | null;
+  rating: number | null;
+  is_favorite: boolean;
 };
 
 type PersonDetail = {

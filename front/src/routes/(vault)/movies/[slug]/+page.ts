@@ -151,6 +151,9 @@ type ApiMovieDetail = {
       poster_url: string | null;
       in_vault: boolean;
       vault_slug: string | null;
+      watch_status: "watched" | "will_watch" | "wont_watch" | null;
+      rating: number | null;
+      is_favorite: boolean;
     }>;
   } | null;
   writeback?: {

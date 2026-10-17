@@ -528,8 +528,32 @@
     @apply absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none;
   }
 
-  .vd-collection-badge--check {
-    @apply bottom-1.5 left-1.5 flex size-5 items-center justify-center rounded-full bg-emerald-500 p-0 text-white shadow-md;
+  .vd-status-badge {
+    @apply absolute bottom-1.5 left-1.5 flex size-5 items-center justify-center rounded-full p-0 text-white shadow-md;
+  }
+
+  .vd-status-badge--wont {
+    @apply bg-red-500;
+  }
+
+  .vd-status-badge--will {
+    @apply bg-orange-500;
+  }
+
+  .vd-status-badge--watched {
+    @apply bg-emerald-500;
+  }
+
+  .vd-status-badge-rating {
+    @apply text-[9px] font-bold leading-none;
+  }
+
+  .vd-status-badge--favorite {
+    @apply bottom-auto left-auto right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-white/90 p-0 shadow-md;
+  }
+
+  .vd-status-badge-heart {
+    @apply fill-red-500 text-red-500;
   }
 
   .vd-collection-badge--loading {
