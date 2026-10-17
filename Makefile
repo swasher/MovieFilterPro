@@ -2,7 +2,7 @@ _GREEN := "\033[32m[%s]\033[0m %s\n" # Green text for "printf"
 _RED := "\033[31m[%s]\033[0m %s\n" # Red text for "printf"
 .SILENT:
 .ONESHELL:
-.PHONY: all
+.PHONY: all front
 .DEFAULT_GOAL := help
 
 define PRINT_HELP_PYSCRIPT
@@ -122,6 +122,9 @@ push-no-cache: build-and-push
 huey:
 	uv run python -m huey.bin.huey_consumer movie_filter_pro.huey.HUEY -k thread -w 2 -v -S
 
+
+front:
+	cd front && pnpm run dev
 
 tunnel:
 	# first run `ngrok config add-authtoken <ngrok token>`  - token on page 'your-autotoken', not 'tunnels->autotoken'!!!

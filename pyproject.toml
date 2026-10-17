@@ -1,6 +1,6 @@
 [project]
 name = "moviefilterpro"
-version = "0.1.187"
+version = "0.1.190"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,6 +25,7 @@ dependencies = [
     "python-decouple>=3.8",
     "python-slugify>=8.0.4",
     "rapidfuzz>=3.14.5",
+    "rtfox-browser>=0.0.2",
     "starlette>=0.47.0",
     "tavily>=1.1.0",
     "tmdbapis",
