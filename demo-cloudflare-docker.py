@@ -1,31 +1,31 @@
 """
-Фаза 0.5: проверка обхода Cloudflare через rtfox-browser внутри Docker-контейнера.
-Версия 2 — расширенная диагностика + Chrome for Testing + автоклик Turnstile.
+Фаза 0.5: проверка обхода Cloudflare через rtfox-browser. Версия 3.
 
 Что проверяем:
-  1. rtfox-browser поднимает браузер (Chrome for Testing / Chromium) в контейнере.
-  2. Cloudflare-челлендж на Kinozal проходится (с snapshots и автокликом turnstile).
+  1. rtfox-browser поднимает браузер (Chrome for Testing / Chromium / Google Chrome).
+  2. Cloudflare-челлендж на Kinozal проходится.
   3. Куки из браузера (cf_clearance и пр.) работают в обычном `requests`
-     с тем же User-Agent — это основа гибридного подхода для боевого кода.
+     с тем же User-Agent (основа гибридного подхода для боевого кода).
 
-Диагностика:
-  - печатает egress IP контейнера (сравни с IP dev-машины, где демо работало);
-  - печатает значение navigator.webdriver ДО и ПОСЛЕ первого get;
-  - каждые ~10 сек снимает snapshot страницы (snap_NN.html), если она менялась;
-  - если видит turnstile-iframe — пытается кликнуть чекбокс (макс. 5 раз, раз в 8 сек).
+Что появилось в v3:
+  - правильное автоопределение браузера и на Windows (для запуска на dev-машине);
+  - `--console` — сбор console-лог браузера (видно JS-ошибки челленджа);
+  - в цикле ожидания печатается состояние челленджа:
+      token_len=N    — turnstile-токен уже получен (виджет отработал);
+      success=…      — появился ли блок "Verification successful";
+      cf_iframe=YES  — рендерится ли turnstile-iframe;
+      error="…"      — текст ошибки CF, если она показана.
 
-Запуск (внутри контейнера):
-  docker exec -it <имя контейнера> python /app/demo-cloudflare-docker.py
+Запуск в контейнере (prod):
+  docker exec -it -e KINOZAL_SPIKE_COOKIE_UID=... -e KINOZAL_SPIKE_COOKIE_PASS=... \
+      <имя контейнера> python /app/demo-cloudflare-docker.py [--console]
 
-Выбор браузера:
-  KINOZAL_SPIKE_BROWSER=/opt/chrome/chrome       — Chrome for Testing (по умолчанию, если есть)
-  KINOZAL_SPIKE_BROWSER=/usr/bin/chromium        — Debian Chromium (A/B тест)
+Запуск на dev-машине (Windows, свой Chrome):
+  uv run python demo-cloudflare-docker.py [--console] [--headed]
 
-Профиль (переживает перезапуск — копим доверие CF):
-  docker exec -it <имя контейнера> python /app/demo-cloudflare-docker.py --profile /app/.chrome_profile
-
-План Б (headed через Xvfb):
-  docker exec -it <имя контейнера> xvfb-run -a python /app/demo-cloudflare-docker.py --headed
+Другие CF-зоны из контейнера (контрольный тест):
+  docker exec -it -e KINOZAL_SPIKE_URL=https://nopecha.com/demo/cloudflare \
+      <имя контейнера> python /app/demo-cloudflare-docker.py [--console]
 
 Переменные окружения:
   KINOZAL_SPIKE_URL           — полный URL для проверки (по умолчанию browse.php на kinozal.guru)
@@ -35,6 +35,7 @@
   KINOZAL_SPIKE_CHECK_DETAILS — если "1", проверяем details-страницу через requests (по умолчанию "1")
   KINOZAL_SPIKE_CHECK_DL      — если "1", проверяем, стоит ли dl-поддомен за Cloudflare (по умолчанию "1")
   KINOZAL_SPIKE_DETACHED      — если "1", запуск chrome detached-процессом (use_subprocess=False)
+  KINOZAL_SPIKE_BROWSER       — бинарь браузера (иначе автоопределение)
 
 Коды выхода:
   0 — все проверки прошли
@@ -78,23 +79,52 @@ def pick_browser():
         if os.path.exists(env):
             return env
         print(f"[WARN] KINOZAL_SPIKE_BROWSER={env} не найден, пробую автоопределение")
-    candidates = [
+
+    candidates = []
+
+    if os.name == "nt":
+        for base_var in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+            base = os.environ.get(base_var)
+            if base:
+                candidates.append(os.path.join(base, "Google", "Chrome", "Application", "chrome.exe"))
+
+    candidates += [
         "/opt/chrome/chrome",
         "/opt/chrome-linux64/chrome",
         shutil.which("chromium"),
         shutil.which("google-chrome"),
         shutil.which("chromium-browser"),
     ]
+
     for c in candidates:
         if c and os.path.exists(c):
             return c
     return None
 
 
+CHALLENGE_STATE_JS = """
+(function () {
+    var parts = [];
+    var inp = document.querySelector('input[name="cf-turnstile-response"]');
+    if (inp) parts.push('token_len=' + inp.value.length);
+    var ok = document.getElementById('tSBMk0');
+    if (ok) parts.push('success=' + (ok.style.display !== 'none' ? 'VISIBLE' : 'hidden'));
+    var err = document.getElementById('challenge-error-text');
+    if (err && !err.closest('noscript') && err.textContent.trim()) {
+        parts.push('error="' + err.textContent.trim().slice(0, 80) + '"');
+    }
+    var f = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+    parts.push('cf_iframe=' + (f ? 'YES' : 'no'));
+    return parts.join(' ');
+})()
+"""
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Cloudflare spike v2 for Kinozal scraper")
-    parser.add_argument("--headed", action="store_true", help="запуск с GUI (требует xvfb-run)")
+    parser = argparse.ArgumentParser(description="Cloudflare spike v3 for Kinozal scraper")
+    parser.add_argument("--headed", action="store_true", help="запуск с GUI (в контейнере требует xvfb-run)")
     parser.add_argument("--profile", default=None, help="путь к постоянному chrome-профилю")
+    parser.add_argument("--console", action="store_true", help="собирать console-лог браузера")
     args = parser.parse_args()
 
     url = os.environ.get("KINOZAL_SPIKE_URL", DEFAULT_URL)
@@ -109,11 +139,11 @@ def main():
     host = url.split("/")[2]
 
     print("=" * 74)
-    print("ФАЗА 0.5: Cloudflare-обход, расширенная диагностика")
+    print("ФАЗА 0.5: Cloudflare-обход, расширенная диагностика v3")
     print("=" * 74)
     root = os.geteuid() == 0 if hasattr(os, "geteuid") else None
     print(f"python: {sys.version.split()[0]} | platform: {platform.platform()}")
-    print(f"root: {root} | URL: {url} | headless: {headless}")
+    print(f"root: {root} | URL: {url} | headless: {headless} | console-лог: {args.console}")
     print(f"ожидание челленджа: {wait_seconds}s | куки uid/pass заданы: {bool(cookie_uid and cookie_pass)}")
     print(f"профиль: {args.profile or 'временный'} | detached: {detached}")
     print()
@@ -121,7 +151,7 @@ def main():
     try:
         import requests
         ip = requests.get("https://api.ipify.org", timeout=15).text.strip()
-        print(f"egress IP контейнера: {ip}")
+        print(f"egress IP: {ip}")
     except Exception as e:
         print(f"[WARN] egress IP не определён: {e}")
     print()
@@ -163,6 +193,7 @@ def main():
             browser_executable_path=browser,
             user_data_dir=args.profile,
             use_subprocess=not detached,
+            enable_cdp_events=args.console,
         )
         print(f"  браузер запущен за {time.time() - t0:.1f}s")
 
@@ -172,6 +203,23 @@ def main():
         except Exception:
             print("  navigator.webdriver (до get): неизвестно")
 
+        seen_console = set()
+
+        def report_console():
+            if not args.console:
+                return
+            try:
+                entries = driver.get_log("browser")
+            except Exception:
+                return
+            for e in entries:
+                key = (e.get("level") or "") + (e.get("message") or "")[:200]
+                if key in seen_console:
+                    continue
+                seen_console.add(key)
+                if e.get("level") in ("SEVERE", "WARNING", "ERROR"):
+                    print(f"    [console:{e.get('level')}] {e.get('message')}")
+
         def get_challenge_frames(drv):
             try:
                 return drv.execute_script(
@@ -179,6 +227,12 @@ def main():
                 ) or []
             except Exception:
                 return []
+
+        def get_challenge_state(drv):
+            try:
+                return (drv.execute_script(CHALLENGE_STATE_JS) or "").strip()
+            except Exception:
+                return ""
 
         def try_click_turnstile(drv):
             from selenium.webdriver.common.action_chains import ActionChains
@@ -219,6 +273,7 @@ def main():
         snap_seq = 0
         clicks = 0
         last_click = 0.0
+        last_state = None
         schedule_reload = bool(cookie_uid and cookie_pass)
 
         while time.time() - start < wait_seconds:
@@ -230,8 +285,14 @@ def main():
                 "challenges.cloudflare.com" in f["src"] or "turnstile" in f["src"]
                 for f in frames
             )
-
             challenged = looks_like_challenge(title, current, html)
+
+            state = get_challenge_state(driver)
+            if state and state != last_state:
+                print(f"    [state {int(time.time() - start)}s] {state}")
+                last_state = state
+
+            report_console()
 
             if html and not challenged and not schedule_reload:
                 print(f"  челлендж пройден за {time.time() - t0:.1f}s")
@@ -267,11 +328,12 @@ def main():
 
             time.sleep(1)
         else:
+            report_console()
             with open("challenge-page.html", "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
             print(f"[FAIL] челлендж не пройден за {wait_seconds}s")
             print(f"  url={driver.current_url!r} title={driver.title!r}")
-            print(f"  автокликов: {clicks}")
+            print(f"  автокликов: {clicks} | финальное состояние: {get_challenge_state(driver)!r}")
             print("  snapshots: snap_NN.html, финальный дамп: challenge-page.html")
             return 1
 

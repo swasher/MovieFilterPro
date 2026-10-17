@@ -2,6 +2,8 @@ import re
 import dataclasses
 import logging
 import asyncio
+import random
+import time
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 
@@ -21,6 +23,22 @@ from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, ne
 from web_logger import log, LogType
 
 kinozal_logger = logging.getLogger('kinozal')
+
+
+REQUESTS_PAUSE_SECONDS = 2.0
+REQUESTS_PAUSE_JITTER_SECONDS = 1.0
+RATE_LIMIT_MAX_ATTEMPTS = 3
+RATE_LIMIT_RETRY_SLEEPS_SECONDS = (15, 30)
+
+
+def sleep_interruptible(seconds: float, cancel_event: asyncio.Event | None = None) -> None:
+    remaining = seconds
+    while remaining > 0:
+        if cancel_event is not None and cancel_event.is_set():
+            raise ScanCancelled()
+        step = min(1.0, remaining)
+        time.sleep(step)
+        remaining -= step
 
 
 def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asyncio.Event):
@@ -126,7 +144,15 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
     # download the HTML document
     # with an HTTP GET request
     # response = requests.get(site.url())
-    response = client.browse_movies(page=page_number)
+    response = None
+    for attempt in range(1, RATE_LIMIT_MAX_ATTEMPTS + 1):
+        response = client.browse_movies(page=page_number)
+        if response.status_code == 429 and attempt < RATE_LIMIT_MAX_ATTEMPTS:
+            wait = RATE_LIMIT_RETRY_SLEEPS_SECONDS[attempt - 1]
+            log(f"Rate limit (429) on browse page #{page_number}. Attempt {attempt}/{RATE_LIMIT_MAX_ATTEMPTS}. Retrying in {wait}s...", logger_name=LogType.ERROR)
+            sleep_interruptible(wait, cancel_event)
+            continue
+        break
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")
@@ -233,7 +259,7 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
         raise Exception(response)
 
 
-def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
+def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> tuple[KinozalMovie, float]:
     """
     Парсит данные со страницы фильма. Получает на вход частично заполненный данными объект KinozalMovie,
     добавляет найденные данные и возвращает этот же объект.
@@ -244,27 +270,36 @@ def get_details(m: KinozalMovie) -> tuple[KinozalMovie, float]:
     client = KinozalClient()
     pref = UserPreferences.get()
 
-    try:
-        response = client.get_movie_details(m.kinozal_id)
-        response.raise_for_status()
-    # except HTTPError as http_err:
-    #     log(f"HTTP error occurred: {http_err}", logger_name=LogType.ERROR)
-    #     return None, 0
-    # except Timeout:
-    #     log("The request timed out", logger_name=LogType.ERROR)
-    #     return None, 0
-    # except RequestException as req_err:
-    #     log(f"An error occurred: {req_err}", logger_name=LogType.ERROR)
-    #     return None, 0
-    # except Exception as e:
-    #     log(f"An unexpected error occurred: {e}", logger_name=LogType.ERROR)
-    #     return None, 0
-    except RequestException as e:
-        log(f"Failed to get details for movie id {m.kinozal_id} due to a network error.", logger_name=LogType.ERROR,)
-        raise DetailsFetchError(f"Network error for movie id {m.kinozal_id}") from e
-    except Exception as e:
-        log(f"An unexpected error occurred while getting details for movie id {m.kinozal_id}.", logger_name=LogType.ERROR)
-        raise DetailsFetchError(f"Unexpected error for movie id {m.kinozal_id}") from e
+    for attempt in range(1, RATE_LIMIT_MAX_ATTEMPTS + 1):
+        try:
+            response = client.get_movie_details(m.kinozal_id)
+            if response.status_code == 429 and attempt < RATE_LIMIT_MAX_ATTEMPTS:
+                wait = RATE_LIMIT_RETRY_SLEEPS_SECONDS[attempt - 1]
+                log(f"Rate limit (429) for movie id {m.kinozal_id}. Attempt {attempt}/{RATE_LIMIT_MAX_ATTEMPTS}. Retrying in {wait}s...", logger_name=LogType.ERROR)
+                sleep_interruptible(wait, cancel_event)
+                continue
+            response.raise_for_status()
+        # except HTTPError as http_err:
+        #     log(f"HTTP error occurred: {http_err}", logger_name=LogType.ERROR)
+        #     return None, 0
+        # except Timeout:
+        #     log("The request timed out", logger_name=LogType.ERROR)
+        #     return None, 0
+        # except RequestException as req_err:
+        #     log(f"An error occurred: {req_err}", logger_name=LogType.ERROR)
+        #     return None, 0
+        # except Exception as e:
+        #     log(f"An unexpected error occurred: {e}", logger_name=LogType.ERROR)
+        #     return None, 0
+        except ScanCancelled:
+            raise
+        except RequestException as e:
+            log(f"Failed to get details for movie id {m.kinozal_id} due to a network error.", logger_name=LogType.ERROR,)
+            raise DetailsFetchError(f"Network error for movie id {m.kinozal_id}") from e
+        except Exception as e:
+            log(f"An unexpected error occurred while getting details for movie id {m.kinozal_id}.", logger_name=LogType.ERROR)
+            raise DetailsFetchError(f"Unexpected error for movie id {m.kinozal_id}") from e
+        break
 
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -560,7 +595,8 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
                 log(f" ┣━ MARK AS PARTIAL [{status}]")
                 m.kinorium_partial_match = True
 
-        m, sec = get_details(m)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS FOR THE MOVIE
+        sleep_interruptible(REQUESTS_PAUSE_SECONDS + random.uniform(0, REQUESTS_PAUSE_JITTER_SECONDS), cancel_event)
+        m, sec = get_details(m, cancel_event)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS FOR THE MOVIE
         log(f' ┣━ GET DETAILS: {sec:.1f}s')
 
         # Эта проверка выкидывает все, что через него не прошло
