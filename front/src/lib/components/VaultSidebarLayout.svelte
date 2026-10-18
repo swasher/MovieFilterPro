@@ -59,7 +59,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
       return true;
     }
 
-    return href === "/" ? currentPath === "/" : currentPath === href || currentPath.startsWith(`${href}/`);
+    return href === "/" ? currentPath === "/" && currentSearch === "" : currentPath === href || currentPath.startsWith(`${href}/`);
   };
 
   function isCustomList(id: string): boolean {
@@ -273,6 +273,9 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
                         <Sortable.Item id={subItem.id}>
                           {@render menuItemContent(subItem, group)}
                         </Sortable.Item>
+                        {#if subItem.id === "all" && group.id === "system"}
+                          <Sidebar.Separator class="my-1" />
+                        {/if}
                       {/each}
                     </Sortable.Root>
                   {/if}
