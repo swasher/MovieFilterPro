@@ -1,5 +1,7 @@
 # VAULT TMDB Sync Implementation
 
+> **Исторический план реализации.** Django HTMX endpoints и шаблоны, упомянутые в фазах ниже, удалены вместе со старым UI. Текущий API находится в `vault/api.py`, интерфейс — в `front/src/routes/`. Отмеченные незавершёнными ручные проверки не считаются выполненными.
+
 ## Phase 1: Data Model
 - [x] Добавить в `vault.Movie` поля: `tmdb_id`, `tmdb_media_type`, `tmdb_last_synced_at`
 - [x] Создать и применить миграцию
