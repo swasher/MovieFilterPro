@@ -60,33 +60,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Установка supervisor и браузеров для обхода Cloudflare в kinozal_scan.
-# chromium (apt) — резервный браузер + он тянет все системные библиотеки,
-#   которые нужны Chrome for Testing (тот приходит без зависимостей).
-# Chrome for Testing — "брендовый" Google Chrome, к нему Cloudflare
-#   доверяет заметно больше, чем к Debian Chromium.
-# chromedriver rtfox_browser скачивает и патчит сам на первом запуске.
-# xvfb — запасной вариант: headed-браузер без дисплея, если headless не пройдёт челлендж.
-# fonts-liberation — шрифты, чтобы страницы корректно рендерились в headless.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    supervisor \
-    chromium \
-    xvfb \
-    fonts-liberation \
-    curl \
-    unzip \
+# Установка supervisor для управления процессами
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
     && rm -rf /var/lib/apt/lists/*
-
-RUN set -ex; \
-    CHROME_VERSION=$(curl -fsSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json \
-        | python3 -c "import sys, json; print(json.load(sys.stdin)['channels']['Stable']['version'])"); \
-    echo "Chrome for Testing version: ${CHROME_VERSION}"; \
-    curl -fsSL -o /tmp/chrome-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chrome-linux64.zip"; \
-    unzip -q /tmp/chrome-linux64.zip -d /opt; \
-    mv /opt/chrome-linux64 /opt/chrome; \
-    rm /tmp/chrome-linux64.zip
-
-ENV KINOZAL_BROWSER_BINARY=/opt/chrome/chrome
 
 RUN mkdir -p /torrents_hotfolder /app/logs
 
