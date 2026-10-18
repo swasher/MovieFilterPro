@@ -65,8 +65,8 @@ TmdbWritebackService.sync_*(...)      (vault/services/tmdb_writeback_service.py)
 
 > Границы: **`tmdb_adapter`** — только инфраструктура (клиент, auth). Всю прикладную
 > логику writeback держать в `vault/services/tmdb_writeback_service.py`. Мутаторы
-> (`MovieStatusService`, `vault/views.py`) не должны знать про TMDB — их покрывают
-> сигналы.
+> (`MovieStatusService` и API actions в `vault/api.py`) не должны содержать
+> прикладную writeback логику — ее запускают сигналы.
 
 ## 4. Маппинг данных Vault → TMDB
 

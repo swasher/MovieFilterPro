@@ -1,5 +1,7 @@
 # План и подробное описание: синхронизация `vault.Movie` с TMDB
 
+> Исторический план реализации. Указанные ниже HTMX routes и Django templates удалены вместе со старым UI. Текущие frontend-вызовы используют Ninja endpoints из `vault/api.py`, например `/api/vault/movies/{slug}/fetch-tmdb` и `/api/vault/movies/{slug}/fetch-tmdb-confirm`.
+
 ## 0) Цель
 Сделать сервисную функцию для `vault`, которая:
 1. Находит соответствующий объект на TMDB даже без заранее известного `tmdb_id`.

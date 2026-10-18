@@ -1,8 +1,10 @@
 # Kinozal Svelte Migration Plan
 
+> Миграция завершена. Django UI удален; текущие пользовательские страницы находятся в `front/src/routes/`, backend-вызовы идут через Ninja API.
+
 ## Цель
 
-Перенести сценарий работы с `django app kinozal` в новый Svelte UI поэтапно, не ломая существующий Django-интерфейс и не смешивая данные `Kinozal` с `Vault`.
+Историческая цель документа — перенос сценариев из Django UI в Svelte без смешивания данных `Kinozal` с `Vault`.
 
 Ключевой принцип:
 - `Kinozal` живет в своем отдельном пространстве данных.
@@ -14,7 +16,7 @@
 - Общий shell сайта должен быть независим от `Vault`.
 - Sidebar должен быть частью только `Vault`, а не всего приложения.
 - `Kinozal` должен жить как отдельный раздел нового UI.
-- Legacy Django UI должен оставаться рабочим на всем протяжении переноса.
+- Legacy Django UI больше не поддерживается и удален.
 - Новый frontend должен получать данные через API, а не через перенос HTMX как есть.
 
 ## Статус
@@ -106,8 +108,8 @@
 ### Backend
 
 - Основная модель: `moviefilter.models.MovieRSS`
-- Текущий Django entrypoint: `moviefilter/views.py::rss`
-- Текущая HTMX-подача таблицы: `moviefilter/htmx_views.py::rss_table_data`
+- Исторический Django entrypoint удален: `moviefilter.views.rss`.
+- Историческая HTMX-подача удалена: `moviefilter.htmx_views.rss_table_data`; текущие операции доступны через `moviefilter/api.py`.
 
 ### Frontend
 
@@ -122,6 +124,6 @@
 - Не переносить весь функционал за один заход.
 - Сначала делать вертикальный срез с реальным route + API + таблицей.
 
-## Ближайший следующий шаг
+## Завершение
 
-- Реализовать `Phase 6`: mobile behavior, scroll state, тесты и финальную полировку UX.
+Пользовательский интерфейс работает через Svelte, а Django UI templates, routes и HTMX handlers удалены.

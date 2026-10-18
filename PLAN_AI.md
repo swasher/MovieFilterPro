@@ -4,9 +4,9 @@
 
 ### `kinozal`/очередь
 - Очередь кандидатов уже хранится в `moviefilter.MovieRSS` (приоритеты: HIGH/LOW/DEFER/SKIP/WAIT_TRANS/TRANS_FOUND).
-- Сканирование Kinozal уже асинхронное, с отменой и уведомлениями (`kinozal_scan.service.start_scan_task`, `kinozal_scan.htmx_views.scan/cancel_scan`).
+- Сканирование Kinozal уже асинхронное, с отменой и уведомлениями (`kinozal_scan.service.start_scan_task`, `kinozal.api`).
 - В `movie_audit` уже есть базовая фильтрация (страны/жанры/год/рейтинг), проверка пересечений с Kinorium, разбор деталей раздачи.
-- Скачивание `.torrent` уже реализовано (`moviefilter.htmx_views.get_torrent_file`) и использует настроенную hotfolder-папку.
+- Скачивание `.torrent` уже реализовано в `moviefilter.api` и использует настроенную hotfolder-папку.
 
 ### `vault`/хранилище
 - `vault.Movie` + `Rating` + `UserList(UserListMovie)` уже дают полный профиль предпочтений: оценки, «буду смотреть», «не буду», «избранное», «просмотрено».

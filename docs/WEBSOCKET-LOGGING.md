@@ -30,16 +30,10 @@
     -   `send_log_update(self, event)`: Срабатывает на событие от `log` или `alog`. Получает текстовое сообщение, "заворачивает" его в стандартный формат `{'type': 'log', 'content': ...}` и отправляет клиенту.
     -   `send_notification(self, event)`: Срабатывает на событие от `asend_notification`. Получает готовый словарь (`payload`) и пересылает его клиенту без изменений.
 
-## 3. Фронтенд (`kinozal_scan/templates/scan_page.html`)
+## 3. Svelte frontend
 
--   **Подключение**: При загрузке страницы устанавливается одно WebSocket соединение.
--   **Обработчик `socket.onmessage`**:
-    1.  Получает данные от сервера и парсит их как JSON (`const data = JSON.parse(event.data);`).
-    2.  Проверяет поле `data.type`.
-    3.  **Если `data.type === 'log'`**:
-        -   Создаёт новый `<div>` для записи лога.
-        -   Фильтрует сообщение на основе выбранного radio-button (Scan, Debug, Error).
-        -   Добавляет `div` в контейнер `#log-content`.
-    4.  **Если `data.type === 'scan_complete'`**:
-        -   Вызывает функцию `showToast(data.message, data.status)` для отображения всплывающего уведомления.
-        -   Выполняет дополнительные действия (например, скрывает кнопку "Cancel").
+-   Скан подключается через `front/src/lib/services/scanLogger.svelte.ts` и используется страницей `front/src/routes/scan/+page.svelte`.
+-   `front/src/routes/match-log/+page.svelte` подписывается на тот же `/ws/log/` для событий сопоставления.
+-   Обработчики парсят JSON, отображают `log` и обрабатывают `scan_complete`; завершение скана обновляет состояние Svelte UI.
+
+Старый клиент в `kinozal_scan/templates/scan_page.html` удален вместе с Django UI.

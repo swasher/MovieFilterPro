@@ -34,10 +34,6 @@ ALLOWED_HOSTS = ['*']
 # CSRF_TRUSTED_ORIGINS = ['https://*.fly.dev']
 # CSRF_TRUSTED_ORIGINS = ['*']
 
-LOGIN_REDIRECT_URL = "/"
-LOGIN_URL = 'core:login'
-LOGOUT_REDIRECT_URL = 'core:login'
-
 DEBUG_LOG = os.path.join(BASE_DIR, 'logs', 'debug.log')
 ERROR_LOG = os.path.join(BASE_DIR, 'logs', 'error.log')
 SCAN_LOG = os.path.join(BASE_DIR, 'logs', 'scan.log')
@@ -71,10 +67,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.postgres',
     'core',
-    'crispy_forms',
-    'crispy_bootstrap5',
-    'django_htmx',
-    'widget_tweaks',
     'channels',
     'moviefilter',
     'tmdb_adapter',
@@ -100,8 +92,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'moviefilter.middleware.toast_middleware.HtmxMessageMiddleware',
-    'django_htmx.middleware.HtmxMiddleware',
 ]
 if ENABLE_DEBUG_TOOLBAR:
     MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
@@ -123,8 +113,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                "core.context_processors.version_processor",
-                "core.context_processors.dev_banner_processor",
             ],
         },
     },

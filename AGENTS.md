@@ -56,24 +56,23 @@
 ## Архитектура и потоки данных
 
 ### 1) Поток Kinozal -> RSS (`moviefilter`)
-- UI скана: `kinozal_scan/templates/scan_page.html` (`/scan_page/`).
-- HTMX старт скана: `kinozal_scan/htmx_views.py::scan` (`/scan/`).
+- UI скана: `front/src/routes/scan/+page.svelte`.
+- Старт/статус/отмена скана: Ninja endpoints в `kinozal_scan/api.py`.
 - Async orchestration: `kinozal_scan/service.py::start_scan_task`.
 - Основной парсер: `kinozal_scan/parse.py` (`kinozal_scan`, `parse_page`, `get_details`, `movie_audit`).
 - Результат складывается в `moviefilter.models.MovieRSS`.
-- Лента/фильтры/действия пользователя: `moviefilter/views.py`, `moviefilter/htmx_views.py`, `moviefilter/templates/rss.html`.
+- Лента/фильтры/действия пользователя: `front/src/routes/kinozal/+page.svelte`, `moviefilter/api.py`.
 
 ### 2) Влияние Kinorium на `moviefilter`
 - Таблица `moviefilter.models.Kinorium` используется парсером для skip/partial match.
-- Обновление Kinorium через UI: `kinorium/views.py` (`/table/` + загрузка 2 CSV).
-- Парсер CSV: `kinorium/parse_csv.py`.
+- Табличный Django UI и HTMX загрузка Kinorium удалены; модельный кэш Kinorium продолжает использоваться сканером.
 
 ### 3) Поток Vault (`vault`)
 - Основные модели: `vault/models.py`.
 - Сервисы статусов/рейтингов/TMDB: `vault/services/*`.
 - API-слой для фронта Svelte: `django-ninja` (`vault/api.py`, префикс `/api/vault/`).
 - UI Vault: `front/src/routes/**`.
-- Legacy-слой (Django-шаблоны): `vault/views.py`, `vault/templates/vault/*`, роуты в `vault/urls.py` и без префикса в `movie_filter_pro/urls.py` — только для обратной совместимости.
+- Старый Django UI Vault удален; пользовательские страницы обслуживает Svelte, данные и действия — `vault/api.py` и `vault/services/*`.
 
 ### 4) Импорт данных в Vault
 - Команда: `uv run python manage.py import_kinorium_csv`.
@@ -99,7 +98,7 @@
 
 ## Где править по задачам
 - Логика скана/фильтрации новых релизов: `kinozal_scan/parse.py`, `kinozal_scan/checks.py`.
-- Действия в RSS (Hide/Defer/Wait/Download): `moviefilter/htmx_views.py`, `moviefilter/templates/partials/rss-table.html`.
+- Действия в Kinozal UI (Hide/Defer/Wait/Download): `front/src/routes/kinozal/+page.svelte`, `moviefilter/api.py`.
 - Кеш постеров RSS: `moviefilter/image_caching.py`.
 - Статусы/рейтинги/системные списки Vault: `vault/services/movie_status_service.py`.
 - Сезоны/эпизоды Vault: `vault/services/season_status_service.py`.
@@ -126,8 +125,8 @@ favorites, rating, списки, TMDB Lists, очередь writeback, асин�
 - Для локального single-user сценария глобальный `SSR` в `front` отключен, приложение ведет себя как SPA.
 - Аутентификация — стандартная Django session auth (`django.contrib.auth`), без JWT/token-based схемы.
 - В API использовать реальный `request.user`; если endpoint требует пользователя — возвращать `401`, без `User.objects.first()` и других single-user fallback.
-- `tmdb_adapter` — инфраструктурный слой TMDB (клиент из `UserPreferences`, auth/logout, сброс singleton). Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`.
-- `vault` полностью перенесен в новый frontend (списки, фильтры, поиск, детали, персоны, статусы, рейтинг, пользовательские списки, TMDB sync, сезоны). Django-шаблоны `vault` остаются legacy.
+- `tmdb_adapter.client_singleton` — инфраструктурный TMDB-клиент из `UserPreferences`; auth/logout endpoints находятся в `vault/api.py`. Прикладную логику поиска, matching, sync и import для Vault держать в `vault/services/*`.
+- `vault` полностью перенесен в новый frontend (списки, фильтры, поиск, детали, персоны, статусы, рейтинг, пользовательские списки, TMDB sync, сезоны). Старые Django templates, UI routes и HTMX handlers удалены.
 - В `front/src/routes/**` есть и другие перенесенные страницы: `kinozal`, `scan`, `plex`, `tmdb`, `tmdb-sync`, `preferences`.
 
 ## Шапки для сервисного слоя
