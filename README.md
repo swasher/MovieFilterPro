@@ -28,7 +28,7 @@
 
 ### Лента Kinozal
 
-![img_1.png](img_1.png)
+![img_1.png](docs/images/img_1.png)
 
 ### Сканирование релизов
 
@@ -38,15 +38,15 @@
 
 ### Plex
 
-![img_2.png](img_2.png)
+![img_2.png](docs/images/img_2.png)
 
 ### Настройки интеграций
 
-![img_7.png](img_7.png)
-![img_6.png](img_6.png)
-![img_3.png](img_3.png)
-![img_4.png](img_4.png)
-![img_5.png](img_5.png)
+![img_7.png](docs/images/img_7.png)
+![img_6.png](docs/images/img_6.png)
+![img_3.png](docs/images/img_3.png)
+![img_4.png](docs/images/img_4.png)
+![img_5.png](docs/images/img_5.png)
 
 ## Разделы приложения
 
