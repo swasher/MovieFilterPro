@@ -24,7 +24,7 @@
 
 ### Vault — главная страница и коллекция
 
-![img.png](img.png)
+![img.png](docs/images/img.png)
 
 ### Лента Kinozal
 
