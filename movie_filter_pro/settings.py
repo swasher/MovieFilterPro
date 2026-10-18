@@ -79,7 +79,6 @@ INSTALLED_APPS = [
     'moviefilter',
     'tmdb_adapter',
     'plex',
-    'tmdb',
     'kinorium',
     'vault',
     'kinozal_scan',

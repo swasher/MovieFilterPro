@@ -40,7 +40,6 @@ urlpatterns = [
     path('', include('core.urls')),
     path('vault/', include('vault.urls')),
     path('', include('plex.urls')),
-    path('', include('tmdb.urls')),
     path('', include('kinorium.urls')),
     path('', include('web_logger.urls')),
     path('', include('kinozal_scan.urls')),
