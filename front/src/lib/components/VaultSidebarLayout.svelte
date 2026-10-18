@@ -166,7 +166,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   async function saveGroupOrder(groupId: string) {
     const group = items.find((g) => g.id === groupId);
     if (!group?.children) return;
-    const keys = group.children.map((c) => c.id);
+    const keys = group.children.map((c) => c.id).filter((id) => id !== "all");
     const payload: { system_keys?: string[]; custom_keys?: string[] } = {};
     if (groupId === "system") {
       payload.system_keys = keys;
@@ -220,7 +220,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
       {/snippet}
     </Sidebar.MenuButton>
 
-    {#if editMode && (group.id === "system" || group.id === "custom")}
+    {#if editMode && (group.id === "system" || group.id === "custom") && subItem.id !== "all"}
       <div
         class="absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 group-data-[collapsible=icon]:hidden"
         data-sidebar="menu-action"

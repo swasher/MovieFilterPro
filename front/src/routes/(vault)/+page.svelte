@@ -11,7 +11,7 @@ import { Switch } from "$lib/components/ui/switch";
 import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
-import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
+import MovieCard from "$lib/components/vault/MovieCard.svelte";
 import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X } from "@lucide/svelte";
 
 type MovieCard = {
@@ -45,6 +45,13 @@ type TmdbSearchResult = {
     poster_url: string | null;
     popularity: number | null;
     vote_average: number | null;
+  };
+
+  type HomeGroup = {
+    id: string;
+    title: string;
+    see_all_href: string;
+    movies: MovieCard[];
   };
 
   let { data } = $props();
@@ -101,6 +108,11 @@ type TmdbSearchResult = {
 
   const genreNameMap = $derived(
     Object.fromEntries((data.genres ?? []).map((g) => [g.slug, g.name]))
+  );
+
+  const isHome = $derived(data.isHome === true);
+  const homeGroups = $derived(
+    (data.homeGroups ?? []).filter((group) => group.movies.length > 0)
   );
 
   const trimmedTmdbSearchQuery = $derived(tmdbSearchQuery.trim());
@@ -476,6 +488,21 @@ type TmdbSearchResult = {
   };
 </script>
 
+{#snippet movieTooltip()}
+  <div
+    class="bg-popover text-popover-foreground pointer-events-none fixed z-50 max-w-[220px] rounded-lg border border-border/70 px-3 py-2.5 shadow-lg backdrop-blur-sm"
+    style={`left:${tooltipX}px; top:${tooltipY}px;`}
+  >
+    <p class="line-clamp-2 text-sm font-semibold leading-tight">{hoveredMovie?.title}</p>
+    <p class="text-muted-foreground mt-1 line-clamp-2 text-[12px] leading-snug">
+      {hoveredMovie?.original_title || "—"}
+    </p>
+    <p class="text-muted-foreground mt-1 text-[11px] font-medium">
+      {hoveredMovie?.year ?? "—"}
+    </p>
+  </div>
+{/snippet}
+
 <div class="mx-auto w-full max-w-6xl p-6">
   <div class="mx-auto w-full max-w-[964px]">
     <div class="mb-6 space-y-3">
@@ -512,19 +539,21 @@ type TmdbSearchResult = {
         <div class="flex flex-wrap items-center gap-3">
           <SortSelect value={activeOrder} onChange={applyOrder} />
 
-          <Button
-            variant="outline"
-            size="icon"
-            class="h-11 w-11"
-            onclick={() => (isListView = !isListView)}
-            aria-label="Toggle view mode"
-          >
-            {#if isListView}
-              <TextAlignJustify class="size-4 text-foreground" />
-            {:else}
-              <LayoutGrid class="size-4 text-muted-foreground" />
-            {/if}
-          </Button>
+          {#if !isHome}
+            <Button
+              variant="outline"
+              size="icon"
+              class="h-11 w-11"
+              onclick={() => (isListView = !isListView)}
+              aria-label="Toggle view mode"
+            >
+              {#if isListView}
+                <TextAlignJustify class="size-4 text-foreground" />
+              {:else}
+                <LayoutGrid class="size-4 text-muted-foreground" />
+              {/if}
+            </Button>
+          {/if}
 
           <Button
             variant="outline"
@@ -593,6 +622,53 @@ type TmdbSearchResult = {
           <CardDescription>{data.apiError}</CardDescription>
         </CardHeader>
       </Card>
+    {:else if isHome}
+      {#each homeGroups as group (group.id)}
+        <div class="mb-8">
+          <div class="mb-3 flex items-baseline justify-between gap-4">
+            <h2 class="text-lg font-semibold tracking-tight">{group.title}</h2>
+            <a
+              href={group.see_all_href}
+              class="text-muted-foreground shrink-0 text-sm transition-colors hover:text-foreground"
+            >
+              Все
+            </a>
+          </div>
+          <div class="flex flex-wrap gap-4">
+            {#each group.movies as movie (movie.id)}
+              <a
+                href={`/movies/${movie.slug}`}
+                data-sveltekit-preload-data="hover"
+                class="block"
+                onmouseenter={() => onMovieEnter(movie)}
+                onmousemove={onMovieMove}
+                onmouseleave={onMovieLeave}
+              >
+                <MovieCard {movie} />
+              </a>
+            {/each}
+          </div>
+        </div>
+      {/each}
+
+      {#if homeGroups.length === 0}
+        <Card>
+          <CardHeader>
+            <CardTitle>Фильмотека пуста</CardTitle>
+            <CardDescription>Добавь первый фильм из TMDB — он появится здесь.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onclick={openAddMovieDialog}>
+              <Plus class="size-4" />
+              Add movie
+            </Button>
+          </CardContent>
+        </Card>
+      {/if}
+
+      {#if hoveredMovie}
+        {@render movieTooltip()}
+      {/if}
     {:else}
       {#if isListView}
         <div class="rounded-md border">
@@ -686,37 +762,7 @@ type TmdbSearchResult = {
               onmousemove={onMovieMove}
               onmouseleave={onMovieLeave}
             >
-              <Card class="relative h-[270px] w-[180px] flex-none overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
-                <CardContent class="h-full !p-0">
-                  <MovieStatusBadges
-                    watch_status={data.activeStatus === movie.watch_status ? null : movie.watch_status}
-                    rating={movie.rating}
-                    is_favorite={movie.in_favorites && data.activeStatus !== "favorites"}
-                    position="top-left"
-                  />
-
-                  {#if movie.movie_type === "series" || movie.movie_type === "miniseries"}
-                    <Badge variant="secondary" class="absolute bottom-2 left-2 z-10 px-1.5 py-0.5 text-[10px]">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</Badge>
-                  {/if}
-
-                  <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0.5 text-[10px]">
-                    {movie.year ?? "?"}
-                  </Badge>
-
-                  {#if movie.poster_url}
-                    <img
-                      src={movie.poster_url}
-                      alt={movie.title}
-                      class="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  {:else}
-                    <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs">
-                      no poster
-                    </div>
-                  {/if}
-                </CardContent>
-              </Card>
+              <MovieCard {movie} activeStatus={data.activeStatus} />
             </a>
           {/each}
           {#if hasMore || isLoadingMore}
@@ -735,18 +781,7 @@ type TmdbSearchResult = {
       {/if}
 
       {#if hoveredMovie && !isListView}
-        <div
-          class="bg-popover text-popover-foreground pointer-events-none fixed z-50 max-w-[220px] rounded-lg border border-border/70 px-3 py-2.5 shadow-lg backdrop-blur-sm"
-          style={`left:${tooltipX}px; top:${tooltipY}px;`}
-        >
-          <p class="line-clamp-2 text-sm font-semibold leading-tight">{hoveredMovie.title}</p>
-          <p class="text-muted-foreground mt-1 line-clamp-2 text-[12px] leading-snug">
-            {hoveredMovie.original_title || "—"}
-          </p>
-          <p class="text-muted-foreground mt-1 text-[11px] font-medium">
-            {hoveredMovie.year ?? "—"}
-          </p>
-        </div>
+        {@render movieTooltip()}
       {/if}
 
       {#if allMovies.length === 0}

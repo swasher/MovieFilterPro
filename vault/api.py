@@ -2,7 +2,8 @@ import logging
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, DateTimeField, Exists, F, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
@@ -47,6 +48,17 @@ class MovieOut(Schema):
     in_favorites: bool = False
     watch_status: str | None = None
     rating: int | None = None
+
+
+class HomeMovieGroupOut(Schema):
+    id: str
+    title: str
+    see_all_href: str
+    movies: list[MovieOut]
+
+
+class HomeOut(Schema):
+    groups: list[HomeMovieGroupOut]
 
 
 class WritebackPerMovieOut(Schema):
@@ -620,6 +632,16 @@ def _build_movie_out(movie: Movie, user=None, state: dict | None = None) -> Movi
     )
 
 
+def _build_home_group(group_id: str, title: str, see_all_href: str, movies, user) -> HomeMovieGroupOut:
+    states = MovieStatusService.get_movie_states_bulk(user, movies)
+    return HomeMovieGroupOut(
+        id=group_id,
+        title=title,
+        see_all_href=see_all_href,
+        movies=[_build_movie_out(movie, user=user, state=states.get(movie.id)) for movie in movies],
+    )
+
+
 def _ui_status_display(movie: Movie) -> str:
     """Статус для UI: сериал в статусе released (между сезонами) показываем как «ПАУЗА»."""
     if movie.movie_type == Movie.MovieType.SERIES and movie.status == Movie.Status.RELEASED:
@@ -834,6 +856,25 @@ def list_movies(
                 if order == "-added_at"
                 else ("created_at", "-year", "title", "id")
             )
+    elif order in {"-watched_at", "-rated_at"}:
+        if user:
+            # Пользовательские даты: значение даты (watched_at/rated_at) с fallback на updated_at,
+            # чтобы фильмы без даты не всплывали выше фильмов с датой (nulls last).
+            if order == "-watched_at":
+                sort_expr = Coalesce(
+                    F("user_movies__watched_at"),
+                    F("user_movies__updated_at"),
+                    output_field=DateTimeField(),
+                ).desc(nulls_last=True)
+            else:
+                sort_expr = Coalesce(
+                    F("user_movies__rated_at"),
+                    F("user_movies__updated_at"),
+                    output_field=DateTimeField(),
+                ).desc(nulls_last=True)
+            ordering = (sort_expr, "-year", "title", "id")
+        else:
+            ordering = allowed_orders["-year"]
     else:
         ordering = allowed_orders.get(order, allowed_orders["-year"])
 
@@ -849,6 +890,75 @@ def list_movies(
     movies = [movie for movie in qs]
     states = MovieStatusService.get_movie_states_bulk(user, movies)
     return [_build_movie_out(movie, user=user, state=states.get(movie.id)) for movie in movies]
+
+
+HOME_SECTION_SIZE = 5
+
+
+@api.get("/home", response=HomeOut)
+def home_data(request):
+    """Главный экран Vault: ленты «Недавно добавленные/просмотренные/оценённые» по 5 карточек."""
+    user = _resolve_api_user(request)
+
+    groups: list[HomeMovieGroupOut] = []
+
+    added_movies = list(Movie.objects.order_by("-created_at", "id")[:HOME_SECTION_SIZE])
+    groups.append(
+        _build_home_group("added", "Недавно добавленные", "/?order=-added_at", added_movies, user)
+    )
+
+    if user is not None:
+        user_movie_sq = UserMovie.objects.filter(user=user, movie=OuterRef("pk"))
+
+        watched_movies = list(
+            Movie.objects.filter(
+                user_movies__user=user,
+                user_movies__watch_status=UserMovie.WatchStatus.WATCHED,
+            )
+            .annotate(
+                _home_sort=Coalesce(
+                    Subquery(user_movie_sq.values("watched_at")[:1]),
+                    Subquery(user_movie_sq.values("updated_at")[:1]),
+                    output_field=DateTimeField(),
+                ),
+            )
+            .order_by(F("_home_sort").desc(nulls_last=True), "id")[:HOME_SECTION_SIZE]
+        )
+        groups.append(
+            _build_home_group(
+                "watched",
+                "Недавно просмотренные",
+                "/?status=watched&order=-watched_at",
+                watched_movies,
+                user,
+            )
+        )
+
+        rated_movies = list(
+            Movie.objects.filter(
+                user_movies__user=user,
+                user_movies__rating__isnull=False,
+            )
+            .annotate(
+                _home_sort=Coalesce(
+                    Subquery(user_movie_sq.values("rated_at")[:1]),
+                    Subquery(user_movie_sq.values("updated_at")[:1]),
+                    output_field=DateTimeField(),
+                ),
+            )
+            .order_by(F("_home_sort").desc(nulls_last=True), "id")[:HOME_SECTION_SIZE]
+        )
+        groups.append(
+            _build_home_group(
+                "rated",
+                "Недавно оценённые",
+                "/?status=watched&order=-rated_at",
+                rated_movies,
+                user,
+            )
+        )
+
+    return HomeOut(groups=groups)
 
 
 @api.get("/genres", response=list[NamedItemOut])
@@ -1506,6 +1616,8 @@ def person_toggle_favorite(request, person_id: int):
 
 SYSTEM_SIDEBAR_KEYS = list(SYSTEM_LIST_LABELS.keys())
 
+ALL_MOVIES_SIDEBAR_ITEM_ID = "all"
+
 SYSTEM_SIDEBAR_ITEMS = [
     SidebarItemOut(id=key, title=label, href=f"/?status={key}", count=0)
     for key, label in SYSTEM_LIST_LABELS.items()
@@ -1528,12 +1640,18 @@ def _order_custom_keys(stored_keys: list[str], custom_items: list[SidebarItemOut
 @api.get("/sidebar", response=list[SidebarGroupOut])
 def sidebar_data(request):
     user = _resolve_api_user(request)
+    all_movies_item = SidebarItemOut(
+        id=ALL_MOVIES_SIDEBAR_ITEM_ID,
+        title="Все фильмы",
+        href="/",
+        count=Movie.objects.count(),
+    )
     if user is None:
         return [
             SidebarGroupOut(
                 id="system",
                 title="Системные",
-                children=SYSTEM_SIDEBAR_ITEMS,
+                children=[all_movies_item, *SYSTEM_SIDEBAR_ITEMS],
             ),
             SidebarGroupOut(id="custom", title="Мои списки", children=[]),
         ]
@@ -1541,13 +1659,16 @@ def sidebar_data(request):
     counts = MovieStatusService.get_system_lists_counts(user)
 
     system_items = [
-        SidebarItemOut(
-            id=item.id,
-            title=item.title,
-            href=item.href,
-            count=counts[item.id],
-        )
-        for item in SYSTEM_SIDEBAR_ITEMS
+        all_movies_item,
+        *[
+            SidebarItemOut(
+                id=item.id,
+                title=item.title,
+                href=item.href,
+                count=counts[item.id],
+            )
+            for item in SYSTEM_SIDEBAR_ITEMS
+        ],
     ]
 
     custom_lists_qs = (
@@ -1567,10 +1688,10 @@ def sidebar_data(request):
 
     layout = SidebarLayout.objects.filter(user=user).first()
     if layout is not None:
-        system_keys = _order_system_keys(layout.system_keys or [])
+        system_keys = [ALL_MOVIES_SIDEBAR_ITEM_ID, *_order_system_keys(layout.system_keys or [])]
         custom_items = _order_custom_keys(layout.custom_keys or [], custom_items)
     else:
-        system_keys = SYSTEM_SIDEBAR_KEYS
+        system_keys = [ALL_MOVIES_SIDEBAR_ITEM_ID, *SYSTEM_SIDEBAR_KEYS]
 
     system_by_id = {item.id: item for item in system_items}
     system_group = SidebarGroupOut(

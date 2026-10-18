@@ -20,6 +20,13 @@ type ApiGenre = {
   slug: string;
 };
 
+type ApiHomeGroup = {
+  id: string;
+  title: string;
+  see_all_href: string;
+  movies: ApiMovie[];
+};
+
 export const load: PageLoad = async ({ fetch, url }) => {
   const genre = url.searchParams.getAll("genre");
   const yearFrom = url.searchParams.get("year_from") ?? "";
@@ -33,6 +40,56 @@ export const load: PageLoad = async ({ fetch, url }) => {
   const searchPlot = url.searchParams.get("search_plot") === "true";
   const order = (url.searchParams.get("order") ?? "-year").trim();
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+
+  const isHome = ![...url.searchParams.keys()].length; 
+
+  const emptyState = {
+    movies: [] as ApiMovie[],
+    genres: [] as ApiGenre[],
+    homeGroups: [] as ApiHomeGroup[],
+    apiError: "",
+    activeGenre: genre,
+    activeYearFrom: yearFrom,
+    activeYearTo: yearTo,
+    activeMovieType: movieType,
+    activeWatchStatus: watchStatus,
+    activeIsFavorite: isFavorite,
+    activeStatus: status,
+    activeList: list,
+    activeQuery: q,
+    activeOrder: order,
+    activeSearchPlot: searchPlot,
+    initialOffset: offset,
+    isHome,
+  };
+
+  if (isHome) {
+    try {
+      const [homeResponse, genresResponse] = await Promise.all([
+        fetch("/api/vault/home"),
+        fetch("/api/vault/genres"),
+      ]);
+
+      const homePayload = homeResponse.ok
+        ? ((await homeResponse.json()) as { groups?: ApiHomeGroup[] })
+        : { groups: [] as ApiHomeGroup[] };
+      const genres = genresResponse.ok
+        ? ((await genresResponse.json()) as ApiGenre[])
+        : [];
+
+      return {
+        ...emptyState,
+        homeGroups: homePayload.groups ?? [],
+        genres,
+        apiError: !homeResponse.ok ? `API error: ${homeResponse.status}` : "",
+      };
+    } catch (error) {
+      return {
+        ...emptyState,
+        apiError: error instanceof Error ? error.message : "Unknown API error",
+      };
+    }
+  }
 
   try {
     const params = new URLSearchParams({ limit: "30", offset: offset.toString() });
@@ -63,6 +120,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
     return {
       movies,
       genres,
+      homeGroups: [] as ApiHomeGroup[],
+      isHome,
       apiError: !moviesResponse.ok ? `API error: ${moviesResponse.status}` : "",
       activeGenre: genre,
       activeYearFrom: yearFrom,
@@ -81,6 +140,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
     return {
       movies: [] as ApiMovie[],
       genres: [] as ApiGenre[],
+      homeGroups: [] as ApiHomeGroup[],
+      isHome,
       apiError: error instanceof Error ? error.message : "Unknown API error",
       activeGenre: genre,
       activeYearFrom: yearFrom,
