@@ -25,10 +25,10 @@ from web_logger import log, LogType
 kinozal_logger = logging.getLogger('kinozal')
 
 
-REQUESTS_PAUSE_SECONDS = 2.0
-REQUESTS_PAUSE_JITTER_SECONDS = 1.0
+REQUESTS_PAUSE_SECONDS = 10.0
+REQUESTS_PAUSE_JITTER_SECONDS = 5.0
 RATE_LIMIT_MAX_ATTEMPTS = 3
-RATE_LIMIT_RETRY_SLEEPS_SECONDS = (15, 30)
+RATE_LIMIT_RETRY_SLEEPS_SECONDS = (60, 120)
 
 
 def sleep_interruptible(seconds: float, cancel_event: asyncio.Event | None = None) -> None:
