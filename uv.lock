@@ -789,7 +789,7 @@ wheels = [
 
 [[package]]
 name = "moviefilterpro"
-version = "0.1.197"
+version = "0.1.198"
 source = { virtual = "." }
 dependencies = [
     { name = "aiofiles" },

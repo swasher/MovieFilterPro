@@ -35,6 +35,12 @@ class MovieRSS(models.Model):
 
     class Meta:
         ordering = ['date_added']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'original_title', 'year'],
+                name='unique_movierss_movie_identity',
+            ),
+        ]
 
     # Похоже, что этот флаг не используется нигде
     # POSSIBLE DEPRECATED
@@ -275,8 +281,8 @@ class UserPreferences(models.Model):
         return countries, genres, self.max_year, self.min_rating
 
     def get_low_priority_preferences(self) -> tuple[list[str], list[str], int, float]:
-        countries = self.low_countries.split(', ') if self.countries else []
-        genres = self.low_genres.split(', ') if self.genres else []
+        countries = self.low_countries.split(', ') if self.low_countries else []
+        genres = self.low_genres.split(', ') if self.low_genres else []
         return countries, genres, self.low_max_year, self.low_min_rating
 
     class Meta:

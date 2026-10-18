@@ -91,6 +91,8 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
             log(f'SAVE TO DB: [{len(movies)} movies]')
 
             counter += len(movies)
+            # get_or_create is race-safe when the identity fields have a DB
+            # uniqueness constraint (see MovieRSS.Meta).
             for m in movies:
                 # todo использовать bulk_create
                 movie, created = MovieRSS.objects.get_or_create(
@@ -508,12 +510,13 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
     # Годы могут быть диапазонами (напр. '1982-1994'), берем только первые 4 цифры
     movie_years_str = {m.year[:4] for m in movies if m.year and m.year[:4].isdigit()}
 
-    # 2. Предварительная загрузка из MovieRSS для проверок exist_in_kinozal и need_dubbed
-    # Загружаем в словарь для быстрой проверки: {(title, original_title, year): priority}
+    # 2. Предварительная загрузка из MovieRSS для проверок exist_in_kinozal и need_dubbed.
+    # Фильтруем по названиям, а затем сверяем точные пары названий и нормализованный год
+    # в Python: year в MovieRSS — строка и может содержать диапазон.
     rss_check_query = Q(title__in=movie_titles) | Q(original_title__in=movie_original_titles)
     existing_rss_movies = {
-        (movie.title, movie.original_title, str(movie.year)): movie.priority
-        for movie in MovieRSS.objects.filter(rss_check_query).filter(year__in=[int(y) for y in movie_years_str])
+        (movie.title, movie.original_title, movie.year if movie.year.isdigit() else movie.year[:4]): (movie.priority, movie.pk)
+        for movie in MovieRSS.objects.filter(rss_check_query)
     }
 
     # 3. Предварительная загрузка из Kinorium для проверки exist_in_kinorium
@@ -563,11 +566,11 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
         Если у фильма есть норм. озвучка И у такого же фильма в базе MovieRSS статус "жду озвучку", то присвоить статус "есть озвучка" и continue
         """
         # Проверка 1: Фильм ждет озвучку?
-        if m.dubbed and existing_rss_movies.get(movie_key) == WAIT_TRANS:
+        existing_movie = existing_rss_movies.get(movie_key)
+        if m.dubbed and existing_movie and existing_movie[0] == WAIT_TRANS:
             log(' ┣━ FOUND DUBBING [x]')
-            # Помечаем фильм в базе как "есть озвучка". Это единственный запрос к БД, который остался в цикле.
-            MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year).update(
-                priority=TRANS_FOUND)
+            # Обновляем именно найденную запись: входящий год может быть диапазоном.
+            MovieRSS.objects.filter(pk=existing_movie[1]).update(priority=TRANS_FOUND)
             continue
 
         # Проверка 2: Фильм уже есть в RSS?

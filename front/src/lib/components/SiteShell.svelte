@@ -100,16 +100,6 @@
       <div class="flex flex-wrap items-center justify-end gap-2">
         <small class="text-muted-foreground text-xs">v. {siteVersion}</small>
 
-        <Button href="/tmdb" variant={isActive("/tmdb") ? "secondary" : "outline"} size="sm">
-          <KeyRound class="size-4" />
-          TMDB
-        </Button>
-
-        <Button href="/preferences" variant={isActive("/preferences") ? "secondary" : "outline"} size="sm">
-          <Settings class="size-4" />
-          Preferences
-        </Button>
-
         <Button variant="outline" size="icon" onclick={toggleTheme} aria-label="Toggle theme">
           {#if darkMode}
             <Moon class="size-4" />
@@ -134,6 +124,15 @@
               <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">
                 Пользователь: <span class="font-semibold text-foreground">{user.username}</span>
               </DropdownMenu.Label>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item>
+                {#snippet child({ props })}
+                  <a href="/preferences" {...props}>
+                    <Settings class="mr-2 size-4" />
+                    <span>Preferences</span>
+                  </a>
+                {/snippet}
+              </DropdownMenu.Item>
               <DropdownMenu.Separator />
               <DropdownMenu.Group>
                 <DropdownMenu.Item>

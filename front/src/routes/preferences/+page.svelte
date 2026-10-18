@@ -333,16 +333,9 @@
       <CardHeader class="gap-4 md:flex-row md:items-start md:justify-between">
         <div class="space-y-2">
           <CardTitle class="text-2xl">Preferences</CardTitle>
-          <CardDescription class="max-w-3xl text-sm leading-relaxed">
-            Глобальные настройки Django backend теперь редактируются прямо в новом UI. Legacy-страница остаётся
-            рабочей, но больше не нужна для повседневной настройки.
-          </CardDescription>
         </div>
 
         <div class="flex flex-wrap gap-3">
-          <Button variant="outline" href="http://127.0.0.1:8000/preferences/" target="_blank" rel="noreferrer">
-            Django Page
-          </Button>
           <Button variant="outline" onclick={resetForm} disabled={!isDirty || isSaving}>
             Reset
           </Button>
@@ -512,9 +505,6 @@
             <div class="space-y-2">
               <div class="text-sm font-medium">TMDB authenticated write token</div>
               <Input value={preferences.tmdb_v4_authenticated_access_token ?? ""} readonly />
-            </div>
-            <div class="flex gap-3 pt-2">
-              <Button variant="outline" href="/tmdb">Open TMDB</Button>
             </div>
           </CardContent>
         </Card>

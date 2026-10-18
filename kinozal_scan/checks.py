@@ -110,7 +110,7 @@ def check_users_filters(user: User, m: KinozalMovie, priority: int, prefs) -> bo
         return False
 
     ### 2 Genres
-    genre_intersection = set(m.genres) & set(stop_genres)
+    genre_intersection = set(m.genres.split(', ')) & set(stop_genres)
     if bool(genre_intersection):
         if priority is LOW:
             log(f' ┣━ MARK LOW: [genres] {genre_intersection}')
