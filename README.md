@@ -32,9 +32,7 @@
 
 ### Сканирование релизов
 
-<!-- TODO: добавить скриншот страницы сканирования: docs/screenshots/scan.png -->
-
-> Место для скриншота: `docs/screenshots/scan.png`
+![img.png](docs/images/img8.png)
 
 ### Plex
 
