@@ -156,6 +156,7 @@ class UserPreferences(models.Model):
     """
     user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
     last_scan = models.DateField(blank=True, null=True, default=timezone.now)
+    last_scan_kinozal_id = models.PositiveIntegerField(blank=True, null=True)
     scan_from_page = models.PositiveSmallIntegerField(blank=True, null=True, default=0, help_text='Если длительный скан оборвался, можно его продолжить с этой страницы до последней.')
 
     countries = models.CharField(max_length=300, default='СССР, Россия, Индия')

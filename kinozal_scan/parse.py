@@ -7,6 +7,7 @@ import time
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 
+from django.db import transaction
 from django.db.models import Q
 from requests.exceptions import HTTPError, Timeout, RequestException
 
@@ -42,91 +43,103 @@ def sleep_interruptible(seconds: float, cancel_event: asyncio.Event | None = Non
 
 
 def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asyncio.Event):
-    """
-    Запускает сканирование кинозала. Проходит сканированием по всем страницам, начиная с start_page (обычно 0, но
-    пользователь может указать конкретную страницу, если оборвался длинный скан, и до даты последнего сканирования.)
-    :param start_page: стартовая страница, начинается от нуля.
-    :param scan_to_date:
-    :param user:
-    :cancel_event: объект, который меняется, если пользователь нажал Cancel во время сканирования.
-    :return:
-    """
-
-    last_day_reached = False
-    last_page_reached = False
-    counter = 0  # сколько нашлось фильмов для записи в базу
+    """Собирает релизы до сохранённой даты, затем обрабатывает их от старых к новым."""
+    counter = 0
     prefs = UserPreferences.get()
+    checkpoint_id = prefs.last_scan_kinozal_id
+    current_page = start_page or 0
+    movies_to_process = []
+    last_day_reached = False
+    checkpoint_found = False
 
-    if start_page is None:
-        current_page = 0
-    else:
-        current_page = start_page
-
+    # Первый проход читает только списки релизов и держит их в памяти.
     while not last_day_reached and current_page <= 100:
-
         try:
-            # Получаем список всех фильмов со страницы. Если достигли нужной даты, то last_day_reached возврашается как True
-            movies, last_day_reached = parse_page(current_page, scan_to_date, cancel_event)
-
-            # Проверяем список по фильтрам, и получаем отфильтрованный и заполненный список, который можно уже заносить в базу.
-            # movie_audit удаляет из списка movies фильмы, не прошедшие проверку, а так-же заполняет каждый movie дополнительными данными.
-            movies = movie_audit(movies, user, prefs, cancel_event)
-        except DetailsFetchError as e:
-            if cancel_event.is_set():
-                raise ScanCancelled()
-            log(
-                "Scan terminated due to a critical error while fetching movie details.",
-                logger_name=LogType.ERROR,
-            )
-            raise e
+            page_movies, last_day_reached = parse_page(current_page, scan_to_date, cancel_event)
         except ScanCancelled:
             log("kinozal_scan: Scan cancelled by user")
             return counter
 
-        # записываем фильмы в базу
-        if movies:
-            # logger.debug(f"SAVE TO DB")
-            # logger.info(f"SAVE TO DB infoinfoinfoinfoinfo")
-            # logger.error(f"SAVE TO DB ERROR ERROR ERROR ERROR ERROR ")
-            log(f'SAVE TO DB: [{len(movies)} movies]')
+        if checkpoint_id:
+            checkpoint_index = next(
+                (index for index, movie in enumerate(page_movies) if movie.kinozal_id == checkpoint_id),
+                None,
+            )
+            if checkpoint_index is not None:
+                # Включаем новые релизы перед контрольным, сам контрольный
+                # уже успешно обработан в прошлый раз.
+                movies_to_process.extend(page_movies[:checkpoint_index])
+                checkpoint_found = True
+                log(f'Found last processed Kinozal release id={checkpoint_id}; stopping list scan.')
+                break
 
-            counter += len(movies)
-            # get_or_create is race-safe when the identity fields have a DB
-            # uniqueness constraint (see MovieRSS.Meta).
-            for m in movies:
-                # todo использовать bulk_create
-                movie, created = MovieRSS.objects.get_or_create(
-                    title=m.title,
-                    original_title=m.original_title,
-                    year=m.year,
-                    defaults=dataclasses.asdict(m),
-                )
-                if created:
-                    continue
-
-                update_fields = []
-                if not movie.imdb_id and m.imdb_id:
-                    movie.imdb_id = m.imdb_id
-                    update_fields.append('imdb_id')
-                if movie.imdb_rating is None and m.imdb_rating is not None:
-                    movie.imdb_rating = m.imdb_rating
-                    update_fields.append('imdb_rating')
-                if not movie.kinopoisk_id and m.kinopoisk_id:
-                    movie.kinopoisk_id = m.kinopoisk_id
-                    update_fields.append('kinopoisk_id')
-                if movie.kinopoisk_rating is None and m.kinopoisk_rating is not None:
-                    movie.kinopoisk_rating = m.kinopoisk_rating
-                    update_fields.append('kinopoisk_rating')
-
-                if update_fields:
-                    movie.save(update_fields=update_fields)
-        log('')
-
-        # переходим к сканированию следующей странице
+        movies_to_process.extend(page_movies)
         current_page += 1
 
-    return counter
+    if not last_day_reached and not checkpoint_found:
+        message = f'Kinozal scan reached page limit before reaching {scan_to_date}.'
+        log(message, logger_name=LogType.ERROR)
+        raise RuntimeError(message)
 
+    if checkpoint_id and not checkpoint_found:
+        log(
+            f'Last processed Kinozal release id={checkpoint_id} was not found; '
+            f'processing all releases from {scan_to_date} onward.'
+        )
+
+    # Списки сайта идут от новых релизов к старым. Так контрольная точка
+    # продвигается в том же порядке, в котором мы обрабатываем релизы.
+    movies_to_process.reverse()
+    log(f'Collected {len(movies_to_process)} releases; processing oldest first.')
+
+    def save_processed_movie(movie: KinozalMovie, should_save: bool) -> None:
+        nonlocal counter
+
+        with transaction.atomic():
+            if should_save:
+                saved_movie, created = MovieRSS.objects.get_or_create(
+                    title=movie.title,
+                    original_title=movie.original_title,
+                    year=movie.year,
+                    defaults=dataclasses.asdict(movie),
+                )
+                if not created:
+                    update_fields = []
+                    if not saved_movie.imdb_id and movie.imdb_id:
+                        saved_movie.imdb_id = movie.imdb_id
+                        update_fields.append('imdb_id')
+                    if saved_movie.imdb_rating is None and movie.imdb_rating is not None:
+                        saved_movie.imdb_rating = movie.imdb_rating
+                        update_fields.append('imdb_rating')
+                    if not saved_movie.kinopoisk_id and movie.kinopoisk_id:
+                        saved_movie.kinopoisk_id = movie.kinopoisk_id
+                        update_fields.append('kinopoisk_id')
+                    if saved_movie.kinopoisk_rating is None and movie.kinopoisk_rating is not None:
+                        saved_movie.kinopoisk_rating = movie.kinopoisk_rating
+                        update_fields.append('kinopoisk_rating')
+                    if update_fields:
+                        saved_movie.save(update_fields=update_fields)
+                counter += 1
+
+            prefs.last_scan = movie.date_added
+            prefs.last_scan_kinozal_id = movie.kinozal_id
+            prefs.save(update_fields=['last_scan', 'last_scan_kinozal_id'])
+
+    try:
+        movie_audit(movies_to_process, user, prefs, cancel_event, save_processed_movie)
+    except DetailsFetchError:
+        if cancel_event.is_set():
+            raise ScanCancelled()
+        log(
+            "Scan terminated due to a critical error while fetching movie details.",
+            logger_name=LogType.ERROR,
+        )
+        raise
+    except ScanCancelled:
+        log("kinozal_scan: Scan cancelled by user")
+        return counter
+
+    return counter
 
 def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list[KinozalMovie], bool]:
     """
@@ -482,7 +495,13 @@ def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> t
 #     return result
 
 
-def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.Event) -> list[KinozalMovie]:
+def movie_audit(
+    movies: list[KinozalMovie],
+    user,
+    prefs,
+    cancel_event: asyncio.Event,
+    on_processed=None,
+) -> list[KinozalMovie]:
     """
     Оптимизированная версия.
     Выполняет предварительную загрузку данных, чтобы минимизировать количество запросов к БД внутри цикла.
@@ -496,7 +515,8 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
     Каждый Объект сначала проходит простые проверки, нужно ли продолжать с ним работу.
     Если прошел, тогда парсер сканирует страницу фильма, заполняет объект.
 
-    Возвращает список объектов KinozalMovie, которые осталось только записать в базу.
+    Возвращает подходящие фильмы. Если передан on_processed, вызывает его после обработки
+    каждого релиза, в том числе если фильтры или существующие записи привели к пропуску.
     """
 
     # Начало блока предварительной загрузки данных ---
@@ -571,11 +591,15 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
             log(' ┣━ FOUND DUBBING [x]')
             # Обновляем именно найденную запись: входящий год может быть диапазоном.
             MovieRSS.objects.filter(pk=existing_movie[1]).update(priority=TRANS_FOUND)
+            if on_processed:
+                on_processed(m, False)
             continue
 
         # Проверка 2: Фильм уже есть в RSS?
         if movie_key in existing_rss_movies:
             log(' ┣━ SKIP [exist in kinozal]')
+            if on_processed:
+                on_processed(m, False)
             continue
 
         """
@@ -586,6 +610,8 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
         status = kinorium_full_match.get(movie_key)
         if status:
             log(f" ┣━ SKIP [{status}]")
+            if on_processed:
+                on_processed(m, False)
             continue
 
         status = kinorium_partial_title_year.get((m.title, year_str_for_check))
@@ -616,5 +642,9 @@ def movie_audit(movies: list[KinozalMovie], user, prefs, cancel_event: asyncio.E
             log(f' ┣━ ADD TO DB [prio={"low" if m.priority == LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
 
             result.append(m)
+            if on_processed:
+                on_processed(m, True)
+        elif on_processed:
+            on_processed(m, False)
 
     return result

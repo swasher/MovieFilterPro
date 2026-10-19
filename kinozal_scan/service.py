@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime
+from datetime import date
 
 from .runtime import executor, tasks, cancel_events
 from .parse import kinozal_scan
@@ -50,8 +50,7 @@ async def start_scan_task(task_id: str, start_page: int, scan_to_date: date, use
             def db_update():
                 pref = UserPreferences.get()
                 pref.scan_from_page = None
-                pref.last_scan = datetime.now().date()
-                pref.save()
+                pref.save(update_fields=['scan_from_page'])
 
             # Обновляем UserPreferences в синхронном исполнителе, чтобы избежать проблем с Django ORM
             await loop.run_in_executor(

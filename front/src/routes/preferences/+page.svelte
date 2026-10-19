@@ -27,7 +27,6 @@
 
   type PreferencesFormState = {
     last_scan: string;
-    scan_from_page: string;
     countries: string;
     genres: string;
     max_year: string;
@@ -64,10 +63,6 @@
     const normalized = value.trim();
     return normalized ? normalized : null;
   };
-  const asOptionalInteger = (value: string) => {
-    const normalized = value.trim();
-    return normalized ? Number.parseInt(normalized, 10) : null;
-  };
   const asNumber = (value: string, fallback: number) => {
     const normalized = Number.parseFloat(value);
     return Number.isFinite(normalized) ? normalized : fallback;
@@ -78,7 +73,6 @@
     const domain = preferences.kinozal_domain ?? "";
     return {
       last_scan: preferences.last_scan ?? "",
-      scan_from_page: asText(preferences.scan_from_page),
       countries: preferences.countries,
       genres: preferences.genres,
       max_year: asText(preferences.max_year),
@@ -112,7 +106,6 @@
 
   const buildPayload = (formState: PreferencesFormState): PreferencesUpdatePayload => ({
     last_scan: formState.last_scan.trim() || null,
-    scan_from_page: asOptionalInteger(formState.scan_from_page),
     countries: formState.countries.trim(),
     genres: formState.genres.trim(),
     max_year: asNumber(formState.max_year, 1990),
@@ -466,10 +459,6 @@
               <div class="space-y-2">
                 <div class="text-sm font-medium">Last scan</div>
                 <Input bind:value={form.last_scan} type="date" />
-              </div>
-              <div class="space-y-2">
-                <div class="text-sm font-medium">Scan from page</div>
-                <Input bind:value={form.scan_from_page} type="number" min="0" />
               </div>
             </div>
 

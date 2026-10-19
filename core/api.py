@@ -216,6 +216,8 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
 
 
 def _apply_preferences_update(preferences: UserPreferences, payload: PreferencesUpdateIn) -> UserPreferences:
+    if preferences.last_scan != payload.last_scan:
+        preferences.last_scan_kinozal_id = None
     preferences.last_scan = payload.last_scan
     preferences.scan_from_page = payload.scan_from_page
     preferences.countries = payload.countries

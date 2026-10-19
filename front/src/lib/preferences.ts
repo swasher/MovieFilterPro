@@ -1,6 +1,5 @@
 export type PreferencesData = {
   last_scan: string | null;
-  scan_from_page: number | null;
   countries: string;
   genres: string;
   max_year: number;
@@ -36,7 +35,6 @@ export type PreferencesData = {
 
 export type PreferencesUpdatePayload = {
   last_scan: string | null;
-  scan_from_page: number | null;
   countries: string;
   genres: string;
   max_year: number;
@@ -91,7 +89,6 @@ export const isValidMirrorDomain = (domain: string): boolean =>
 
 export const emptyPreferences = (): PreferencesData => ({
   last_scan: null,
-  scan_from_page: 0,
   countries: "",
   genres: "",
   max_year: 1990,

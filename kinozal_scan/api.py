@@ -20,7 +20,7 @@ def start_scan(request):
     
     async_to_sync(start_scan_task)(
         task_id=task_id,
-        start_page=pref.scan_from_page or 0,
+        start_page=0,
         scan_to_date=pref.last_scan,
         user=user,
     )
