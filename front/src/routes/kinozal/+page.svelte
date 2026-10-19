@@ -28,6 +28,7 @@
     emptyKinozalMoviesPage,
     emptyKinozalSummary,
     type KinozalMovie,
+    type KinozalMovieAction,
     type KinozalPriorityFilter,
     type KinozalSortKey,
     type KinozalSummary,
@@ -39,6 +40,7 @@
     AlertCircle,
     ArrowDownToLine,
     ArrowDownUp,
+    BookmarkPlus,
     CircleDashed,
     Clapperboard,
     Clock3,
@@ -49,6 +51,7 @@
     RefreshCw,
     Search,
     Star,
+    Trash2,
     X
   } from "@lucide/svelte";
 
@@ -457,7 +460,7 @@
 
   const performMovieAction = async (
     movie: KinozalMovie,
-    action: "hide" | "defer" | "wait-trans",
+    action: KinozalMovieAction,
     targetPriorityKey: string
   ) => {
     const previousMovies = [...movies];
@@ -1106,6 +1109,30 @@
                     >
                       <EyeOff class="mr-2 size-4" />
                       {isActionPending(movie.id, "hide") ? "..." : "Hide"}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button kz-action-button--will-watch"
+                      title="Добавить в Vault со статусом «Буду смотреть»"
+                      onclick={() => performMovieAction(movie, "vault-will-watch", "SKIP")}
+                      disabled={isActionPending(movie.id, "vault-will-watch")}
+                    >
+                      <BookmarkPlus class="mr-2 size-4" />
+                      {isActionPending(movie.id, "vault-will-watch") ? "..." : "Will watch"}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button kz-action-button--delete"
+                      title="Убрать из Kinozal без добавления в Vault"
+                      onclick={() => performMovieAction(movie, "delete", "SKIP")}
+                      disabled={isActionPending(movie.id, "delete")}
+                    >
+                      <Trash2 class="mr-2 size-4" />
+                      {isActionPending(movie.id, "delete") ? "..." : "Delete"}
                     </Button>
                   </div>
                 </td>

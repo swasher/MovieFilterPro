@@ -11,7 +11,7 @@ from moviefilter.classes import KinozalSearch
 from moviefilter.hotfolder import resolve_torrents_hotfolder_path
 from moviefilter.image_caching import get_cached_image_url
 from moviefilter.image_caching import remove_cached_image
-from moviefilter.kinozal import KinozalClient, LinkConstructor
+from moviefilter.kinozal import KinozalClient, LinkConstructor, normalize_kinozal_domain
 from moviefilter.models import MovieRSS, UserPreferences
 from moviefilter.services.torrent_download_service import (
     TorrentDownloadError,
@@ -443,7 +443,7 @@ def _kinozal_search(movie_id: int) -> list[KinozalSearch]:
             item.seed = element.find("td", {"class": "sl_s"}).text
             item.peer = element.find("td", {"class": "sl_p"}).text
             item.created = element.find_all("td", "s")[2].text
-            item.link = f"https://{preferences.kinozal_domain}{element.a['href']}"
+            item.link = f"https://{normalize_kinozal_domain(preferences.kinozal_domain)}{element.a['href']}"
             item.is_4k = quality == 7
             item.is_sdr = "SDR" in item.header
             results.append(item)
@@ -524,6 +524,41 @@ def hide_movie(request, movie_id: int):
 
     # Queue background task for Vault import + "wont_watch" status (like Download does)
     KinozalDownloadImportService.enqueue_hide_action(
+        movie_rss_id=movie_id,
+        user=user,
+    )
+
+    return result
+
+
+@api.post("/movies/{movie_id}/delete", response=KinozalActionOut)
+def delete_movie(request, movie_id: int):
+    """Убрать фильм из ленты Kinozal, не добавляя его в Vault."""
+    _require_api_user(request)
+
+    return _update_movie_priority(
+        movie_id,
+        SKIP,
+        message_prefix="Delete",
+        remove_cache=True,
+    )
+
+
+@api.post("/movies/{movie_id}/vault-will-watch", response=KinozalActionOut)
+def vault_will_watch_movie(request, movie_id: int):
+    """Фильм скачан из другого источника: добавить в Vault со статусом «Буду смотреть»."""
+    user = _require_api_user(request)
+
+    # Update RSS priority to SKIP (synchronous, immediate)
+    result = _update_movie_priority(
+        movie_id,
+        SKIP,
+        message_prefix="Will watch",
+        remove_cache=True,
+    )
+
+    # Queue background task for Vault import + "will_watch" status
+    KinozalDownloadImportService.enqueue_will_watch_action(
         movie_rss_id=movie_id,
         user=user,
     )

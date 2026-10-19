@@ -128,6 +128,39 @@ class KinozalApiTests(TestCase):
         self.assertEqual(self.movie_high.priority, SKIP)
         remove_cached_image_mock.assert_called_once_with(self.movie_high.pk)
 
+    @patch("moviefilter.api.KinozalDownloadImportService.enqueue_hide_action")
+    @patch("moviefilter.api.remove_cached_image")
+    def test_delete_action_updates_priority_without_vault_import(
+        self,
+        remove_cached_image_mock,
+        enqueue_hide_action_mock,
+    ):
+        response = self.client.post(f"/api/kinozal/movies/{self.movie_high.pk}/delete")
+
+        self.assertEqual(response.status_code, 200)
+        self.movie_high.refresh_from_db()
+        self.assertEqual(self.movie_high.priority, SKIP)
+        remove_cached_image_mock.assert_called_once_with(self.movie_high.pk)
+        enqueue_hide_action_mock.assert_not_called()
+
+    @patch("moviefilter.api.KinozalDownloadImportService.enqueue_will_watch_action")
+    @patch("moviefilter.api.remove_cached_image")
+    def test_vault_will_watch_action_updates_priority_and_queues_vault_import(
+        self,
+        remove_cached_image_mock,
+        enqueue_will_watch_action_mock,
+    ):
+        response = self.client.post(f"/api/kinozal/movies/{self.movie_high.pk}/vault-will-watch")
+
+        self.assertEqual(response.status_code, 200)
+        self.movie_high.refresh_from_db()
+        self.assertEqual(self.movie_high.priority, SKIP)
+        remove_cached_image_mock.assert_called_once_with(self.movie_high.pk)
+        enqueue_will_watch_action_mock.assert_called_once_with(
+            movie_rss_id=self.movie_high.pk,
+            user=self.user,
+        )
+
     @patch("moviefilter.api.remove_cached_image")
     def test_wait_trans_action_updates_priority(self, remove_cached_image_mock):
         response = self.client.post(f"/api/kinozal/movies/{self.movie_low.pk}/wait-trans")

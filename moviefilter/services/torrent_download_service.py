@@ -33,7 +33,7 @@ def validate_download_preferences() -> UserPreferences:
         raise TorrentDownloadError(
             "settings_missing_domain",
             "Не указан домен Kinozal.",
-            hint="Открой Preferences и заполни `kinozal_domain`.",
+            hint="Открой Preferences и добавь зеркало в «Зеркала kinozal».",
         )
 
     if not (preferences.cookie_uid or "").strip() or not (preferences.cookie_pass or "").strip():

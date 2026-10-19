@@ -1,5 +1,7 @@
 from datetime import date
 
+import re
+
 import requests
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
@@ -32,6 +34,7 @@ class PreferencesOut(Schema):
     cookie_pass: str | None = None
     cookie_uid: str | None = None
     kinozal_domain: str | None = None
+    kinozal_mirrors: list[str] = []
     torrents_hotfolder: str | None = None
     resolved_torrents_hotfolder: str | None = None
     hotfolder_exists: bool = False
@@ -67,6 +70,7 @@ class PreferencesUpdateIn(Schema):
     cookie_pass: str | None = None
     cookie_uid: str | None = None
     kinozal_domain: str | None = None
+    kinozal_mirrors: list[str] = []
     torrents_hotfolder: str | None = None
     ignore_title: str = ""
     tmdb_api_key: str | None = None
@@ -99,6 +103,67 @@ def _normalized_optional_string(value: str | None) -> str | None:
     return normalized or None
 
 
+_MIRROR_DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+
+# Ограничения на список зеркал. Длина домена совпадает с
+# moviefilter.models.UserPreferences.kinozal_domain (varchar(50)).
+MIRROR_DOMAIN_MAX_LENGTH = 50
+MAX_KINOZAL_MIRRORS = 20
+
+
+def _normalize_mirror_domain(value: object) -> str | None:
+    """
+    Приводит домен зеркала к каноническому виду (без схемы, пути и порта).
+    Возвращает None, если значение не похоже на домен.
+    """
+    if not isinstance(value, str):
+        return None
+    domain = value.strip().lower()
+    # strip scheme and path if someone pasted a full URL
+    if "://" in domain:
+        domain = domain.split("://", 1)[1]
+    domain = domain.split("/", 1)[0].split(":", 1)[0].strip()
+    if not domain or len(domain) > MIRROR_DOMAIN_MAX_LENGTH:
+        return None
+    if not _MIRROR_DOMAIN_RE.match(domain):
+        return None
+    return domain
+
+
+def _validated_mirror_list(value: object) -> list[str]:
+    """
+    Нормализует список зеркал, сохраняя порядок и убирая дубликаты.
+    Некорректные значения не игнорируются, а приводят к ошибке 400 —
+    иначе пользователь потерял бы введённое зеркало без объяснения.
+    """
+    if not isinstance(value, list):
+        raise HttpError(400, "Список зеркал должен быть массивом строк.")
+
+    result: list[str] = []
+    seen: set[str] = set()
+    invalid: list[str] = []
+    for item in value:
+        domain = _normalize_mirror_domain(item)
+        if not domain:
+            invalid.append(str(item).strip()[:60] or "(пусто)")
+            continue
+        if domain in seen:
+            continue
+        seen.add(domain)
+        result.append(domain)
+
+    if invalid:
+        raise HttpError(
+            400,
+            "Некорректные зеркала: "
+            + ", ".join(f"«{item}»" for item in invalid)
+            + ". Ожидается домен вида kinozal.tv (без https:// и пути).",
+        )
+    if len(result) > MAX_KINOZAL_MIRRORS:
+        raise HttpError(400, f"Максимум {MAX_KINOZAL_MIRRORS} зеркал.")
+    return result
+
+
 def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
     configured_hotfolder = _normalized_optional_string(preferences.torrents_hotfolder)
     resolved_hotfolder = None
@@ -129,6 +194,7 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         cookie_pass=preferences.cookie_pass or None,
         cookie_uid=preferences.cookie_uid or None,
         kinozal_domain=preferences.kinozal_domain or None,
+        kinozal_mirrors=list(preferences.kinozal_mirrors or []),
         torrents_hotfolder=preferences.torrents_hotfolder or None,
         resolved_torrents_hotfolder=resolved_hotfolder,
         hotfolder_exists=hotfolder_exists,
@@ -164,7 +230,18 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.plex_token = _normalized_optional_string(payload.plex_token)
     preferences.cookie_pass = _normalized_optional_string(payload.cookie_pass)
     preferences.cookie_uid = _normalized_optional_string(payload.cookie_uid)
-    preferences.kinozal_domain = _normalized_optional_string(payload.kinozal_domain)
+    mirrors = _validated_mirror_list(payload.kinozal_mirrors)
+    active = _normalize_mirror_domain(payload.kinozal_domain)
+    # Инвариант: активное зеркало всегда одно из зеркал в списке.
+    # Пустой список — значит активного зеркала нет.
+    if not mirrors:
+        active = None
+    elif active is None:
+        active = mirrors[0]
+    elif active not in mirrors:
+        raise HttpError(400, f"Активное зеркало «{active}» отсутствует в списке зеркал.")
+    preferences.kinozal_mirrors = mirrors
+    preferences.kinozal_domain = active
     preferences.torrents_hotfolder = _normalized_optional_string(payload.torrents_hotfolder)
     preferences.ignore_title = payload.ignore_title
     preferences.tmdb_api_key = _normalized_optional_string(payload.tmdb_api_key)

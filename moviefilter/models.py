@@ -1,6 +1,7 @@
 from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
@@ -173,6 +174,12 @@ class UserPreferences(models.Model):
     cookie_pass = models.CharField(max_length=25, blank=True, null=True)
     cookie_uid = models.CharField(max_length=25, blank=True, null=True)
     kinozal_domain = models.CharField(max_length=50, blank=True, null=True)
+    kinozal_mirrors = ArrayField(
+        models.CharField(max_length=50),
+        default=list,
+        verbose_name="Зеркала kinozal",
+        help_text="Список известных зеркал Kinozal (домены без https://).",
+    )
     torrents_hotfolder = models.CharField(max_length=70, blank=True, null=True)
 
     ignore_title = models.CharField(max_length=500, default='')

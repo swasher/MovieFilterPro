@@ -73,6 +73,14 @@ export type KinozalActionResponse = {
   message: string;
 };
 
+/**
+ * Пользовательские действия над фильмом в ленте Kinozal.
+ * - hide: убрать из ленты + добавить в Vault со статусом «Не интересует»
+ * - delete: убрать из ленты без добавления в Vault
+ * - vault-will-watch: убрать из ленты + добавить в Vault со статусом «Буду смотреть»
+ */
+export type KinozalMovieAction = "hide" | "delete" | "vault-will-watch" | "defer" | "wait-trans";
+
 export type KinozalDownloadOption = {
   id: number;
   header: string;

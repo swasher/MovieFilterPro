@@ -12,7 +12,7 @@ from requests.exceptions import HTTPError, Timeout, RequestException
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from moviefilter.classes import KinozalMovie
-from moviefilter.kinozal import KinozalClient
+from moviefilter.kinozal import KinozalClient, normalize_kinozal_domain
 from moviefilter.models import Country, MovieRSS, Kinorium
 from moviefilter.models import UserPreferences
 
@@ -380,7 +380,7 @@ def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> t
     poster = soup.find('img', 'p200').attrs['src']
     # используют и внешние линки (тогда в нем есть http), и внутренние относительные линки (тогда надо добавить домен)
     if poster[:4] != 'http':
-        poster = f'https://{pref.kinozal_domain}/{poster}'
+        poster = f'https://{normalize_kinozal_domain(pref.kinozal_domain)}/{poster}'
     m.poster = poster
 
     # DEBUG

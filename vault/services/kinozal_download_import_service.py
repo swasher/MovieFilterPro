@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID, uuid4
@@ -12,7 +13,7 @@ from vault.services.movie_status_service import MovieStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService, TMDBMatchingResult
 from vault.services.tmdb_movie_sync_service import TMDBMovieSyncService
-from vault.constants import WONT_WATCH_LABEL
+from vault.constants import SYSTEM_LIST_LABELS
 
 
 ImportStatus = Literal["created", "reused", "not_found", "ambiguous", "error"]
@@ -32,6 +33,44 @@ class KinozalDownloadEnqueueResult:
     operation_id: UUID
     status: QueueStatus
     message: str
+
+
+@dataclass(slots=True, frozen=True)
+class VaultImportAction:
+    """Описание сценария импорта фильма из Kinozal в Vault.
+
+    Один и тот же пайплайн (поиск -> TMDB match -> импорт -> статус) обслуживает
+    несколько пользовательских сценариев и отличается только целевым статусом.
+    """
+
+    action: str
+    label: str
+    watch_status_key: str
+    task_path: str
+    started_message: str
+
+    @property
+    def watch_status_label(self) -> str:
+        return SYSTEM_LIST_LABELS[self.watch_status_key]
+
+
+# Сценарий Hide: фильм убран из ленты Kinozal и помечен в Vault как «Не интересует».
+HIDE_ACTION = VaultImportAction(
+    action="hide",
+    label="Hide",
+    watch_status_key="wont_watch",
+    task_path="vault.tasks.process_kinozal_hide_action",
+    started_message="Фоновый hide-импорт в Vault запущен",
+)
+
+# Сценарий Will watch: фильм скачан из другого источника, в Vault ставится «Буду смотреть».
+WILL_WATCH_ACTION = VaultImportAction(
+    action="will_watch",
+    label="Will watch",
+    watch_status_key="will_watch",
+    task_path="vault.tasks.process_kinozal_will_watch_action",
+    started_message="Фоновый will_watch-импорт в Vault запущен",
+)
 
 
 class KinozalDownloadImportService:
@@ -304,6 +343,35 @@ class KinozalDownloadImportService:
         movie_rss_id: int,
         user,
     ) -> KinozalDownloadEnqueueResult:
+        """Сценарий Hide: убрать фильм из ленты Kinozal и пометить в Vault как «Не интересует»."""
+        return cls._enqueue_vault_import_action(
+            movie_rss_id=movie_rss_id,
+            user=user,
+            action=HIDE_ACTION,
+        )
+
+    @classmethod
+    def enqueue_will_watch_action(
+        cls,
+        *,
+        movie_rss_id: int,
+        user,
+    ) -> KinozalDownloadEnqueueResult:
+        """Сценарий Will watch: фильм скачан из другого источника, в Vault ставится «Буду смотреть»."""
+        return cls._enqueue_vault_import_action(
+            movie_rss_id=movie_rss_id,
+            user=user,
+            action=WILL_WATCH_ACTION,
+        )
+
+    @classmethod
+    def _enqueue_vault_import_action(
+        cls,
+        *,
+        movie_rss_id: int,
+        user,
+        action: VaultImportAction,
+    ) -> KinozalDownloadEnqueueResult:
         operation_id = uuid4()
         movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
         if movie_rss is None:
@@ -324,16 +392,16 @@ class KinozalDownloadImportService:
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.INFO,
-            event_type="hide_requested",
-            message=f"Hide requested for '{movie_rss.title}'",
+            event_type=f"{action.action}_requested",
+            message=f"{action.label} requested for '{movie_rss.title}'",
             torrent_id=0,
             movie_rss=movie_rss,
             user=user,
         )
         try:
-            from vault.tasks import process_kinozal_hide_action
+            task = cls._resolve_task(action.task_path)
 
-            process_kinozal_hide_action(
+            task(
                 str(operation_id),
                 movie_rss_id,
                 user.id if getattr(user, "is_authenticated", False) else None,
@@ -343,7 +411,7 @@ class KinozalDownloadImportService:
                 operation_id=operation_id,
                 level=VaultConnectionEvent.Level.ERROR,
                 event_type="import_queue_failed",
-                message=f"Не удалось поставить hide-импорт в очередь: {exc}",
+                message=f"Не удалось поставить {action.action}-импорт в очередь: {exc}",
                 torrent_id=0,
                 movie_rss=movie_rss,
                 user=user,
@@ -352,14 +420,14 @@ class KinozalDownloadImportService:
             return KinozalDownloadEnqueueResult(
                 operation_id=operation_id,
                 status="error",
-                message="Hide запрос принят, но импорт в Vault не удалось поставить в очередь",
+                message=f"{action.label} запрос принят, но импорт в Vault не удалось поставить в очередь",
             )
 
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.INFO,
             event_type="import_queued",
-            message="Hide-импорт в Vault поставлен в очередь",
+            message=f"{action.label}-импорт в Vault поставлен в очередь",
             torrent_id=0,
             movie_rss=movie_rss,
             user=user,
@@ -367,11 +435,10 @@ class KinozalDownloadImportService:
         return KinozalDownloadEnqueueResult(
             operation_id=operation_id,
             status="queued",
-            message="Hide запрос принят. Импорт в Vault поставлен в очередь",
+            message=f"{action.label} запрос принят. Импорт в Vault поставлен в очередь",
         )
 
     @classmethod
-    @transaction.atomic
     def handle_hide_action(
         cls,
         *,
@@ -379,7 +446,42 @@ class KinozalDownloadImportService:
         user,
         operation_id: UUID | None = None,
     ) -> KinozalDownloadImportResult:
+        """Импорт фильма в Vault со статусом «Не интересует» (сценарий Hide)."""
+        return cls._handle_vault_import_action(
+            movie_rss_id=movie_rss_id,
+            user=user,
+            action=HIDE_ACTION,
+            operation_id=operation_id,
+        )
+
+    @classmethod
+    def handle_will_watch_action(
+        cls,
+        *,
+        movie_rss_id: int,
+        user,
+        operation_id: UUID | None = None,
+    ) -> KinozalDownloadImportResult:
+        """Импорт фильма в Vault со статусом «Буду смотреть» (сценарий Will watch)."""
+        return cls._handle_vault_import_action(
+            movie_rss_id=movie_rss_id,
+            user=user,
+            action=WILL_WATCH_ACTION,
+            operation_id=operation_id,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def _handle_vault_import_action(
+        cls,
+        *,
+        movie_rss_id: int,
+        user,
+        action: VaultImportAction,
+        operation_id: UUID | None = None,
+    ) -> KinozalDownloadImportResult:
         operation_id = operation_id or uuid4()
+        status_label = action.watch_status_label
         movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
         if movie_rss is None:
             cls._log(
@@ -400,7 +502,7 @@ class KinozalDownloadImportService:
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.INFO,
             event_type="background_import_started",
-            message="Фоновый hide-импорт в Vault запущен",
+            message=action.started_message,
             torrent_id=0,
             movie_rss=movie_rss,
             user=user,
@@ -500,12 +602,12 @@ class KinozalDownloadImportService:
             )
 
         cls._persist_external_ids(movie, movie_rss)
-        MovieStatusService.set_status(user, movie, "wont_watch")
+        MovieStatusService.set_status(user, movie, action.watch_status_key)
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.SUCCESS,
-            event_type="wont_watch_applied",
-            message=f"Статус '{WONT_WATCH_LABEL}' выставлен",
+            event_type=f"{action.watch_status_key}_applied",
+            message=f"Статус '{status_label}' выставлен",
             torrent_id=0,
             movie_rss=movie_rss,
             vault_movie=movie,
@@ -514,7 +616,7 @@ class KinozalDownloadImportService:
         )
 
         final_status: ImportStatus = "created" if candidate is not None and movie.source == Movie.Source.TMDB else "reused"
-        final_message = f"Фильм обработан и статус '{WONT_WATCH_LABEL}' выставлен"
+        final_message = f"Фильм обработан и статус '{status_label}' выставлен"
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.SUCCESS,
@@ -536,6 +638,13 @@ class KinozalDownloadImportService:
     # ------------------------------------ #
     #            DOMAIN LAYER              #
     # ------------------------------------ #
+
+    @staticmethod
+    def _resolve_task(task_path: str):
+        """Ленивый импорт фоновой задачи (избегаем циклических импортов vault.tasks -> сервис)."""
+        module_path, _, attr_name = task_path.rpartition(".")
+        module = importlib.import_module(module_path)
+        return getattr(module, attr_name)
 
     @classmethod
     def _find_existing_movie(

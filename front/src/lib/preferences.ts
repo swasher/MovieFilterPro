@@ -14,6 +14,7 @@ export type PreferencesData = {
   cookie_pass: string | null;
   cookie_uid: string | null;
   kinozal_domain: string | null;
+  kinozal_mirrors: string[];
   torrents_hotfolder: string | null;
   resolved_torrents_hotfolder: string | null;
   hotfolder_exists: boolean;
@@ -49,6 +50,7 @@ export type PreferencesUpdatePayload = {
   cookie_pass: string | null;
   cookie_uid: string | null;
   kinozal_domain: string | null;
+  kinozal_mirrors: string[];
   torrents_hotfolder: string | null;
   ignore_title: string;
   tmdb_api_key: string | null;
@@ -68,6 +70,25 @@ export type PreferencesApiErrorPayload = {
   detail?: string;
 };
 
+// Правила валидации зеркал должны совпадать с бэкендом (core/api.py):
+// домен без схемы/пути/порта, только латиница, цифры, точка и дефис.
+export const MIRROR_DOMAIN_MAX_LENGTH = 50;
+export const MAX_KINOZAL_MIRRORS = 20;
+
+const MIRROR_DOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+
+export const normalizeMirrorDomain = (raw: string): string => {
+  let domain = raw.trim().toLowerCase();
+  if (domain.includes("://")) domain = domain.split("://", 2)[1];
+  domain = domain.split("/", 1)[0].split(":", 1)[0].trim();
+  return domain;
+};
+
+export const isValidMirrorDomain = (domain: string): boolean =>
+  domain.length > 0 &&
+  domain.length <= MIRROR_DOMAIN_MAX_LENGTH &&
+  MIRROR_DOMAIN_PATTERN.test(domain);
+
 export const emptyPreferences = (): PreferencesData => ({
   last_scan: null,
   scan_from_page: 0,
@@ -84,6 +105,7 @@ export const emptyPreferences = (): PreferencesData => ({
   cookie_pass: null,
   cookie_uid: null,
   kinozal_domain: null,
+  kinozal_mirrors: [],
   torrents_hotfolder: null,
   resolved_torrents_hotfolder: null,
   hotfolder_exists: false,

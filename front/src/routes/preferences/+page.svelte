@@ -4,21 +4,26 @@
   import { tick } from "svelte";
   import CheckIcon from "@lucide/svelte/icons/check";
   import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import MinusIcon from "@lucide/svelte/icons/minus";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import * as Command from "$lib/components/ui/command";
   import { Input } from "$lib/components/ui/input";
   import * as Popover from "$lib/components/ui/popover";
+  import * as Select from "$lib/components/ui/select";
   import { Separator } from "$lib/components/ui/separator";
   import { Switch } from "$lib/components/ui/switch";
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils.js";
   import {
+    MAX_KINOZAL_MIRRORS,
     emptyPreferences,
     type PreferencesApiErrorPayload,
     type PreferencesData,
     type PreferencesUpdatePayload
   } from "$lib/preferences";
+  import KinozalMirrorDialog from "$lib/components/KinozalMirrorDialog.svelte";
 
   type PreferencesFormState = {
     last_scan: string;
@@ -36,6 +41,7 @@
     cookie_pass: string;
     cookie_uid: string;
     kinozal_domain: string;
+    kinozal_mirrors: string[];
     torrents_hotfolder: string;
     ignore_title: string;
     tmdb_api_key: string;
@@ -67,36 +73,42 @@
     return Number.isFinite(normalized) ? normalized : fallback;
   };
 
-  const createFormState = (preferences: PreferencesData): PreferencesFormState => ({
-    last_scan: preferences.last_scan ?? "",
-    scan_from_page: asText(preferences.scan_from_page),
-    countries: preferences.countries,
-    genres: preferences.genres,
-    max_year: asText(preferences.max_year),
-    min_rating: asText(preferences.min_rating),
-    low_countries: preferences.low_countries,
-    low_genres: preferences.low_genres,
-    low_max_year: asText(preferences.low_max_year),
-    low_min_rating: asText(preferences.low_min_rating),
-    plex_address: preferences.plex_address ?? "",
-    plex_token: preferences.plex_token ?? "",
-    cookie_pass: preferences.cookie_pass ?? "",
-    cookie_uid: preferences.cookie_uid ?? "",
-    kinozal_domain: preferences.kinozal_domain ?? "",
-    torrents_hotfolder: preferences.torrents_hotfolder ?? "",
-    ignore_title: preferences.ignore_title,
-    tmdb_api_key: preferences.tmdb_api_key ?? "",
-    omdb_api_key: preferences.omdb_api_key ?? "",
-    tavily_api_key: preferences.tavily_api_key ?? "",
-    searxng_url: preferences.searxng_url ?? "",
-    tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? "",
-    ai_enabled: preferences.ai_enabled ?? false,
-    ai_base_url: preferences.ai_base_url ?? "",
-    ai_api_key: preferences.ai_api_key ?? "",
-    ai_model: preferences.ai_model ?? "",
-    groq_api_key: preferences.groq_api_key ?? "",
-    groq_model: preferences.groq_model ?? ""
-  });
+  const createFormState = (preferences: PreferencesData): PreferencesFormState => {
+    const mirrors = preferences.kinozal_mirrors ?? [];
+    const domain = preferences.kinozal_domain ?? "";
+    return {
+      last_scan: preferences.last_scan ?? "",
+      scan_from_page: asText(preferences.scan_from_page),
+      countries: preferences.countries,
+      genres: preferences.genres,
+      max_year: asText(preferences.max_year),
+      min_rating: asText(preferences.min_rating),
+      low_countries: preferences.low_countries,
+      low_genres: preferences.low_genres,
+      low_max_year: asText(preferences.low_max_year),
+      low_min_rating: asText(preferences.low_min_rating),
+      plex_address: preferences.plex_address ?? "",
+      plex_token: preferences.plex_token ?? "",
+      cookie_pass: preferences.cookie_pass ?? "",
+      cookie_uid: preferences.cookie_uid ?? "",
+      // Активное зеркало всегда одно из зеркал в списке (инвариант бэкенда).
+      kinozal_domain: mirrors.includes(domain) ? domain : "",
+      kinozal_mirrors: mirrors,
+      torrents_hotfolder: preferences.torrents_hotfolder ?? "",
+      ignore_title: preferences.ignore_title,
+      tmdb_api_key: preferences.tmdb_api_key ?? "",
+      omdb_api_key: preferences.omdb_api_key ?? "",
+      tavily_api_key: preferences.tavily_api_key ?? "",
+      searxng_url: preferences.searxng_url ?? "",
+      tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? "",
+      ai_enabled: preferences.ai_enabled ?? false,
+      ai_base_url: preferences.ai_base_url ?? "",
+      ai_api_key: preferences.ai_api_key ?? "",
+      ai_model: preferences.ai_model ?? "",
+      groq_api_key: preferences.groq_api_key ?? "",
+      groq_model: preferences.groq_model ?? ""
+    };
+  };
 
   const buildPayload = (formState: PreferencesFormState): PreferencesUpdatePayload => ({
     last_scan: formState.last_scan.trim() || null,
@@ -114,6 +126,7 @@
     cookie_pass: asOptionalText(formState.cookie_pass),
     cookie_uid: asOptionalText(formState.cookie_uid),
     kinozal_domain: asOptionalText(formState.kinozal_domain),
+    kinozal_mirrors: formState.kinozal_mirrors,
     torrents_hotfolder: asOptionalText(formState.torrents_hotfolder),
     ignore_title: formState.ignore_title.trim(),
     tmdb_api_key: asOptionalText(formState.tmdb_api_key),
@@ -147,6 +160,7 @@
   let form = $state<PreferencesFormState>(emptyFormState);
   let hasUnsavedChanges = $state(false);
   let formRevision = $state(0);
+  let addMirrorOpen = $state(false);
   let initialSnapshot = $state(payloadSnapshot(emptyFormState));
 
   // --- TMDB write-back status ---
@@ -249,6 +263,39 @@
   };
 
 
+
+  const markDirty = () => {
+    formRevision++;
+    hasUnsavedChanges = true;
+  };
+
+  const handleAddMirror = (domain: string) => {
+    if (form.kinozal_mirrors.includes(domain)) return;
+    form.kinozal_mirrors = [...form.kinozal_mirrors, domain];
+    // Если активного зеркала нет (или оно не из списка) — активируем новое.
+    if (!form.kinozal_mirrors.includes(form.kinozal_domain)) {
+      form.kinozal_domain = domain;
+    }
+    addMirrorOpen = false;
+    markDirty();
+  };
+
+  const removeSelectedMirror = () => {
+    const selected = form.kinozal_domain;
+    if (!selected || !form.kinozal_mirrors.includes(selected)) return;
+    const index = form.kinozal_mirrors.indexOf(selected);
+    const next = form.kinozal_mirrors.filter((m) => m !== selected);
+    form.kinozal_mirrors = next;
+    // Удаляем активное зеркало — активируем следующее за ним (иначе первое).
+    const nextActive = next[index] ?? next[0] ?? "";
+    form.kinozal_domain = nextActive;
+    toast.success(
+      nextActive
+        ? `Зеркало ${selected} удалено. Активное зеркало: ${nextActive}.`
+        : `Зеркало ${selected} удалено. Активных зеркал не осталось.`
+    );
+    markDirty();
+  };
 
   $effect(() => {
     preferences = data.preferences ?? null;
@@ -356,13 +403,53 @@
         <Card class="border-border/70">
           <CardHeader>
             <CardTitle class="text-xl">Kinozal</CardTitle>
-            <CardDescription>Cookies, домен и hotfolder для torrent download flow.</CardDescription>
+            <CardDescription>Cookies, зеркала kinozal, hotfolder для torrent download flow и состояние скана.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-5">
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
-                <div class="text-sm font-medium">Kinozal domain</div>
-                <Input bind:value={form.kinozal_domain} placeholder="kinozal.tv" />
+                <div class="text-sm font-medium">Зеркала kinozal</div>
+                <div class="flex gap-2">
+                  <Select.Root
+                    type="single"
+                    bind:value={form.kinozal_domain}
+                    disabled={!form.kinozal_mirrors.length}
+                    onValueChange={() => markDirty()}
+                  >
+                    <Select.Trigger class="flex-1" aria-label="Активное зеркало kinozal">
+                      {#if form.kinozal_domain}
+                        {form.kinozal_domain}
+                      {:else}
+                        <span class="text-muted-foreground">
+                          {form.kinozal_mirrors.length ? "Выберите зеркало" : "Зеркала не заданы"}
+                        </span>
+                      {/if}
+                    </Select.Trigger>
+                    <Select.Content>
+                      {#each form.kinozal_mirrors as mirror (mirror)}
+                        <Select.Item value={mirror}>{mirror}</Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onclick={() => (addMirrorOpen = true)}
+                    disabled={form.kinozal_mirrors.length >= MAX_KINOZAL_MIRRORS}
+                    title="Добавить зеркало"
+                  >
+                    <PlusIcon class="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onclick={removeSelectedMirror}
+                    disabled={!form.kinozal_mirrors.includes(form.kinozal_domain)}
+                    title="Удалить выбранное зеркало"
+                  >
+                    <MinusIcon class="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div class="space-y-2">
                 <div class="text-sm font-medium">Cookie UID</div>
@@ -375,6 +462,14 @@
               <div class="space-y-2">
                 <div class="text-sm font-medium">Torrents hotfolder</div>
                 <Input bind:value={form.torrents_hotfolder} placeholder="/torrents_hotfolder or \\qnap\TorrentsHotFolder" />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Last scan</div>
+                <Input bind:value={form.last_scan} type="date" />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Scan from page</div>
+                <Input bind:value={form.scan_from_page} type="number" min="0" />
               </div>
             </div>
 
@@ -409,19 +504,6 @@
             <CardDescription>Базовые правила фильтрации и low-priority логика для скана.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-5">
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="space-y-2">
-                <div class="text-sm font-medium">Last scan</div>
-                <Input bind:value={form.last_scan} type="date" />
-              </div>
-              <div class="space-y-2">
-                <div class="text-sm font-medium">Scan from page</div>
-                <Input bind:value={form.scan_from_page} type="number" min="0" />
-              </div>
-            </div>
-
-            <Separator />
-
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <div class="text-sm font-medium">Strict countries</div>
@@ -669,6 +751,10 @@
               <span>{form.cookie_uid.trim() && form.cookie_pass.trim() ? "Configured" : "Missing"}</span>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <span>Зеркала kinozal</span>
+              <span>{form.kinozal_mirrors.length} шт.{form.kinozal_domain ? ` / активно: ${form.kinozal_domain}` : ""}</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>Hotfolder</span>
               <span>{form.torrents_hotfolder.trim() ? "Configured" : "Missing"}</span>
             </div>
@@ -708,6 +794,13 @@
         {isSaving ? "Saving..." : "Save Preferences"}
       </Button>
     </div>
+
+    <KinozalMirrorDialog
+      bind:open={addMirrorOpen}
+      existing={form.kinozal_mirrors}
+      onadd={handleAddMirror}
+      oncancel={() => (addMirrorOpen = false)}
+    />
   </div>
 {:else}
   <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">

@@ -7,6 +7,37 @@ from moviefilter.models import UserPreferences
 from web_logger import log
 
 
+class KinozalDomainNotConfigured(RuntimeError):
+    """Не выбрано ни одного зеркала Kinozal в настройках."""
+
+    def __init__(
+        self,
+        message: str = "Не настроено зеркало Kinozal. Выбери его в Preferences → Зеркала kinozal.",
+    ):
+        super().__init__(message)
+
+
+def normalize_kinozal_domain(raw: str | None) -> str:
+    """
+    Приводит домен зеркала к каноническому виду: без схемы, пути и порта.
+    """
+    domain = (raw or "").strip().lower()
+    if "://" in domain:
+        domain = domain.split("://", 1)[1]
+    domain = domain.split("/", 1)[0].split(":", 1)[0].strip()
+    return domain
+
+
+def get_active_kinozal_domain() -> str:
+    """
+    Активное зеркало Kinozal.
+
+    Читается из UserPreferences при каждом обращении, чтобы переключение
+    зеркала в настройках применялось без перезапуска процесса.
+    """
+    return normalize_kinozal_domain(UserPreferences.get().kinozal_domain)
+
+
 class LinkConstructor:
     """
     Конструктор ссылок для сайта Kinozal. Создает ссылки по типу
@@ -45,19 +76,29 @@ class LinkConstructor:
         self.id = id
         self.d = d
         self.s = s
-        self.domain = UserPreferences.get().kinozal_domain
+
+    @property
+    def domain(self) -> str:
+        """Активное зеркало Kinozal (всегда актуальное, из UserPreferences)."""
+        return get_active_kinozal_domain()
+
+    def _require_domain(self) -> str:
+        domain = self.domain
+        if not domain:
+            raise KinozalDomainNotConfigured()
+        return domain
 
     @property
     def _browse(self) -> str:
         """Базовая ссылка для страница-списка фильмов."""
         # 'https://kinozal.tv/browse.php?'
-        return f'https://{self.domain}/browse.php?'
+        return f'https://{self._require_domain()}/browse.php?'
 
     @property
     def _details(self) -> str:
         """Базовая ссылка для страницы с деталями фильм."""
         # 'https://kinozal.tv/details.php?'
-        return f'https://{self.domain}/details.php?'
+        return f'https://{self._require_domain()}/details.php?'
 
     @staticmethod
     def link(root, payload) -> str:
@@ -98,7 +139,7 @@ class LinkConstructor:
         Returns:
             Полная ссылка на постер
         """
-        return f'https://{self.domain}/{relative_link}'
+        return f'https://{self._require_domain()}/{relative_link}'
 
     def search_url(self) -> str:
         """
@@ -177,23 +218,35 @@ class KinozalClient:
         if hasattr(self, 'initialized'):
             return
 
-        global_preferencies = UserPreferences.get()
-
         # Настройка HTTP сессии
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36"
         })
 
-        # Установка куков для авторизации
-        self.session.cookies.update({
-            "uid": global_preferencies.cookie_uid,    # Значение куки uid для авторизации
-            "pass": global_preferencies.cookie_pass,  # Значение куки pass для авторизации
-        })
-
-        # Домен сайта (например, 'kinozal.tv')
-        self.domain = global_preferencies.kinozal_domain
+        # Домен и куки читаются динамически из UserPreferences (см. property domain
+        # и _refresh_cookies), чтобы переключение зеркала и обновление cookies
+        # применялись без перезапуска процесса.
         self.initialized = True
+
+    @property
+    def domain(self) -> str:
+        """Текущее активное зеркало Kinozal (читается из UserPreferences каждый раз)."""
+        return get_active_kinozal_domain()
+
+    def _require_domain(self) -> str:
+        domain = self.domain
+        if not domain:
+            raise KinozalDomainNotConfigured()
+        return domain
+
+    def _refresh_cookies(self) -> None:
+        """Синхронизирует cookies сессии с текущими настройками."""
+        preferences = UserPreferences.get()
+        self.session.cookies.update({
+            "uid": preferences.cookie_uid or "",    # Значение куки uid для авторизации
+            "pass": preferences.cookie_pass or "",  # Значение куки pass для авторизации
+        })
 
     def get_html_response(self, path_or_constructor, **kwargs) -> Response:
         """
@@ -203,6 +256,8 @@ class KinozalClient:
             path_or_constructor: Строка пути, URL или экземпляр LinkConstructor
             **kwargs: Дополнительные параметры для requests.get
         """
+        self._refresh_cookies()
+
         # Если передали LinkConstructor
         if isinstance(path_or_constructor, LinkConstructor):
             url = path_or_constructor.url()
@@ -211,7 +266,7 @@ class KinozalClient:
             url = path_or_constructor
         # Если относительный путь
         else:
-            url = f"https://{self.domain}{path_or_constructor}"
+            url = f"https://{self._require_domain()}{path_or_constructor}"
 
         s = self.session
         response = s.get(url, **kwargs)
@@ -227,7 +282,8 @@ class KinozalClient:
         Returns:
             Response объект с содержимым торрент-файла
         """
-        url = f"https://dl.{self.domain}/download.php?id={kinozal_id}"
+        url = f"https://dl.{self._require_domain()}/download.php?id={kinozal_id}"
+        self._refresh_cookies()
         return self.session.get(url)
 
     # === Методы интеграции с LinkConstructor ===

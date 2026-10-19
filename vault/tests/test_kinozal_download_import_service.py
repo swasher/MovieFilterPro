@@ -129,6 +129,118 @@ class KinozalDownloadImportServiceTests(TestCase):
             ).exists()
         )
 
+    @patch("vault.tasks.process_kinozal_will_watch_action")
+    def test_enqueue_will_watch_action_logs_queue_event(self, queue_task_mock):
+        rss_movie = self._create_rss_movie()
+
+        result = KinozalDownloadImportService.enqueue_will_watch_action(
+            movie_rss_id=rss_movie.id,
+            user=self.user,
+        )
+
+        self.assertEqual(result.status, "queued")
+        queue_task_mock.assert_called_once()
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="will_watch_requested",
+            ).exists()
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="import_queued",
+            ).exists()
+        )
+
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieImportService.import_movie")
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.find_by_imdb_id")
+    def test_hide_action_imports_movie_and_sets_wont_watch(self, find_by_imdb_id_mock, import_movie_mock):
+        rss_movie = self._create_rss_movie()
+        candidate = self._candidate()
+        find_by_imdb_id_mock.return_value = TMDBMatchingResult(
+            status="auto_match",
+            selected_candidate=candidate,
+            candidates=(candidate,),
+            message="TMDB match",
+        )
+        imported_movie = Movie.objects.create(
+            title="Интерстеллар",
+            original_title="Interstellar",
+            year=2014,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+            source=Movie.Source.TMDB,
+            tmdb_id=321,
+            tmdb_media_type="movie",
+        )
+        import_movie_mock.return_value = SimpleNamespace(
+            status="created",
+            message="Фильм добавлен в Vault",
+            movie=imported_movie,
+        )
+
+        result = KinozalDownloadImportService.handle_hide_action(
+            movie_rss_id=rss_movie.id,
+            user=self.user,
+        )
+
+        self.assertEqual(result.status, "created")
+        self.assertEqual(
+            UserMovie.objects.get(user=self.user, movie=imported_movie).watch_status,
+            UserMovie.WatchStatus.SKIP,
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="wont_watch_applied",
+            ).exists()
+        )
+
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieImportService.import_movie")
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.find_by_imdb_id")
+    def test_will_watch_action_imports_movie_and_sets_will_watch(self, find_by_imdb_id_mock, import_movie_mock):
+        rss_movie = self._create_rss_movie()
+        candidate = self._candidate()
+        find_by_imdb_id_mock.return_value = TMDBMatchingResult(
+            status="auto_match",
+            selected_candidate=candidate,
+            candidates=(candidate,),
+            message="TMDB match",
+        )
+        imported_movie = Movie.objects.create(
+            title="Интерстеллар",
+            original_title="Interstellar",
+            year=2014,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+            source=Movie.Source.TMDB,
+            tmdb_id=321,
+            tmdb_media_type="movie",
+        )
+        import_movie_mock.return_value = SimpleNamespace(
+            status="created",
+            message="Фильм добавлен в Vault",
+            movie=imported_movie,
+        )
+
+        result = KinozalDownloadImportService.handle_will_watch_action(
+            movie_rss_id=rss_movie.id,
+            user=self.user,
+        )
+
+        self.assertEqual(result.status, "created")
+        self.assertEqual(
+            UserMovie.objects.get(user=self.user, movie=imported_movie).watch_status,
+            UserMovie.WatchStatus.PLAN,
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="will_watch_applied",
+            ).exists()
+        )
+
     @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.find_by_imdb_id")
     def test_repeated_download_reuses_existing_movie_without_duplicates(self, find_by_imdb_id_mock):
         rss_movie = self._create_rss_movie()
