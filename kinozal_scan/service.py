@@ -3,7 +3,7 @@ from datetime import date
 
 from .runtime import executor, tasks, cancel_events
 from .parse import kinozal_scan
-from .exceptions import DetailsFetchError, ScanCancelled
+from .exceptions import DetailsFetchError, ScanCancelled, KinozalRateLimitError
 from moviefilter.models import UserPreferences
 from web_logger import alog, LogType, asend_notification
 
@@ -27,6 +27,15 @@ async def start_scan_task(task_id: str, start_page: int, scan_to_date: date, use
         except ScanCancelled:
             # Если отменили вручную, просто выходим, не отправляя уведомлений
             await alog("Scan cancelled by user.", logger_name=LogType.SCAN)
+        except KinozalRateLimitError as e:
+            # 429 от Kinozal: не долбим забаненный сайт, скан остановлен.
+            # Прогресс сохранён чекпойнтом — следующий запуск продолжит с места остановки.
+            await alog(f"Scan stopped due to Kinozal rate limit (429): {e}", logger_name=LogType.ERROR)
+            await asend_notification({
+                'type': 'scan_complete',
+                'status': 'error',
+                'message': 'Сканирование остановлено: Kinozal ответил 429 (слишком много запросов). Прогресс сохранён — подожди и запусти скан позже.'
+            })
         except DetailsFetchError:
             # Эта ошибка уже залогирована на более низком уровне.
             # Здесь мы просто сообщаем пользователю о проблеме.

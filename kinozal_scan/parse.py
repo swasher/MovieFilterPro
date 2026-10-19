@@ -18,7 +18,7 @@ from moviefilter.models import Country, MovieRSS, Kinorium
 from moviefilter.models import UserPreferences
 
 from .util import is_float
-from .exceptions import DetailsFetchError, ScanCancelled
+from .exceptions import DetailsFetchError, ScanCancelled, KinozalRateLimitError
 
 from .checks import exist_in_kinorium, exist_in_kinozal, check_users_filters, need_dubbed
 from web_logger import log, LogType
@@ -28,8 +28,6 @@ kinozal_logger = logging.getLogger('kinozal')
 
 REQUESTS_PAUSE_SECONDS = 10.0
 REQUESTS_PAUSE_JITTER_SECONDS = 5.0
-RATE_LIMIT_MAX_ATTEMPTS = 3
-RATE_LIMIT_RETRY_SLEEPS_SECONDS = (60, 120)
 
 
 def sleep_interruptible(seconds: float, cancel_event: asyncio.Event | None = None) -> None:
@@ -53,7 +51,12 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
     checkpoint_found = False
 
     # Первый проход читает только списки релизов и держит их в памяти.
+    # Этот цикл тоже ходит на сайт (browse.php), поэтому между страницами
+    # соблюдаем ту же паузу, что и перед запросами страниц фильмов.
+    first_page = True
     while not last_day_reached and current_page <= 100:
+        if not first_page:
+            sleep_interruptible(REQUESTS_PAUSE_SECONDS + random.uniform(0, REQUESTS_PAUSE_JITTER_SECONDS), cancel_event)
         try:
             page_movies, last_day_reached = parse_page(current_page, scan_to_date, cancel_event)
         except ScanCancelled:
@@ -75,6 +78,7 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
 
         movies_to_process.extend(page_movies)
         current_page += 1
+        first_page = False
 
     if not last_day_reached and not checkpoint_found:
         message = f'Kinozal scan reached page limit before reaching {scan_to_date}.'
@@ -159,15 +163,12 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
     # download the HTML document
     # with an HTTP GET request
     # response = requests.get(site.url())
-    response = None
-    for attempt in range(1, RATE_LIMIT_MAX_ATTEMPTS + 1):
-        response = client.browse_movies(page=page_number)
-        if response.status_code == 429 and attempt < RATE_LIMIT_MAX_ATTEMPTS:
-            wait = RATE_LIMIT_RETRY_SLEEPS_SECONDS[attempt - 1]
-            log(f"Rate limit (429) on browse page #{page_number}. Attempt {attempt}/{RATE_LIMIT_MAX_ATTEMPTS}. Retrying in {wait}s...", logger_name=LogType.ERROR)
-            sleep_interruptible(wait, cancel_event)
-            continue
-        break
+    response = client.browse_movies(page=page_number)
+    if response.status_code == 429:
+        # Не долбим забаненный сайт повторными запросами: ретраи только продлевают
+        # блокировку. Останавливаем скан — прогресс уже сохранён чекпойнтом.
+        log(f"Rate limit (429) on browse page #{page_number}. Scan stopped.", logger_name=LogType.ERROR)
+        raise KinozalRateLimitError(f"Rate limit (429) on browse page #{page_number}")
 
     if response.ok:
         soup = BeautifulSoup(response.content, "html.parser")
@@ -285,36 +286,37 @@ def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> t
     client = KinozalClient()
     pref = UserPreferences.get()
 
-    for attempt in range(1, RATE_LIMIT_MAX_ATTEMPTS + 1):
-        try:
-            response = client.get_movie_details(m.kinozal_id)
-            if response.status_code == 429 and attempt < RATE_LIMIT_MAX_ATTEMPTS:
-                wait = RATE_LIMIT_RETRY_SLEEPS_SECONDS[attempt - 1]
-                log(f"Rate limit (429) for movie id {m.kinozal_id}. Attempt {attempt}/{RATE_LIMIT_MAX_ATTEMPTS}. Retrying in {wait}s...", logger_name=LogType.ERROR)
-                sleep_interruptible(wait, cancel_event)
-                continue
-            response.raise_for_status()
-        # except HTTPError as http_err:
-        #     log(f"HTTP error occurred: {http_err}", logger_name=LogType.ERROR)
-        #     return None, 0
-        # except Timeout:
-        #     log("The request timed out", logger_name=LogType.ERROR)
-        #     return None, 0
-        # except RequestException as req_err:
-        #     log(f"An error occurred: {req_err}", logger_name=LogType.ERROR)
-        #     return None, 0
-        # except Exception as e:
-        #     log(f"An unexpected error occurred: {e}", logger_name=LogType.ERROR)
-        #     return None, 0
-        except ScanCancelled:
-            raise
-        except RequestException as e:
-            log(f"Failed to get details for movie id {m.kinozal_id} due to a network error.", logger_name=LogType.ERROR,)
-            raise DetailsFetchError(f"Network error for movie id {m.kinozal_id}") from e
-        except Exception as e:
-            log(f"An unexpected error occurred while getting details for movie id {m.kinozal_id}.", logger_name=LogType.ERROR)
-            raise DetailsFetchError(f"Unexpected error for movie id {m.kinozal_id}") from e
-        break
+    try:
+        response = client.get_movie_details(m.kinozal_id)
+        if response.status_code == 429:
+            # Не долбим забаненный сайт повторными запросами: ретраи только продлевают
+            # блокировку. Останавливаем скан — прогресс уже сохранён чекпойнтом.
+            log(f"Rate limit (429) for movie id {m.kinozal_id}. Scan stopped.", logger_name=LogType.ERROR)
+            raise KinozalRateLimitError(f"Rate limit (429) for movie id {m.kinozal_id}")
+        response.raise_for_status()
+
+    # except HTTPError as http_err:
+    #     log(f"HTTP error occurred: {http_err}", logger_name=LogType.ERROR)
+    #     return None, 0
+    # except Timeout:
+    #     log("The request timed out", logger_name=LogType.ERROR)
+    #     return None, 0
+    # except RequestException as req_err:
+    #     log(f"An error occurred: {req_err}", logger_name=LogType.ERROR)
+    #     return None, 0
+    # except Exception as e:
+    #     log(f"An unexpected error occurred: {e}", logger_name=LogType.ERROR)
+    #     return None, 0
+    except ScanCancelled:
+        raise
+    except KinozalRateLimitError:
+        raise
+    except RequestException as e:
+        log(f"Failed to get details for movie id {m.kinozal_id} due to a network error.", logger_name=LogType.ERROR,)
+        raise DetailsFetchError(f"Network error for movie id {m.kinozal_id}") from e
+    except Exception as e:
+        log(f"An unexpected error occurred while getting details for movie id {m.kinozal_id}.", logger_name=LogType.ERROR)
+        raise DetailsFetchError(f"Unexpected error for movie id {m.kinozal_id}") from e
 
     soup = BeautifulSoup(response.content, "html.parser")
 
