@@ -518,7 +518,7 @@ def hide_movie(request, movie_id: int):
     result = _update_movie_priority(
         movie_id,
         SKIP,
-        message_prefix="Hide",
+        message_prefix="Не интересует",
         remove_cache=True,
     )
 
@@ -539,7 +539,7 @@ def delete_movie(request, movie_id: int):
     return _update_movie_priority(
         movie_id,
         SKIP,
-        message_prefix="Delete",
+        message_prefix="Убрано",
         remove_cache=True,
     )
 
@@ -553,7 +553,7 @@ def vault_will_watch_movie(request, movie_id: int):
     result = _update_movie_priority(
         movie_id,
         SKIP,
-        message_prefix="Will watch",
+        message_prefix="Буду смотреть",
         remove_cache=True,
     )
 

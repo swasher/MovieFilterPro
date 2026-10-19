@@ -1104,23 +1104,24 @@
                       variant="outline"
                       size="sm"
                       class="kz-action-button kz-action-button--hide"
+                      title="Убрать из ленты и добавить в Vault со статусом «Не интересует»"
                       onclick={() => performMovieAction(movie, "hide", "SKIP")}
                       disabled={isActionPending(movie.id, "hide")}
                     >
                       <EyeOff class="mr-2 size-4" />
-                      {isActionPending(movie.id, "hide") ? "..." : "Hide"}
+                      {isActionPending(movie.id, "hide") ? "..." : "Не интересует"}
                     </Button>
 
                     <Button
                       variant="outline"
                       size="sm"
                       class="kz-action-button kz-action-button--will-watch"
-                      title="Добавить в Vault со статусом «Буду смотреть»"
+                      title="Убрать из ленты и добавить в Vault со статусом «Буду смотреть»"
                       onclick={() => performMovieAction(movie, "vault-will-watch", "SKIP")}
                       disabled={isActionPending(movie.id, "vault-will-watch")}
                     >
                       <BookmarkPlus class="mr-2 size-4" />
-                      {isActionPending(movie.id, "vault-will-watch") ? "..." : "Will watch"}
+                      {isActionPending(movie.id, "vault-will-watch") ? "..." : "Буду смотреть"}
                     </Button>
 
                     <Button
@@ -1132,7 +1133,7 @@
                       disabled={isActionPending(movie.id, "delete")}
                     >
                       <Trash2 class="mr-2 size-4" />
-                      {isActionPending(movie.id, "delete") ? "..." : "Delete"}
+                      {isActionPending(movie.id, "delete") ? "..." : "Убрать из ленты"}
                     </Button>
                   </div>
                 </td>
