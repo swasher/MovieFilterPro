@@ -2,7 +2,7 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as StarRating from "$lib/components/ui/star-rating";
   import { Button } from "$lib/components/ui/button";
-  import { CheckCheck, X } from "@lucide/svelte";
+  import { CalendarClock, CheckCheck, X } from "@lucide/svelte";
   import { cn } from "$lib/utils.js";
 
   interface SeasonUserState {
@@ -20,15 +20,21 @@
     revision: number;
     onStatusClick: (season: Season) => void;
     onRatingClick: (season: Season, rating: number | null) => void;
+    onPlanClick?: (season: Season, planned: boolean) => void;
+    isUnreleased?: boolean;
   }
 
-  let { season, revision, onStatusClick, onRatingClick } = $props();
+  let { season, revision, onStatusClick, onRatingClick, onPlanClick, isUnreleased = false } = $props();
 
   let open = $state(false);
 
   const isWatched = $derived.by(() => {
     revision;
     return season.user_state.watch_status === "watched";
+  });
+  const isPlanned = $derived.by(() => {
+    revision;
+    return season.user_state.watch_status === "plan";
   });
   const hasRating = $derived.by(() => {
     revision;
@@ -39,12 +45,18 @@
     return season.user_state.rating ?? 0;
   });
 
-  const triggerClass = $derived(
-    cn(
+  const triggerClass = $derived.by(() => {
+    if (isUnreleased) {
+      return cn(
+        "vd-season-watched",
+        isPlanned ? "vd-season-plan--active" : "vd-season-plan--inactive"
+      );
+    }
+    return cn(
       "vd-season-watched",
       isWatched ? "vd-season-watched--active" : "vd-season-watched--inactive"
-    )
-  );
+    );
+  });
 
   const handleRatingChange = (value: number) => {
     onRatingClick(season, Math.round(value * 2));
@@ -60,11 +72,18 @@
     onStatusClick(season, watched);
     open = false;
   };
+
+  const handlePlanClick = (planned: boolean) => {
+    onPlanClick?.(season, planned);
+    open = false;
+  };
 </script>
 
 <Popover.Root bind:open>
   <Popover.Trigger class={triggerClass} openOnHover>
-    {#if hasRating}
+    {#if isUnreleased}
+      <CalendarClock class={cn("size-4", isPlanned ? "" : "opacity-0")} />
+    {:else if hasRating}
       <span class="text-emerald-600 font-medium text-sm">{currentRating}</span>
     {:else if isWatched}
       <CheckCheck class="size-4" />
@@ -75,22 +94,33 @@
 
   <Popover.Content class="w-56" side="bottom" align="center">
     <div class="p-2">
-      <div class="flex items-center justify-center gap-2">
-        <StarRating.Root
-          value={currentRating / 2}
-          max={5}
-          allowHalf
-          class="text-emerald-500"
-          onValueChange={handleRatingChange}
-        >
-          {#snippet children({ items })}
-            <div class="flex gap-1">
-              {#each items as item (item.index)}
-                <StarRating.Star index={item.index} state={item.state} class="size-5 text-emerald-500" />
-              {/each}
-            </div>
-          {/snippet}
-        </StarRating.Root>
+      {#if isUnreleased}
+        <div class="flex flex-col">
+          <Button
+            variant="link"
+            class="px-0 h-7 justify-start"
+            onclick={() => handlePlanClick(!isPlanned)}
+          >
+            {isPlanned ? "Убрать из планов" : "В планах"}
+          </Button>
+        </div>
+      {:else}
+        <div class="flex items-center justify-center gap-2">
+          <StarRating.Root
+            value={currentRating / 2}
+            max={5}
+            allowHalf
+            class="text-emerald-500"
+            onValueChange={handleRatingChange}
+          >
+            {#snippet children({ items })}
+              <div class="flex gap-1">
+                {#each items as item (item.index)}
+                  <StarRating.Star index={item.index} state={item.state} class="size-5 text-emerald-500" />
+                {/each}
+              </div>
+            {/snippet}
+          </StarRating.Root>
 
         {#if hasRating}
           <button
@@ -120,6 +150,7 @@
           Непросмотрено
         </Button>
       </div>
+      {/if}
     </div>
   </Popover.Content>
 </Popover.Root>

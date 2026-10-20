@@ -88,6 +88,14 @@
   );
   const seasonsLabel = $derived(pluralizeSeasons(releasedSeasonsCount));
 
+  // Невышедшие сезоны (is_unreleased) показываем в конце сетки
+  const sortedSeasons = $derived(
+    [...movie.seasons].sort((a, b) => {
+      if (a.is_unreleased !== b.is_unreleased) return a.is_unreleased ? 1 : -1;
+      return a.season_number - b.season_number;
+    })
+  );
+
   function pluralizeSeasons(n: number): string {
     const mod10 = n % 10;
     const mod100 = n % 100;
@@ -797,6 +805,27 @@
     }
   };
 
+  const setSeasonPlan = async (season: { id: number; user_state: { watch_status: string | null; rating: number | null } }, planned: boolean) => {
+    try {
+      const response = await fetch(`/api/vault/seasons/${season.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ watch_status: planned ? "plan" : null })
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        await handleUnauthorized(response.status, payload.message);
+        return;
+      }
+
+      season.user_state = { ...payload.user_state };
+      seasonsRevision++;
+    } catch (error) {
+      toast.error("Не удалось обновить план сезона");
+    }
+  };
+
   let isImportingCollectionPart = $state(false);
   let importingPartTmdbId = $state<number | null>(null);
 
@@ -1389,11 +1418,20 @@
           <CardContent class="vd-card-content">
             <div class="vd-season-grid">
 
-              {#each movie.seasons as season (season.id)}
-                <div class="vd-card vd-season-card">
+              {#each sortedSeasons as season (season.id)}
+                <div class={`vd-card vd-season-card${season.is_unreleased ? " vd-season-card--unreleased" : ""}`}>
                   <div class="vd-season-poster-block">
                     {#if season.poster_url}
                       <img src={season.poster_url} alt={`Постер сезона ${season.season_number}`} class="vd-season-poster-img" />
+                      {#if season.is_unreleased}
+                        <div class="vd-season-unreleased-overlay">
+                          <span class="vd-season-unreleased-badge">Не выпущен</span>
+                        </div>
+                      {/if}
+                    {:else if season.is_unreleased}
+                      <div class="vd-season-unreleased-overlay">
+                        <span class="vd-season-unreleased-badge">Не выпущен</span>
+                      </div>
                     {:else}
                       <div class="vd-season-poster-fallback">no poster</div>
                     {/if}
@@ -1405,14 +1443,20 @@
                       {#if season.air_year}
                         <span class="vd-chip">{season.air_year}</span>
                       {/if}
-                      <span class="vd-chip">{season.episodes_count} серий</span>
+                      {#if season.is_unreleased}
+                        <span class="vd-chip vd-chip--unreleased">Дата не объявлена</span>
+                      {:else}
+                        <span class="vd-chip">{season.episodes_count} серий</span>
+                      {/if}
                     </div>
 
                     <SeasonStatus
                       {season}
                       revision={seasonsRevision}
+                      isUnreleased={season.is_unreleased}
                       onStatusClick={setSeasonStatus}
                       onRatingClick={setSeasonRating}
+                      onPlanClick={setSeasonPlan}
                     />
                   </div>
                 </div>

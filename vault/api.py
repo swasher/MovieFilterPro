@@ -396,6 +396,8 @@ class SeasonOut(Schema):
     poster_url: str | None = None
     episodes_count: int
     air_year: int | None = None
+    # Сезон ещё не выпущен: TMDB не отдал air_date (release_date в БД пуст)
+    is_unreleased: bool = False
     user_state: "UserSeasonStateOut"
 
 
@@ -667,6 +669,7 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
         poster_url=_tmdb_image_url(season.poster),
         episodes_count=episodes_count,
         air_year=air_year,
+        is_unreleased=season.release_date is None,
         user_state=UserSeasonStateOut(
             watch_status=user_state_data["watch_status"],
             rating=user_state_data["rating"],

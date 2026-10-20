@@ -132,6 +132,7 @@ type ApiMovieDetail = {
     poster_url: string | null;
     episodes_count: number;
     air_year: number | null;
+    is_unreleased: boolean;
     user_state: {
       watch_status: "watched" | "plan" | "skip" | null;
       rating: number | null;
