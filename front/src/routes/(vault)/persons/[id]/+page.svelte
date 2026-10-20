@@ -232,15 +232,13 @@
                         watch_status={item.watch_status}
                         rating={item.rating}
                         is_favorite={item.is_favorite}
+                        year={item.year}
                       />
                     </div>
 
                     <div class="vd-filmography-copy">
                       <p class="vd-related-title">{item.title}</p>
                       <div class="vd-facts-row vd-facts-row--muted">
-                        {#if item.year}
-                          <span class="vd-fact-inline">{item.year}</span>
-                        {/if}
                         <span class="vd-fact-inline">{item.roles.join(", ")}</span>
                       </div>
                       {#if item.character_names.length}

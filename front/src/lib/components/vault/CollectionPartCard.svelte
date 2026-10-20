@@ -67,6 +67,7 @@
                   watch_status={part.watch_status}
                   rating={part.rating}
                   is_favorite={part.is_favorite}
+                  year={part.year}
                 />
               </div>
             </a>

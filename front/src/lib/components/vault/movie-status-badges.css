@@ -1,11 +1,8 @@
 @reference "../../../routes/layout.css";
 
+/* Статус/оценка — всегда вверху справа */
 .vd-status-badge {
-  @apply absolute bottom-1.5 left-1.5 flex size-5 items-center justify-center rounded-full p-0 text-white shadow-md;
-}
-
-.vd-status-badge--top-left {
-  @apply bottom-auto top-1.5;
+  @apply absolute top-1.5 right-1.5 z-10 flex size-5 items-center justify-center rounded-full p-0 text-white shadow-md;
 }
 
 .vd-status-badge--wont {
@@ -24,10 +21,16 @@
   @apply text-[9px] font-bold leading-none;
 }
 
+/* Favorite — внизу справа */
 .vd-status-badge--favorite {
-  @apply bottom-auto left-auto right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-white/90 p-0 shadow-md;
+  @apply absolute top-auto right-1.5 bottom-1.5 left-auto z-10 flex size-5 items-center justify-center rounded-full bg-white/90 p-0 shadow-md;
 }
 
 .vd-status-badge-heart {
   @apply fill-red-500 text-red-500;
+}
+
+/* Год — по центру снизу (единый вид для всех карточек) */
+.vd-status-badge--year {
+  @apply absolute top-auto right-auto bottom-1.5 left-1/2 z-10 -translate-x-1/2 rounded-full border-transparent bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground shadow-md;
 }

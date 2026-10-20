@@ -30,16 +30,12 @@
       watch_status={activeStatus === movie.watch_status ? null : movie.watch_status}
       rating={movie.rating}
       is_favorite={movie.in_favorites && activeStatus !== "favorites"}
-      position="top-left"
+      year={movie.year}
     />
 
     {#if movie.movie_type === "series" || movie.movie_type === "miniseries"}
-      <Badge variant="secondary" class="absolute bottom-2 left-2 z-10 px-1.5 py-0.5 text-[10px]">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</Badge>
+      <Badge variant="secondary" class="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 text-[10px]">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</Badge>
     {/if}
-
-    <Badge variant="secondary" class="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0.5 text-[10px]">
-      {movie.year ?? "?"}
-    </Badge>
 
     {#if movie.poster_url}
       <img
