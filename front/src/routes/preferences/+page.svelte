@@ -312,6 +312,13 @@
   );
   const savedHotfolderPath = $derived(preferences?.resolved_torrents_hotfolder ?? "");
   const hotfolderExists = $derived(preferences?.hotfolder_exists ?? false);
+  const checkpointUrl = $derived.by(() => {
+    const checkpointId = preferences?.last_scan_kinozal_id;
+    const domain = preferences?.kinozal_domain;
+    return checkpointId != null && domain
+      ? `https://${domain}/details.php?id=${checkpointId}`
+      : null;
+  });
   const hotfolderNeedsRefresh = $derived(
     Boolean(preferences && form.torrents_hotfolder.trim() !== (preferences.torrents_hotfolder ?? ""))
   );
@@ -459,6 +466,30 @@
               <div class="space-y-2">
                 <div class="text-sm font-medium">Last scan</div>
                 <Input bind:value={form.last_scan} type="date" />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Последняя успешно обработанная раздача (checkpoint)</div>
+                <Input
+                  value={preferences?.last_scan_kinozal_id?.toString() ?? "Не задан"}
+                  readonly
+                  aria-label="ID последней успешно обработанной раздачи"
+                />
+                {#if preferences?.last_scan_kinozal_id != null && checkpointUrl}
+                  <a
+                    href={checkpointUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    class="text-sm text-primary underline underline-offset-4"
+                  >Открыть эту раздачу на Kinozal</a>
+                {:else if preferences?.last_scan_kinozal_id != null}
+                  <p class="text-sm text-muted-foreground">
+                    Выберите активное зеркало Kinozal, чтобы открыть эту раздачу.
+                  </p>
+                {:else}
+                  <p class="text-sm text-muted-foreground">
+                    Контрольная раздача ещё не сохранена.
+                  </p>
+                {/if}
               </div>
             </div>
 

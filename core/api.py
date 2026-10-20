@@ -20,6 +20,7 @@ HOTFOLDER_HINT = (
 
 class PreferencesOut(Schema):
     last_scan: str | None = None
+    last_scan_kinozal_id: int | None = None
     scan_from_page: int | None = None
     countries: str
     genres: str
@@ -180,6 +181,7 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
 
     return PreferencesOut(
         last_scan=preferences.last_scan.isoformat() if preferences.last_scan else None,
+        last_scan_kinozal_id=preferences.last_scan_kinozal_id,
         scan_from_page=preferences.scan_from_page,
         countries=preferences.countries or "",
         genres=preferences.genres or "",

@@ -1559,17 +1559,19 @@ def person_detail(request, person_id: int):
         state = user_state_map.get(data["id"])
         watch_status = None
         rating = None
-        is_favorite = False
+        # Важно: не переиспользовать `is_favorite` — эта переменная выше хранит
+        # признак избранности самой персоны и возвращается в PersonDetailOut.
+        movie_is_favorite = False
         if state is not None:
             watch_status = MovieStatusService.WATCH_STATUS_TO_STATUS_KEY.get(state.get("watch_status"))
             rating = state.get("rating")
-            is_favorite = bool(state.get("is_favorite"))
+            movie_is_favorite = bool(state.get("is_favorite"))
         filmography.append(
             PersonMovieOut(
                 **data,
                 watch_status=watch_status,
                 rating=rating,
-                is_favorite=is_favorite,
+                is_favorite=movie_is_favorite,
             )
         )
 
