@@ -3,6 +3,7 @@
 """
 
 import logging
+from datetime import datetime
 from enum import Enum
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -13,6 +14,11 @@ class LogType(Enum):
     SCAN = 1
     ERROR = 2
     DEBUG = 3
+
+
+def compact_timestamp() -> str:
+    """Компактная метка даты/времени для строк лога: 25.10.26 10:35:22."""
+    return datetime.now().strftime('%d.%m.%y %H:%M:%S')
 
 
 # channel_layer = get_channel_layer()
@@ -98,7 +104,8 @@ def log(message: str, logger_name: LogType = LogType.SCAN):
             raise ValueError(f"Invalid logger_name: {logger_name}. Must be a LogType member.")
 
     # log_level нужно добавлять, чтобы различать scan и debug сообщения на стороне фронта. Там эта часть удаляется.
-    log_message = f"{log_level}: {message}"
+    # Метка времени ставится после log_level, чтобы фронт по-прежнему фильтровал сообщения по префиксу.
+    log_message = f"{log_level}: [{compact_timestamp()}] {message}"
     send_log_to_websocket(log_message)
 
 
@@ -118,7 +125,8 @@ async def alog(message: str, logger_name: LogType = LogType.SCAN):
             raise ValueError(f"Invalid logger_name: {logger_name}. Must be a LogType member.")
 
     # log_level нужно добавлять, чтобы различать scan и debug сообщения на стороне фронта. Там эта часть удаляется.
-    log_message = f"{log_level}: {message}"
+    # Метка времени ставится после log_level, чтобы фронт по-прежнему фильтровал сообщения по префиксу.
+    log_message = f"{log_level}: [{compact_timestamp()}] {message}"
 
     await get_channel_layer().group_send(
         "log_updates",

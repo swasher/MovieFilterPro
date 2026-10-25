@@ -15,6 +15,10 @@
 -   **Механизм**: Внутри `log` вызывается `send_log_to_websocket`, которая использует `asgiref.sync.async_to_sync` для "проброса" сообщения из синхронного потока в асинхронный event loop Django Channels.
 -   **Тип события Channels**: `send_log_update`
 
+Формат текста: `<LEVEL>: [<dd.mm.yy HH:MM:SS>] <message>`, например
+`INFO: [25.10.26 10:35:22] FOUND [21.11.25]: ...`. Уровень оставлен первым,
+чтобы фронт фильтровал сообщения по префиксу.
+
 ### Из асинхронного кода (например, `kinozal_scan/service.py`)
 
 -   **Функции**: `alog(message: str, logger_name: LogType)` и `asend_notification(payload: dict)`

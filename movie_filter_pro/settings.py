@@ -278,6 +278,7 @@ LOGGING = {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
             'filename': ERROR_LOG,
+            'formatter': 'compact',
         },
         'console': {  # New handler for console output
             'level': 'DEBUG',
@@ -292,6 +293,7 @@ LOGGING = {
             'level': 'INFO',
             'class': 'logging.FileHandler',
             'filename': SCAN_LOG,
+            'formatter': 'compact',
         },
         'kinozal_console': {  # use as: kinozal_logger = logging.getLogger('kinozal'); kinozal_logger.debug("Сообщение") или любой уровень. Выключается/включается переменной KINOZAL_SCAN_PRINT
             'level': 'DEBUG',
@@ -308,6 +310,11 @@ LOGGING = {
         },
         "simple": {
             "format": "{levelname} {message}",
+            "style": "{",
+        },
+        "compact": {  # компактная метка даты/времени для scan.log и error.log
+            "format": "{asctime} {message}",
+            "datefmt": "%d.%m.%y %H:%M:%S",
             "style": "{",
         },
     },
