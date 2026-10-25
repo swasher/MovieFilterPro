@@ -15,8 +15,8 @@ media/cached_images/
 *.sqlite3-wal
 .lancedb/
 .vscode/
-.ruff_cache/
 .uv-cache/
 .pnpm-store/
+backup_torrents/
 dump.json
 nul

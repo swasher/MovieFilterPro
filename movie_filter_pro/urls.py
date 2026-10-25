@@ -6,6 +6,7 @@ from core.api import api as core_api
 from vault.api import api as vault_api
 from moviefilter.api import api as kinozal_api
 from plex.api import api as plex_api
+from qbittorrent.api import api as qbittorrent_api
 from django.http import HttpResponse
 from django.urls import re_path
 
@@ -16,6 +17,7 @@ urlpatterns = [
     path('api/vault/', vault_api.urls),
     path('api/kinozal/', kinozal_api.urls),
     path('api/plex/', plex_api.urls),
+    path('api/qbittorrent/', qbittorrent_api.urls),
     path('', include('core.urls')),
 ]
 

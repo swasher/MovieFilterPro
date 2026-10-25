@@ -18,10 +18,13 @@ export type PreferencesData = {
   cookie_uid: string | null;
   kinozal_domain: string | null;
   kinozal_mirrors: string[];
-  torrents_hotfolder: string | null;
-  resolved_torrents_hotfolder: string | null;
-  hotfolder_exists: boolean;
-  hotfolder_hint: string;
+  qbt_url: string | null;
+  qbt_username: string | null;
+  qbt_password: string | null;
+  torrents_backup_folder: string | null;
+  resolved_torrents_backup_folder: string | null;
+  backup_folder_exists: boolean;
+  backup_folder_hint: string;
   ignore_title: string;
   tmdb_api_key: string | null;
   omdb_api_key: string | null;
@@ -54,7 +57,10 @@ export type PreferencesUpdatePayload = {
   cookie_uid: string | null;
   kinozal_domain: string | null;
   kinozal_mirrors: string[];
-  torrents_hotfolder: string | null;
+  qbt_url: string | null;
+  qbt_username: string | null;
+  qbt_password: string | null;
+  torrents_backup_folder: string | null;
   ignore_title: string;
   tmdb_api_key: string | null;
   omdb_api_key: string | null;
@@ -112,10 +118,13 @@ export const emptyPreferences = (): PreferencesData => ({
   cookie_uid: null,
   kinozal_domain: null,
   kinozal_mirrors: [],
-  torrents_hotfolder: null,
-  resolved_torrents_hotfolder: null,
-  hotfolder_exists: false,
-  hotfolder_hint: "",
+  qbt_url: null,
+  qbt_username: null,
+  qbt_password: null,
+  torrents_backup_folder: null,
+  resolved_torrents_backup_folder: null,
+  backup_folder_exists: false,
+  backup_folder_hint: "",
   ignore_title: "",
   tmdb_api_key: null,
   omdb_api_key: null,

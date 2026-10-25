@@ -7,6 +7,7 @@ from django.test import TestCase
 
 from movie_filter_pro.settings import HIGH
 from moviefilter.models import MovieRSS
+from qbittorrent.models import Torrent
 from vault.models import Movie, UserMovie, VaultConnectionEvent
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 from vault.services.tmdb_movie_matching_service import TMDBCandidate, TMDBMatchingResult
@@ -62,7 +63,7 @@ class KinozalDownloadImportServiceTests(TestCase):
             movie_rss_id=rss_movie.id,
             torrent_id=4999,
             user=self.user,
-            saved_to="/tmp/queued.torrent",
+            torrent_file="/tmp/queued.torrent",
         )
 
         self.assertEqual(result.status, "queued")
@@ -70,7 +71,7 @@ class KinozalDownloadImportServiceTests(TestCase):
         self.assertTrue(
             VaultConnectionEvent.objects.filter(
                 operation_id=result.operation_id,
-                event_type="download_saved",
+                event_type="torrent_added",
             ).exists()
         )
         self.assertTrue(
@@ -106,18 +107,25 @@ class KinozalDownloadImportServiceTests(TestCase):
             message="Фильм добавлен в Vault",
             movie=imported_movie,
         )
+        qbt_torrent = Torrent.objects.create(
+            info_hash="a" * 40,
+            name="Интерстеллар 1080p",
+        )
 
         result = KinozalDownloadImportService.handle_successful_download(
             movie_rss_id=rss_movie.id,
             torrent_id=4001,
             user=self.user,
-            saved_to="/tmp/test.torrent",
+            torrent_file="/tmp/test.torrent",
+            qbt_torrent_id=qbt_torrent.id,
         )
 
         imported_movie.refresh_from_db()
+        qbt_torrent.refresh_from_db()
         self.assertEqual(result.status, "created")
         self.assertEqual(imported_movie.imdb_id, "tt0816692")
         self.assertEqual(imported_movie.kinopoisk_id, 258687)
+        self.assertEqual(qbt_torrent.movie, imported_movie)
         self.assertEqual(
             UserMovie.objects.get(user=self.user, movie=imported_movie).watch_status,
             UserMovie.WatchStatus.PLAN,
@@ -261,13 +269,13 @@ class KinozalDownloadImportServiceTests(TestCase):
             movie_rss_id=rss_movie.id,
             torrent_id=4001,
             user=self.user,
-            saved_to="/tmp/test-1.torrent",
+            torrent_file="/tmp/test-1.torrent",
         )
         second = KinozalDownloadImportService.handle_successful_download(
             movie_rss_id=rss_movie.id,
             torrent_id=4001,
             user=self.user,
-            saved_to="/tmp/test-2.torrent",
+            torrent_file="/tmp/test-2.torrent",
         )
 
         self.assertEqual(Movie.objects.count(), 1)
@@ -307,7 +315,7 @@ class KinozalDownloadImportServiceTests(TestCase):
             movie_rss_id=rss_movie.id,
             torrent_id=4002,
             user=self.user,
-            saved_to="/tmp/test-fallback.torrent",
+            torrent_file="/tmp/test-fallback.torrent",
         )
 
         self.assertEqual(result.status, "created")
@@ -335,7 +343,7 @@ class KinozalDownloadImportServiceTests(TestCase):
             movie_rss_id=rss_movie.id,
             torrent_id=4003,
             user=self.user,
-            saved_to="/tmp/test-ambiguous.torrent",
+            torrent_file="/tmp/test-ambiguous.torrent",
         )
 
         self.assertEqual(result.status, "ambiguous")
@@ -370,7 +378,7 @@ class KinozalDownloadImportServiceTests(TestCase):
             movie_rss_id=rss_movie.id,
             torrent_id=4004,
             user=self.user,
-            saved_to="/tmp/test-not-found.torrent",
+            torrent_file="/tmp/test-not-found.torrent",
         )
 
         self.assertEqual(result.status, "not_found")

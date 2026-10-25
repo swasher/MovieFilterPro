@@ -6,15 +6,15 @@ import requests
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from moviefilter.hotfolder import resolve_torrents_hotfolder_path
 from moviefilter.models import UserPreferences
+from qbittorrent.services.paths import resolve_backup_folder
 
 
 api = NinjaAPI(title="Core API", version="1.0", urls_namespace="core-api")
 
-HOTFOLDER_HINT = (
-    "На сервере в Docker обычно используется `/torrents_hotfolder`, "
-    "а локально на Windows лучше указывать явный путь вроде `\\\\qnap\\TorrentsHotFolder`."
+BACKUP_FOLDER_HINT = (
+    "На сервере в Docker обычно используется `/app/backup_torrents`, "
+    "а локально на Windows лучше указывать явный путь вроде `\\\\qnap\\backup_torrents`."
 )
 
 # Минимальный интервал автосканирования Kinozal (минуты). Частые сканы повышают
@@ -43,10 +43,13 @@ class PreferencesOut(Schema):
     cookie_uid: str | None = None
     kinozal_domain: str | None = None
     kinozal_mirrors: list[str] = []
-    torrents_hotfolder: str | None = None
-    resolved_torrents_hotfolder: str | None = None
-    hotfolder_exists: bool = False
-    hotfolder_hint: str
+    qbt_url: str | None = None
+    qbt_username: str | None = None
+    qbt_password: str | None = None
+    torrents_backup_folder: str | None = None
+    resolved_torrents_backup_folder: str | None = None
+    backup_folder_exists: bool = False
+    backup_folder_hint: str
     ignore_title: str
     tmdb_api_key: str | None = None
     omdb_api_key: str | None = None
@@ -80,7 +83,10 @@ class PreferencesUpdateIn(Schema):
     cookie_uid: str | None = None
     kinozal_domain: str | None = None
     kinozal_mirrors: list[str] = []
-    torrents_hotfolder: str | None = None
+    qbt_url: str | None = None
+    qbt_username: str | None = None
+    qbt_password: str | None = None
+    torrents_backup_folder: str | None = None
     ignore_title: str = ""
     tmdb_api_key: str | None = None
     omdb_api_key: str | None = None
@@ -186,18 +192,18 @@ def _validated_mirror_list(value: object) -> list[str]:
 
 
 def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
-    configured_hotfolder = _normalized_optional_string(preferences.torrents_hotfolder)
-    resolved_hotfolder = None
-    hotfolder_exists = False
+    configured_backup_folder = _normalized_optional_string(preferences.torrents_backup_folder)
+    resolved_backup_folder = None
+    backup_folder_exists = False
 
-    if configured_hotfolder:
+    if configured_backup_folder:
         try:
-            resolved_path = resolve_torrents_hotfolder_path(configured_hotfolder)
-            resolved_hotfolder = str(resolved_path)
-            hotfolder_exists = resolved_path.exists()
+            resolved_path = resolve_backup_folder(configured_backup_folder)
+            resolved_backup_folder = str(resolved_path)
+            backup_folder_exists = resolved_path.exists()
         except ValueError:
-            resolved_hotfolder = None
-            hotfolder_exists = False
+            resolved_backup_folder = None
+            backup_folder_exists = False
 
     return PreferencesOut(
         last_scan=preferences.last_scan.isoformat() if preferences.last_scan else None,
@@ -220,10 +226,13 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         cookie_uid=preferences.cookie_uid or None,
         kinozal_domain=preferences.kinozal_domain or None,
         kinozal_mirrors=list(preferences.kinozal_mirrors or []),
-        torrents_hotfolder=preferences.torrents_hotfolder or None,
-        resolved_torrents_hotfolder=resolved_hotfolder,
-        hotfolder_exists=hotfolder_exists,
-        hotfolder_hint=HOTFOLDER_HINT,
+        qbt_url=preferences.qbt_url or None,
+        qbt_username=preferences.qbt_username or None,
+        qbt_password=preferences.qbt_password or None,
+        torrents_backup_folder=preferences.torrents_backup_folder or None,
+        resolved_torrents_backup_folder=resolved_backup_folder,
+        backup_folder_exists=backup_folder_exists,
+        backup_folder_hint=BACKUP_FOLDER_HINT,
         ignore_title=preferences.ignore_title or "",
         tmdb_api_key=preferences.tmdb_api_key or None,
         omdb_api_key=preferences.omdb_api_key or None,
@@ -270,7 +279,11 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
         raise HttpError(400, f"Активное зеркало «{active}» отсутствует в списке зеркал.")
     preferences.kinozal_mirrors = mirrors
     preferences.kinozal_domain = active
-    preferences.torrents_hotfolder = _normalized_optional_string(payload.torrents_hotfolder)
+    preferences.qbt_url = _normalized_optional_string(payload.qbt_url)
+    preferences.qbt_username = _normalized_optional_string(payload.qbt_username)
+    raw_qbt_password = payload.qbt_password
+    preferences.qbt_password = raw_qbt_password if raw_qbt_password and raw_qbt_password.strip() else None
+    preferences.torrents_backup_folder = _normalized_optional_string(payload.torrents_backup_folder)
     preferences.ignore_title = payload.ignore_title
     preferences.tmdb_api_key = _normalized_optional_string(payload.tmdb_api_key)
     preferences.omdb_api_key = _normalized_optional_string(payload.omdb_api_key)

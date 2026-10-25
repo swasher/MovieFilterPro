@@ -104,8 +104,10 @@ export type KinozalTorrentDownloadResponse = {
   torrent_id: number;
   message: string;
   filename: string | null;
-  saved_to: string | null;
+  info_hash: string | null;
+  archive_path: string | null;
   operation_id?: string | null;
+  warning?: string | null;
 };
 
 export type KinozalApiErrorDetail = {

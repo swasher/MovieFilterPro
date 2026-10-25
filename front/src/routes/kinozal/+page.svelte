@@ -633,7 +633,16 @@
   const canFixDownloadErrorInPreferences = (error: KinozalApiErrorDetail | null) =>
     Boolean(
       error?.code &&
-        ["settings_missing_domain", "settings_missing_auth", "settings_missing_hotfolder"].includes(error.code)
+        [
+          "settings_missing_domain",
+          "settings_missing_auth",
+          "qbt_not_configured",
+          "qbt_auth_failed",
+          "qbt_invalid_url",
+          "qbt_unreachable",
+          "qbt_backup_folder_not_configured",
+          "qbt_backup_folder_invalid"
+        ].includes(error.code)
     );
 
   const retryDownloadOptions = async () => {

@@ -9,6 +9,7 @@ from ninja.errors import HttpError
 
 logger = logging.getLogger("vault.tmdb_writeback")
 
+from qbittorrent.models import Torrent
 from vault.models import (
     Collection,
     FavoritePerson,
@@ -48,6 +49,7 @@ class MovieOut(Schema):
     in_favorites: bool = False
     watch_status: str | None = None
     rating: int | None = None
+    torrent_linked: bool = False
 
 
 class HomeMovieGroupOut(Schema):
@@ -612,7 +614,13 @@ def _build_connection_event_out(item: VaultConnectionEvent) -> ConnectionEventOu
     )
 
 
-def _build_movie_out(movie: Movie, user=None, state: dict | None = None) -> MovieOut:
+def _build_movie_out(
+    movie: Movie,
+    user=None,
+    state: dict | None = None,
+    *,
+    torrent_linked: bool = False,
+) -> MovieOut:
     if state is None and user is not None:
         state = MovieStatusService.get_movie_states_bulk(user, [movie]).get(movie.id)
     watch_status = state.get("watch_status") if state else None
@@ -631,16 +639,35 @@ def _build_movie_out(movie: Movie, user=None, state: dict | None = None) -> Movi
         in_watched=watch_status == "watched",
         in_wont_watch=watch_status == "wont_watch",
         in_favorites=is_favorite,
+        torrent_linked=torrent_linked,
+    )
+
+
+def _torrent_linked_movie_ids(movies) -> set[int]:
+    movie_ids = [movie.id for movie in movies]
+    if not movie_ids:
+        return set()
+    return set(
+        Torrent.objects.filter(movie_id__in=movie_ids).values_list('movie_id', flat=True)
     )
 
 
 def _build_home_group(group_id: str, title: str, see_all_href: str, movies, user) -> HomeMovieGroupOut:
     states = MovieStatusService.get_movie_states_bulk(user, movies)
+    torrent_linked_ids = _torrent_linked_movie_ids(movies)
     return HomeMovieGroupOut(
         id=group_id,
         title=title,
         see_all_href=see_all_href,
-        movies=[_build_movie_out(movie, user=user, state=states.get(movie.id)) for movie in movies],
+        movies=[
+            _build_movie_out(
+                movie,
+                user=user,
+                state=states.get(movie.id),
+                torrent_linked=movie.id in torrent_linked_ids,
+            )
+            for movie in movies
+        ],
     )
 
 
@@ -788,6 +815,7 @@ def list_movies(
     movie_type: str | None = None,
     is_favorite: bool | None = None,
     watch_status: str | None = None,
+    has_torrent: bool | None = None,
 ):
     user = _resolve_api_user(request)
     qs = Movie.objects.all()
@@ -831,6 +859,10 @@ def list_movies(
             qs = qs.exclude(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.WATCHED)
     if user and list:
         qs = qs.filter(in_lists__user_list_id=list, in_lists__user_list__user=user)
+    if has_torrent is True:
+        qs = qs.filter(Exists(Torrent.objects.filter(movie=OuterRef('pk'))))
+    elif has_torrent is False:
+        qs = qs.filter(~Exists(Torrent.objects.filter(movie=OuterRef('pk'))))
 
     allowed_orders = {
         "-year": ("-year", "title", "id"),
@@ -892,7 +924,16 @@ def list_movies(
         qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
     movies = [movie for movie in qs]
     states = MovieStatusService.get_movie_states_bulk(user, movies)
-    return [_build_movie_out(movie, user=user, state=states.get(movie.id)) for movie in movies]
+    torrent_linked_ids = _torrent_linked_movie_ids(movies)
+    return [
+        _build_movie_out(
+            movie,
+            user=user,
+            state=states.get(movie.id),
+            torrent_linked=movie.id in torrent_linked_ids,
+        )
+        for movie in movies
+    ]
 
 
 HOME_SECTION_SIZE = 5

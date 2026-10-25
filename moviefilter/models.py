@@ -208,7 +208,26 @@ class UserPreferences(models.Model):
         verbose_name="Зеркала kinozal",
         help_text="Список известных зеркал Kinozal (домены без https://).",
     )
+    # DEPRECATED: старый hotfolder больше не используется. Оставлен в схеме,
+    # чтобы не делать разрушительную миграцию; download flow работает через qBittorrent API.
     torrents_hotfolder = models.CharField(max_length=70, blank=True, null=True)
+
+    qbt_url = models.CharField(
+        'qBittorrent URL',
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text='URL Web API qBittorrent, доступный с backend (в Docker — имя сервиса, не localhost).',
+    )
+    qbt_username = models.CharField('qBittorrent логин', max_length=200, blank=True, null=True)
+    qbt_password = models.CharField('qBittorrent пароль', max_length=200, blank=True, null=True)
+    torrents_backup_folder = models.CharField(
+        'Папка backup .torrent',
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text='Папка для хранения .torrent-файлов. В Docker обычно /app/backup_torrents.',
+    )
 
     ignore_title = models.CharField(max_length=500, default='')
 

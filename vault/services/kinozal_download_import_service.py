@@ -85,7 +85,8 @@ class KinozalDownloadImportService:
         movie_rss_id: int,
         torrent_id: int,
         user,
-        saved_to: str,
+        torrent_file: str,
+        qbt_torrent_id: int | None = None,
     ) -> KinozalDownloadEnqueueResult:
         operation_id = uuid4()
         movie_rss = MovieRSS.objects.filter(pk=movie_rss_id).first()
@@ -107,12 +108,12 @@ class KinozalDownloadImportService:
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.INFO,
-            event_type="download_saved",
-            message=f"Torrent сохранен: {saved_to}",
+            event_type="torrent_added",
+            message=f"Torrent добавлен в qBittorrent: {torrent_file or 'архив не сохранён'}",
             movie_rss=movie_rss,
             torrent_id=torrent_id,
             user=user,
-            payload={"saved_to": saved_to},
+            payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
         )
         try:
             from vault.tasks import process_kinozal_download_import
@@ -122,7 +123,8 @@ class KinozalDownloadImportService:
                 movie_rss_id,
                 torrent_id,
                 user.id if getattr(user, "is_authenticated", False) else None,
-                saved_to,
+                torrent_file,
+                qbt_torrent_id,
             )
         except Exception as exc:
             cls._log(
@@ -138,7 +140,7 @@ class KinozalDownloadImportService:
             return KinozalDownloadEnqueueResult(
                 operation_id=operation_id,
                 status="error",
-                message="Torrent сохранен, но импорт в Vault не удалось поставить в очередь",
+                message="Torrent добавлен в qBittorrent, но импорт в Vault не удалось поставить в очередь",
             )
 
         cls._log(
@@ -149,7 +151,7 @@ class KinozalDownloadImportService:
             movie_rss=movie_rss,
             torrent_id=torrent_id,
             user=user,
-            payload={"saved_to": saved_to},
+            payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
         )
         return KinozalDownloadEnqueueResult(
             operation_id=operation_id,
@@ -165,7 +167,8 @@ class KinozalDownloadImportService:
         movie_rss_id: int,
         torrent_id: int,
         user,
-        saved_to: str,
+        torrent_file: str,
+        qbt_torrent_id: int | None = None,
         operation_id: UUID | None = None,
         log_download_saved: bool = True,
     ) -> KinozalDownloadImportResult:
@@ -190,12 +193,12 @@ class KinozalDownloadImportService:
             cls._log(
                 operation_id=operation_id,
                 level=VaultConnectionEvent.Level.INFO,
-                event_type="download_saved",
-                message=f"Torrent сохранен: {saved_to}",
+                event_type="torrent_added",
+                message=f"Torrent добавлен в qBittorrent: {torrent_file or 'архив не сохранён'}",
                 movie_rss=movie_rss,
                 torrent_id=torrent_id,
                 user=user,
-                payload={"saved_to": saved_to},
+                payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
             )
         else:
             cls._log(
@@ -206,7 +209,7 @@ class KinozalDownloadImportService:
                 movie_rss=movie_rss,
                 torrent_id=torrent_id,
                 user=user,
-                payload={"saved_to": saved_to},
+                payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
             )
 
         movie = cls._find_existing_movie(movie_rss, operation_id=operation_id, torrent_id=torrent_id, user=user)
@@ -315,6 +318,41 @@ class KinozalDownloadImportService:
             user=user,
             tmdb_id=movie.tmdb_id,
         )
+
+        if qbt_torrent_id:
+            try:
+                from qbittorrent.services.torrent_service import link_torrent_to_movie
+
+                linked = link_torrent_to_movie(qbt_torrent_id, movie)
+                cls._log(
+                    operation_id=operation_id,
+                    level=VaultConnectionEvent.Level.SUCCESS if linked else VaultConnectionEvent.Level.WARNING,
+                    event_type="qbt_torrent_linked" if linked else "qbt_torrent_link_skipped",
+                    message=(
+                        "Раздача qBittorrent привязана к фильму"
+                        if linked
+                        else "Раздачу qBittorrent не удалось привязать к фильму"
+                    ),
+                    movie_rss=movie_rss,
+                    vault_movie=movie,
+                    torrent_id=torrent_id,
+                    user=user,
+                    tmdb_id=movie.tmdb_id,
+                    payload={"qbt_torrent_id": qbt_torrent_id},
+                )
+            except Exception as exc:  # noqa: BLE001 - привязка не должна ломать импорт
+                cls._log(
+                    operation_id=operation_id,
+                    level=VaultConnectionEvent.Level.ERROR,
+                    event_type="qbt_torrent_link_failed",
+                    message=f"Ошибка привязки раздачи qBittorrent: {exc}",
+                    movie_rss=movie_rss,
+                    vault_movie=movie,
+                    torrent_id=torrent_id,
+                    user=user,
+                    tmdb_id=movie.tmdb_id,
+                    payload={"qbt_torrent_id": qbt_torrent_id, "error_type": type(exc).__name__},
+                )
 
         final_status: ImportStatus = "created" if candidate is not None and movie.source == Movie.Source.TMDB else "reused"
         final_message = "Фильм обработан и статус выставлен"

@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'plex',
     'kinorium',
     'vault',
+    'qbittorrent',
     'kinozal_scan',
     'web_logger',
 ]

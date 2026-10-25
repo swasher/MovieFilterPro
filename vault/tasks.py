@@ -34,7 +34,8 @@ def process_kinozal_download_import(
     movie_rss_id: int,
     torrent_id: int,
     user_id: int | None,
-    saved_to: str,
+    torrent_file: str,
+    qbt_torrent_id: int | None = None,
 ):
     close_old_connections()
     operation_uuid = UUID(operation_id)
@@ -47,7 +48,8 @@ def process_kinozal_download_import(
             movie_rss_id=movie_rss_id,
             torrent_id=torrent_id,
             user=user,
-            saved_to=saved_to,
+            torrent_file=torrent_file,
+            qbt_torrent_id=qbt_torrent_id,
             operation_id=operation_uuid,
             log_download_saved=False,
         )

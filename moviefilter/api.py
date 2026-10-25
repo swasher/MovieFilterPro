@@ -8,16 +8,17 @@ from requests import RequestException
 
 from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, TRANS_FOUND, WAIT_TRANS
 from moviefilter.classes import KinozalSearch
-from moviefilter.hotfolder import resolve_torrents_hotfolder_path
 from moviefilter.image_caching import get_cached_image_url
 from moviefilter.image_caching import remove_cached_image
 from moviefilter.kinozal import KinozalClient, LinkConstructor, normalize_kinozal_domain
 from moviefilter.models import MovieRSS, UserPreferences
 from moviefilter.services.torrent_download_service import (
     TorrentDownloadError,
-    download_torrent_file,
-    validate_download_preferences,
+    fetch_torrent_file,
+    validate_kinozal_preferences,
 )
+from qbittorrent.services import torrent_service
+from qbittorrent.services.errors import QbtError
 from vault.models import FavoritePerson
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher
@@ -136,8 +137,10 @@ class KinozalTorrentDownloadOut(Schema):
     torrent_id: int
     message: str
     filename: str | None = None
-    saved_to: str | None = None
+    info_hash: str | None = None
+    archive_path: str | None = None
     operation_id: str | None = None
+    warning: str | None = None
 
 
 def _require_api_user(request):
@@ -176,20 +179,11 @@ def _normalize_page_size(limit: int) -> int:
     return min(limit, MAX_PAGE_SIZE)
 
 
-def _require_kinozal_preferences(*, require_hotfolder: bool = False) -> UserPreferences:
+def _require_kinozal_preferences() -> UserPreferences:
     try:
-        preferences = validate_download_preferences()
+        return validate_kinozal_preferences()
     except TorrentDownloadError as exc:
-        hint = exc.hint
-        if exc.code == "settings_missing_hotfolder":
-            hint = hint or (
-                "На сервере в Docker обычно используется `/torrents_hotfolder`, "
-                "а локально на Windows лучше указывать явный путь вроде `\\\\qnap\\TorrentsHotFolder`."
-            )
-        _raise_kinozal_error(exc.status_code, exc.code, exc.message, hint)
-    if not require_hotfolder:
-        return preferences
-    return preferences
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
 
 
 def _normalize_priority(priority: str | None) -> str:
@@ -389,13 +383,11 @@ def _update_movie_priority(movie_id: int, target_priority: int, *, message_prefi
     )
 
 
-def _download_torrent_file(torrent_id: int) -> tuple[str | None, str, str]:
-    preferences = _require_kinozal_preferences(require_hotfolder=True)
-    try:
-        result = download_torrent_file(torrent_id, preferences=preferences)
-    except TorrentDownloadError as exc:
-        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
-    return result.filename, result.message, result.saved_to
+def _kinozal_source_url(preferences: UserPreferences, torrent_id: int) -> str | None:
+    domain = (preferences.kinozal_domain or "").strip()
+    if not domain:
+        return None
+    return f"https://{domain}/details.php?id={torrent_id}"
 
 
 def _kinozal_search(movie_id: int) -> list[KinozalSearch]:
@@ -604,24 +596,54 @@ def movie_download_options(request, movie_id: int):
 @api.post("/torrents/{torrent_id}/download", response=KinozalTorrentDownloadOut)
 def download_torrent(request, torrent_id: int):
     user = _require_api_user(request)
-    filename, message, saved_to = _download_torrent_file(torrent_id)
     movie_id = _extract_download_movie_id(request)
+    preferences = _require_kinozal_preferences()
+
+    try:
+        torrent_service.validate_ready()
+    except QbtError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    try:
+        torrent_file = fetch_torrent_file(torrent_id, preferences=preferences)
+    except TorrentDownloadError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    try:
+        add_result = torrent_service.add_torrent_from_kinozal(
+            torrent_bytes=torrent_file.content,
+            torrent_id=torrent_id,
+            source_url=_kinozal_source_url(preferences, torrent_id),
+            tag=f"mfp:{movie_id}" if movie_id else None,
+        )
+    except QbtError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    torrent = add_result.torrent
+    message = "Torrent добавлен в qBittorrent"
+    if add_result.warning:
+        message = f"{message}. {add_result.warning}"
     operation_id = None
+
     if movie_id:
         queue_result = KinozalDownloadImportService.enqueue_successful_download(
             movie_rss_id=movie_id,
             torrent_id=torrent_id,
             user=user,
-            saved_to=saved_to,
+            torrent_file=torrent.torrent_file,
+            qbt_torrent_id=torrent.id,
         )
         message = queue_result.message
         operation_id = str(queue_result.operation_id)
+
     return KinozalTorrentDownloadOut(
         torrent_id=torrent_id,
-        filename=filename,
+        filename=torrent_file.filename,
         message=message,
-        saved_to=saved_to,
+        info_hash=torrent.info_hash,
+        archive_path=torrent.torrent_file or None,
         operation_id=operation_id,
+        warning=add_result.warning,
     )
 
 

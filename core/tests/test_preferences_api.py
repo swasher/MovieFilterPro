@@ -30,7 +30,10 @@ class PreferencesApiTests(TestCase):
             cookie_uid="uid123",
             kinozal_domain="kinozal.tv",
             kinozal_mirrors=["kinozal.tv"],
-            torrents_hotfolder=r"C:\temp\torrents",
+            qbt_url="http://qbittorrent:8080",
+            qbt_username="admin",
+            qbt_password="qbt-pass",
+            torrents_backup_folder=r"C:\temp\backup_torrents",
             ignore_title="camrip",
             tmdb_api_key="tmdb-key",
             omdb_api_key="omdb-key",
@@ -38,9 +41,9 @@ class PreferencesApiTests(TestCase):
             tmdb_v4_authenticated_access_token="tmdb-auth-token",
         )
 
-    def test_get_preferences_returns_resolved_hotfolder_data(self):
+    def test_get_preferences_returns_resolved_backup_folder_data(self):
         with TemporaryDirectory() as temp_dir:
-            self.preferences.torrents_hotfolder = temp_dir
+            self.preferences.torrents_backup_folder = temp_dir
             self.preferences.save()
 
             response = self.client.get("/api/core/preferences")
@@ -48,8 +51,11 @@ class PreferencesApiTests(TestCase):
             self.assertEqual(response.status_code, 200)
             payload = response.json()
             self.assertEqual(payload["kinozal_domain"], "kinozal.tv")
-            self.assertEqual(payload["resolved_torrents_hotfolder"], str(Path(temp_dir)))
-            self.assertTrue(payload["hotfolder_exists"])
+            self.assertEqual(payload["resolved_torrents_backup_folder"], str(Path(temp_dir)))
+            self.assertTrue(payload["backup_folder_exists"])
+            self.assertEqual(payload["qbt_url"], "http://qbittorrent:8080")
+            self.assertEqual(payload["qbt_username"], "admin")
+            self.assertEqual(payload["qbt_password"], "qbt-pass")
             self.assertEqual(payload["tmdb_v4_authenticated_access_token"], "tmdb-auth-token")
             self.assertEqual(payload["omdb_api_key"], "omdb-key")
 
@@ -73,7 +79,10 @@ class PreferencesApiTests(TestCase):
                 "cookie_uid": "  new-uid  ",
                 "kinozal_domain": "  kinozal.guru  ",
                 "kinozal_mirrors": ["kinozal.guru"],
-                "torrents_hotfolder": "  C:\\downloads\\torrents  ",
+                "qbt_url": "  http://new-qbt:8080  ",
+                "qbt_username": "  new-admin  ",
+                "qbt_password": "new-qbt-pass",
+                "torrents_backup_folder": "  C:\\downloads\\backup_torrents  ",
                 "ignore_title": "ts, camrip",
                 "tmdb_api_key": "  new-tmdb-key  ",
                 "omdb_api_key": "  new-omdb-key  ",
@@ -87,7 +96,10 @@ class PreferencesApiTests(TestCase):
         self.assertEqual(self.preferences.last_scan.isoformat(), "2026-03-09")
         self.assertEqual(self.preferences.scan_from_page, 9)
         self.assertEqual(self.preferences.kinozal_domain, "kinozal.guru")
-        self.assertEqual(self.preferences.torrents_hotfolder, r"C:\downloads\torrents")
+        self.assertEqual(self.preferences.qbt_url, "http://new-qbt:8080")
+        self.assertEqual(self.preferences.qbt_username, "new-admin")
+        self.assertEqual(self.preferences.qbt_password, "new-qbt-pass")
+        self.assertEqual(self.preferences.torrents_backup_folder, r"C:\downloads\backup_torrents")
         self.assertEqual(self.preferences.plex_address, "http://new-plex:32400")
         self.assertEqual(self.preferences.tmdb_api_key, "new-tmdb-key")
         self.assertEqual(self.preferences.omdb_api_key, "new-omdb-key")
@@ -113,7 +125,10 @@ class PreferencesApiTests(TestCase):
             "cookie_uid": "uid123",
             "kinozal_domain": "kinozal.tv",
             "kinozal_mirrors": ["kinozal.tv"],
-            "torrents_hotfolder": r"C:\temp\torrents",
+            "qbt_url": "http://qbittorrent:8080",
+            "qbt_username": "admin",
+            "qbt_password": "qbt-pass",
+            "torrents_backup_folder": r"C:\temp\backup_torrents",
             "ignore_title": "camrip",
             "tmdb_api_key": "tmdb-key",
             "omdb_api_key": "omdb-key",

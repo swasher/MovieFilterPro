@@ -43,7 +43,10 @@
     cookie_uid: string;
     kinozal_domain: string;
     kinozal_mirrors: string[];
-    torrents_hotfolder: string;
+    qbt_url: string;
+    qbt_username: string;
+    qbt_password: string;
+    torrents_backup_folder: string;
     ignore_title: string;
     tmdb_api_key: string;
     omdb_api_key: string;
@@ -68,6 +71,7 @@
     const normalized = value.trim();
     return normalized ? normalized : null;
   };
+  const asOptionalSecret = (value: string) => (value ? value : null);
   const asNumber = (value: string, fallback: number) => {
     const normalized = Number.parseFloat(value);
     return Number.isFinite(normalized) ? normalized : fallback;
@@ -95,7 +99,10 @@
       // Активное зеркало всегда одно из зеркал в списке (инвариант бэкенда).
       kinozal_domain: mirrors.includes(domain) ? domain : "",
       kinozal_mirrors: mirrors,
-      torrents_hotfolder: preferences.torrents_hotfolder ?? "",
+      qbt_url: preferences.qbt_url ?? "",
+      qbt_username: preferences.qbt_username ?? "",
+      qbt_password: preferences.qbt_password ?? "",
+      torrents_backup_folder: preferences.torrents_backup_folder ?? "",
       ignore_title: preferences.ignore_title,
       tmdb_api_key: preferences.tmdb_api_key ?? "",
       omdb_api_key: preferences.omdb_api_key ?? "",
@@ -130,7 +137,10 @@
     cookie_uid: asOptionalText(formState.cookie_uid),
     kinozal_domain: asOptionalText(formState.kinozal_domain),
     kinozal_mirrors: formState.kinozal_mirrors,
-    torrents_hotfolder: asOptionalText(formState.torrents_hotfolder),
+    qbt_url: asOptionalText(formState.qbt_url),
+    qbt_username: asOptionalText(formState.qbt_username),
+    qbt_password: asOptionalSecret(formState.qbt_password),
+    torrents_backup_folder: asOptionalText(formState.torrents_backup_folder),
     ignore_title: formState.ignore_title.trim(),
     tmdb_api_key: asOptionalText(formState.tmdb_api_key),
     omdb_api_key: asOptionalText(formState.omdb_api_key),
@@ -165,6 +175,9 @@
   let formRevision = $state(0);
   let addMirrorOpen = $state(false);
   let initialSnapshot = $state(payloadSnapshot(emptyFormState));
+  let qbtTestLoading = $state(false);
+  let qbtTestMessage = $state("");
+  let qbtTestError = $state("");
 
   // --- TMDB write-back status ---
   let wbEnabled = $state(true);
@@ -320,8 +333,8 @@
   const isDirty = $derived(
     Boolean(preferences) && (hasUnsavedChanges || currentSnapshot !== initialSnapshot)
   );
-  const savedHotfolderPath = $derived(preferences?.resolved_torrents_hotfolder ?? "");
-  const hotfolderExists = $derived(preferences?.hotfolder_exists ?? false);
+  const savedBackupFolderPath = $derived(preferences?.resolved_torrents_backup_folder ?? "");
+  const backupFolderExists = $derived(preferences?.backup_folder_exists ?? false);
   const checkpointUrl = $derived.by(() => {
     const checkpointId = preferences?.last_scan_kinozal_id;
     const domain = preferences?.kinozal_domain;
@@ -329,8 +342,8 @@
       ? `https://${domain}/details.php?id=${checkpointId}`
       : null;
   });
-  const hotfolderNeedsRefresh = $derived(
-    Boolean(preferences && form.torrents_hotfolder.trim() !== (preferences.torrents_hotfolder ?? ""))
+  const backupFolderNeedsRefresh = $derived(
+    Boolean(preferences && form.torrents_backup_folder.trim() !== (preferences.torrents_backup_folder ?? ""))
   );
 
   const lastScheduledRunLabel = $derived(
@@ -357,6 +370,52 @@
 
   const retryLoad = async () => {
     await invalidateAll();
+  };
+
+  const parseQbtTestError = (payload: unknown, fallback: string) => {
+    if (!payload || typeof payload !== "object" || !("detail" in payload)) return fallback;
+    const detail = (payload as { detail?: unknown }).detail;
+    if (typeof detail === "string" && detail.trim()) return detail.trim();
+    if (detail && typeof detail === "object") {
+      const record = detail as { message?: unknown; hint?: unknown };
+      if (typeof record.message === "string" && record.message.trim()) return record.message.trim();
+      if (typeof record.hint === "string" && record.hint.trim()) return record.hint.trim();
+    }
+    return fallback;
+  };
+
+  const testQbtConnection = async () => {
+    qbtTestLoading = true;
+    qbtTestMessage = "";
+    qbtTestError = "";
+
+    try {
+      const response = await fetch("/api/qbittorrent/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: asOptionalText(form.qbt_url),
+          username: asOptionalText(form.qbt_username),
+          password: asOptionalSecret(form.qbt_password)
+        })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parseQbtTestError(payload, `HTTP ${response.status}`));
+      }
+
+      const version = payload.version ? `qBittorrent ${payload.version}` : "qBittorrent";
+      const apiVersion = payload.web_api_version ? `, Web API ${payload.web_api_version}` : "";
+      const count = payload.torrent_count ?? 0;
+      qbtTestMessage = `Подключение успешно: ${version}${apiVersion}, раздач: ${count}.`;
+      toast.success(qbtTestMessage);
+    } catch (error) {
+      qbtTestError = error instanceof Error ? error.message : "Не удалось подключиться к qBittorrent.";
+      toast.error(qbtTestError);
+    } finally {
+      qbtTestLoading = false;
+    }
   };
 
   const save = async () => {
@@ -428,7 +487,7 @@
         <Card class="border-border/70">
           <CardHeader>
             <CardTitle class="text-xl">Kinozal</CardTitle>
-            <CardDescription>Cookies, зеркала kinozal, hotfolder для torrent download flow и состояние скана.</CardDescription>
+            <CardDescription>Cookies, зеркала Kinozal и состояние скана.</CardDescription>
           </CardHeader>
           <CardContent class="space-y-5">
             <div class="grid gap-4 md:grid-cols-2">
@@ -485,10 +544,6 @@
                 <Input bind:value={form.cookie_pass} type="text" placeholder="pass" />
               </div>
               <div class="space-y-2">
-                <div class="text-sm font-medium">Torrents hotfolder</div>
-                <Input bind:value={form.torrents_hotfolder} placeholder="/torrents_hotfolder or \\qnap\TorrentsHotFolder" />
-              </div>
-              <div class="space-y-2">
                 <div class="text-sm font-medium">Last scan</div>
                 <Input bind:value={form.last_scan} type="date" />
               </div>
@@ -518,28 +573,76 @@
               </div>
             </div>
 
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
+            <CardTitle class="text-xl">qBittorrent</CardTitle>
+            <CardDescription>
+              Web API qBittorrent и папка backup для .torrent-файлов. URL должен быть доступен с backend.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-5">
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Web API URL</div>
+                <Input bind:value={form.qbt_url} placeholder="http://qbittorrent:8080" />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Логин</div>
+                <Input bind:value={form.qbt_username} placeholder="admin" autocomplete="username" />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Пароль</div>
+                <Input bind:value={form.qbt_password} type="password" autocomplete="current-password" />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium">Папка backup .torrent</div>
+                <Input bind:value={form.torrents_backup_folder} placeholder="/app/backup_torrents" />
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <Button variant="outline" onclick={testQbtConnection} disabled={qbtTestLoading}>
+                {qbtTestLoading ? "Проверка..." : "Проверить подключение"}
+              </Button>
+              {#if qbtTestMessage}
+                <span class="text-sm text-emerald-600 dark:text-emerald-400">{qbtTestMessage}</span>
+              {/if}
+              {#if qbtTestError}
+                <span class="text-sm text-destructive">{qbtTestError}</span>
+              {/if}
+            </div>
+
             <div class="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm">
-              <div class="font-medium">Hotfolder resolution</div>
-              <div class="mt-2 text-muted-foreground">{preferences.hotfolder_hint}</div>
+              <div class="font-medium">Backup folder resolution</div>
+              <div class="mt-2 text-muted-foreground">{preferences.backup_folder_hint}</div>
               <div class="mt-3 grid gap-2 md:grid-cols-2">
                 <div>
                   <div class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Resolved path</div>
                   <div class="mt-1 break-all font-mono text-xs">
-                    {savedHotfolderPath || "Путь появится после сохранения."}
+                    {savedBackupFolderPath || "Путь появится после сохранения."}
                   </div>
                 </div>
                 <div>
                   <div class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Exists on backend</div>
-                  <div class="mt-1">{hotfolderExists ? "Yes" : "No"}</div>
+                  <div class="mt-1">{backupFolderExists ? "Yes" : "No"}</div>
                 </div>
               </div>
 
-              {#if hotfolderNeedsRefresh}
+              {#if backupFolderNeedsRefresh}
                 <div class="mt-3 text-amber-600 dark:text-amber-400">
-                  Поле hotfolder изменено. Сохрани настройки, чтобы backend пересчитал resolved path.
+                  Поле backup folder изменено. Сохрани настройки, чтобы backend пересчитал resolved path.
                 </div>
               {/if}
             </div>
+
+            <p class="text-sm text-muted-foreground">
+              В Docker URL обычно выглядит как <span class="font-mono">http://qbittorrent:8080</span>,
+              а папка — <span class="font-mono">/app/backup_torrents</span>. Не используй localhost:
+              backend находится в отдельном контейнере.
+            </p>
           </CardContent>
         </Card>
 
@@ -840,8 +943,12 @@
               <span>{form.kinozal_mirrors.length} шт.{form.kinozal_domain ? ` / активно: ${form.kinozal_domain}` : ""}</span>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
-              <span>Hotfolder</span>
-              <span>{form.torrents_hotfolder.trim() ? "Configured" : "Missing"}</span>
+              <span>qBittorrent</span>
+              <span>{form.qbt_url.trim() ? "Configured" : "Missing"}</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <span>Torrent backup folder</span>
+              <span>{form.torrents_backup_folder.trim() ? "Configured" : "Missing"}</span>
             </div>
             <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
               <span>TMDB read token</span>
