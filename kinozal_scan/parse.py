@@ -355,7 +355,11 @@ def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> t
     if genres_element := soup.select_one('b:-soup-contains("Жанр:")'):
         next_element = genres_element.find_next_sibling('span', class_='lnks_tobrs')
         if next_element:
-            m.genres = next_element.text
+            # Кинозал отдаёт жанры сырым текстом: могут быть переносы строк,
+            # лишние пробелы и непоследовательный регистр ('Семейный' vs 'семейный').
+            # Нормализуем — разбиваем по запятым, обрезаем и приводим к нижнему
+            # регистру, чтобы в БД строка была канонической.
+            m.genres = ', '.join(g.strip().lower() for g in next_element.text.split(',') if g.strip())
         else:
             m.genres = ''
     else:
