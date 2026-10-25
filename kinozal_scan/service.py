@@ -4,6 +4,7 @@ from datetime import date
 from .runtime import executor, tasks, cancel_events
 from .parse import kinozal_scan
 from .exceptions import DetailsFetchError, ScanCancelled, KinozalRateLimitError
+from moviefilter.kinozal import CloudflareBlockedError
 from moviefilter.models import UserPreferences
 from web_logger import alog, LogType, asend_notification
 
@@ -35,6 +36,15 @@ async def start_scan_task(task_id: str, start_page: int, scan_to_date: date, use
                 'type': 'scan_complete',
                 'status': 'error',
                 'message': 'Сканирование остановлено: Kinozal ответил 429 (слишком много запросов). Прогресс сохранён — подожди и запусти скан позже.'
+            })
+        except CloudflareBlockedError as e:
+            # Cloudflare не пропустил даже после браузерной эскалации. Обычно это
+            # репутация IP на данный момент — ретраи в это окно бесполезны.
+            await alog(f"Scan stopped due to Cloudflare block: {e}", logger_name=LogType.ERROR)
+            await asend_notification({
+                'type': 'scan_complete',
+                'status': 'error',
+                'message': 'Сканирование остановлено: Cloudflare заблокировал доступ (обход не помог). Попробуй позже или смени IP-адрес.'
             })
         except DetailsFetchError:
             # Эта ошибка уже залогирована на более низком уровне.

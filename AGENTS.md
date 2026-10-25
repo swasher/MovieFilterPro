@@ -62,6 +62,11 @@
 - Основной парсер: `kinozal_scan/parse.py` (`kinozal_scan`, `parse_page`, `get_details`, `movie_audit`).
 - Результат складывается в `moviefilter.models.MovieRSS`.
 - Лента/фильтры/действия пользователя: `front/src/routes/kinozal/+page.svelte`, `moviefilter/api.py`.
+- Транспорт HTTP: `moviefilter/kinozal/kinozal_client.py` (`KinozalClient.get_html_response`).
+  Единая точка всех GET-запросов к Kinozal (скан, поиск раздач, детали). Внутри — обход
+  Cloudflare: HTTP-first, при детекции челленджа браузерная эскалация через Scrapling
+  `StealthyFetcher` (`moviefilter/kinozal/cloudflare.py`). Парсеры о CF не знают и получают
+  обычный `requests.Response`.
 
 ### 2) Влияние Kinorium на `moviefilter`
 - Таблица `moviefilter.models.Kinorium` используется парсером для skip/partial match.

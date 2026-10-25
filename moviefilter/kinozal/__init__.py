@@ -5,6 +5,7 @@ from .kinozal_client import (
     get_active_kinozal_domain,
     normalize_kinozal_domain,
 )
+from .cloudflare import CloudflareBlockedError
 
 __all__ = [
     "KinozalClient",
@@ -12,4 +13,5 @@ __all__ = [
     "LinkConstructor",
     "get_active_kinozal_domain",
     "normalize_kinozal_domain",
+    "CloudflareBlockedError",
 ]

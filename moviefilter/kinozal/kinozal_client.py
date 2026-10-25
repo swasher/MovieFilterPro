@@ -4,7 +4,9 @@ from urllib.parse import urlencode, quote_plus
 from requests import Response
 
 from moviefilter.models import UserPreferences
-from web_logger import log
+from web_logger import log, LogType
+
+from .cloudflare import CLOUDFLARE_UA, cloudflare_bypass, detect_challenge
 
 
 class KinozalDomainNotConfigured(RuntimeError):
@@ -221,7 +223,8 @@ class KinozalClient:
         # Настройка HTTP сессии
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36"
+            # UA обязан совпадать с браузером эскалации (cf_clearance привязан к UA).
+            "User-Agent": CLOUDFLARE_UA
         })
 
         # Домен и куки читаются динамически из UserPreferences (см. property domain
@@ -248,6 +251,20 @@ class KinozalClient:
             "pass": preferences.cookie_pass or "",  # Значение куки pass для авторизации
         })
 
+    def _auth_cookie_params(self) -> list[dict]:
+        """Куки uid/pass в Playwright-формате для браузерной эскалации.
+
+        Домен выводится из активного зеркала ('.' + хост). Значения не логируются.
+        """
+        preferences = UserPreferences.get()
+        domain = self._require_domain()
+        cookies: list[dict] = []
+        if preferences.cookie_uid:
+            cookies.append({"name": "uid", "value": preferences.cookie_uid, "domain": f".{domain}", "path": "/"})
+        if preferences.cookie_pass:
+            cookies.append({"name": "pass", "value": preferences.cookie_pass, "domain": f".{domain}", "path": "/"})
+        return cookies
+
     def get_html_response(self, path_or_constructor, **kwargs) -> Response:
         """
         Выполняет GET запрос.
@@ -255,6 +272,10 @@ class KinozalClient:
         Args:
             path_or_constructor: Строка пути, URL или экземпляр LinkConstructor
             **kwargs: Дополнительные параметры для requests.get
+
+        Транспортный слой обходит Cloudflare-челлендж: обычный requests-запрос,
+        при детекции челленджа — браузерная эскалация через Scrapling. Вызывающий
+        код о Cloudflare ничего не знает и получает обычный requests.Response.
         """
         self._refresh_cookies()
 
@@ -269,7 +290,19 @@ class KinozalClient:
             url = f"https://{self._require_domain()}{path_or_constructor}"
 
         s = self.session
+
+        # Подкладываем закэшированный cf_clearance, если он есть для этого домена.
+        cloudflare_bypass.apply_clearance(s, url)
+
         response = s.get(url, **kwargs)
+
+        # Cloudflare-челлендж? Тогда обычный requests не получил контент — эскалируем.
+        challenge_reasons = detect_challenge(response.content, response.status_code)
+        if challenge_reasons:
+            for reason in challenge_reasons:
+                log(f"[CF] челлендж на {url}: {reason}", logger_name=LogType.ERROR)
+            response = cloudflare_bypass.escape(url, s, self._auth_cookie_params())
+
         return response
 
     def download_torrent(self, kinozal_id: int):

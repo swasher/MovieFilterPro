@@ -69,6 +69,13 @@ RUN mkdir -p /torrents_hotfolder /app/logs
 # Готовое python-окружение из builder-стадии
 COPY --from=python-builder /opt/venv /opt/venv
 
+# Браузер Chromium + системные зависимости для обхода Cloudflare (Scrapling
+# StealthyFetcher). `scrapling install` = playwright install chromium +
+# install-deps (apt) + обновление списков публичных суффиксов (tld).
+RUN scrapling install \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # Код проекта (Django и всё остальное)
 COPY . /app
 

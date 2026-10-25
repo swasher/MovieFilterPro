@@ -13,7 +13,7 @@ from requests.exceptions import HTTPError, Timeout, RequestException
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 from moviefilter.classes import KinozalMovie
-from moviefilter.kinozal import KinozalClient, normalize_kinozal_domain
+from moviefilter.kinozal import KinozalClient, normalize_kinozal_domain, CloudflareBlockedError
 from moviefilter.models import Country, MovieRSS, Kinorium
 from moviefilter.models import UserPreferences
 
@@ -310,6 +310,10 @@ def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> t
     except ScanCancelled:
         raise
     except KinozalRateLimitError:
+        raise
+    except CloudflareBlockedError:
+        # Cloudflare не пропустил даже после эскалации. Не маскируем под DetailsFetchError,
+        # чтобы сервисный слой мог дать пользователю внятное сообщение.
         raise
     except RequestException as e:
         log(f"Failed to get details for movie id {m.kinozal_id} due to a network error.", logger_name=LogType.ERROR,)
