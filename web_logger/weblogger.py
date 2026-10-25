@@ -3,6 +3,8 @@
 """
 
 import logging
+import threading
+from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from asgiref.sync import async_to_sync
@@ -26,6 +28,78 @@ debug_logger = logging.getLogger('debug_logger')
 scan_logger = logging.getLogger('scan_logger')
 
 
+# ------------------------------------ #
+#          APPLICATION LAYER           #
+#  Bridge-mode для HUEY-воркера       #
+# ------------------------------------ #
+#
+# В HUEY-воркере (отдельный процесс) InMemoryChannelLayer не доставляет
+# события до WebSocket-клиентов web-процесса. Поэтому в воркере log() и
+# send_notification() маршрутизируются через PG LISTEN/NOTIFY (pg_bridge).
+# Режим включается per-thread через контекстный менеджер bridge_mode(),
+# чтобы не затронуть ручной скан в web-процессе.
+
+_bridge_state = threading.local()
+
+
+def _bridge_enabled() -> bool:
+    return bool(getattr(_bridge_state, "enabled", False))
+
+
+def enter_bridge_mode() -> None:
+    _bridge_state.enabled = True
+
+
+def exit_bridge_mode() -> None:
+    _bridge_state.enabled = False
+
+
+@contextmanager
+def bridge_mode():
+    """Включает маршрутизацию логов/уведомлений через PG-мост в текущем потоке."""
+    enter_bridge_mode()
+    try:
+        yield
+    finally:
+        exit_bridge_mode()
+
+
+# ------------------------------------ #
+#         Персистентный лог скана      #
+# ------------------------------------ #
+#
+# Когда скан выполняется в контексте scan_log_context(run_id), строки log()
+# дополнительно пишутся в moviefilter.ScanLogEntry, чтобы была структурированная
+# история (что сканировалось, когда и почему упало). DEBUG-строки в БД не пишутся.
+
+_scan_state = threading.local()
+
+
+def _current_scan_run_id():
+    return getattr(_scan_state, "run_id", None)
+
+
+@contextmanager
+def scan_log_context(run_id):
+    """Включает запись строк log() в ScanLogEntry для заданного запуска скана."""
+    _scan_state.run_id = run_id
+    try:
+        yield
+    finally:
+        _scan_state.run_id = None
+
+
+def _persist_scan_log_entry(run_id, logger_name: LogType, message: str) -> None:
+    from moviefilter.models import ScanLogEntry
+
+    level = ScanLogEntry.Level.ERROR if logger_name is LogType.ERROR else ScanLogEntry.Level.INFO
+    try:
+        ScanLogEntry.objects.create(run_id=run_id, level=level, message=message)
+    except Exception:
+        # Персистентный лог — вспомогательный, не должен ронять скан.
+        debug_logger.debug("persist scan log entry failed", exc_info=True)
+
+
 def send_log_to_websocket(log_message):
     # async_to_sync(channel_layer.group_send)(
     async_to_sync(get_channel_layer().group_send)(
@@ -39,6 +113,9 @@ def send_log_to_websocket(log_message):
 
 def send_notification(payload: dict):
     """Sends a structured notification payload to the websocket group."""
+    if _bridge_enabled():
+        publish_notification(payload)
+        return
     async_to_sync(get_channel_layer().group_send)(
         "log_updates",
         {
@@ -106,7 +183,16 @@ def log(message: str, logger_name: LogType = LogType.SCAN):
     # log_level нужно добавлять, чтобы различать scan и debug сообщения на стороне фронта. Там эта часть удаляется.
     # Метка времени ставится после log_level, чтобы фронт по-прежнему фильтровал сообщения по префиксу.
     log_message = f"{log_level}: [{compact_timestamp()}] {message}"
-    send_log_to_websocket(log_message)
+
+    # Персистентный лог в БД (только внутри запуска скана; DEBUG не пишем).
+    run_id = _current_scan_run_id()
+    if run_id is not None and logger_name is not LogType.DEBUG:
+        _persist_scan_log_entry(run_id, logger_name, message)
+
+    if _bridge_enabled():
+        publish_notification({"type": "log", "content": log_message})
+    else:
+        send_log_to_websocket(log_message)
 
 
 async def alog(message: str, logger_name: LogType = LogType.SCAN):

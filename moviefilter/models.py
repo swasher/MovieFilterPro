@@ -160,6 +160,32 @@ class UserPreferences(models.Model):
     last_scan_kinozal_id = models.PositiveIntegerField(blank=True, null=True)
     scan_from_page = models.PositiveSmallIntegerField(blank=True, null=True, default=0, help_text='Если длительный скан оборвался, можно его продолжить с этой страницы до последней.')
 
+    scan_interval_minutes = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        default=None,
+        help_text='Интервал автоматического сканирования Kinozal в минутах. NULL — автозапуск выключен.',
+    )
+    scan_in_progress = models.BooleanField(
+        default=False,
+        help_text='Сейчас идёт сканирование (ручное или по расписанию). Взаимное исключение.',
+    )
+    scan_cancel_requested = models.BooleanField(
+        default=False,
+        help_text='Запрос отмены текущего сканирования. Используется для сканов по расписанию в HUEY-воркере.',
+    )
+    last_scheduled_run_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text='Время завершения последнего сканирования по расписанию.',
+    )
+    last_scheduled_status = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text='Результат последнего сканирования по расписанию: success/error/cancelled.',
+    )
+
     countries = models.CharField(max_length=300, default='СССР, Россия, Индия')
     genres = models.CharField(max_length=300, default='Мюзикл')
     max_year = models.PositiveSmallIntegerField(default=1990)
@@ -308,3 +334,81 @@ class Country(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# Сколько последних запусков сканирования хранить в ScanRun/ScanLogEntry.
+# Более старые запуски (и их лог-строки) удаляются после завершения нового запуска.
+SCAN_HISTORY_MAX_RUNS = 200
+
+
+class ScanRun(models.Model):
+    """Сводка одного запуска сканирования Kinozal (ручного или по расписанию)."""
+
+    class Trigger(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        SCHEDULED = "scheduled", "Scheduled"
+
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        ERROR = "error", "Error"
+        CANCELLED = "cancelled", "Cancelled"
+        RATE_LIMITED = "rate_limited", "Rate limited"
+        CLOUDFLARE_BLOCKED = "cloudflare_blocked", "Cloudflare blocked"
+
+    trigger = models.CharField('Триггер', max_length=20, choices=Trigger, db_index=True)
+    status = models.CharField('Статус', max_length=30, choices=Status, default=Status.RUNNING, db_index=True)
+    started_at = models.DateTimeField('Начало', auto_now_add=True, db_index=True)
+    finished_at = models.DateTimeField('Завершение', null=True, blank=True)
+    scan_to_date = models.DateField('Сканировать до даты', null=True, blank=True)
+    new_movies_count = models.PositiveIntegerField('Новых фильмов', default=0)
+    error_type = models.CharField('Тип ошибки', max_length=50, null=True, blank=True)
+    error_message = models.TextField('Сообщение об ошибке', blank=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='scan_runs',
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = 'Запуск сканирования'
+        verbose_name_plural = 'Запуски сканирования'
+        ordering = ['-started_at', '-id']
+
+    def __str__(self):
+        return f'{self.get_trigger_display()} {self.started_at:%d.%m.%y %H:%M}'
+
+    @classmethod
+    def prune_history(cls, max_runs: int = SCAN_HISTORY_MAX_RUNS) -> None:
+        """Удаляет запуски сверх лимита (каскадно их лог-строки)."""
+        ids_to_keep = list(
+            cls.objects.order_by("-started_at", "-id")
+            .values_list("id", flat=True)[:max_runs]
+        )
+        cls.objects.exclude(id__in=ids_to_keep).delete()
+
+
+class ScanLogEntry(models.Model):
+    """Построчная запись лога сканирования, привязанная к запуску."""
+
+    class Level(models.TextChoices):
+        INFO = "info", "Info"
+        ERROR = "error", "Error"
+
+    run = models.ForeignKey(ScanRun, on_delete=models.CASCADE, related_name='entries', db_index=True)
+    level = models.CharField('Уровень', max_length=10, choices=Level, default=Level.INFO, db_index=True)
+    message = models.TextField('Сообщение')
+    created_at = models.DateTimeField('Создано', auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Запись лога сканирования'
+        verbose_name_plural = 'Записи лога сканирования'
+        ordering = ['created_at', 'id']
+        indexes = [
+            models.Index(fields=['run', 'created_at'], name='mf_scanlog_run_created_idx'),
+        ]
+
+    def __str__(self):
+        return f'[{self.run_id}] {self.message[:80]}'

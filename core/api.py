@@ -17,11 +17,18 @@ HOTFOLDER_HINT = (
     "а локально на Windows лучше указывать явный путь вроде `\\\\qnap\\TorrentsHotFolder`."
 )
 
+# Минимальный интервал автосканирования Kinozal (минуты). Частые сканы повышают
+# шанс словить 429 от Kinozal, поэтому ниже этого порога не разрешаем.
+MIN_SCAN_INTERVAL_MINUTES = 15
+
 
 class PreferencesOut(Schema):
     last_scan: str | None = None
     last_scan_kinozal_id: int | None = None
     scan_from_page: int | None = None
+    scan_interval_minutes: int | None = None
+    last_scheduled_run_at: str | None = None
+    last_scheduled_status: str | None = None
     countries: str
     genres: str
     max_year: int
@@ -58,6 +65,7 @@ class PreferencesOut(Schema):
 class PreferencesUpdateIn(Schema):
     last_scan: date | None = None
     scan_from_page: int | None = None
+    scan_interval_minutes: int | None = None
     countries: str = ""
     genres: str = ""
     max_year: int
@@ -102,6 +110,18 @@ def _require_api_user(request):
 def _normalized_optional_string(value: str | None) -> str | None:
     normalized = (value or "").strip()
     return normalized or None
+
+
+def _normalize_scan_interval(value: int | None) -> int | None:
+    """None = выключено. Иначе интервал должен быть не меньше минимального порога."""
+    if value is None:
+        return None
+    if value < MIN_SCAN_INTERVAL_MINUTES:
+        raise HttpError(
+            400,
+            f"Интервал автосканирования должен быть не меньше {MIN_SCAN_INTERVAL_MINUTES} минут.",
+        )
+    return value
 
 
 _MIRROR_DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
@@ -183,6 +203,9 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         last_scan=preferences.last_scan.isoformat() if preferences.last_scan else None,
         last_scan_kinozal_id=preferences.last_scan_kinozal_id,
         scan_from_page=preferences.scan_from_page,
+        scan_interval_minutes=preferences.scan_interval_minutes,
+        last_scheduled_run_at=preferences.last_scheduled_run_at.isoformat() if preferences.last_scheduled_run_at else None,
+        last_scheduled_status=preferences.last_scheduled_status or None,
         countries=preferences.countries or "",
         genres=preferences.genres or "",
         max_year=preferences.max_year,
@@ -222,6 +245,7 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
         preferences.last_scan_kinozal_id = None
     preferences.last_scan = payload.last_scan
     preferences.scan_from_page = payload.scan_from_page
+    preferences.scan_interval_minutes = _normalize_scan_interval(payload.scan_interval_minutes)
     preferences.countries = payload.countries
     preferences.genres = payload.genres
     preferences.max_year = payload.max_year

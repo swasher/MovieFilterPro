@@ -8,6 +8,10 @@
   const logger = new ScanLogger();
   let terminalContainer = $state<HTMLDivElement | null>(null);
 
+  // Плановый скан (по расписанию) не имеет task_id в web-процессе — он живёт в
+  // HUEY-воркере и отменяется через DB-флаг.
+  const isScheduledScan = $derived(logger.isScanning && !logger.currentTaskId);
+
   // При изменении типа лога, загружаем его начальное состояние с бэкенда
   $effect(() => {
     const _type = logger.logType; 
@@ -50,6 +54,12 @@
           <Square class="w-4 h-4 fill-current" />
           Отменить скан
         </Button>
+      {/if}
+
+      {#if isScheduledScan}
+        <span class="text-xs font-medium px-2.5 py-1 rounded-full border bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 select-none">
+          плановый скан
+        </span>
       {/if}
 
       <Button variant="outline" onclick={() => logger.clearLog()} class="gap-2">

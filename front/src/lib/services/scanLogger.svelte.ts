@@ -138,9 +138,11 @@ export class ScanLogger {
 
   // Отмена сканирования
   async cancelScan() {
-    if (!this.currentTaskId) return;
+    // Ручной скан имеет task_id; плановый (по расписанию) — нет, он живёт в
+    // HUEY-воркере и отменяется через DB-флаг. Для него используем sentinel.
+    const taskId = this.currentTaskId ?? "scheduled";
     try {
-      const res = await fetch(`/api/kinozal/scan/cancel/${this.currentTaskId}`, { method: 'POST' });
+      const res = await fetch(`/api/kinozal/scan/cancel/${taskId}`, { method: 'POST' });
       if (res.ok) {
         this.isScanning = false;
         this.currentTaskId = null;

@@ -149,12 +149,22 @@ def _deliver_notification(raw_payload: str) -> None:
     if layer is None:
         return
     try:
-        async_to_sync(layer.group_send)(
-            GROUP_NAME,
-            {
-                "type": "send_notification",
-                "payload": payload,
-            },
-        )
+        if payload.get("type") == "log":
+            # Лог-строка из воркера (например, скан по расписанию в HUEY).
+            async_to_sync(layer.group_send)(
+                GROUP_NAME,
+                {
+                    "type": "send_log_update",
+                    "content": payload.get("content", ""),
+                },
+            )
+        else:
+            async_to_sync(layer.group_send)(
+                GROUP_NAME,
+                {
+                    "type": "send_notification",
+                    "payload": payload,
+                },
+            )
     except Exception:
         logger.warning("PG_BRIDGE_DELIVER_FAILED | payload=%r", payload, exc_info=True)

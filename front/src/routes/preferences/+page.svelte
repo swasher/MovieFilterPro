@@ -27,6 +27,8 @@
 
   type PreferencesFormState = {
     last_scan: string;
+    scan_schedule_enabled: boolean;
+    scan_interval_minutes: string;
     countries: string;
     genres: string;
     max_year: string;
@@ -58,6 +60,9 @@
 
   let { data } = $props();
 
+  // Должно совпадать с MIN_SCAN_INTERVAL_MINUTES в core/api.py.
+  const MIN_SCAN_INTERVAL_MINUTES = 15;
+
   const asText = (value: string | number | null | undefined) => (value ?? "").toString();
   const asOptionalText = (value: string) => {
     const normalized = value.trim();
@@ -73,6 +78,8 @@
     const domain = preferences.kinozal_domain ?? "";
     return {
       last_scan: preferences.last_scan ?? "",
+      scan_schedule_enabled: preferences.scan_interval_minutes != null,
+      scan_interval_minutes: asText(preferences.scan_interval_minutes ?? MIN_SCAN_INTERVAL_MINUTES),
       countries: preferences.countries,
       genres: preferences.genres,
       max_year: asText(preferences.max_year),
@@ -106,6 +113,9 @@
 
   const buildPayload = (formState: PreferencesFormState): PreferencesUpdatePayload => ({
     last_scan: formState.last_scan.trim() || null,
+    scan_interval_minutes: formState.scan_schedule_enabled
+      ? Math.max(MIN_SCAN_INTERVAL_MINUTES, Number.parseInt(formState.scan_interval_minutes, 10) || MIN_SCAN_INTERVAL_MINUTES)
+      : null,
     countries: formState.countries.trim(),
     genres: formState.genres.trim(),
     max_year: asNumber(formState.max_year, 1990),
@@ -323,6 +333,21 @@
     Boolean(preferences && form.torrents_hotfolder.trim() !== (preferences.torrents_hotfolder ?? ""))
   );
 
+  const lastScheduledRunLabel = $derived(
+    preferences?.last_scheduled_run_at
+      ? new Date(preferences.last_scheduled_run_at).toLocaleString()
+      : "—"
+  );
+  const lastScheduledStatusLabel = $derived(
+    preferences?.last_scheduled_status === "success"
+      ? "Успешно"
+      : preferences?.last_scheduled_status === "error"
+        ? "Ошибка"
+        : preferences?.last_scheduled_status === "cancelled"
+          ? "Отменён"
+          : preferences?.last_scheduled_status ?? "—"
+  );
+
   const resetForm = () => {
     const nextPreferences = preferences ?? emptyPreferences();
     form = createFormState(nextPreferences);
@@ -514,6 +539,46 @@
                   Поле hotfolder изменено. Сохрани настройки, чтобы backend пересчитал resolved path.
                 </div>
               {/if}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
+            <CardTitle class="text-xl">Автосканирование Kinozal</CardTitle>
+            <CardDescription>Запуск сканирования по расписанию в фоновом воркере (HUEY). Требует запущенного воркера.</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <div class="space-y-1">
+                <Label for="scan-schedule-enabled" class="text-sm font-medium">Автосканирование по расписанию</Label>
+                <div class="text-xs text-muted-foreground">Вкл — скан запускается автоматически с заданным интервалом. Выкл — только вручную.</div>
+              </div>
+              <Switch
+                id="scan-schedule-enabled"
+                bind:checked={form.scan_schedule_enabled}
+                onCheckedChange={(v) => { form.scan_schedule_enabled = v; markDirty(); return v; }}
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium">Интервал, минут</div>
+              <Input
+                bind:value={form.scan_interval_minutes}
+                type="number"
+                min={MIN_SCAN_INTERVAL_MINUTES}
+                disabled={!form.scan_schedule_enabled}
+              />
+              <div class="text-xs text-muted-foreground">Минимум {MIN_SCAN_INTERVAL_MINUTES} минут. Интервал считается от завершения предыдущего запуска.</div>
+            </div>
+            <div class="rounded-xl border border-border/70 px-4 py-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-muted-foreground">Последний плановый запуск</span>
+                <span>{lastScheduledRunLabel}</span>
+              </div>
+              <div class="mt-1 flex items-center justify-between">
+                <span class="text-muted-foreground">Статус</span>
+                <span>{lastScheduledStatusLabel}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
