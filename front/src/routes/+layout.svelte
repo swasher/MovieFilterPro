@@ -3,14 +3,9 @@
   import { headerLinks } from "$lib/template-data";
   import { Toaster } from "$lib/components/ui/sonner";
   import "./layout.css";
-  import favicon from "$lib/assets/favicon.svg";
 
   let { children, data } = $props();
 </script>
-
-<svelte:head>
-  <link rel="icon" href={favicon} />
-</svelte:head>
 
 <Toaster position="top-center" />
 <AppShell {headerLinks} auth={data.auth} siteVersion={data.siteVersion} appName="MovieFilter Pro">
