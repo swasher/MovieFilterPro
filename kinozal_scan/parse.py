@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from requests.exceptions import HTTPError, Timeout, RequestException
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
@@ -105,7 +106,7 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
                     title=movie.title,
                     original_title=movie.original_title,
                     year=movie.year,
-                    defaults=dataclasses.asdict(movie),
+                    defaults={**dataclasses.asdict(movie), 'scanned_at': timezone.now()},
                 )
                 if not created:
                     update_fields = []
@@ -125,7 +126,7 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
                         saved_movie.save(update_fields=update_fields)
                 counter += 1
 
-            prefs.last_scan = movie.date_added
+            prefs.last_scan = movie.tracker_date
             prefs.last_scan_kinozal_id = movie.kinozal_id
             prefs.save(update_fields=['last_scan', 'last_scan_kinozal_id'])
 
@@ -193,16 +194,16 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
 
             kinozal_id: int = int(s['href'].split('id=')[1])
 
-            date_added = m.find_all('td', 's')[-1].text.split(' в ')[0]  # '27.11.2023' or 'сегодня' or 'вчера' or 'сейчас'
-            match date_added:
+            tracker_date = m.find_all('td', 's')[-1].text.split(' в ')[0]  # '27.11.2023' or 'сегодня' or 'вчера' or 'сейчас'
+            match tracker_date:
                 case 'сегодня' | 'сейчас':
-                    date_added = datetime.now().date()
+                    tracker_date = datetime.now().date()
                 case 'вчера':
-                    date_added = (datetime.now() - timedelta(days=1)).date()
+                    tracker_date = (datetime.now() - timedelta(days=1)).date()
                 case _:
-                    date_added = datetime.strptime(date_added, '%d.%m.%Y').date()
+                    tracker_date = datetime.strptime(tracker_date, '%d.%m.%Y').date()
 
-            if date_added < scan_to_date:
+            if tracker_date < scan_to_date:
                 return movies, END_DATE_REACHED
 
             # фильм имеет `нормальную` озвучку - дубляж или профессиональный многоголосый
@@ -257,10 +258,10 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
                 else:
                     year = str(datetime.now().year)
 
-            # print(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
-            log(f'FOUND [{date_added:%d.%m.%y}]: {title} - {year}')
+            # print(f'FOUND [{tracker_date:%d.%m.%y}]: {title} - {year}')
+            log(f'FOUND [{tracker_date:%d.%m.%y}]: {title} - {year}')
 
-            m = KinozalMovie(kinozal_id, title, original_title, year, date_added, dubbed)
+            m = KinozalMovie(kinozal_id, title, original_title, year, tracker_date, dubbed)
 
             movies.append(m)
 

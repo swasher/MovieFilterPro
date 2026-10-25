@@ -27,7 +27,7 @@ api = NinjaAPI(title="Kinozal API", version="1.0", urls_namespace="kinozal-api")
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 50
-DEFAULT_SORT = "date_added"
+DEFAULT_SORT = "scanned_at"
 
 PRIORITY_FILTERS = {"ALL", "HIGH", "LOW", "DEFER", "SKIP", "WAIT_TRANS", "TRANS_FOUND"}
 
@@ -43,7 +43,7 @@ PRIORITY_KEY_MAP = {
 PRIORITY_DB_MAP = {value: key for key, value in PRIORITY_KEY_MAP.items()}
 
 ALLOWED_SORTS = {
-    "date_added": ("date_added", "id"),
+    "scanned_at": ("scanned_at", "id"),
     "title": ("title", "id"),
     "year": ("-year", "-id"),
     "imdb_rating": ("-imdb_rating", "-id"),
@@ -51,7 +51,7 @@ ALLOWED_SORTS = {
 }
 
 ALLOWED_REVERSED_SORTS = {
-    "date_added": ("-date_added", "-id"),
+    "scanned_at": ("-scanned_at", "-id"),
     "title": ("-title", "-id"),
     "year": ("year", "id"),
     "imdb_rating": ("imdb_rating", "id"),
@@ -65,7 +65,8 @@ class KinozalMovieOut(Schema):
     title: str
     original_title: str | None = None
     year: str
-    date_added: str
+    tracker_date: str
+    scanned_at: str | None = None
     plot: str
     translate: str | None = None
     poster_url: str | None = None
@@ -293,7 +294,8 @@ def _serialize_movie(request, movie: MovieRSS, favorite_matcher: FavoriteActorMa
         title=movie.title,
         original_title=movie.original_title or None,
         year=movie.year,
-        date_added=movie.date_added.isoformat(),
+        tracker_date=movie.tracker_date.isoformat(),
+        scanned_at=movie.scanned_at.isoformat() if movie.scanned_at else None,
         plot=movie.plot or "",
         translate=movie.translate or None,
         poster_url=_normalize_poster_url(

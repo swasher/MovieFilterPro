@@ -1,5 +1,6 @@
 import json
-from datetime import date
+from datetime import date, datetime
+from django.utils import timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -35,7 +36,8 @@ class KinozalApiTests(TestCase):
             title="Alpha",
             original_title="Alpha Original",
             year="2024",
-            date_added=date(2026, 3, 8),
+            tracker_date=date(2026, 3, 8),
+            scanned_at=timezone.make_aware(datetime(2026, 3, 9, 12, 0)),
             imdb_rating=7.5,
             kinopoisk_rating=6.5,
             genres="Drama, Sci-Fi",
@@ -52,7 +54,8 @@ class KinozalApiTests(TestCase):
             title="Beta",
             original_title="Beta Original",
             year="2023",
-            date_added=date(2026, 3, 7),
+            tracker_date=date(2026, 3, 7),
+            scanned_at=timezone.make_aware(datetime(2026, 3, 9, 11, 0)),
             imdb_rating=8.1,
             kinopoisk_rating=7.1,
             genres="Comedy",
@@ -69,7 +72,8 @@ class KinozalApiTests(TestCase):
             title="Gamma",
             original_title="Gamma Original",
             year="2022",
-            date_added=date(2026, 3, 6),
+            tracker_date=date(2026, 3, 6),
+            scanned_at=timezone.make_aware(datetime(2026, 3, 9, 10, 0)),
             imdb_rating=6.3,
             kinopoisk_rating=5.9,
             genres="Thriller",
@@ -93,15 +97,17 @@ class KinozalApiTests(TestCase):
         self.assertEqual(payload["items"][0]["priority_key"], "LOW")
 
     @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
-    def test_movies_endpoint_sorts_oldest_scan_first_by_default(self, _cached_image_mock):
+    def test_movies_endpoint_sorts_oldest_scanned_first_by_default(self, _cached_image_mock):
         response = self.client.get("/api/kinozal/movies", {"priority": "ALL"})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual([item["title"] for item in payload["items"]], ["Gamma", "Beta", "Alpha"])
+        self.assertEqual(payload["items"][0]["tracker_date"], "2026-03-06")
+        self.assertIn("2026-03-09", payload["items"][0]["scanned_at"])
 
     @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
-    def test_movies_endpoint_sorts_newest_scan_first_when_reversed(self, _cached_image_mock):
+    def test_movies_endpoint_sorts_newest_scanned_first_when_reversed(self, _cached_image_mock):
         response = self.client.get("/api/kinozal/movies", {"priority": "ALL", "reverse": "true"})
 
         self.assertEqual(response.status_code, 200)
@@ -312,7 +318,8 @@ class KinozalApiFavoriteActorsTests(TestCase):
             title="Alpha",
             original_title="Alpha Original",
             year="2024",
-            date_added=date(2026, 3, 8),
+            tracker_date=date(2026, 3, 8),
+            scanned_at=timezone.make_aware(datetime(2026, 3, 9, 12, 0)),
             genres="Drama",
             countries="USA",
             director="Director",

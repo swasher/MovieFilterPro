@@ -13,7 +13,7 @@ class CountryAdmin(admin.ModelAdmin):
 
 
 class MovieRssAdmin(admin.ModelAdmin):
-    list_display = ["title", "original_title", "year", "priority", "date_added"]
+    list_display = ["title", "original_title", "year", "priority", "tracker_date", "scanned_at"]
     list_display_links = ["title"]
     list_filter = ["priority"]
     search_fields = ['title', 'original_title']

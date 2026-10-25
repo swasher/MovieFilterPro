@@ -13,6 +13,7 @@
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { Toggle } from "$lib/components/ui/toggle";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import {
     DEFAULT_PRIORITY_FILTER,
     DEFAULT_REVERSE,
@@ -99,6 +100,23 @@
   const formatScanDate = (value: string) => {
     const [year = "", month = "", day = ""] = value.split("-");
     return year && month && day ? `${day}.${month}.${year}` : value;
+  };
+  const formatScannedDate = (value: string | null) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return formatScanDate(value);
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}.${month}.${year}`;
+  };
+  const formatScanDateTime = (value: string | null) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${formatScannedDate(value)}, ${hours}:${minutes}`;
   };
   const formatCreatedDate = (value: string) => value.split(" ")[0] || value;
   const compactList = (items: string[], limit: number) => items.filter(Boolean).slice(0, limit);
@@ -978,8 +996,23 @@
                       <dd class="kz-fact-value">{formatRating(movie.kinopoisk_rating)}</dd>
                     </div>
                     <div class="kz-fact">
-                      <dt class="kz-fact-label">Scan</dt>
-                      <dd class="kz-fact-value">{formatScanDate(movie.date_added)}</dd>
+                      <dt class="kz-fact-label">scan</dt>
+                      <dd class="kz-fact-value">
+                        <Tooltip.Provider>
+                          <Tooltip.Root>
+                            <Tooltip.Trigger>
+                              <span class="cursor-default">{formatScannedDate(movie.scanned_at)}</span>
+                            </Tooltip.Trigger>
+                            <Tooltip.Content side="top" align="center">
+                              {formatScanDateTime(movie.scanned_at)}
+                            </Tooltip.Content>
+                          </Tooltip.Root>
+                        </Tooltip.Provider>
+                      </dd>
+                    </div>
+                    <div class="kz-fact">
+                      <dt class="kz-fact-label">tracker</dt>
+                      <dd class="kz-fact-value">{formatScanDate(movie.tracker_date)}</dd>
                     </div>
                   </dl>
                 </td>

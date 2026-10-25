@@ -24,14 +24,14 @@ class KinozalScanPersistenceTests(TestCase):
             title="Duplicate",
             original_title="Duplicate Original",
             year="2025",
-            date_added=date(2026, 3, 8),
+            tracker_date=date(2026, 3, 8),
         )
         candidate = KinozalMovie(
             kinozal_id=7001,
             title="Duplicate",
             original_title="Duplicate Original",
             year="2025",
-            date_added=date(2026, 3, 9),
+            tracker_date=date(2026, 3, 9),
         )
         cancel_event = Mock()
         cancel_event.is_set.return_value = False

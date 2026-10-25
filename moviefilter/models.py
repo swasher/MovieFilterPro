@@ -35,7 +35,7 @@ class MovieRSS(models.Model):
     )
 
     class Meta:
-        ordering = ['date_added']
+        ordering = ['scanned_at', 'id']
         constraints = [
             models.UniqueConstraint(
                 fields=['title', 'original_title', 'year'],
@@ -53,7 +53,8 @@ class MovieRSS(models.Model):
     title = models.CharField(max_length=200)
     original_title = models.CharField(max_length=200)
     year = models.CharField(max_length=9, help_text='Год может быть представлен как диапазон: 1982-1994')
-    date_added = models.DateField()
+    tracker_date = models.DateField(help_text='Дата создания раздачи на трекере Kinozal')
+    scanned_at = models.DateTimeField(default=timezone.now, db_index=True, help_text='Дата и время попадания записи в базу при сканировании')
     dubbed = models.BooleanField(blank=True, null=True, help_text='Раздача имеет дубляж или ПМ. Нужно для передачи этой информации из сканера в чекер.')
 
     imdb_id = models.CharField(max_length=15, blank=True, null=True)

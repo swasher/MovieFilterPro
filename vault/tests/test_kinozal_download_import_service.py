@@ -23,7 +23,7 @@ class KinozalDownloadImportServiceTests(TestCase):
             "title": "Интерстеллар",
             "original_title": "Interstellar",
             "year": "2014",
-            "date_added": date(2026, 3, 9),
+            "tracker_date": date(2026, 3, 9),
             "imdb_id": "tt0816692",
             "imdb_rating": 8.7,
             "kinopoisk_id": 258687,

@@ -1,6 +1,6 @@
 export const KINOZAL_PAGE_SIZE = 20;
 export const DEFAULT_PRIORITY_FILTER = "HIGH";
-export const DEFAULT_SORT_KEY = "date_added";
+export const DEFAULT_SORT_KEY = "scanned_at";
 export const DEFAULT_REVERSE = false;
 
 export type KinozalPriorityFilter =
@@ -13,7 +13,7 @@ export type KinozalPriorityFilter =
   | "TRANS_FOUND";
 
 export type KinozalSortKey =
-  | "date_added"
+  | "scanned_at"
   | "title"
   | "year"
   | "imdb_rating"
@@ -25,7 +25,8 @@ export type KinozalMovie = {
   title: string;
   original_title: string | null;
   year: string;
-  date_added: string;
+  tracker_date: string;
+  scanned_at: string | null;
   plot: string;
   translate: string | null;
   poster_url: string | null;
@@ -152,7 +153,7 @@ export const KINOZAL_SORT_OPTIONS: Array<{
   value: KinozalSortKey;
   label: string;
 }> = [
-  { value: "date_added", label: "По дате скана" },
+  { value: "scanned_at", label: "По дате сканирования" },
   { value: "title", label: "По названию" },
   { value: "year", label: "По году" },
   { value: "imdb_rating", label: "Рейтинг IMDB" },

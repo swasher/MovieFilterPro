@@ -23,7 +23,7 @@ const validPriorities = new Set([
 ] as const);
 
 const validSorts = new Set([
-  "date_added",
+  "scanned_at",
   "title",
   "year",
   "imdb_rating",
