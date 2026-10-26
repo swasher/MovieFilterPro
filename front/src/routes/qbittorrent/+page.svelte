@@ -17,7 +17,7 @@
     TableHeader,
     TableRow
   } from "$lib/components/ui/table";
-  import { RefreshCw } from "@lucide/svelte";
+  import { ExternalLink, RefreshCw } from "@lucide/svelte";
   import {
     parseQbtApiError,
     type QbtApiErrorDetail,
@@ -214,6 +214,17 @@
                   <div class="mt-1 font-mono text-xs text-muted-foreground" title={item.info_hash}>
                     {item.info_hash.slice(0, 16)}…
                   </div>
+                  {#if item.source_url}
+                    <a
+                      href={item.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      class="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <ExternalLink class="size-3" />
+                      Kinozal
+                    </a>
+                  {/if}
                   {#if item.category || item.tags.length > 0}
                     <div class="mt-1 flex flex-wrap gap-1">
                       {#if item.category}

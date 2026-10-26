@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from moviefilter.models import UserPreferences
-from qbittorrent.models import Torrent
+from qbittorrent.models import Torrent, TorrentEvent
 from qbittorrent.services import torrent_service
 from qbittorrent.services.errors import QbtError
 from vault.models import Movie
@@ -41,6 +41,12 @@ class FakeTorrentInfo:
         self.name = 'Test Movie'
         self.save_path = '/downloads'
         self.content_path = '/downloads/Test Movie'
+        self.state = 'downloading'
+        self.progress = 0.5
+        self.dlspeed = 1024
+        self.upspeed = 512
+        self.eta = 60
+        self.size = 4096
 
 
 class FakeClient:
@@ -58,6 +64,8 @@ class FakeClient:
         self.add_error = add_error
         self.add_kwargs = None
         self.export_called = False
+        self.delete_kwargs = None
+        self.delete_error = None
 
     def torrents_add(self, **kwargs):
         self.add_kwargs = kwargs
@@ -70,6 +78,8 @@ class FakeClient:
             return []
         if torrent_hashes is None:
             return self.info_items
+        if isinstance(torrent_hashes, (list, tuple, set)):
+            return self.info_items if self.info_hash in torrent_hashes else []
         if torrent_hashes in (self.info_hash, _info_hash()):
             return self.info_items
         return []
@@ -77,6 +87,17 @@ class FakeClient:
     def torrents_export(self, torrent_hash=None, **kwargs):
         self.export_called = True
         return b'd4:info0:e'
+
+    def torrents_properties(self, torrent_hash=None, **kwargs):
+        return type('Properties', (), {'comment': 'https://kinozal.tv/details.php?id=1001'})()
+
+    def torrents_delete(self, delete_files=False, torrent_hashes=None, **kwargs):
+        self.delete_kwargs = {
+            'delete_files': delete_files,
+            'torrent_hashes': torrent_hashes,
+        }
+        if self.delete_error is not None:
+            raise self.delete_error
 
     def torrents_count(self):
         return 1
@@ -254,3 +275,184 @@ class TorrentServiceTests(TestCase):
         self.assertTrue(status.connected)
         self.assertEqual(status.version, '5.1.4')
         self.assertEqual(status.torrent_count, 1)
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_get_progress_returns_rows(self, build_client_mock):
+        info_hash = _info_hash()
+        build_client_mock.return_value = FakeClient(
+            info_hash=info_hash,
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+
+        available, rows = torrent_service.get_progress([info_hash])
+
+        self.assertTrue(available)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].info_hash, info_hash)
+        self.assertEqual(rows[0].state, 'downloading')
+        self.assertEqual(rows[0].progress, 0.5)
+
+    def test_get_progress_returns_unavailable_without_qbt_config(self):
+        self.preferences.qbt_url = ''
+        self.preferences.save()
+
+        available, rows = torrent_service.get_progress([_info_hash()])
+
+        self.assertFalse(available)
+        self.assertEqual(rows, [])
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_attach_torrent_to_movie_creates_record_and_archive(self, build_client_mock):
+        info_hash = _info_hash()
+        build_client_mock.return_value = FakeClient(
+            info_hash=info_hash,
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+
+        torrent, warning = torrent_service.attach_torrent_to_movie(info_hash, movie)
+
+        self.assertIsNone(warning)
+        self.assertEqual(torrent.movie, movie)
+        self.assertEqual(torrent.info_hash, info_hash)
+        self.assertEqual(torrent.source_url, 'https://kinozal.tv/details.php?id=1001')
+        self.assertEqual(torrent.torrent_file, f'{info_hash}.torrent')
+        self.assertTrue((Path(self.temp_dir.name) / f'{info_hash}.torrent').exists())
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_attach_torrent_rejects_other_movie(self, build_client_mock):
+        info_hash = _info_hash()
+        other_movie = Movie.objects.create(title='Other Movie', year=2023)
+        Torrent.objects.create(movie=other_movie, info_hash=info_hash, name='Test Movie')
+        build_client_mock.return_value = FakeClient(
+            info_hash=info_hash,
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+        target_movie = Movie.objects.create(title='Target Movie', year=2024)
+
+        with self.assertRaises(QbtError) as context:
+            torrent_service.attach_torrent_to_movie(info_hash, target_movie)
+
+        self.assertEqual(context.exception.code, 'qbt_torrent_already_linked')
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_delete_torrent_removes_qbt_archive_and_record(self, build_client_mock):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        archive_path = Path(self.temp_dir.name) / f'{info_hash}.torrent'
+        archive_path.write_bytes(b'd4:info0:e')
+        torrent = Torrent.objects.create(
+            movie=movie,
+            info_hash=info_hash,
+            name='Test Movie',
+            torrent_file=f'{info_hash}.torrent',
+        )
+        client = FakeClient(info_hash=info_hash)
+        build_client_mock.return_value = client
+
+        result = torrent_service.delete_torrent(torrent, delete_files=True, reason='manual')
+
+        self.assertTrue(result.qbt_deleted)
+        self.assertTrue(result.archive_deleted)
+        self.assertTrue(result.record_deleted)
+        self.assertIsNone(result.error)
+        self.assertFalse(Torrent.objects.filter(pk=torrent.pk).exists())
+        self.assertFalse(archive_path.exists())
+        self.assertEqual(client.delete_kwargs['delete_files'], True)
+        self.assertEqual(client.delete_kwargs['torrent_hashes'], info_hash)
+        self.assertTrue(
+            TorrentEvent.objects.filter(
+                event_type='torrent_deleted',
+                movie=movie,
+            ).exists()
+        )
+
+    def test_delete_torrent_keeps_record_without_qbt_configuration(self):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        archive_path = Path(self.temp_dir.name) / f'{info_hash}.torrent'
+        archive_path.write_bytes(b'd4:info0:e')
+        torrent = Torrent.objects.create(
+            movie=movie,
+            info_hash=info_hash,
+            name='Test Movie',
+            torrent_file=f'{info_hash}.torrent',
+        )
+        self.preferences.qbt_url = ''
+        self.preferences.save()
+
+        result = torrent_service.delete_torrent(torrent, delete_files=True)
+
+        self.assertFalse(result.qbt_deleted)
+        self.assertFalse(result.archive_deleted)
+        self.assertFalse(result.record_deleted)
+        self.assertIsNotNone(result.error)
+        self.assertTrue(Torrent.objects.filter(pk=torrent.pk).exists())
+        self.assertTrue(archive_path.exists())
+        torrent.refresh_from_db()
+        self.assertIn('qBittorrent не настроен', torrent.last_error)
+        self.assertTrue(
+            TorrentEvent.objects.filter(
+                event_type='torrent_delete_failed',
+                movie=movie,
+            ).exists()
+        )
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_delete_torrent_keeps_record_when_qbt_delete_fails(self, build_client_mock):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        torrent = Torrent.objects.create(
+            movie=movie,
+            info_hash=info_hash,
+            name='Test Movie',
+        )
+        client = FakeClient(info_hash=info_hash)
+        client.delete_error = RuntimeError('boom')
+        build_client_mock.return_value = client
+
+        result = torrent_service.delete_torrent(torrent, delete_files=True)
+
+        self.assertFalse(result.qbt_deleted)
+        self.assertFalse(result.record_deleted)
+        self.assertIsNotNone(result.error)
+        self.assertTrue(Torrent.objects.filter(pk=torrent.pk).exists())
+
+    @patch('qbittorrent.services.torrent_service.delete_torrent_archive', return_value=False)
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_delete_torrent_reports_archive_warning(self, build_client_mock, _delete_archive_mock):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        archive_path = Path(self.temp_dir.name) / f'{info_hash}.torrent'
+        archive_path.write_bytes(b'd4:info0:e')
+        torrent = Torrent.objects.create(
+            movie=movie,
+            info_hash=info_hash,
+            name='Test Movie',
+            torrent_file=f'{info_hash}.torrent',
+        )
+        build_client_mock.return_value = FakeClient(info_hash=info_hash)
+
+        result = torrent_service.delete_torrent(torrent, delete_files=True)
+
+        self.assertTrue(result.qbt_deleted)
+        self.assertTrue(result.record_deleted)
+        self.assertFalse(result.archive_deleted)
+        self.assertIsNotNone(result.error)
+        self.assertFalse(Torrent.objects.filter(pk=torrent.pk).exists())
+        self.assertTrue(archive_path.exists())
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_delete_movie_torrents_deletes_all_linked(self, build_client_mock):
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        first_hash = _info_hash()
+        second_hash = _info_hash(b'Second Movie')
+        Torrent.objects.create(movie=movie, info_hash=first_hash, name='First')
+        Torrent.objects.create(movie=movie, info_hash=second_hash, name='Second')
+        build_client_mock.return_value = FakeClient(info_hash=first_hash)
+
+        result = torrent_service.delete_movie_torrents(movie)
+
+        self.assertEqual(result.deleted_count, 2)
+        self.assertEqual(result.errors, [])
+        self.assertFalse(Torrent.objects.filter(movie=movie).exists())

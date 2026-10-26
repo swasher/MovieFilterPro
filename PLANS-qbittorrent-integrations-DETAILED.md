@@ -89,7 +89,11 @@
 
 - `GET /status` — настроен ли qbt, доступен ли, версия, количество раздач;
 - `POST /test` — проверка сохранённых или переданных настроек;
-- `GET /torrents?limit=&offset=` — список раздач qbt + локальная привязка к Vault.
+- `GET /torrents?limit=&offset=` — список раздач qbt + локальная привязка к Vault;
+- `POST /progress` — batch-прогресс по infohash;
+- `POST /torrents/{info_hash}/link` — ручная привязка;
+- `POST /torrents/{info_hash}/delete` — удаление раздачи, файлов, архива и локальной записи;
+- `POST /movies/{movie_id}/torrents/delete` — удаление всех раздач фильма.
 
 В `vault/api.py`:
 
@@ -145,20 +149,27 @@ Download теперь вызывает qbt API. Ошибки qbt показыв�
 
 ### Этап 2 — Vault UI
 
-- иконки `link-2` / `link-2-off`;
-- фильтр неприлинкованных;
-- проценты загрузки;
-- ручная привязка;
-- ссылка на Kinozal;
-- ссылка в qbt UI с учётом ограничения по hash.
+- [x] иконки `link-2` / `link-2-off` на карточках «Буду смотреть»;
+- [x] фильтр «Только без раздачи qBittorrent»;
+- [x] проценты загрузки на карточках и в list view (polling 5с);
+- [x] ручная привязка раздачи к фильму;
+- [x] ссылка на страницу Kinozal и путь qbt в detail;
+- [ ] ссылка в qbt UI по infohash — отложена (штатный WebUI не фильтрует по hash).
 
 ### Этап 3 — удаление и «Просмотрено»
 
-- модалка при установке WATCHED;
-- отдельная кнопка «Удалить раздачу»;
-- удаление qbt-торрента с файлами;
-- удаление архива `.torrent`;
-- удаление локальной записи `Torrent`.
+- [x] модалка при установке WATCHED (показывается, если у фильма есть привязанные раздачи);
+- [x] отдельная кнопка «Удалить раздачу» в блоке qBittorrent на странице фильма;
+- [x] удаление qbt-торрента с файлами (`torrents_delete(delete_files=True)`);
+- [x] удаление архива `.torrent` из backup-папки;
+- [x] удаление локальной записи `Torrent`;
+- [x] персистентный журнал `torrent_deleted` / `torrent_delete_failed`;
+- [x] `POST /api/qbittorrent/torrents/{info_hash}/delete`;
+- [x] `POST /api/qbittorrent/movies/{movie_id}/torrents/delete`;
+- [x] `toggle-status` принимает `delete_torrents` и возвращает `torrents_deleted` + `torrent_delete_errors`.
+
+Если qBittorrent недоступен, локальная запись и архив сохраняются, чтобы удаление можно было повторить.
+Статус WATCHED при этом всё равно выставляется, а frontend показывает предупреждение.
 
 ### Этап 4 — WebSocket
 

@@ -13,6 +13,8 @@ type ApiMovie = {
   in_favorites: boolean;
   watch_status: "watched" | "will_watch" | "wont_watch" | null;
   rating: number | null;
+  torrent_linked: boolean;
+  torrent_info_hash: string | null;
 };
 
 type ApiGenre = {
@@ -34,6 +36,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
   const movieType = url.searchParams.get("movie_type") ?? "";
   const watchStatus = url.searchParams.get("watch_status") ?? "";
   const isFavorite = url.searchParams.get("is_favorite") === "true";
+  const hasTorrent = (url.searchParams.get("has_torrent") ?? "").trim();
   const status = (url.searchParams.get("status") ?? "").trim();
   const list = (url.searchParams.get("list") ?? "").trim();
   const q = (url.searchParams.get("q") ?? "").trim();
@@ -54,6 +57,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
     activeMovieType: movieType,
     activeWatchStatus: watchStatus,
     activeIsFavorite: isFavorite,
+    activeHasTorrent: hasTorrent,
     activeStatus: status,
     activeList: list,
     activeQuery: q,
@@ -99,6 +103,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
     if (movieType) params.set("movie_type", movieType);
     if (watchStatus) params.set("watch_status", watchStatus);
     if (isFavorite) params.set("is_favorite", "true");
+    if (hasTorrent) params.set("has_torrent", hasTorrent);
     if (status) params.set("status", status);
     if (list) params.set("list", list);
     if (q) params.set("q", q);
@@ -129,6 +134,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeMovieType: movieType,
       activeWatchStatus: watchStatus,
       activeIsFavorite: isFavorite,
+      activeHasTorrent: hasTorrent,
       activeStatus: status,
       activeList: list,
       activeQuery: q,
@@ -149,6 +155,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeMovieType: movieType,
       activeWatchStatus: watchStatus,
       activeIsFavorite: isFavorite,
+      activeHasTorrent: hasTorrent,
       activeStatus: status,
       activeList: list,
       activeQuery: q,

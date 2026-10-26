@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import { toast } from "svelte-sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
 import { Badge } from "$lib/components/ui/badge";
@@ -12,7 +12,12 @@ import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
 import MovieCard from "$lib/components/vault/MovieCard.svelte";
-import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X } from "@lucide/svelte";
+import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X, Link2, Link2Off } from "@lucide/svelte";
+import {
+  QBT_DOWNLOADING_STATES,
+  type QbtProgressItem,
+  type QbtProgressResponse
+} from "$lib/qbittorrent";
 
 type MovieCard = {
   id: number;
@@ -27,6 +32,8 @@ type MovieCard = {
   in_favorites: boolean;
   watch_status: "watched" | "will_watch" | "wont_watch" | null;
   rating: number | null;
+  torrent_linked: boolean;
+  torrent_info_hash: string | null;
 };
 
 type Genre = {
@@ -105,6 +112,11 @@ type TmdbSearchResult = {
   let selectedMovieType = $state("");
   let selectedWatchStatus = $state("");
   let isFavorite = $state(false);
+  let onlyUnlinked = $state(false);
+
+  let progressByHash = $state<Record<string, QbtProgressItem>>({});
+  let progressRequestInFlight = false;
+  let progressTimer: ReturnType<typeof setInterval> | null = null;
 
   const genreNameMap = $derived(
     Object.fromEntries((data.genres ?? []).map((g) => [g.slug, g.name]))
@@ -114,6 +126,42 @@ type TmdbSearchResult = {
   const homeGroups = $derived(
     (data.homeGroups ?? []).filter((group) => group.movies.length > 0)
   );
+
+  const progressMovies = $derived(
+    isHome ? homeGroups.flatMap((group) => group.movies) : allMovies
+  );
+  const progressHashes = $derived(
+    [
+      ...new Set(
+        progressMovies
+          .map((movie) => movie.torrent_info_hash)
+          .filter((value): value is string => Boolean(value))
+      )
+    ]
+  );
+  const progressHashesKey = $derived(progressHashes.join(","));
+
+  const progressFor = (movie: MovieCard): QbtProgressItem | null => {
+    if (!movie.torrent_info_hash) return null;
+    return progressByHash[movie.torrent_info_hash] ?? null;
+  };
+
+  const showTorrentInList = (movie: MovieCard): boolean =>
+    movie.torrent_linked ||
+    movie.watch_status === "will_watch" ||
+    data.activeStatus === "will_watch";
+
+  const torrentProgressLabel = (movie: MovieCard): string | null => {
+    const progress = progressFor(movie);
+    if (
+      !progress ||
+      !QBT_DOWNLOADING_STATES.has(progress.state) ||
+      progress.progress >= 1
+    ) {
+      return null;
+    }
+    return `${Math.floor(Math.min(1, Math.max(0, progress.progress)) * 100)}%`;
+  };
 
   const trimmedTmdbSearchQuery = $derived(tmdbSearchQuery.trim());
 
@@ -135,6 +183,7 @@ type TmdbSearchResult = {
     selectedMovieType = data.activeMovieType ?? "";
     selectedWatchStatus = data.activeWatchStatus ?? "";
     isFavorite = data.activeIsFavorite ?? false;
+    onlyUnlinked = data.activeHasTorrent === "false";
     exactSearch = data.activeSearchPlot === false;
   });
 
@@ -231,6 +280,66 @@ type TmdbSearchResult = {
       setTimeout(() => { loadingGuard = false; }, 100);
     }
   };
+
+  const loadProgress = async () => {
+    if (progressRequestInFlight) return;
+
+    const hashes = progressHashes;
+    if (hashes.length === 0) {
+      progressByHash = {};
+      return;
+    }
+
+    progressRequestInFlight = true;
+    try {
+      const response = await fetch("/api/qbittorrent/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hashes })
+      });
+      if (!response.ok) return;
+
+      const payload = (await response.json()) as QbtProgressResponse;
+      if (!payload.available) {
+        progressByHash = {};
+        return;
+      }
+
+      const next: Record<string, QbtProgressItem> = {};
+      for (const item of payload.items) {
+        next[item.info_hash] = item;
+      }
+      progressByHash = next;
+    } catch {
+      // Прогресс опционален: недоступный qbt не должен ломать Vault.
+    } finally {
+      progressRequestInFlight = false;
+    }
+  };
+
+  $effect(() => {
+    void progressHashesKey;
+    void loadProgress();
+  });
+
+  onMount(() => {
+    const tickProgress = () => {
+      if (!document.hidden) {
+        void loadProgress();
+      }
+    };
+
+    progressTimer = setInterval(tickProgress, 5000);
+    document.addEventListener("visibilitychange", tickProgress);
+
+    return () => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      document.removeEventListener("visibilitychange", tickProgress);
+    };
+  });
 
   const buildTmdbSelectionKey = (candidate: Pick<TmdbSearchResult, "media_type" | "tmdb_id">) =>
     `${candidate.media_type}:${candidate.tmdb_id}`;
@@ -329,6 +438,7 @@ type TmdbSearchResult = {
     if (selectedMovieType) params.set("movie_type", selectedMovieType); else params.delete("movie_type");
     if (selectedWatchStatus) params.set("watch_status", selectedWatchStatus); else params.delete("watch_status");
     if (isFavorite) params.set("is_favorite", "true"); else params.delete("is_favorite");
+    if (onlyUnlinked) params.set("has_torrent", "false"); else params.delete("has_torrent");
 
     params.delete("page");
 
@@ -346,6 +456,7 @@ type TmdbSearchResult = {
     selectedMovieType = "";
     selectedWatchStatus = "";
     isFavorite = false;
+    onlyUnlinked = false;
     await applyFilters();
   };
 
@@ -571,7 +682,7 @@ type TmdbSearchResult = {
         </div>
       </div>
 
-      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || data.activeQuery}
+      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || onlyUnlinked || data.activeQuery}
         <div class="flex flex-wrap items-center gap-3 text-sm">
           {#if selectedGenres.length > 0}
             <p class="text-muted-foreground">
@@ -607,6 +718,13 @@ type TmdbSearchResult = {
               <button class="underline hover:text-foreground" onclick={() => { isFavorite = false; applyFilters(); }}>×</button>
             </p>
           {/if}
+          {#if onlyUnlinked}
+            <span class="text-border">|</span>
+            <p class="text-muted-foreground">
+              Без раздачи
+              <button class="underline hover:text-foreground" onclick={() => { onlyUnlinked = false; applyFilters(); }}>×</button>
+            </p>
+          {/if}
           {#if data.activeQuery}
             <span class="text-border">|</span>
             <p class="text-muted-foreground">Поиск: <strong>{data.activeQuery}</strong></p>
@@ -636,6 +754,7 @@ type TmdbSearchResult = {
           </div>
           <div class="flex flex-wrap gap-4">
             {#each group.movies as movie (movie.id)}
+              {@const progress = progressFor(movie)}
               <a
                 href={`/movies/${movie.slug}`}
                 data-sveltekit-preload-data="hover"
@@ -644,7 +763,11 @@ type TmdbSearchResult = {
                 onmousemove={onMovieMove}
                 onmouseleave={onMovieLeave}
               >
-                <MovieCard {movie} />
+                <MovieCard
+                  {movie}
+                  torrentProgress={progress?.progress ?? null}
+                  torrentState={progress?.state ?? null}
+                />
               </a>
             {/each}
           </div>
@@ -680,6 +803,7 @@ type TmdbSearchResult = {
                 <th class="px-3 py-2 font-medium">Original title</th>
                 <th class="w-20 px-3 py-2 font-medium">Year</th>
                 <th class="w-20 px-3 py-2 font-medium">Type</th>
+                <th class="w-24 px-3 py-2 font-medium">Torrent</th>
                 <th class="w-28 px-3 py-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -722,6 +846,26 @@ type TmdbSearchResult = {
                       <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]">MOVIE</Badge>
                     {/if}
                   </td>
+                  <td class="px-3 py-2 align-middle">
+                    {#if showTorrentInList(movie)}
+                      {@const progressLabel = torrentProgressLabel(movie)}
+                      <span
+                        class={`inline-flex items-center gap-1.5 text-xs ${movie.torrent_linked ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+                        title={movie.torrent_linked ? "Раздача привязана" : "Раздача не привязана"}
+                      >
+                        {#if movie.torrent_linked}
+                          <Link2 class="size-3.5" />
+                        {:else}
+                          <Link2Off class="size-3.5" />
+                        {/if}
+                        {#if progressLabel}
+                          <span class="tabular-nums">{progressLabel}</span>
+                        {/if}
+                      </span>
+                    {:else}
+                      <span class="text-muted-foreground">—</span>
+                    {/if}
+                  </td>
                   <td class="px-3 py-2 align-middle flex items-center gap-1.5">
                     {#if movie.in_favorites}
                       <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
@@ -754,6 +898,7 @@ type TmdbSearchResult = {
       {:else}
         <div class="flex flex-wrap gap-4">
           {#each allMovies as movie (movie.id)}
+            {@const progress = progressFor(movie)}
             <a
               href={`/movies/${movie.slug}`}
               data-sveltekit-preload-data="hover"
@@ -762,7 +907,12 @@ type TmdbSearchResult = {
               onmousemove={onMovieMove}
               onmouseleave={onMovieLeave}
             >
-              <MovieCard {movie} activeStatus={data.activeStatus} />
+              <MovieCard
+                {movie}
+                activeStatus={data.activeStatus}
+                torrentProgress={progress?.progress ?? null}
+                torrentState={progress?.state ?? null}
+              />
             </a>
           {/each}
           {#if hasMore || isLoadingMore}
@@ -995,6 +1145,17 @@ type TmdbSearchResult = {
           id="filter-favorite"
         />
         <label for="filter-favorite" class="text-sm cursor-pointer">Только избранное</label>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={onlyUnlinked}
+          onchange={() => { onlyUnlinked = !onlyUnlinked; }}
+          class="rounded border-input"
+          id="filter-unlinked"
+        />
+        <label for="filter-unlinked" class="text-sm cursor-pointer">Только без раздачи qBittorrent</label>
       </div>
     </div>
 

@@ -1,3 +1,15 @@
+export const QBT_DOWNLOADING_STATES = new Set([
+  "downloading",
+  "forcedDL",
+  "metaDL",
+  "stalledDL",
+  "queuedDL",
+  "allocating",
+  "checkingDL",
+  "checkingResumeData",
+  "pausedDL"
+]);
+
 export type QbtLinkedMovie = {
   id: number;
   title: string;
@@ -18,9 +30,36 @@ export type QbtTorrent = {
   tags: string[];
   save_path: string;
   content_path: string;
+  source_url: string | null;
   added_on: number | null;
   completion_on: number | null;
   linked_movie: QbtLinkedMovie | null;
+};
+
+export type QbtProgressItem = {
+  info_hash: string;
+  state: string;
+  progress: number;
+  dlspeed: number;
+  upspeed: number;
+  eta: number;
+  size: number;
+};
+
+export type QbtProgressResponse = {
+  available: boolean;
+  items: QbtProgressItem[];
+};
+
+export type MovieTorrent = {
+  id: number;
+  info_hash: string;
+  name: string;
+  source_url: string | null;
+  torrent_file: string | null;
+  save_path: string | null;
+  content_path: string | null;
+  created_at: string | null;
 };
 
 export type QbtTorrentsResponse = {
@@ -28,6 +67,23 @@ export type QbtTorrentsResponse = {
   total: number;
   limit: number;
   offset: number;
+};
+
+export type QbtTorrentDeleteResponse = {
+  message: string;
+  info_hash: string;
+  name: string;
+  qbt_deleted: boolean;
+  archive_deleted: boolean;
+  record_deleted: boolean;
+  error: string | null;
+};
+
+export type QbtMovieTorrentsDeleteResponse = {
+  message: string;
+  deleted: QbtTorrentDeleteResponse[];
+  deleted_count: number;
+  errors: string[];
 };
 
 export type QbtApiErrorDetail = {

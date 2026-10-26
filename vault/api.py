@@ -8,8 +8,10 @@ from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
 logger = logging.getLogger("vault.tmdb_writeback")
+logger_qbt = logging.getLogger("vault.qbittorrent")
 
 from qbittorrent.models import Torrent
+from qbittorrent.services import torrent_service as qbt_torrent_service
 from vault.models import (
     Collection,
     FavoritePerson,
@@ -50,6 +52,7 @@ class MovieOut(Schema):
     watch_status: str | None = None
     rating: int | None = None
     torrent_linked: bool = False
+    torrent_info_hash: str | None = None
 
 
 class HomeMovieGroupOut(Schema):
@@ -68,6 +71,17 @@ class WritebackPerMovieOut(Schema):
     last_error: str | None = None
     next_retry_at: str | None = None
     reason: str | None = None
+
+
+class MovieTorrentOut(Schema):
+    id: int
+    info_hash: str
+    name: str
+    source_url: str | None = None
+    torrent_file: str | None = None
+    save_path: str | None = None
+    content_path: str | None = None
+    created_at: str | None = None
 
 
 class MovieDetailOut(Schema):
@@ -117,6 +131,7 @@ class MovieDetailOut(Schema):
     showrunners: list["PersonCreditOut"] = []
     actors: list["PersonCreditOut"]
     seasons: list["SeasonOut"] = []
+    torrents: list[MovieTorrentOut] = []
     collection: "CollectionBriefOut | None" = None
     writeback: WritebackPerMovieOut | None = None
 
@@ -260,12 +275,15 @@ class TMDBCandidateOut(Schema):
 
 class ToggleStatusIn(Schema):
     status_key: str
+    delete_torrents: bool = False
 
 
 class ToggleStatusOut(Schema):
     status_key: str
     is_active: bool
     user_state: UserStateOut
+    torrents_deleted: int = 0
+    torrent_delete_errors: list[str] = []
 
 
 class RateMovieIn(Schema):
@@ -619,7 +637,7 @@ def _build_movie_out(
     user=None,
     state: dict | None = None,
     *,
-    torrent_linked: bool = False,
+    torrent_info_hash: str | None = None,
 ) -> MovieOut:
     if state is None and user is not None:
         state = MovieStatusService.get_movie_states_bulk(user, [movie]).get(movie.id)
@@ -639,22 +657,29 @@ def _build_movie_out(
         in_watched=watch_status == "watched",
         in_wont_watch=watch_status == "wont_watch",
         in_favorites=is_favorite,
-        torrent_linked=torrent_linked,
+        torrent_linked=torrent_info_hash is not None,
+        torrent_info_hash=torrent_info_hash,
     )
 
 
-def _torrent_linked_movie_ids(movies) -> set[int]:
+def _torrent_link_info(movies) -> dict[int, str]:
     movie_ids = [movie.id for movie in movies]
     if not movie_ids:
-        return set()
-    return set(
-        Torrent.objects.filter(movie_id__in=movie_ids).values_list('movie_id', flat=True)
+        return {}
+    links: dict[int, str] = {}
+    rows = (
+        Torrent.objects.filter(movie_id__in=movie_ids)
+        .order_by('movie_id', '-created_at', '-id')
+        .values_list('movie_id', 'info_hash')
     )
+    for movie_id, info_hash in rows:
+        links.setdefault(movie_id, info_hash)
+    return links
 
 
 def _build_home_group(group_id: str, title: str, see_all_href: str, movies, user) -> HomeMovieGroupOut:
     states = MovieStatusService.get_movie_states_bulk(user, movies)
-    torrent_linked_ids = _torrent_linked_movie_ids(movies)
+    torrent_links = _torrent_link_info(movies)
     return HomeMovieGroupOut(
         id=group_id,
         title=title,
@@ -664,7 +689,7 @@ def _build_home_group(group_id: str, title: str, see_all_href: str, movies, user
                 movie,
                 user=user,
                 state=states.get(movie.id),
-                torrent_linked=movie.id in torrent_linked_ids,
+                torrent_info_hash=torrent_links.get(movie.id),
             )
             for movie in movies
         ],
@@ -924,13 +949,13 @@ def list_movies(
         qs = qs.order_by(*ordering).distinct()[bounded_offset:bounded_offset + bounded_limit]
     movies = [movie for movie in qs]
     states = MovieStatusService.get_movie_states_bulk(user, movies)
-    torrent_linked_ids = _torrent_linked_movie_ids(movies)
+    torrent_links = _torrent_link_info(movies)
     return [
         _build_movie_out(
             movie,
             user=user,
             state=states.get(movie.id),
-            torrent_linked=movie.id in torrent_linked_ids,
+            torrent_info_hash=torrent_links.get(movie.id),
         )
         for movie in movies
     ]
@@ -1042,6 +1067,20 @@ def movie_detail(request, slug: str):
         favorite_person_ids = set(
             FavoritePerson.objects.filter(user=user).values_list("person_id", flat=True)
         )
+
+    torrents = [
+        MovieTorrentOut(
+            id=item.id,
+            info_hash=item.info_hash,
+            name=item.name,
+            source_url=item.source_url or None,
+            torrent_file=item.torrent_file or None,
+            save_path=item.save_path or None,
+            content_path=item.content_path or None,
+            created_at=_datetime_to_iso(item.created_at),
+        )
+        for item in Torrent.objects.filter(movie=movie).order_by("-created_at", "-id")
+    ]
 
     return MovieDetailOut(
         id=movie.id,
@@ -1172,6 +1211,7 @@ def movie_detail(request, slug: str):
             _build_season_out(season, user=user)
             for season in movie.seasons.all().order_by("season_number")
         ],
+        torrents=torrents,
         collection=_build_collection_out(movie, user=user),
         writeback=_build_writeback_out(movie),
     )
@@ -1441,10 +1481,27 @@ def movie_toggle_status(request, slug: str, payload: ToggleStatusIn):
     except Exception as exc:
         raise HttpError(400, str(exc))
 
+    torrents_deleted = 0
+    torrent_delete_errors: list[str] = []
+    if payload.delete_torrents and payload.status_key == "watched" and is_active:
+        try:
+            delete_result = qbt_torrent_service.delete_movie_torrents(
+                movie,
+                delete_files=True,
+                reason="watched",
+            )
+            torrents_deleted = delete_result.deleted_count
+            torrent_delete_errors = delete_result.errors
+        except Exception as exc:  # noqa: BLE001 - статус не должен зависеть от qbt
+            logger_qbt.exception("Не удалось удалить раздачи qBittorrent для %s", movie.slug)
+            torrent_delete_errors = [str(exc)]
+
     return ToggleStatusOut(
         status_key=payload.status_key,
         is_active=is_active,
         user_state=_build_user_state(user, movie),
+        torrents_deleted=torrents_deleted,
+        torrent_delete_errors=torrent_delete_errors,
     )
 
 

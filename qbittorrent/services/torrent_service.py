@@ -16,6 +16,7 @@ from .errors import QbtError
 from .metadata import TorrentMetadataError, parse_torrent_metadata
 from .paths import (
     archive_exists,
+    delete_torrent_archive,
     ensure_backup_folder,
     resolve_backup_folder,
     write_torrent_archive,
@@ -65,6 +66,37 @@ class QbtTorrentRow:
     completion_on: int | None
     torrent: Torrent | None
     linked_movie: Movie | None
+
+
+@dataclass(slots=True, frozen=True)
+class QbtProgressRow:
+    info_hash: str
+    state: str
+    progress: float
+    dlspeed: int
+    upspeed: int
+    eta: int
+    size: int
+
+
+@dataclass(slots=True, frozen=True)
+class TorrentDeleteResult:
+    info_hash: str
+    name: str
+    qbt_deleted: bool
+    archive_deleted: bool
+    record_deleted: bool
+    error: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class MovieTorrentsDeleteResult:
+    results: list[TorrentDeleteResult]
+    errors: list[str]
+
+    @property
+    def deleted_count(self) -> int:
+        return sum(1 for item in self.results if item.record_deleted)
 
 
 def _preferences() -> UserPreferences:
@@ -559,3 +591,293 @@ def list_torrents(*, limit: int = 500, offset: int = 0) -> tuple[list[QbtTorrent
         )
 
     return rows, total
+
+
+def get_progress(hashes: list[str]) -> tuple[bool, list[QbtProgressRow]]:
+    """Best-effort прогресс для карточек Vault. Ошибки qbt не должны ломать Vault."""
+    normalized = list(dict.fromkeys((value or '').strip().lower() for value in hashes if (value or '').strip()))
+    if not normalized:
+        return True, []
+
+    preferences = _preferences()
+    if not _configured_url(preferences):
+        return False, []
+
+    try:
+        client = build_client(preferences=preferences)
+        items = client.torrents_info(torrent_hashes=normalized[:200])
+    except Exception as exc:  # noqa: BLE001
+        logger.debug('Не удалось получить прогресс qBittorrent: %s', exc, exc_info=True)
+        return False, []
+
+    wanted = set(normalized)
+    rows: list[QbtProgressRow] = []
+    for item in items:
+        info_hash = _safe_str(getattr(item, 'hash', '')).lower()
+        if info_hash not in wanted:
+            continue
+        rows.append(
+            QbtProgressRow(
+                info_hash=info_hash,
+                state=_safe_str(getattr(item, 'state', '')),
+                progress=_safe_float(getattr(item, 'progress', 0.0)),
+                dlspeed=_safe_int(getattr(item, 'dlspeed', 0)),
+                upspeed=_safe_int(getattr(item, 'upspeed', 0)),
+                eta=_safe_int(getattr(item, 'eta', 0)),
+                size=_safe_int(getattr(item, 'size', 0)),
+            )
+        )
+
+    return True, rows
+
+
+def attach_torrent_to_movie(info_hash: str, movie: Movie) -> tuple[Torrent, str | None]:
+    """Привязывает уже существующую в qBittorrent раздачу к фильму Vault."""
+    normalized = (info_hash or '').strip().lower()
+    if not normalized:
+        raise QbtError('qbt_torrent_not_found', 'Не указан infohash раздачи.', status_code=400)
+
+    preferences = _preferences()
+    if not _configured_url(preferences):
+        raise QbtError(
+            'qbt_not_configured',
+            'qBittorrent не настроен.',
+            hint='Заполни URL, логин и пароль в Preferences → qBittorrent.',
+            status_code=400,
+        )
+
+    client = build_client(preferences=preferences)
+    try:
+        items = client.torrents_info(torrent_hashes=normalized)
+    except Exception as exc:  # noqa: BLE001
+        raise qbt_error_from_exception(exc, action='поиск раздачи') from exc
+
+    if not items:
+        raise QbtError(
+            'qbt_torrent_not_found',
+            'Раздача не найдена в qBittorrent.',
+            status_code=404,
+        )
+
+    info = items[0]
+    qbt_hash = _safe_str(getattr(info, 'hash', '')).lower() or normalized
+    existing = Torrent.objects.filter(info_hash=qbt_hash).first()
+
+    if existing is not None and existing.movie_id is not None and existing.movie_id != movie.id:
+        raise QbtError(
+            'qbt_torrent_already_linked',
+            'Раздача уже привязана к другому фильму Vault.',
+            status_code=409,
+        )
+
+    source_url = ''
+    try:
+        properties = client.torrents_properties(torrent_hash=qbt_hash)
+        comment = _safe_str(getattr(properties, 'comment', ''))
+        comment_lower = comment.lower()
+        if comment.startswith(('http://', 'https://')) and (
+            'kinozal' in comment_lower or 'details.php' in comment_lower
+        ):
+            source_url = comment
+    except Exception:  # noqa: BLE001 - comment не обязателен
+        logger.debug('Не удалось получить comment раздачи %s', qbt_hash, exc_info=True)
+
+    name = _safe_str(getattr(info, 'name', '')) or qbt_hash
+    save_path = _safe_str(getattr(info, 'save_path', ''))
+    content_path = _safe_str(getattr(info, 'content_path', ''))
+
+    configured_folder = (preferences.torrents_backup_folder or '').strip()
+    archive_relative = existing.torrent_file if existing is not None else ''
+    archive_saved = False
+    warning: str | None = None
+
+    if configured_folder and archive_relative:
+        try:
+            archive_saved = archive_exists(
+                resolve_backup_folder(configured_folder),
+                archive_relative,
+            )
+        except (ValueError, OSError):
+            archive_saved = False
+
+    if not archive_saved:
+        if not configured_folder:
+            warning = 'Папка backup для .torrent не настроена в Preferences → qBittorrent.'
+        else:
+            try:
+                exported = client.torrents_export(torrent_hash=qbt_hash)
+                archive_relative = write_torrent_archive(
+                    resolve_backup_folder(configured_folder),
+                    qbt_hash,
+                    exported,
+                )
+                archive_saved = True
+            except Exception as exc:  # noqa: BLE001
+                warning = f'Не удалось сохранить .torrent: {exc}'
+                logger.warning('Не удалось экспортировать .torrent для %s: %s', qbt_hash, exc, exc_info=True)
+
+    defaults = {
+        'name': name,
+        'save_path': save_path,
+        'content_path': content_path,
+        'last_error': warning or '',
+    }
+    if source_url:
+        defaults['source_url'] = source_url
+    if archive_relative:
+        defaults['torrent_file'] = archive_relative
+
+    torrent, _created = Torrent.objects.update_or_create(
+        info_hash=qbt_hash,
+        defaults=defaults,
+    )
+
+    if torrent.movie_id is not None and torrent.movie_id != movie.id:
+        raise QbtError(
+            'qbt_torrent_already_linked',
+            'Раздача уже привязана к другому фильму Vault.',
+            status_code=409,
+        )
+
+    torrent.movie = movie
+    torrent.save(update_fields=['movie', 'updated_at'])
+
+    _log_event(
+        'torrent_manual_linked',
+        f'Раздача привязана к фильму «{movie.title}» вручную.',
+        torrent=torrent,
+        movie=movie,
+        payload={'info_hash': torrent.info_hash, 'archive_saved': archive_saved},
+    )
+
+    return torrent, warning
+
+
+def delete_torrent(
+    torrent: Torrent,
+    *,
+    delete_files: bool = True,
+    reason: str = 'manual',
+) -> TorrentDeleteResult:
+    """Удаляет раздачу из qBittorrent (вместе с файлами), архив .torrent и локальную запись.
+
+    Если qBittorrent недоступен, локальная запись и архив сохраняются, чтобы удаление
+    можно было повторить. Медиафайлы удаляет сам qBittorrent через delete_files=True.
+    """
+    info_hash = torrent.info_hash
+    name = torrent.name
+    movie = torrent.movie
+
+    preferences = _preferences()
+    qbt_deleted = False
+    error: str | None = None
+
+    if not _configured_url(preferences):
+        error = 'qBittorrent не настроен: раздача и локальная запись не удалены.'
+    else:
+        try:
+            client = build_client(preferences=preferences)
+            client.torrents_delete(
+                delete_files=delete_files,
+                torrent_hashes=info_hash,
+            )
+            qbt_deleted = True
+        except Exception as exc:  # noqa: BLE001
+            mapped = qbt_error_from_exception(exc, action='удаление раздачи')
+            error = mapped.message
+            logger.warning(
+                'Не удалось удалить раздачу %s из qBittorrent: %s',
+                info_hash,
+                exc,
+                exc_info=True,
+            )
+
+    archive_deleted = False
+    if qbt_deleted:
+        configured_folder = (preferences.torrents_backup_folder or '').strip()
+        if configured_folder and torrent.torrent_file:
+            try:
+                folder = resolve_backup_folder(configured_folder)
+                if archive_exists(folder, torrent.torrent_file):
+                    archive_deleted = delete_torrent_archive(folder, torrent.torrent_file)
+                    if not archive_deleted:
+                        error = (
+                            'Раздача удалена, но архив .torrent удалить не удалось. '
+                            'Проверь права на папку backup.'
+                        )
+            except (ValueError, OSError) as exc:
+                error = f'Раздача удалена, но архив .torrent удалить не удалось: {exc}'
+                logger.warning(
+                    'Не удалось удалить архив .torrent для %s: %s',
+                    info_hash,
+                    exc,
+                    exc_info=True,
+                )
+
+    record_deleted = False
+    if qbt_deleted:
+        torrent.delete()
+        record_deleted = True
+    elif error:
+        torrent.last_error = error
+        torrent.save(update_fields=['last_error', 'updated_at'])
+
+    event_type = 'torrent_deleted' if record_deleted else 'torrent_delete_failed'
+    level = TorrentEvent.Level.INFO if record_deleted else TorrentEvent.Level.ERROR
+    if record_deleted and error:
+        level = TorrentEvent.Level.WARNING
+
+    _log_event(
+        event_type,
+        (
+            f'Раздача удалена: {name}'
+            if record_deleted
+            else f'Не удалось удалить раздачу: {name}'
+        ),
+        level=level,
+        torrent=None if record_deleted else torrent,
+        movie=movie,
+        payload={
+            'info_hash': info_hash,
+            'name': name,
+            'delete_files': delete_files,
+            'qbt_deleted': qbt_deleted,
+            'archive_deleted': archive_deleted,
+            'record_deleted': record_deleted,
+            'reason': reason,
+            'error': error,
+        },
+    )
+
+    return TorrentDeleteResult(
+        info_hash=info_hash,
+        name=name,
+        qbt_deleted=qbt_deleted,
+        archive_deleted=archive_deleted,
+        record_deleted=record_deleted,
+        error=error,
+    )
+
+
+def delete_movie_torrents(
+    movie: Movie,
+    *,
+    delete_files: bool = True,
+    reason: str = 'watched',
+) -> MovieTorrentsDeleteResult:
+    """Удаляет все раздачи, привязанные к фильму Vault."""
+    torrents = list(
+        Torrent.objects.filter(movie=movie)
+        .select_related('movie')
+        .order_by('id')
+    )
+    results = [
+        delete_torrent(torrent, delete_files=delete_files, reason=reason)
+        for torrent in torrents
+    ]
+    errors = [
+        f'{item.name}: {item.error}'
+        for item in results
+        if item.error
+    ]
+    return MovieTorrentsDeleteResult(results=results, errors=errors)

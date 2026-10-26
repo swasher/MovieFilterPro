@@ -5,6 +5,9 @@ import json
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
+from vault.models import Movie
+
+from .models import Torrent
 from .services import torrent_service
 from .services.errors import QbtError
 
@@ -47,6 +50,7 @@ class QbtTorrentOut(Schema):
     tags: list[str] = []
     save_path: str
     content_path: str
+    source_url: str | None = None
     added_on: int | None = None
     completion_on: int | None = None
     linked_movie: QbtLinkedMovieOut | None = None
@@ -57,6 +61,57 @@ class QbtTorrentsOut(Schema):
     total: int
     limit: int
     offset: int
+
+
+class QbtProgressOut(Schema):
+    info_hash: str
+    state: str
+    progress: float
+    dlspeed: int
+    upspeed: int
+    eta: int
+    size: int
+
+
+class QbtProgressIn(Schema):
+    hashes: list[str] = []
+
+
+class QbtProgressResponse(Schema):
+    available: bool
+    items: list[QbtProgressOut] = []
+
+
+class QbtLinkIn(Schema):
+    movie_id: int
+
+
+class QbtLinkOut(Schema):
+    message: str
+    info_hash: str
+    movie: QbtLinkedMovieOut
+    warning: str | None = None
+
+
+class QbtDeleteIn(Schema):
+    delete_files: bool = True
+
+
+class QbtTorrentDeleteOut(Schema):
+    message: str
+    info_hash: str
+    name: str
+    qbt_deleted: bool
+    archive_deleted: bool
+    record_deleted: bool
+    error: str | None = None
+
+
+class QbtMovieTorrentsDeleteOut(Schema):
+    message: str
+    deleted: list[QbtTorrentDeleteOut] = []
+    deleted_count: int = 0
+    errors: list[str] = []
 
 
 def _require_api_user(request):
@@ -120,9 +175,26 @@ def _serialize_torrent(row: torrent_service.QbtTorrentRow) -> QbtTorrentOut:
         tags=row.tags,
         save_path=row.save_path,
         content_path=row.content_path,
+        source_url=row.torrent.source_url if row.torrent is not None and row.torrent.source_url else None,
         added_on=row.added_on,
         completion_on=row.completion_on,
         linked_movie=linked_movie,
+    )
+
+
+def _serialize_torrent_delete(
+    result: torrent_service.TorrentDeleteResult,
+    *,
+    message: str,
+) -> QbtTorrentDeleteOut:
+    return QbtTorrentDeleteOut(
+        message=message,
+        info_hash=result.info_hash,
+        name=result.name,
+        qbt_deleted=result.qbt_deleted,
+        archive_deleted=result.archive_deleted,
+        record_deleted=result.record_deleted,
+        error=result.error,
     )
 
 
@@ -176,4 +248,128 @@ def torrents(request, limit: int = 500, offset: int = 0):
         total=total,
         limit=bounded_limit,
         offset=bounded_offset,
+    )
+
+
+@api.post('/progress', response=QbtProgressResponse)
+def progress(request, payload: QbtProgressIn):
+    _require_api_user(request)
+
+    requested_hashes = [
+        value.strip()
+        for value in payload.hashes
+        if value.strip()
+    ][:200]
+    available, rows = torrent_service.get_progress(requested_hashes)
+
+    return QbtProgressResponse(
+        available=available,
+        items=[
+            QbtProgressOut(
+                info_hash=row.info_hash,
+                state=row.state,
+                progress=row.progress,
+                dlspeed=row.dlspeed,
+                upspeed=row.upspeed,
+                eta=row.eta,
+                size=row.size,
+            )
+            for row in rows
+        ],
+    )
+
+
+@api.post('/torrents/{info_hash}/delete', response=QbtTorrentDeleteOut)
+def delete_torrent(request, info_hash: str, payload: QbtDeleteIn | None = None):
+    _require_api_user(request)
+
+    normalized = (info_hash or '').strip().lower()
+    torrent = (
+        Torrent.objects.filter(info_hash=normalized)
+        .select_related('movie')
+        .first()
+    )
+    if torrent is None:
+        raise HttpError(404, 'Torrent not found')
+
+    delete_files = True if payload is None else payload.delete_files
+    result = torrent_service.delete_torrent(
+        torrent,
+        delete_files=delete_files,
+        reason='manual',
+    )
+
+    if result.record_deleted:
+        if result.error:
+            message = 'Раздача удалена, но остались предупреждения.'
+        elif delete_files:
+            message = 'Раздача, файлы и архив удалены.'
+        else:
+            message = 'Раздача и архив удалены.'
+    else:
+        message = result.error or 'Не удалось удалить раздачу.'
+
+    return _serialize_torrent_delete(result, message=message)
+
+
+@api.post('/movies/{movie_id}/torrents/delete', response=QbtMovieTorrentsDeleteOut)
+def delete_movie_torrents(request, movie_id: int, payload: QbtDeleteIn | None = None):
+    _require_api_user(request)
+
+    movie = Movie.objects.filter(pk=movie_id).first()
+    if movie is None:
+        raise HttpError(404, 'Movie not found')
+
+    delete_files = True if payload is None else payload.delete_files
+    result = torrent_service.delete_movie_torrents(
+        movie,
+        delete_files=delete_files,
+        reason='manual',
+    )
+
+    deleted = [
+        _serialize_torrent_delete(
+            item,
+            message='Раздача удалена.' if item.record_deleted else (item.error or 'Не удалось удалить раздачу.'),
+        )
+        for item in result.results
+    ]
+
+    if not result.results:
+        message = 'У фильма нет привязанных раздач.'
+    elif result.errors:
+        message = f'Удалено раздач: {result.deleted_count} из {len(result.results)}.'
+    else:
+        message = f'Удалено раздач: {result.deleted_count}.'
+
+    return QbtMovieTorrentsDeleteOut(
+        message=message,
+        deleted=deleted,
+        deleted_count=result.deleted_count,
+        errors=result.errors,
+    )
+
+
+@api.post('/torrents/{info_hash}/link', response=QbtLinkOut)
+def link_torrent(request, info_hash: str, payload: QbtLinkIn):
+    _require_api_user(request)
+
+    movie = Movie.objects.filter(pk=payload.movie_id).first()
+    if movie is None:
+        raise HttpError(404, 'Movie not found')
+
+    try:
+        torrent, warning = torrent_service.attach_torrent_to_movie(info_hash, movie)
+    except QbtError as exc:
+        _raise_qbt_error(exc)
+
+    return QbtLinkOut(
+        message=f'Раздача привязана к фильму «{movie.title}».',
+        info_hash=torrent.info_hash,
+        movie=QbtLinkedMovieOut(
+            id=movie.id,
+            title=movie.title,
+            slug=movie.slug,
+        ),
+        warning=warning,
     )

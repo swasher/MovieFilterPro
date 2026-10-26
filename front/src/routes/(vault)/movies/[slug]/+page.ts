@@ -1,5 +1,6 @@
 import { error } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
+import type { MovieTorrent } from "$lib/qbittorrent";
 
 type ApiMovieDetail = {
   id: number;
@@ -138,6 +139,7 @@ type ApiMovieDetail = {
       rating: number | null;
     };
   }>;
+  torrents: MovieTorrent[];
   collection: {
     tmdb_id: number;
     name: string;
