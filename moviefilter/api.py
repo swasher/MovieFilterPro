@@ -1,14 +1,21 @@
 import json
+import mimetypes
 
 from bs4 import BeautifulSoup
 from django.db.models import Q
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 from requests import RequestException
 
 from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, TRANS_FOUND, WAIT_TRANS
 from moviefilter.classes import KinozalSearch
-from moviefilter.image_caching import get_cached_image_url
+from moviefilter.image_caching import (
+    CACHE_STATUS_MISSING,
+    CACHE_STATUS_READY,
+    get_cached_image_state,
+    get_placeholder_image_url,
+)
 from moviefilter.image_caching import remove_cached_image
 from moviefilter.kinozal import KinozalClient, LinkConstructor, normalize_kinozal_domain
 from moviefilter.models import MovieRSS, UserPreferences
@@ -292,10 +299,7 @@ def _serialize_movie(request, movie: MovieRSS, favorite_matcher: FavoriteActorMa
         scanned_at=movie.scanned_at.isoformat() if movie.scanned_at else None,
         plot=movie.plot or "",
         translate=movie.translate or None,
-        poster_url=_normalize_poster_url(
-            request,
-            get_cached_image_url(movie.poster, movie.pk, movie.priority),
-        ),
+        poster_url=f"/api/kinozal/movies/{movie.pk}/poster",
         imdb_id=movie.imdb_id or None,
         imdb_rating=movie.imdb_rating,
         kinopoisk_id=movie.kinopoisk_id or None,
@@ -502,6 +506,35 @@ def list_movies(
         limit=page_size,
         total_count=total_count,
     )
+
+
+@api.get("/movies/{movie_id}/poster", response=None)
+def movie_poster(request, movie_id: int):
+    """Отдаёт только локальный кеш; внешние хостинги доступны одному серверу."""
+    _require_api_user(request)
+    movie = _get_movie_or_404(movie_id)
+    status, cached_filepath = get_cached_image_state(movie.poster, movie.pk, movie.priority)
+
+    if status == CACHE_STATUS_READY and cached_filepath is not None:
+        content_type, _ = mimetypes.guess_type(cached_filepath.name)
+        try:
+            file_handle = cached_filepath.open("rb")
+        except OSError:
+            status = CACHE_STATUS_PENDING
+        else:
+            response = FileResponse(file_handle, content_type=content_type or "image/jpeg")
+            response["Cache-Control"] = "private, max-age=86400"
+            return response
+
+    if status == CACHE_STATUS_MISSING:
+        response = HttpResponseRedirect(get_placeholder_image_url())
+        response["Cache-Control"] = "no-store"
+        return response
+
+    response = HttpResponse(status=503)
+    response["Cache-Control"] = "no-store"
+    response["Retry-After"] = "1"
+    return response
 
 
 @api.post("/movies/{movie_id}/hide", response=KinozalActionOut)

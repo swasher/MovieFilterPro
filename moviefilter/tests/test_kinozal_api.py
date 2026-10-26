@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime
+from pathlib import Path
 from django.utils import timezone
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from django.test import TestCase
 
 from core.models import Country
 from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, WAIT_TRANS
+from moviefilter.image_caching import CACHE_STATUS_MISSING, CACHE_STATUS_PENDING, CACHE_STATUS_READY
 from moviefilter.models import MovieRSS, UserPreferences
 from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher, normalize_actor_name
 from vault.models import FavoritePerson, Person
@@ -86,8 +88,7 @@ class KinozalApiTests(TestCase):
             poster="https://example.com/poster-c.jpg",
         )
 
-    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
-    def test_movies_endpoint_returns_filtered_page(self, _cached_image_mock):
+    def test_movies_endpoint_returns_filtered_page(self):
         response = self.client.get("/api/kinozal/movies", {"priority": "LOW", "q": "Beta"})
 
         self.assertEqual(response.status_code, 200)
@@ -97,8 +98,7 @@ class KinozalApiTests(TestCase):
         self.assertEqual(payload["items"][0]["title"], "Beta")
         self.assertEqual(payload["items"][0]["priority_key"], "LOW")
 
-    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
-    def test_movies_endpoint_sorts_oldest_scanned_first_by_default(self, _cached_image_mock):
+    def test_movies_endpoint_sorts_oldest_scanned_first_by_default(self):
         response = self.client.get("/api/kinozal/movies", {"priority": "ALL"})
 
         self.assertEqual(response.status_code, 200)
@@ -107,8 +107,7 @@ class KinozalApiTests(TestCase):
         self.assertEqual(payload["items"][0]["tracker_date"], "2026-03-06")
         self.assertIn("2026-03-09", payload["items"][0]["scanned_at"])
 
-    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
-    def test_movies_endpoint_sorts_newest_scanned_first_when_reversed(self, _cached_image_mock):
+    def test_movies_endpoint_sorts_newest_scanned_first_when_reversed(self):
         response = self.client.get("/api/kinozal/movies", {"priority": "ALL", "reverse": "true"})
 
         self.assertEqual(response.status_code, 200)
@@ -125,6 +124,45 @@ class KinozalApiTests(TestCase):
         self.assertEqual(payload["low"], 1)
         self.assertEqual(payload["defer"], 1)
         self.assertEqual(payload["total"], 3)
+
+    def test_movies_endpoint_exposes_only_internal_poster_url(self):
+        response = self.client.get("/api/kinozal/movies", {"priority": "HIGH"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["items"][0]["poster_url"],
+            f"/api/kinozal/movies/{self.movie_high.pk}/poster",
+        )
+
+    @patch("moviefilter.api.get_cached_image_state", return_value=(CACHE_STATUS_PENDING, None))
+    def test_poster_endpoint_returns_retryable_response_while_cache_is_pending(self, _cache_state_mock):
+        response = self.client.get(f"/api/kinozal/movies/{self.movie_high.pk}/poster")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertEqual(response["Retry-After"], "1")
+
+    @patch("moviefilter.api.get_cached_image_state", return_value=(CACHE_STATUS_MISSING, None))
+    def test_poster_endpoint_redirects_to_placeholder_when_source_is_missing(self, _cache_state_mock):
+        response = self.client.get(f"/api/kinozal/movies/{self.movie_high.pk}/poster")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/static/img/poster-placeholder.svg")
+        self.assertEqual(response["Cache-Control"], "no-store")
+
+    def test_poster_endpoint_serves_ready_cached_file(self):
+        cached_file = Path(self._testMethodName + ".jpg")
+        cached_file.write_bytes(b"poster-data")
+        self.addCleanup(cached_file.unlink)
+
+        with patch(
+            "moviefilter.api.get_cached_image_state",
+            return_value=(CACHE_STATUS_READY, cached_file),
+        ):
+            response = self.client.get(f"/api/kinozal/movies/{self.movie_high.pk}/poster")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"poster-data")
 
     @patch("moviefilter.api.remove_cached_image")
     def test_hide_action_updates_priority(self, remove_cached_image_mock):
@@ -363,8 +401,7 @@ class KinozalApiFavoriteActorsTests(TestCase):
             poster="https://example.com/poster-a.jpg",
         )
 
-    @patch("moviefilter.api.get_cached_image_url", side_effect=lambda poster, *_: poster)
-    def test_movies_endpoint_marks_favorite_actors(self, _cached_image_mock):
+    def test_movies_endpoint_marks_favorite_actors(self):
         response = self.client.get("/api/kinozal/movies", {"priority": "ALL"})
 
         self.assertEqual(response.status_code, 200)

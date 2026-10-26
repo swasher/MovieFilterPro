@@ -20,13 +20,51 @@
   let shouldLoad = $state(false);
   let isLoaded = $state(false);
   let hasError = $state(false);
+  let retryAttempt = $state(0);
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  const retryDelays = [1000, 2000, 5000, 10000, 15000];
+
+  const imageSrc = $derived(
+    src && retryAttempt > 0 ? `${src}${src.includes("?") ? "&" : "?"}retry=${retryAttempt}` : src
+  );
+
+  const clearRetryTimer = () => {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
 
   $effect(() => {
     src;
+    clearRetryTimer();
+    retryAttempt = 0;
     shouldLoad = false;
     isLoaded = false;
     hasError = false;
   });
+
+  $effect(() => {
+    return () => {
+      clearRetryTimer();
+    };
+  });
+
+  const retryOrShowError = () => {
+    const delay = retryDelays[retryAttempt];
+    if (delay === undefined) {
+      isLoaded = true;
+      hasError = true;
+      return;
+    }
+
+    isLoaded = false;
+    clearRetryTimer();
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      retryAttempt += 1;
+    }, delay);
+  };
 
   $effect(() => {
     const node = container;
@@ -76,16 +114,16 @@
 
     {#if shouldLoad}
       <img
-        {src}
+        src={imageSrc}
         {alt}
         loading="lazy"
         decoding="async"
         onload={() => {
+          clearRetryTimer();
           isLoaded = true;
         }}
         onerror={() => {
-          isLoaded = true;
-          hasError = true;
+          retryOrShowError();
         }}
         class={`h-full w-full object-cover transition-opacity duration-300 ${isLoaded ? "opacity-100" : "opacity-0"} ${imageClass}`}
       />
