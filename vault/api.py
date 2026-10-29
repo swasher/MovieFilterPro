@@ -971,7 +971,12 @@ def home_data(request):
 
     groups: list[HomeMovieGroupOut] = []
 
-    added_movies = list(Movie.objects.order_by("-created_at", "id")[:HOME_SECTION_SIZE])
+    added_qs = Movie.objects.all()
+    if user is not None:
+        added_qs = added_qs.exclude(
+            user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.SKIP
+        )
+    added_movies = list(added_qs.order_by("-created_at", "id")[:HOME_SECTION_SIZE])
     groups.append(
         _build_home_group("added", "Недавно добавленные", "/?order=-added_at", added_movies, user)
     )
