@@ -865,7 +865,9 @@ def list_movies(
     if year_to is not None:
         qs = qs.filter(year__lte=year_to)
     if movie_type:
-        qs = qs.filter(movie_type=movie_type)
+        type_values = [t.strip() for t in movie_type.split(",") if t.strip()]
+        if type_values:
+            qs = qs.filter(movie_type__in=type_values) if len(type_values) > 1 else qs.filter(movie_type=type_values[0])
     if user and status:
         if status == "favorites":
             qs = qs.filter(user_movies__user=user, user_movies__is_favorite=True)
@@ -966,7 +968,7 @@ HOME_SECTION_SIZE = 5
 
 @api.get("/home", response=HomeOut)
 def home_data(request):
-    """Главный экран Vault: ленты «Недавно добавленные/просмотренные/оценённые» по 5 карточек."""
+    """Главный экран Vault: ленты «Недавно добавленные/просмотренные фильмы/сериалы» по 5 карточек."""
     user = _resolve_api_user(request)
 
     groups: list[HomeMovieGroupOut] = []
@@ -984,7 +986,7 @@ def home_data(request):
     if user is not None:
         user_movie_sq = UserMovie.objects.filter(user=user, movie=OuterRef("pk"))
 
-        watched_movies = list(
+        watched_base_qs = (
             Movie.objects.filter(
                 user_movies__user=user,
                 user_movies__watch_status=UserMovie.WatchStatus.WATCHED,
@@ -996,38 +998,32 @@ def home_data(request):
                     output_field=DateTimeField(),
                 ),
             )
-            .order_by(F("_home_sort").desc(nulls_last=True), "id")[:HOME_SECTION_SIZE]
+            .order_by(F("_home_sort").desc(nulls_last=True), "id")
+        )
+        watched_movie_list = list(
+            watched_base_qs.filter(movie_type=Movie.MovieType.MOVIE)[:HOME_SECTION_SIZE]
         )
         groups.append(
             _build_home_group(
-                "watched",
-                "Недавно просмотренные",
-                "/?status=watched&order=-watched_at",
-                watched_movies,
+                "watched_movies",
+                "Недавно просмотренные фильмы",
+                "/?status=watched&movie_type=movie&order=-watched_at",
+                watched_movie_list,
                 user,
             )
         )
 
-        rated_movies = list(
-            Movie.objects.filter(
-                user_movies__user=user,
-                user_movies__rating__isnull=False,
-            )
-            .annotate(
-                _home_sort=Coalesce(
-                    Subquery(user_movie_sq.values("rated_at")[:1]),
-                    Subquery(user_movie_sq.values("updated_at")[:1]),
-                    output_field=DateTimeField(),
-                ),
-            )
-            .order_by(F("_home_sort").desc(nulls_last=True), "id")[:HOME_SECTION_SIZE]
+        watched_series_list = list(
+            watched_base_qs.filter(
+                movie_type__in=[Movie.MovieType.SERIES, Movie.MovieType.MINISERIES]
+            )[:HOME_SECTION_SIZE]
         )
         groups.append(
             _build_home_group(
-                "rated",
-                "Недавно оценённые",
-                "/?status=watched&order=-rated_at",
-                rated_movies,
+                "watched_series",
+                "Недавно просмотренные сериалы",
+                "/?status=watched&movie_type=series,miniseries&order=-watched_at",
+                watched_series_list,
                 user,
             )
         )
