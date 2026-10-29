@@ -166,7 +166,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   async function saveGroupOrder(groupId: string) {
     const group = items.find((g) => g.id === groupId);
     if (!group?.children) return;
-    const keys = group.children.map((c) => c.id).filter((id) => id !== "all");
+    const keys = group.children.map((c) => c.id).filter((id) => !["all", "all_persons"].includes(id));
     const payload: { system_keys?: string[]; custom_keys?: string[] } = {};
     if (groupId === "system") {
       payload.system_keys = keys;
@@ -220,7 +220,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
       {/snippet}
     </Sidebar.MenuButton>
 
-    {#if editMode && (group.id === "system" || group.id === "custom") && subItem.id !== "all"}
+    {#if editMode && (group.id === "system" || group.id === "custom") && !["all", "all_persons"].includes(subItem.id)}
       <div
         class="absolute end-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 group-data-[collapsible=icon]:hidden"
         data-sidebar="menu-action"
@@ -273,7 +273,7 @@ import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
                         <Sortable.Item id={subItem.id}>
                           {@render menuItemContent(subItem, group)}
                         </Sortable.Item>
-                        {#if subItem.id === "all" && group.id === "system"}
+                        {#if subItem.id === "all_persons" && group.id === "system"}
                           <Sidebar.Separator class="my-1" />
                         {/if}
                       {/each}

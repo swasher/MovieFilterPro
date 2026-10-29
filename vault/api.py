@@ -488,6 +488,17 @@ class TogglePersonFavoriteOut(Schema):
     is_favorite: bool
 
 
+class PersonListOut(Schema):
+    id: int
+    name: str
+    original_name: str | None = None
+    photo_url: str | None = None
+    birth_date: str | None = None
+    death_date: str | None = None
+    movies_count: int = 0
+    is_favorite: bool = False
+
+
 api = NinjaAPI(title="Vault API", version="1.0")
 
 
@@ -1602,6 +1613,65 @@ def movie_delete(request, slug: str):
     )
 
 
+@api.get("/persons", response=list[PersonListOut])
+def person_list(
+    request,
+    limit: int = 50,
+    q: str | None = None,
+    is_favorite: bool | None = None,
+    order: str = "name",
+):
+    """Минимальный список персон: поиск по имени, фильтр избранного, сортировка."""
+    user = _resolve_api_user(request)
+    bounded = max(1, min(limit, 50))
+    qs = Person.objects.annotate(movies_count=Count("person_movies"))
+    if q:
+        query = (q or "").strip()
+        if query:
+            qs = qs.filter(Q(name__icontains=query) | Q(original_name__icontains=query))
+    if is_favorite:
+        if user is None:
+            return []
+        qs = qs.filter(favorited_by__user=user)
+    allowed_orders = {
+        "name": ("name", "id"),
+        "-name": ("-name", "id"),
+        "original_name": ("original_name", "id"),
+        "-original_name": ("-original_name", "id"),
+        "birth_date": ("birth_date", "id"),
+        "-birth_date": ("-birth_date", "id"),
+    }
+    ordering = allowed_orders.get((order or "name").strip(), allowed_orders["name"])
+    # Даты без года рождения — всегда внизу, в обе стороны (иначе DESC тянет NULL наверх)
+    if ordering[0] == "birth_date":
+        qs = qs.order_by(F("birth_date").asc(nulls_last=True), "id")
+    elif ordering[0] == "-birth_date":
+        qs = qs.order_by(F("birth_date").desc(nulls_last=True), "id")
+    else:
+        qs = qs.order_by(*ordering)
+    persons = list(qs.distinct()[:bounded])
+    favorite_ids: set[int] = set()
+    if user is not None and persons:
+        favorite_ids = set(
+            FavoritePerson.objects.filter(
+                user=user, person_id__in=[p.id for p in persons]
+            ).values_list("person_id", flat=True)
+        )
+    return [
+        PersonListOut(
+            id=p.id,
+            name=p.name,
+            original_name=p.original_name or None,
+            photo_url=p.photo_url,
+            birth_date=_date_to_iso(p.birth_date),
+            death_date=_date_to_iso(p.death_date),
+            movies_count=getattr(p, "movies_count", 0) or 0,
+            is_favorite=p.id in favorite_ids,
+        )
+        for p in persons
+    ]
+
+
 @api.get("/persons/{person_id}", response=PersonDetailOut)
 def person_detail(request, person_id: int):
     person = Person.objects.filter(id=person_id).first()
@@ -1722,6 +1792,8 @@ SYSTEM_SIDEBAR_KEYS = list(SYSTEM_LIST_LABELS.keys())
 
 ALL_MOVIES_SIDEBAR_ITEM_ID = "all"
 
+ALL_PERSONS_SIDEBAR_ITEM_ID = "all_persons"
+
 SYSTEM_SIDEBAR_ITEMS = [
     SidebarItemOut(id=key, title=label, href=f"/?status={key}", count=0)
     for key, label in SYSTEM_LIST_LABELS.items()
@@ -1750,12 +1822,18 @@ def sidebar_data(request):
         href="/",
         count=Movie.objects.count(),
     )
+    all_persons_item = SidebarItemOut(
+        id=ALL_PERSONS_SIDEBAR_ITEM_ID,
+        title="Все актеры",
+        href="/persons",
+        count=Person.objects.count(),
+    )
     if user is None:
         return [
             SidebarGroupOut(
                 id="system",
                 title="Системные",
-                children=[all_movies_item, *SYSTEM_SIDEBAR_ITEMS],
+                children=[all_movies_item, all_persons_item, *SYSTEM_SIDEBAR_ITEMS],
             ),
             SidebarGroupOut(id="custom", title="Мои списки", children=[]),
         ]
@@ -1764,6 +1842,7 @@ def sidebar_data(request):
 
     system_items = [
         all_movies_item,
+        all_persons_item,
         *[
             SidebarItemOut(
                 id=item.id,
@@ -1792,10 +1871,14 @@ def sidebar_data(request):
 
     layout = SidebarLayout.objects.filter(user=user).first()
     if layout is not None:
-        system_keys = [ALL_MOVIES_SIDEBAR_ITEM_ID, *_order_system_keys(layout.system_keys or [])]
+        system_keys = [
+            ALL_MOVIES_SIDEBAR_ITEM_ID,
+            ALL_PERSONS_SIDEBAR_ITEM_ID,
+            *_order_system_keys(layout.system_keys or []),
+        ]
         custom_items = _order_custom_keys(layout.custom_keys or [], custom_items)
     else:
-        system_keys = [ALL_MOVIES_SIDEBAR_ITEM_ID, *SYSTEM_SIDEBAR_KEYS]
+        system_keys = [ALL_MOVIES_SIDEBAR_ITEM_ID, ALL_PERSONS_SIDEBAR_ITEM_ID, *SYSTEM_SIDEBAR_KEYS]
 
     system_by_id = {item.id: item for item in system_items}
     system_group = SidebarGroupOut(

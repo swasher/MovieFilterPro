@@ -4,14 +4,20 @@
   import { Separator } from "$lib/components/ui/separator";
   import { ArrowDownWideNarrow, ArrowUpWideNarrow } from "@lucide/svelte";
 
-  let { value, onChange }: { value: string; onChange: (value: string) => void } = $props();
+  let { value, onChange, options }: {
+    value: string;
+    onChange: (value: string) => void;
+    options?: { field: string; label: string }[];
+  } = $props();
 
-  const orderOptions = [
+  const defaultOptions = [
     { field: "year", label: "По году" },
     { field: "imdb_rating", label: "По рейтингу" },
     { field: "title", label: "По названию" },
     { field: "added_at", label: "По дате добавления" }
   ];
+
+  const orderOptions = $derived(options ?? defaultOptions);
 
   const getOrderField = (v: string) => v.replace(/^-/, "");
   const getOrderDirection = (v: string) => (v.startsWith("-") ? "desc" : "asc");
