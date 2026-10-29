@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from django.db import transaction
 
 from moviefilter.models import MovieRSS
-from vault.models import Movie, VaultConnectionEvent
+from vault.models import Movie, UserMovie, VaultConnectionEvent
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService, TMDBMatchingResult
@@ -214,7 +214,7 @@ class KinozalDownloadImportService:
 
         movie = cls._find_existing_movie(movie_rss, operation_id=operation_id, torrent_id=torrent_id, user=user)
         candidate = None
-        if movie is None or not movie.tmdb_id:
+        if (movie is None or not movie.tmdb_id) and not cls._has_user_vault_data(user, movie):
             match_result = cls._resolve_tmdb_match(movie_rss, operation_id=operation_id, torrent_id=torrent_id, user=user)
             if match_result is not None and match_result.selected_candidate is not None:
                 candidate = match_result.selected_candidate
@@ -251,7 +251,12 @@ class KinozalDownloadImportService:
                 tmdb_id=candidate.tmdb_id,
             )
 
-        if movie is not None and candidate is not None and (not movie.tmdb_id or movie.tmdb_id != candidate.tmdb_id):
+        if (
+            movie is not None
+            and candidate is not None
+            and (not movie.tmdb_id or movie.tmdb_id != candidate.tmdb_id)
+            and not cls._has_user_vault_data(user, movie)
+        ):
             sync_result = TMDBMovieSyncService.sync_movie(
                 movie=movie,
                 force_rematch=True,
@@ -305,19 +310,30 @@ class KinozalDownloadImportService:
                 message="Не удалось определить фильм в Vault",
             )
 
-        cls._persist_external_ids(movie, movie_rss)
-        MovieStatusService.set_status(user, movie, "will_watch")
-        cls._log(
-            operation_id=operation_id,
-            level=VaultConnectionEvent.Level.SUCCESS,
-            event_type="will_watch_applied",
-            message="Статус 'Буду смотреть' выставлен",
-            movie_rss=movie_rss,
-            vault_movie=movie,
-            torrent_id=torrent_id,
-            user=user,
-            tmdb_id=movie.tmdb_id,
-        )
+        status_preserved = cls._has_user_vault_data(user, movie)
+        if status_preserved:
+            cls._log_preserved_user_state(
+                operation_id=operation_id,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                status_key="will_watch",
+                torrent_id=torrent_id,
+            )
+        else:
+            cls._persist_external_ids(movie, movie_rss)
+            MovieStatusService.set_status(user, movie, "will_watch")
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.SUCCESS,
+                event_type="will_watch_applied",
+                message="Статус 'Буду смотреть' выставлен",
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                torrent_id=torrent_id,
+                user=user,
+                tmdb_id=movie.tmdb_id,
+            )
 
         if qbt_torrent_id:
             try:
@@ -355,7 +371,11 @@ class KinozalDownloadImportService:
                 )
 
         final_status: ImportStatus = "created" if candidate is not None and movie.source == Movie.Source.TMDB else "reused"
-        final_message = "Фильм обработан и статус выставлен"
+        if status_preserved:
+            final_status = "reused"
+            final_message = "Фильм уже есть в Vault, статус не изменён"
+        else:
+            final_message = "Фильм обработан и статус выставлен"
         cls._log(
             operation_id=operation_id,
             level=VaultConnectionEvent.Level.SUCCESS,
@@ -547,6 +567,32 @@ class KinozalDownloadImportService:
         )
 
         movie = cls._find_existing_movie(movie_rss, operation_id=operation_id, torrent_id=0, user=user)
+        if movie is not None and cls._has_user_vault_data(user, movie):
+            cls._log_preserved_user_state(
+                operation_id=operation_id,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                action=action,
+                torrent_id=0,
+            )
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.SUCCESS,
+                event_type="operation_completed",
+                message="Фильм уже есть в Vault, статус не изменён",
+                torrent_id=0,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                tmdb_id=movie.tmdb_id,
+            )
+            return KinozalDownloadImportResult(
+                operation_id=operation_id,
+                status="reused",
+                message="Фильм уже есть в Vault, статус не изменён",
+                movie=movie,
+            )
         candidate = None
         if movie is None or not movie.tmdb_id:
             match_result = cls._resolve_tmdb_match(movie_rss, operation_id=operation_id, torrent_id=0, user=user)
@@ -583,6 +629,33 @@ class KinozalDownloadImportService:
                 vault_movie=movie,
                 user=user,
                 tmdb_id=candidate.tmdb_id,
+            )
+
+        if movie is not None and cls._has_user_vault_data(user, movie):
+            cls._log_preserved_user_state(
+                operation_id=operation_id,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                action=action,
+                torrent_id=0,
+            )
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.SUCCESS,
+                event_type="operation_completed",
+                message="Фильм уже есть в Vault, статус не изменён",
+                torrent_id=0,
+                movie_rss=movie_rss,
+                vault_movie=movie,
+                user=user,
+                tmdb_id=movie.tmdb_id,
+            )
+            return KinozalDownloadImportResult(
+                operation_id=operation_id,
+                status="reused",
+                message="Фильм уже есть в Vault, статус не изменён",
+                movie=movie,
             )
 
         if movie is not None and candidate is not None and (not movie.tmdb_id or movie.tmdb_id != candidate.tmdb_id):
@@ -676,6 +749,52 @@ class KinozalDownloadImportService:
     # ------------------------------------ #
     #            DOMAIN LAYER              #
     # ------------------------------------ #
+
+    @staticmethod
+    def _has_user_vault_data(user, movie: Movie) -> bool:
+        """Есть ли у пользователя собственные данные по фильму (статус/избранное/оценка/заметка).
+
+        Такие записи нельзя затирать авто-импортом из Kinozal (hide/will_watch/download).
+        Пустая связь (только что созданная строка без пользовательских данных) — не в счёт.
+        """
+        if user is None or getattr(user, "pk", None) is None:
+            return False
+        if movie is None or getattr(movie, "pk", None) is None:
+            return False
+        user_movie = UserMovie.objects.filter(user=user, movie=movie).first()
+        if user_movie is None:
+            return False
+        return bool(
+            user_movie.watch_status is not None
+            or user_movie.is_favorite
+            or user_movie.rating is not None
+            or (user_movie.note or "").strip()
+        )
+
+    @classmethod
+    def _log_preserved_user_state(
+        cls,
+        *,
+        operation_id: UUID,
+        movie_rss: MovieRSS,
+        vault_movie: Movie,
+        user,
+        action: VaultImportAction | None = None,
+        torrent_id: int = 0,
+        status_key: str = "",
+    ) -> None:
+        label = action.watch_status_label if action is not None else status_key or ""
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type=f"{status_key or (action.watch_status_key if action else 'status')}_skipped_already_in_vault",
+            message=f"Фильм уже есть в Vault, пользовательский статус '{label}' сохранён",
+            torrent_id=torrent_id,
+            movie_rss=movie_rss,
+            vault_movie=vault_movie,
+            user=user,
+            tmdb_id=vault_movie.tmdb_id,
+        )
 
     @staticmethod
     def _resolve_task(task_path: str):
