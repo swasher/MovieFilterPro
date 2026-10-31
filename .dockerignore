@@ -26,6 +26,7 @@ node_modules/
 *.pyc
 *.pyo
 *.pyd
+*.dump
 .Python
 pip-log.txt
 pip-delete-this-directory.txt

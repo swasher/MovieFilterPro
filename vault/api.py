@@ -889,17 +889,14 @@ def list_movies(
         elif status == "wont_watch":
             qs = qs.filter(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.SKIP)
     # TEMP-DUPLICATES: временный фильтр для чистки дублей после импорта с Kinorium.
-    # Показывает только фильмы, у которых есть несколько инстансов с одинаковым tmdb_id.
+    # Показывает только фильмы, у которых есть несколько инстансов с одинаковой
+    # парой (tmdb_id, tmdb_media_type). Группировать только по tmdb_id НЕЛЬЗЯ:
+    # числовые ID фильмов и сериалов в TMDB живут в разных неймспейсах и могут
+    # совпадать у совершенно разных произведений (напр. movie 241554
+    # «Ночной беглец» vs tv 241554 «Дневники Киллербота»).
     # Удалить вместе с пунктом сайдбара "Duplicates", когда дубли будут разобраны.
     if status == "duplicates":
-        duplicate_tmdb_ids = (
-            Movie.objects.exclude(tmdb_id__isnull=True)
-            .values("tmdb_id")
-            .annotate(cnt=Count("id"))
-            .filter(cnt__gt=1)
-            .values("tmdb_id")
-        )
-        qs = qs.exclude(tmdb_id__isnull=True).filter(tmdb_id__in=duplicate_tmdb_ids)
+        qs = qs.exclude(tmdb_id__isnull=True).filter(_duplicate_tmdb_pair_condition())
     if user and is_favorite:
         qs = qs.filter(user_movies__user=user, user_movies__is_favorite=True)
     if user and watch_status:
@@ -1800,17 +1797,29 @@ def person_toggle_favorite(request, person_id: int):
     return TogglePersonFavoriteOut(is_favorite=created)
 
 
-def _duplicates_movies_count() -> int:
-    # TEMP-DUPLICATES: количество строк Movie, чей tmdb_id встречается >1 раза.
-    # Удалить вместе с фильтром status=duplicates, когда дубли будут разобраны.
-    duplicate_tmdb_ids = (
+def _duplicate_tmdb_pair_condition() -> Q:
+    # TEMP-DUPLICATES: условие "tmdb_id встречается >1 раза в пределах одного
+    # tmdb_media_type". Двухпроходное: сначала пары-дубли, потом OR по ним.
+    # Ветка tmdb_media_type__isnull нужна, т.к. NULL=NULL в SQL не матчится.
+    pairs = list(
         Movie.objects.exclude(tmdb_id__isnull=True)
-        .values("tmdb_id")
+        .values("tmdb_id", "tmdb_media_type")
         .annotate(cnt=Count("id"))
         .filter(cnt__gt=1)
-        .values("tmdb_id")
     )
-    return Movie.objects.exclude(tmdb_id__isnull=True).filter(tmdb_id__in=duplicate_tmdb_ids).count()
+    condition = Q(pk__in=[])
+    for pair in pairs:
+        if pair["tmdb_media_type"] is None:
+            condition |= Q(tmdb_id=pair["tmdb_id"], tmdb_media_type__isnull=True)
+        else:
+            condition |= Q(tmdb_id=pair["tmdb_id"], tmdb_media_type=pair["tmdb_media_type"])
+    return condition
+
+
+def _duplicates_movies_count() -> int:
+    # TEMP-DUPLICATES: количество строк Movie, чья пара (tmdb_id, tmdb_media_type)
+    # встречается >1 раза. Удалить вместе с фильтром status=duplicates.
+    return Movie.objects.exclude(tmdb_id__isnull=True).filter(_duplicate_tmdb_pair_condition()).count()
 
 
 SYSTEM_SIDEBAR_KEYS = list(SYSTEM_LIST_LABELS.keys())

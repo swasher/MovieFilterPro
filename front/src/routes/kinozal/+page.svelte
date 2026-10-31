@@ -1301,7 +1301,7 @@
               <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Seed</th>
               <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Peer</th>
               <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Created</th>
-              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Down</th>
+              <th class="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Download</th>
             </tr>
           </thead>
           <tbody>
@@ -1343,7 +1343,7 @@
                       {#if downloadingTorrentId === option.id}
                         <CircleDashed class="size-3.5 animate-spin" />
                       {:else}
-                        Down
+                        Download
                       {/if}
                     </Button>
                   </div>

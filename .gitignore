@@ -1,5 +1,6 @@
 *sqlite3*
 *.log
+*.dump
 .idea/
 __pycache__/
 collectstatic
