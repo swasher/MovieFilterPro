@@ -28,6 +28,7 @@
   } = $props();
 
   let pointer = $state({ x: 0, y: 0 });
+  let cardEl = $state<HTMLDivElement | null>(null);
 
   const cursorAnchor = {
     getBoundingClientRect: () => new DOMRect(pointer.x, pointer.y, 0, 0)
@@ -37,6 +38,23 @@
     if (isCurrent) return;
     onclick?.(part);
   };
+
+  // Длинные коллекции скроллятся горизонтально — центрируем текущий фильм,
+  // но не трогаем вертикальный скролл страницы.
+  $effect(() => {
+    if (!isCurrent || !cardEl) return;
+    const container = cardEl.closest<HTMLElement>(".vd-collection-grid");
+    if (!container) return;
+    const cardRect = cardEl.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const isFullyVisible = cardRect.left >= containerRect.left && cardRect.right <= containerRect.right;
+    if (isFullyVisible) return;
+    const targetLeft =
+      container.scrollLeft +
+      (cardRect.left - containerRect.left) -
+      (container.clientWidth - cardRect.width) / 2;
+    container.scrollTo({ left: Math.max(0, targetLeft), behavior: "auto" });
+  });
 </script>
 
 <Tooltip.Provider>
@@ -46,6 +64,7 @@
         <div
           role="presentation"
           class="block"
+          bind:this={cardEl}
           onpointermove={(e) => (pointer = { x: e.clientX, y: e.clientY })}
         >
           {#if part.in_vault && part.vault_slug}
@@ -53,6 +72,7 @@
               {...props}
               href={isCurrent ? undefined : `/movies/${part.vault_slug}`}
               class="vd-collection-card vd-collection-card--compact group"
+              class:vd-collection-card--current={isCurrent}
               aria-current={isCurrent ? "page" : undefined}
               onclick={isCurrent ? (e) => e.preventDefault() : undefined}
               data-sveltekit-preload-data="hover"

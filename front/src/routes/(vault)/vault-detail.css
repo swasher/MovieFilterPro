@@ -527,6 +527,19 @@
     @apply hover:border-transparent;
   }
 
+  /* текущий фильм — изумрудное кольцо, карточка не кликабельна */
+  .vd-collection-card--current {
+    @apply cursor-default;
+  }
+
+  .vd-collection-card--compact.vd-collection-card--current:hover {
+    @apply bg-transparent;
+  }
+
+  .vd-collection-card--current .vd-collection-poster-wrap {
+    @apply ring-2 ring-emerald-500/80 ring-offset-2 ring-offset-background;
+  }
+
   .vd-collection-poster-wrap {
     @apply relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-muted flex items-center justify-center;
   }
