@@ -84,6 +84,10 @@
   let stateVersion = 0;
   let debounceHandle: ReturnType<typeof setTimeout> | null = null;
   let snapshotKey = "";
+  // Обычная переменная, НЕ $state: guard от затирания ввода эхом из URL
+  // (как в Фильмах, коммит 492755b). Реактивность здесь вредна: присвоение
+  // перезапустило бы $effect с еще старым data и снесло бы ввод.
+  let lastSubmittedSearchQuery = "";
 
   const KINOZAL_STATE_STORAGE_KEY = "kinozal-page-state-v2";
 
@@ -240,6 +244,7 @@
       activeSort = snapshot.activeSort ?? activeSort;
       activeReverse = snapshot.activeReverse ?? activeReverse;
       searchQuery = snapshot.searchQuery ?? searchQuery;
+      lastSubmittedSearchQuery = searchQuery;
 
       await tick();
       window.scrollTo({ top: snapshot.scrollY ?? 0, behavior: "auto" });
@@ -259,7 +264,12 @@
     activePriority = data.activePriority ?? DEFAULT_PRIORITY_FILTER;
     activeSort = data.activeSort ?? DEFAULT_SORT_KEY;
     activeReverse = data.activeReverse ?? DEFAULT_REVERSE;
-    searchQuery = data.activeQuery ?? "";
+    // Не затираем ввод пользователя эхом из URL: синхронизируем только если
+    // пользователь ничего не печатал после последнего сабмита (как в Фильмах).
+    const activeQuery = data.activeQuery ?? "";
+    if (searchQuery === lastSubmittedSearchQuery && activeQuery !== lastSubmittedSearchQuery.trim()) {
+      searchQuery = activeQuery;
+    }
     loadMoreError = "";
     isLoadingMore = false;
     stateVersion += 1;
@@ -297,6 +307,7 @@
     const params = new URLSearchParams(window.location.search);
     const priority = next.priority ?? activePriority;
     const q = next.q ?? searchQuery;
+    lastSubmittedSearchQuery = q;
     const sort = next.sort ?? activeSort;
     const reverse = next.reverse ?? activeReverse;
 

@@ -888,6 +888,18 @@ def list_movies(
             qs = qs.filter(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.PLAN)
         elif status == "wont_watch":
             qs = qs.filter(user_movies__user=user, user_movies__watch_status=UserMovie.WatchStatus.SKIP)
+    # TEMP-DUPLICATES: временный фильтр для чистки дублей после импорта с Kinorium.
+    # Показывает только фильмы, у которых есть несколько инстансов с одинаковым tmdb_id.
+    # Удалить вместе с пунктом сайдбара "Duplicates", когда дубли будут разобраны.
+    if status == "duplicates":
+        duplicate_tmdb_ids = (
+            Movie.objects.exclude(tmdb_id__isnull=True)
+            .values("tmdb_id")
+            .annotate(cnt=Count("id"))
+            .filter(cnt__gt=1)
+            .values("tmdb_id")
+        )
+        qs = qs.exclude(tmdb_id__isnull=True).filter(tmdb_id__in=duplicate_tmdb_ids)
     if user and is_favorite:
         qs = qs.filter(user_movies__user=user, user_movies__is_favorite=True)
     if user and watch_status:
@@ -1788,6 +1800,19 @@ def person_toggle_favorite(request, person_id: int):
     return TogglePersonFavoriteOut(is_favorite=created)
 
 
+def _duplicates_movies_count() -> int:
+    # TEMP-DUPLICATES: количество строк Movie, чей tmdb_id встречается >1 раза.
+    # Удалить вместе с фильтром status=duplicates, когда дубли будут разобраны.
+    duplicate_tmdb_ids = (
+        Movie.objects.exclude(tmdb_id__isnull=True)
+        .values("tmdb_id")
+        .annotate(cnt=Count("id"))
+        .filter(cnt__gt=1)
+        .values("tmdb_id")
+    )
+    return Movie.objects.exclude(tmdb_id__isnull=True).filter(tmdb_id__in=duplicate_tmdb_ids).count()
+
+
 SYSTEM_SIDEBAR_KEYS = list(SYSTEM_LIST_LABELS.keys())
 
 ALL_MOVIES_SIDEBAR_ITEM_ID = "all"
@@ -1828,12 +1853,19 @@ def sidebar_data(request):
         href="/persons",
         count=Person.objects.count(),
     )
+    # TEMP-DUPLICATES: временный пункт для чистки дублей после импорта с Kinorium.
+    duplicates_item = SidebarItemOut(
+        id="duplicates",
+        title="Duplicates",
+        href="/?status=duplicates",
+        count=_duplicates_movies_count(),
+    )
     if user is None:
         return [
             SidebarGroupOut(
                 id="system",
                 title="Системные",
-                children=[all_movies_item, all_persons_item, *SYSTEM_SIDEBAR_ITEMS],
+                children=[all_movies_item, all_persons_item, *SYSTEM_SIDEBAR_ITEMS, duplicates_item],
             ),
             SidebarGroupOut(id="custom", title="Мои списки", children=[]),
         ]
@@ -1884,7 +1916,8 @@ def sidebar_data(request):
     system_group = SidebarGroupOut(
         id="system",
         title="Системные",
-        children=[system_by_id[key] for key in system_keys],
+        # TEMP-DUPLICATES: пункт вне layout-порядка, всегда в конце группы.
+        children=[system_by_id[key] for key in system_keys] + [duplicates_item],
     )
 
     custom_group = SidebarGroupOut(

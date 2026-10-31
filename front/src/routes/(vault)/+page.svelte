@@ -682,7 +682,7 @@ type TmdbSearchResult = {
         </div>
       </div>
 
-      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || onlyUnlinked || data.activeQuery}
+      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || onlyUnlinked || data.activeQuery || data.activeStatus === "duplicates"}
         <div class="flex flex-wrap items-center gap-3 text-sm">
           {#if selectedGenres.length > 0}
             <p class="text-muted-foreground">
@@ -723,6 +723,13 @@ type TmdbSearchResult = {
             <p class="text-muted-foreground">
               Без раздачи
               <button class="underline hover:text-foreground" onclick={() => { onlyUnlinked = false; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if data.activeStatus === "duplicates"}
+            <span class="text-border">|</span>
+            <p class="text-muted-foreground">
+              Duplicates
+              <button class="underline hover:text-foreground" onclick={() => goto("/", { invalidateAll: true })}>×</button>
             </p>
           {/if}
           {#if data.activeQuery}

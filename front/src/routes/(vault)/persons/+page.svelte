@@ -24,7 +24,9 @@
   const persons = $derived(data.persons ?? []);
 
   let searchQuery = $state(data.activeQuery ?? "");
-  let lastSubmittedSearchQuery = $state("");
+  // Обычная переменная, НЕ $state: иначе присвоение в applyParams перезапустит
+  // $effect ниже со старым data и затрет ввод (как в Фильмах, коммит 492755b).
+  let lastSubmittedSearchQuery = "";
   let onlyFavorites = $state(data.activeIsFavorite ?? false);
   let useEnglish = $state((data.activeLang ?? "ru") === "en");
   let activeOrder = $state(data.activeOrder ?? "name");
