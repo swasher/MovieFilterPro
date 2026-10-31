@@ -1293,6 +1293,7 @@
           </div>
         </div>
 
+        {#if userState.in_will_watch}
         <div class="vd-section">
           <p class="vd-section-title">qBittorrent</p>
           {#if movie.torrents.length}
@@ -1343,6 +1344,7 @@
             </div>
           {/if}
         </div>
+        {/if}
       </div>
     </div>
 
