@@ -740,6 +740,27 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
     )
 
 
+def _collection_part_sort_key(part: dict):
+    """Ключ хронологической сортировки частей коллекции.
+
+    Сначала части с датой релиза (YYYY-MM-DD сортируется лексикографически),
+    затем части без даты (по году, если он известен). Тай-брейк — исходный
+    порядок TMDB (order), чтобы равные даты оставались стабильными.
+    """
+    release_date = str(part.get("release_date") or "").strip()
+    try:
+        order_key = int(part.get("order"))
+    except (TypeError, ValueError):
+        order_key = 0
+    if release_date:
+        return (0, release_date, order_key)
+    try:
+        year_key = int(part.get("year"))
+    except (TypeError, ValueError):
+        year_key = 10**9  # без года — после частей с известным годом
+    return (1, year_key, order_key)
+
+
 def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
     """Собирает CollectionBriefOut из movie.collection + parts_data. in_vault вычисляется на лету."""
     coll: Collection | None = getattr(movie, "collection", None)
@@ -752,7 +773,8 @@ def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
     if coll is None:
         return None
 
-    parts_raw: list[dict] = list(coll.parts_data or [])
+    # Показываем части хронологически; сырой порядок TMDB остаётся в parts_data
+    parts_raw: list[dict] = sorted(coll.parts_data or [], key=_collection_part_sort_key)
     # Собираем карту tmdb_id -> Movie (slug) одним запросом
     tmdb_ids = [p.get("tmdb_id") for p in parts_raw if p.get("tmdb_id") is not None]
     vault_map: dict[int, str] = {}
@@ -2636,7 +2658,7 @@ def collection_refresh(request, tmdb_id: int):
     if movie is None:
         # fallback — собрать вручную
         parts_out: list[CollectionPartOut] = []
-        for p in list(coll.parts_data or []):
+        for p in sorted(list(coll.parts_data or []), key=_collection_part_sort_key):
             try:
                 pid = int(p.get("tmdb_id"))
             except Exception:
