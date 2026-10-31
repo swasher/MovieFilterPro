@@ -274,6 +274,16 @@ class Movie(models.Model):
                 name='movie_fts_ru_gin_idx',
             ),
         ]
+        constraints = [
+            # Пара (tmdb_id, tmdb_media_type) уникальна: числовые ID фильмов и
+            # сериалов в TMDB живут в разных неймспейсах и могут совпадать у
+            # разных произведений. Строки с tmdb_id NULL ограничению не мешают
+            # (в Postgres NULL не равен NULL).
+            models.UniqueConstraint(
+                fields=['tmdb_id', 'tmdb_media_type'],
+                name='uniq_movie_tmdb_pair',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.year})" if self.year else self.title

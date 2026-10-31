@@ -155,6 +155,31 @@ class TMDBMovieSyncService:
                     message=msg,
                 )
 
+            # Пара (tmdb_id, tmdb_media_type) уникальна на уровне БД: если её уже
+            # держит другой фильм (напр. две строки Kinorium сматчились в один
+            # TMDB ID) — не падаем в IntegrityError, а отдаём понятную ошибку.
+            holder = (
+                Movie.objects.filter(tmdb_id=candidate.tmdb_id, tmdb_media_type=media_type)
+                .exclude(pk=movie.pk)
+                .first()
+            )
+            if holder is not None:
+                msg = (
+                    f"Этот TMDB ID уже привязан к фильму «{holder.title}» "
+                    f"({holder.year or '?'}, {holder.slug})"
+                )
+                cls._log_done(
+                    "error",
+                    msg,
+                    movie=movie,
+                    tmdb_id=candidate.tmdb_id,
+                    media_type=media_type,
+                )
+                return TMDBSyncResult(
+                    status="error",
+                    message=msg,
+                )
+
             updated_fields: list[str] = []
             set_field = cls._field_setter(movie, updated_fields)
 

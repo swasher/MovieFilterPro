@@ -1442,7 +1442,6 @@
             {#if movie.original_title}
               <CardDescription class="vd-subtitle">{movie.original_title}</CardDescription>
             {/if}
-            <p class="font-mono text-xs text-muted-foreground">slug: {movie.slug}</p>
           </div>
 
           <div class="vd-facts-row">
