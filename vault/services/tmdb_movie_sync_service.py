@@ -14,7 +14,7 @@ from moviefilter.services.favorite_actor_matcher import (
     DEFAULT_SCORE_CUTOFF,
     normalize_actor_name,
 )
-from tmdb_adapter.client_singleton import get_tmdb_client
+from tmdb_adapter.client_singleton import get_person_basic, get_tmdb_client
 from web_logger import send_match_log
 from vault.models import Collection, Genre, Movie, MoviePerson, Episode, Person, PersonAlias, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
@@ -591,7 +591,7 @@ class TMDBMovieSyncService:
         movie.movie_persons.all().delete()
 
         # R5 простой путь: батч SELECT уже существующих Person (DB есть → пропуск API).
-        # Последовательно: фильм → список персон → кто в DB — пропуск, остальных — tmdb.person.
+        # Последовательно: фильм → список персон → кто в DB — пропуск, остальных — базовый TMDB-запрос.
         # Кэши живут только на время синхронизации текущего фильма и затем освобождаются.
         person_cache: dict[int, Person] = {}
         person_details_cache: dict[int, object | None] = {}
@@ -1186,7 +1186,7 @@ class TMDBMovieSyncService:
             from vault.services.tmdb_rate_limiter import TmdbRateLimiter
 
             TmdbRateLimiter.wait()
-            details = tmdb.person(person_id)
+            details = get_person_basic(tmdb, person_id)
         except Exception:
             details = None
 
@@ -1262,6 +1262,8 @@ class TMDBMovieSyncService:
             return "M"
         if gender == 1:
             return "F"
+        if gender == 3:
+            return "N"
         return ""
 
     @staticmethod

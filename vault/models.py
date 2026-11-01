@@ -49,6 +49,7 @@ class Person(models.Model):
     GENDER_CHOICES = [
         ('M', 'Мужской'),
         ('F', 'Женский'),
+        ('N', 'Небинарный'),
     ]
 
     tmdb_id = models.CharField(max_length=10, unique=True)

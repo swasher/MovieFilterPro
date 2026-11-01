@@ -1,4 +1,6 @@
-from typing import Optional
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Any, Optional
 from tmdbapis import TMDbAPIs
 from tmdbapis.exceptions import Authentication
 from threading import Lock
@@ -64,3 +66,76 @@ def get_tmdb_client_en() -> TMDbAPIs:
 
 def get_tmdb_config() -> Optional[dict]:
     return _tmdb_config
+
+
+@dataclass(frozen=True, slots=True)
+class PersonBasic:
+    """Только базовые поля TMDB-персоны, без кредитов, фото и переводов."""
+
+    id: int | None
+    name: str
+    imdb_id: str | None
+    birthday: date | None
+    deathday: date | None
+    place_of_birth: str
+    known_for_department: str
+    also_known_as: list[str]
+    profile_path: str | None
+    gender: int | None
+    biography: str
+    popularity: float | None
+
+
+def _parse_tmdb_date(value: Any) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_person_basic(tmdb: TMDbAPIs, person_id: int) -> Optional[PersonBasic]:
+    """
+    Лёгкий запрос /person/{id} без append_to_response.
+
+    Не использует tmdb.person(), потому что тот объект лениво догружает
+    кредиты, фото и переводы при обращении к части полей.
+    """
+    data = tmdb._api.people_get_details(
+        person_id,
+        language=getattr(tmdb, "language", None),
+    )
+    if not isinstance(data, dict):
+        return None
+
+    raw_aliases = data.get("also_known_as")
+    aliases = (
+        [item for item in raw_aliases if isinstance(item, str)]
+        if isinstance(raw_aliases, list)
+        else []
+    )
+
+    return PersonBasic(
+        id=data.get("id"),
+        name=data.get("name") or "",
+        imdb_id=data.get("imdb_id") or None,
+        birthday=_parse_tmdb_date(data.get("birthday")),
+        deathday=_parse_tmdb_date(data.get("deathday")),
+        place_of_birth=data.get("place_of_birth") or "",
+        known_for_department=data.get("known_for_department") or "",
+        also_known_as=aliases,
+        profile_path=data.get("profile_path") or None,
+        gender=data.get("gender"),
+        biography=data.get("biography") or "",
+        popularity=_as_float(data.get("popularity")),
+    )

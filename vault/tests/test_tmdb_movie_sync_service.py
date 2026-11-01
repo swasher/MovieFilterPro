@@ -15,6 +15,8 @@ class _FakeTMDBClient:
     def __init__(self, movie_details=None, person_details=None):
         self._movie_details = movie_details or {}
         self._person_details = person_details or {}
+        self.language = "RU"
+        self._api = SimpleNamespace(people_get_details=self._people_get_details)
 
     def movie(self, movie_id):
         return self._movie_details[movie_id]
@@ -22,7 +24,7 @@ class _FakeTMDBClient:
     def tv_show(self, tv_id):
         raise KeyError(tv_id)
 
-    def person(self, person_id):
+    def _people_get_details(self, person_id, language=None):
         if person_id not in self._person_details:
             raise KeyError(person_id)
         return self._person_details[person_id]
@@ -112,37 +114,39 @@ def _movie_details_without_people():
 
 def _person_details():
     return {
-        1001: SimpleNamespace(
-            id=1001,
-            imdb_id="nm0000190",
-            name="Matthew McConaughey",
-            profile_path="/actor1.jpg",
-            gender=2,
-            birthday=date(1969, 11, 4),
-            deathday=None,
-            place_of_birth="Houston, Texas, USA",
-            known_for_department="Acting",
-            also_known_as=[
+        1001: {
+            "id": 1001,
+            "imdb_id": "nm0000190",
+            "name": "Matthew McConaughey",
+            "profile_path": "/actor1.jpg",
+            "gender": 2,
+            "birthday": "1969-11-04",
+            "deathday": None,
+            "place_of_birth": "Houston, Texas, USA",
+            "known_for_department": "Acting",
+            "also_known_as": [
                 "Matty McConaughey",
                 "matty mcconaughey",
                 "Matthew McConaughey",
                 "",
             ],
-            biography="Actor",
-        ),
-        1002: SimpleNamespace(
-            id=1002,
-            imdb_id="nm0634240",
-            name="Christopher Nolan",
-            profile_path="/dir1.jpg",
-            gender=2,
-            birthday=date(1970, 7, 30),
-            deathday=None,
-            place_of_birth="London, England, UK",
-            known_for_department="Directing",
-            also_known_as=[],
-            biography="Director",
-        ),
+            "biography": "Actor",
+            "popularity": 1.0,
+        },
+        1002: {
+            "id": 1002,
+            "imdb_id": "nm0634240",
+            "name": "Christopher Nolan",
+            "profile_path": "/dir1.jpg",
+            "gender": 2,
+            "birthday": "1970-07-30",
+            "deathday": None,
+            "place_of_birth": "London, England, UK",
+            "known_for_department": "Directing",
+            "also_known_as": [],
+            "biography": "Director",
+            "popularity": 1.0,
+        },
     }
 
 
@@ -197,6 +201,7 @@ class TMDBMovieSyncServiceTests(TestCase):
 
         actor = Person.objects.get(tmdb_id="1001")
         self.assertEqual(actor.photo, "/actor1.jpg")
+        self.assertEqual(actor.birth_date, date(1969, 11, 4))
         self.assertEqual(actor.place_of_birth, "Houston, Texas, USA")
         self.assertEqual(actor.known_for_department, "Acting")
         self.assertEqual(
@@ -344,6 +349,13 @@ class TMDBMovieSyncServiceTests(TestCase):
         linked = movie.movie_persons.filter(role="actor").first()
         self.assertIsNotNone(linked)
         self.assertEqual(linked.person_id, old_person.pk)
+
+    def test_map_person_gender_supports_all_tmdb_values(self):
+        self.assertEqual(TMDBMovieSyncService._map_person_gender(0), "")
+        self.assertEqual(TMDBMovieSyncService._map_person_gender(1), "F")
+        self.assertEqual(TMDBMovieSyncService._map_person_gender(2), "M")
+        self.assertEqual(TMDBMovieSyncService._map_person_gender(3), "N")
+        self.assertEqual(TMDBMovieSyncService._map_person_gender(None), "")
 
     def test_match_source_label_maps_score_reasons(self):
         def label(reasons):
