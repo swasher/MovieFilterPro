@@ -58,6 +58,7 @@ class Person(models.Model):
     birth_date = models.DateField('Дата рождения', null=True, blank=True)
     death_date = models.DateField('Дата смерти', null=True, blank=True)
     place_of_birth = models.CharField('Место рождения', max_length=255, blank=True, default='')
+    known_for_department = models.CharField('Известен как', max_length=50, blank=True, default='')
     gender = models.CharField('Пол', max_length=1, choices=GENDER_CHOICES, blank=True)
     # photo = models.ImageField('Фото', upload_to='persons/', null=True, blank=True)
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')

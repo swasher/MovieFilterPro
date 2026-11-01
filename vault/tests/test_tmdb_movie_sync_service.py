@@ -121,6 +121,7 @@ def _person_details():
             birthday=date(1969, 11, 4),
             deathday=None,
             place_of_birth="Houston, Texas, USA",
+            known_for_department="Acting",
             biography="Actor",
         ),
         1002: SimpleNamespace(
@@ -132,6 +133,7 @@ def _person_details():
             birthday=date(1970, 7, 30),
             deathday=None,
             place_of_birth="London, England, UK",
+            known_for_department="Directing",
             biography="Director",
         ),
     }
@@ -189,6 +191,7 @@ class TMDBMovieSyncServiceTests(TestCase):
         actor = Person.objects.get(tmdb_id="1001")
         self.assertEqual(actor.photo, "/actor1.jpg")
         self.assertEqual(actor.place_of_birth, "Houston, Texas, USA")
+        self.assertEqual(actor.known_for_department, "Acting")
 
     @patch("vault.services.tmdb_movie_sync_service.get_tmdb_client")
     def test_sync_does_not_change_usermovie_state(self, get_tmdb_client_mock):

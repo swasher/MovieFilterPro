@@ -469,6 +469,7 @@ class PersonDetailOut(Schema):
     birth_date: str | None = None
     death_date: str | None = None
     place_of_birth: str | None = None
+    known_for_department: str | None = None
     gender: str | None = None
     gender_display: str | None = None
     movies_count: int
@@ -1789,6 +1790,7 @@ def person_detail(request, person_id: int):
         birth_date=_date_to_iso(person.birth_date),
         death_date=_date_to_iso(person.death_date),
         place_of_birth=person.place_of_birth or None,
+        known_for_department=person.known_for_department or None,
         gender=person.gender or None,
         gender_display=person.get_gender_display() if person.gender else None,
         movies_count=len(filmography),

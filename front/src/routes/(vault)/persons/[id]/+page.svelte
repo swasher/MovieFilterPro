@@ -36,6 +36,22 @@
       .filter(Boolean)
   );
 
+  const knownForLabels: Record<string, string> = {
+    Acting: "Актер",
+    Actors: "Актер",
+    Directing: "Режиссер",
+    Writing: "Сценарист",
+    Production: "Продюсер",
+    Sound: "Звук",
+    Camera: "Оператор",
+    Editing: "Монтажер",
+    Art: "Художник",
+    "Costume & Make-Up": "Костюмы и грим",
+    Crew: "Съемочная группа",
+    "Visual Effects": "Визуальные эффекты",
+    Lighting: "Освещение",
+  };
+
   const personAge = $derived.by(() => {
     if (!person.birth_date) return null;
     const birth = new Date(person.birth_date);
@@ -152,6 +168,14 @@
                 <div class="vd-fact">
                   <dt class="vd-fact-label">Place of birth</dt>
                   <dd class="vd-fact-value">{person.place_of_birth}</dd>
+                </div>
+              {/if}
+              {#if person.known_for_department}
+                <div class="vd-fact">
+                  <dt class="vd-fact-label">Known for</dt>
+                  <dd class="vd-fact-value" title={person.known_for_department}>
+                    {knownForLabels[person.known_for_department] ?? person.known_for_department}
+                  </dd>
                 </div>
               {/if}
               {#if person.gender_display}

@@ -1048,6 +1048,9 @@ class TMDBMovieSyncService:
         birth_date = getattr(details, "birthday", None)
         death_date = getattr(details, "deathday", None)
         place_of_birth = cls._clean_text(getattr(details, "place_of_birth", None), 255, "")
+        known_for_department = cls._clean_text(
+            getattr(details, "known_for_department", None), 50, ""
+        )
         biography = getattr(details, "biography", None) if details is not None else None
         popularity = cls._safe_float(
             cls._first_non_empty(getattr(credit, "popularity", None), getattr(details, "popularity", None))
@@ -1063,6 +1066,7 @@ class TMDBMovieSyncService:
                 birth_date=birth_date,
                 death_date=death_date,
                 place_of_birth=place_of_birth,
+                known_for_department=known_for_department,
                 gender=gender,
                 photo=photo,
                 biography=biography or "",
@@ -1103,6 +1107,10 @@ class TMDBMovieSyncService:
         if place_of_birth and person.place_of_birth != place_of_birth:
             person.place_of_birth = place_of_birth
             update_fields.append("place_of_birth")
+
+        if known_for_department and person.known_for_department != known_for_department:
+            person.known_for_department = known_for_department
+            update_fields.append("known_for_department")
 
         if person.gender != gender:
             person.gender = gender
