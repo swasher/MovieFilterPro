@@ -2,7 +2,6 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase, TestCase
 
-from core.models import Country
 from vault.models import Movie, MoviePerson, Person
 from vault.services.tmdb_ai_matching_service import AICastComparison, TMDBAIMatchingService
 from vault.services.tmdb_match_resolver import TMDBMatchResolver
@@ -99,13 +98,11 @@ class CompareCastsTests(SimpleTestCase):
 
 class LocalActorNamesTests(TestCase):
     def _person(self, tmdb_id, imdb_id, name):
-        country = Country.objects.get_or_create(name="Unknown", defaults={"code": "XX"})[0]
         return Person.objects.create(
             tmdb_id=tmdb_id,
             imdb_id=imdb_id,
             name=name,
             original_name=name,
-            country=country,
         )
 
     def test_returns_top_actor_names_by_order(self):

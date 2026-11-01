@@ -163,7 +163,7 @@ class Command(BaseCommand):
         cache[name] = country
         return country
 
-    def _get_or_create_person(self, full_name: str, original_name: str, note: str, cache: dict, unknown_country: Country):
+    def _get_or_create_person(self, full_name: str, original_name: str, note: str, cache: dict):
         if not full_name and not original_name:
             return None
         key = (full_name or original_name).strip()
@@ -179,7 +179,6 @@ class Command(BaseCommand):
             name=full_name or original_name or '',
             original_name=original_name or full_name or '',
             biography=note or '',
-            country=unknown_country,
         )
         cache[key] = person
         return person
@@ -368,7 +367,7 @@ class Command(BaseCommand):
             name = director.strip()
             if not name:
                 continue
-            person = self._get_or_create_person(name, name, None, person_cache, unknown_country)
+            person = self._get_or_create_person(name, name, None, person_cache)
             if person:
                 MoviePerson.objects.get_or_create(movie=movie, person=person, role='director')
 
@@ -377,7 +376,7 @@ class Command(BaseCommand):
             name = actor.strip()
             if not name:
                 continue
-            person = self._get_or_create_person(name, name, None, person_cache, unknown_country)
+            person = self._get_or_create_person(name, name, None, person_cache)
             if person:
                 MoviePerson.objects.get_or_create(
                     movie=movie,
@@ -538,7 +537,6 @@ class Command(BaseCommand):
                         original_name=row.get('Original Name'),
                         note=row.get('Note'),
                         cache=person_cache,
-                        unknown_country=unknown_country,
                     )
                     if person:
                         stats['persons_imported'] += 1

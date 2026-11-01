@@ -1738,9 +1738,13 @@
           <div class="vd-section">
             <p class="vd-section-title">{isSeries ? "Создатели" : "Crew / Съемочная группа"}</p>
             {#if crewCards.length}
-              <div class="vd-crew-grid">
+              <div class="vd-crew-grid vd-crew-grid--compact">
                 {#each crewCards as person (person.id)}
-                  <PersonCard person={{ ...person, character_name: person._roleLabelCombined }} movieYear={movie.year} />
+                  <PersonCard
+                    person={{ ...person, character_name: person._roleLabelCombined }}
+                    movieYear={movie.year}
+                    compact
+                  />
                 {/each}
               </div>
             {:else}
@@ -1750,15 +1754,15 @@
 
           <div class="vd-section">
             <p class="vd-section-title">В ролях</p>
-            <div class="vd-crew-grid">
-              {#if movie.actors.length}
+            {#if movie.actors.length}
+              <div class="vd-person-strip">
                 {#each movie.actors as person, actorIdx (person.id + '-' + (person.character_name ?? '') + '-' + actorIdx)}
-                  <PersonCard {person} movieYear={movie.year} />
+                  <PersonCard {person} movieYear={movie.year} compact />
                 {/each}
-              {:else}
-                <p class="vd-empty">Нет данных</p>
-              {/if}
-            </div>
+              </div>
+            {:else}
+              <p class="vd-empty">Нет данных</p>
+            {/if}
           </div>
 
         </CardContent>

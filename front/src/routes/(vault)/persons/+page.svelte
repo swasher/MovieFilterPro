@@ -114,7 +114,7 @@
         <Input
           bind:value={searchQuery}
           type="search"
-          placeholder="Поиск актеров..."
+          placeholder="Поиск персон..."
           class="h-11 w-full pr-10"
           oninput={onSearchInput}
         />
@@ -182,7 +182,7 @@
 
   <Card class="vd-card">
     <CardHeader>
-      <CardTitle class="vd-section-title">Все актеры ({persons.length})</CardTitle>
+      <CardTitle class="vd-section-title">Все персоны ({persons.length})</CardTitle>
     </CardHeader>
     <CardContent class="vd-card-content">
       {#if data.apiError}

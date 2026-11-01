@@ -148,10 +148,10 @@
 
           <div class="vd-facts-grid">
             <dl class="vd-facts-list">
-              {#if person.country}
+              {#if person.place_of_birth}
                 <div class="vd-fact">
-                  <dt class="vd-fact-label">Country</dt>
-                  <dd class="vd-fact-value">{person.country}</dd>
+                  <dt class="vd-fact-label">Place of birth</dt>
+                  <dd class="vd-fact-value">{person.place_of_birth}</dd>
                 </div>
               {/if}
               {#if person.gender_display}

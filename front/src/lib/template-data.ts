@@ -26,7 +26,7 @@ export const defaultSidebarItems: SidebarItem[] = [
     href: "#",
     children: [
       { id: "all", title: "Все фильмы", href: "/", count: 0 },
-      { id: "all_persons", title: "Все актеры", href: "/persons", count: 0 },
+      { id: "all_persons", title: "Все персоны", href: "/persons", count: 0 },
       { id: "watched", title: "Просмотрено", href: "/?status=watched", count: 0 },
       { id: "will_watch", title: "Буду смотреть", href: "/?status=will_watch", count: 0 },
       { id: "wont_watch", title: "Не интересует", href: "/?status=wont_watch", count: 0 },

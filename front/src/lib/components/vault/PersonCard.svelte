@@ -13,7 +13,15 @@
     death_date?: string | null;
   };
 
-  let { person, movieYear }: { person: PersonCredit; movieYear?: number | null } = $props();
+  let {
+    person,
+    movieYear,
+    compact = false,
+  }: {
+    person: PersonCredit;
+    movieYear?: number | null;
+    compact?: boolean;
+  } = $props();
 
   let pointer = $state({ x: 0, y: 0 });
 
@@ -70,11 +78,22 @@
 <Tooltip.Root>
   <Tooltip.Trigger>
     {#snippet child({ props })}
-      <div role="presentation" class="block" onpointermove={(e) => (pointer = { x: e.clientX, y: e.clientY })}>
+      <div
+        role="presentation"
+        class="block"
+        class:vd-person-card--compact={compact}
+        onpointermove={(e) => (pointer = { x: e.clientX, y: e.clientY })}
+      >
         <a {...props} href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
           <div class="vd-filmography-card">
             {#if person.photo_url}
-              <img src={person.photo_url} alt={person.name} class="vd-photo" />
+              <img
+                src={person.photo_url}
+                alt={person.name}
+                class="vd-photo"
+                loading="lazy"
+                decoding="async"
+              />
             {:else}
               <div class="vd-photo-fallback">{initials(person.name)}</div>
             {/if}

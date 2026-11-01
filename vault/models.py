@@ -57,13 +57,12 @@ class Person(models.Model):
     original_name = models.CharField('Имя-Фимилия (EN)', max_length=100)
     birth_date = models.DateField('Дата рождения', null=True, blank=True)
     death_date = models.DateField('Дата смерти', null=True, blank=True)
+    place_of_birth = models.CharField('Место рождения', max_length=255, blank=True, default='')
     gender = models.CharField('Пол', max_length=1, choices=GENDER_CHOICES, blank=True)
     # photo = models.ImageField('Фото', upload_to='persons/', null=True, blank=True)
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
     popularity = models.FloatField('Популярность TMDB', null=True, blank=True, db_index=True)
-    # country = models.CharField('Страна', max_length=100, blank=True)
-    country = models.ForeignKey('core.Country', on_delete=models.RESTRICT)
 
     class Meta:
         verbose_name = 'Персона'

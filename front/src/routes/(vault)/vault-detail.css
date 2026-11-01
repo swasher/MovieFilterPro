@@ -371,6 +371,41 @@
     grid-template-columns: repeat(auto-fill, 140px);
   }
 
+  .vd-crew-grid--compact {
+    grid-template-columns: repeat(auto-fill, 96px);
+  }
+
+  .vd-person-strip {
+    @apply flex gap-3 overflow-x-auto pb-2;
+    scrollbar-width: thin;
+  }
+
+  .vd-person-card--compact {
+    @apply w-[96px] shrink-0;
+  }
+
+  .vd-person-card--compact .vd-crew-copy {
+    @apply p-1.5;
+  }
+
+  .vd-person-card--compact .vd-crew-title {
+    @apply text-[11px];
+  }
+
+  .vd-person-card--compact .vd-crew-subtitle {
+    @apply text-[10px];
+  }
+
+  @media (min-width: 768px) {
+    .vd-person-card--compact {
+      @apply w-[104px];
+    }
+
+    .vd-crew-grid--compact {
+      grid-template-columns: repeat(auto-fill, 104px);
+    }
+  }
+
   .vd-crew-inline {
     @apply flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm leading-6;
   }

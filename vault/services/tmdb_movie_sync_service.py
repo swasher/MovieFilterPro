@@ -597,7 +597,6 @@ class TMDBMovieSyncService:
 
         movie.movie_persons.all().delete()
 
-        unknown_country = cls._get_unknown_country()
         # R5 простой путь: батч SELECT уже существующих Person (DB есть → пропуск API).
         # Последовательно: фильм → список персон → кто в DB — пропуск, остальных — tmdb.person.
         # Глобальный кэш (_GLOBAL_*) остаётся для наблюдения, но кросс-фильм дедуп
@@ -628,7 +627,6 @@ class TMDBMovieSyncService:
             person = cls._upsert_person_from_credit(
                 tmdb=tmdb,
                 credit=credit,
-                unknown_country=unknown_country,
                 person_cache=person_cache,
                 person_details_cache=person_details_cache,
                 previous_index=previous_index,
@@ -659,7 +657,6 @@ class TMDBMovieSyncService:
             person = cls._upsert_person_from_credit(
                 tmdb=tmdb,
                 credit=credit,
-                unknown_country=unknown_country,
                 person_cache=person_cache,
                 person_details_cache=person_details_cache,
                 previous_index=previous_index,
@@ -706,7 +703,6 @@ class TMDBMovieSyncService:
             person = cls._upsert_person_from_credit(
                 tmdb=tmdb,
                 credit=credit,
-                unknown_country=unknown_country,
                 person_cache=person_cache,
                 person_details_cache=person_details_cache,
                 previous_index=previous_index,
@@ -998,7 +994,6 @@ class TMDBMovieSyncService:
         cls,
         tmdb,
         credit,
-        unknown_country: CoreCountry,
         person_cache: dict[int, Person],
         person_details_cache: dict[int, object | None],
         previous_index: PreviousPersonIndex | None = None,
@@ -1052,6 +1047,7 @@ class TMDBMovieSyncService:
         )
         birth_date = getattr(details, "birthday", None)
         death_date = getattr(details, "deathday", None)
+        place_of_birth = cls._clean_text(getattr(details, "place_of_birth", None), 255, "")
         biography = getattr(details, "biography", None) if details is not None else None
         popularity = cls._safe_float(
             cls._first_non_empty(getattr(credit, "popularity", None), getattr(details, "popularity", None))
@@ -1066,10 +1062,10 @@ class TMDBMovieSyncService:
                 original_name=original_name,
                 birth_date=birth_date,
                 death_date=death_date,
+                place_of_birth=place_of_birth,
                 gender=gender,
                 photo=photo,
                 biography=biography or "",
-                country=unknown_country,
                 popularity=popularity,
             )
             person_cache[person_id] = person
@@ -1102,6 +1098,12 @@ class TMDBMovieSyncService:
             person.death_date = death_date
             update_fields.append("death_date")
 
+        # Не затираем уже заполненное место рождения, если TMDB временно
+        # вернул пустое значение (например, при сбое загрузки деталей).
+        if place_of_birth and person.place_of_birth != place_of_birth:
+            person.place_of_birth = place_of_birth
+            update_fields.append("place_of_birth")
+
         if person.gender != gender:
             person.gender = gender
             update_fields.append("gender")
@@ -1113,10 +1115,6 @@ class TMDBMovieSyncService:
         if biography is not None and person.biography != biography:
             person.biography = biography
             update_fields.append("biography")
-
-        if not person.country_id:
-            person.country = unknown_country
-            update_fields.append("country")
 
         if popularity is not None and person.popularity != popularity:
             person.popularity = popularity
@@ -1206,18 +1204,6 @@ class TMDBMovieSyncService:
             if not Person.objects.filter(imdb_id=candidate).exists():
                 return candidate
         return imdb_id
-
-    @classmethod
-    def _get_unknown_country(cls) -> CoreCountry:
-        by_name = CoreCountry.objects.filter(name="Unknown").first()
-        if by_name:
-            return by_name
-
-        by_code = CoreCountry.objects.filter(code="XX").first()
-        if by_code:
-            return by_code
-
-        return CoreCountry.objects.create(name="Unknown", code="XX")
 
     @staticmethod
     def _map_person_gender(gender: int | None) -> str:

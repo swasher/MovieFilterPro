@@ -32,8 +32,8 @@ class CountryAdmin(admin.ModelAdmin):
 
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'birth_date', 'country', 'gender', 'photo_preview']
-    list_filter = ['country', 'gender', 'birth_date']
+    list_display = ['full_name', 'birth_date', 'gender', 'photo_preview']
+    list_filter = ['gender', 'birth_date']
     search_fields = ['first_name', 'last_name']
     date_hierarchy = 'birth_date'
 
@@ -45,7 +45,7 @@ class PersonAdmin(admin.ModelAdmin):
             'fields': ('birth_date', 'death_date')
         }),
         ('Дополнительно', {
-            'fields': ('country', 'biography'),
+            'fields': ('biography',),
             'classes': ('collapse',)
         }),
     )

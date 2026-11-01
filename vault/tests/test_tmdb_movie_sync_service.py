@@ -120,6 +120,7 @@ def _person_details():
             gender=2,
             birthday=date(1969, 11, 4),
             deathday=None,
+            place_of_birth="Houston, Texas, USA",
             biography="Actor",
         ),
         1002: SimpleNamespace(
@@ -130,6 +131,7 @@ def _person_details():
             gender=2,
             birthday=date(1970, 7, 30),
             deathday=None,
+            place_of_birth="London, England, UK",
             biography="Director",
         ),
     }
@@ -186,6 +188,7 @@ class TMDBMovieSyncServiceTests(TestCase):
 
         actor = Person.objects.get(tmdb_id="1001")
         self.assertEqual(actor.photo, "/actor1.jpg")
+        self.assertEqual(actor.place_of_birth, "Houston, Texas, USA")
 
     @patch("vault.services.tmdb_movie_sync_service.get_tmdb_client")
     def test_sync_does_not_change_usermovie_state(self, get_tmdb_client_mock):
@@ -232,27 +235,23 @@ class TMDBMovieSyncServiceTests(TestCase):
         )
         get_tmdb_client_mock.return_value = fake_tmdb
 
-        unknown_country = Country.objects.create(name="Unknown", code="XX")
         orphan = Person.objects.create(
             tmdb_id="9001",
             imdb_id="im9000001",
             name="Orphan Person",
             original_name="Orphan Person",
-            country=unknown_country,
         )
         favorite_orphan = Person.objects.create(
             tmdb_id="9002",
             imdb_id="im9000002",
             name="Favorite Orphan",
             original_name="Favorite Orphan",
-            country=unknown_country,
         )
         linked = Person.objects.create(
             tmdb_id="9003",
             imdb_id="im9000003",
             name="Linked Person",
             original_name="Linked Person",
-            country=unknown_country,
         )
 
         user = User.objects.create_user(username="fav_user", password="x")
@@ -297,13 +296,11 @@ class TMDBMovieSyncServiceTests(TestCase):
         )
         get_tmdb_client_mock.return_value = fake_tmdb
 
-        unknown_country = Country.objects.create(name="Unknown", code="XX")
         old_person = Person.objects.create(
             tmdb_id="k000000001",
             imdb_id="im00000001",
             name="Мэттью МакКонахи",
             original_name="Мэттью МакКонахи",
-            country=unknown_country,
         )
         movie = Movie.objects.create(
             title="Интерстеллар",

@@ -9,7 +9,6 @@ from uuid import uuid4
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from core.models import Country
 from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, WAIT_TRANS
 from moviefilter.image_caching import CACHE_STATUS_MISSING, CACHE_STATUS_PENDING, CACHE_STATUS_READY
 from moviefilter.models import MovieRSS, UserPreferences
@@ -374,13 +373,11 @@ class KinozalApiFavoriteActorsTests(TestCase):
         self.client.force_login(self.user)
         UserPreferences.objects.create(user=self.user, kinozal_domain="kinozal.tv")
 
-        self.country = Country.objects.create(name="USA", code="US")
         self.person = Person.objects.create(
             tmdb_id="100",
             imdb_id="nm100",
             name="Дайан Лэйн",
             original_name="Diane Lane",
-            country=self.country,
         )
         FavoritePerson.objects.create(user=self.user, person=self.person)
 

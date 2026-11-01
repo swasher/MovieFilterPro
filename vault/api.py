@@ -468,7 +468,7 @@ class PersonDetailOut(Schema):
     biography: str
     birth_date: str | None = None
     death_date: str | None = None
-    country: str | None = None
+    place_of_birth: str | None = None
     gender: str | None = None
     gender_display: str | None = None
     movies_count: int
@@ -1239,7 +1239,7 @@ def movie_detail(request, slug: str):
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
             )
-            for item in movie.get_actors().select_related("person")[:12]
+            for item in movie.get_actors().select_related("person")
         ],
         seasons=[
             _build_season_out(season, user=user)
@@ -1646,7 +1646,7 @@ def person_list(
     """Минимальный список персон: поиск по имени, фильтр избранного, сортировка."""
     user = _resolve_api_user(request)
     bounded = max(1, min(limit, 50))
-    qs = Person.objects.annotate(movies_count=Count("person_movies"))
+    qs = Person.objects.annotate(movies_count=Count("person_movies__movie", distinct=True))
     if q:
         query = (q or "").strip()
         if query:
@@ -1768,6 +1768,16 @@ def person_detail(request, person_id: int):
 
     years = [item.movie.year for item in filmography_qs if item.movie.year is not None]
 
+    def count_movies_for_role(role: str) -> int:
+        """Количество уникальных фильмов с указанной ролью, а не число связей."""
+        return (
+            filmography_qs.filter(role=role)
+            .order_by()
+            .values("movie_id")
+            .distinct()
+            .count()
+        )
+
     return PersonDetailOut(
         id=person.id,
         name=person.name,
@@ -1778,19 +1788,19 @@ def person_detail(request, person_id: int):
         biography=person.biography or "",
         birth_date=_date_to_iso(person.birth_date),
         death_date=_date_to_iso(person.death_date),
-        country=person.country.name if person.country_id else None,
+        place_of_birth=person.place_of_birth or None,
         gender=person.gender or None,
         gender_display=person.get_gender_display() if person.gender else None,
         movies_count=len(filmography),
-        roles_count=filmography_qs.values("role").distinct().count(),
+        roles_count=filmography_qs.order_by().values("role").distinct().count(),
         career_years=(max(years) - min(years)) if years else 0,
         filmography=filmography,
-        actor_count=filmography_qs.filter(role="actor").count(),
-        director_count=filmography_qs.filter(role="director").count(),
-        producer_count=filmography_qs.filter(role="producer").count(),
-        screenplay_count=filmography_qs.filter(role="screenplay").count(),
-        writer_count=filmography_qs.filter(role="writer").count(),
-        showrunner_count=filmography_qs.filter(role="showrunner").count(),
+        actor_count=count_movies_for_role("actor"),
+        director_count=count_movies_for_role("director"),
+        producer_count=count_movies_for_role("producer"),
+        screenplay_count=count_movies_for_role("screenplay"),
+        writer_count=count_movies_for_role("writer"),
+        showrunner_count=count_movies_for_role("showrunner"),
         is_favorite=is_favorite,
     )
 
@@ -1846,7 +1856,7 @@ def sidebar_data(request):
     )
     all_persons_item = SidebarItemOut(
         id=ALL_PERSONS_SIDEBAR_ITEM_ID,
-        title="Все актеры",
+        title="Все персоны",
         href="/persons",
         count=Person.objects.count(),
     )
