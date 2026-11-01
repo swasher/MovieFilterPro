@@ -52,6 +52,12 @@
     Lighting: "Освещение",
   };
 
+  function formatPersonDate(iso: string | null | undefined): string {
+    if (!iso) return "";
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+    return match ? `${match[3]}.${match[2]}.${match[1]}` : iso;
+  }
+
   const personAge = $derived.by(() => {
     if (!person.birth_date) return null;
     const birth = new Date(person.birth_date);
@@ -187,8 +193,8 @@
               {#if person.birth_date}
                 <div class="vd-fact">
                   <dt class="vd-fact-label">Born</dt>
-                  <dd class="vd-fact-value">
-                    {person.birth_date}
+                  <dd class="vd-fact-value" title={person.birth_date}>
+                    {formatPersonDate(person.birth_date)}
                     {#if personAge !== null}
                       <span class="text-muted-foreground">
                         · {personAge} {person.death_date ? "at death" : "years old"}
@@ -200,7 +206,7 @@
               {#if person.death_date}
                 <div class="vd-fact">
                   <dt class="vd-fact-label">Died</dt>
-                  <dd class="vd-fact-value">{person.death_date}</dd>
+                  <dd class="vd-fact-value" title={person.death_date}>{formatPersonDate(person.death_date)}</dd>
                 </div>
               {/if}
             </dl>
