@@ -1036,6 +1036,7 @@ class TMDBMovieSyncService:
             name,
             original_name,
         )
+        details_synced_at = timezone.now() if details is not None else None
         biography = getattr(details, "biography", None) if details is not None else None
         popularity = cls._safe_float(
             cls._first_non_empty(getattr(credit, "popularity", None), getattr(details, "popularity", None))
@@ -1056,6 +1057,7 @@ class TMDBMovieSyncService:
                 photo=photo,
                 biography=biography or "",
                 popularity=popularity,
+                person_details_synced_at=details_synced_at,
             )
             cls._sync_person_aliases(person, aliases)
             person_cache[person_id] = person
@@ -1114,6 +1116,10 @@ class TMDBMovieSyncService:
             person.popularity = popularity
             update_fields.append("popularity")
 
+        if details_synced_at is not None and person.person_details_synced_at != details_synced_at:
+            person.person_details_synced_at = details_synced_at
+            update_fields.append("person_details_synced_at")
+
         if update_fields:
             person.save(update_fields=update_fields)
 
@@ -1157,9 +1163,15 @@ class TMDBMovieSyncService:
         return aliases
 
     @classmethod
-    def _sync_person_aliases(cls, person: Person, aliases: list[str]) -> None:
+    def _sync_person_aliases(
+        cls,
+        person: Person,
+        aliases: list[str],
+        *,
+        clear_empty: bool = False,
+    ) -> None:
         """Синхронизирует TMDB-псевдонимы, не трогая ручные."""
-        if not aliases:
+        if not aliases and not clear_empty:
             return
 
         existing = set(
@@ -1169,13 +1181,14 @@ class TMDBMovieSyncService:
             return
 
         person.aliases.filter(source="tmdb").delete()
-        PersonAlias.objects.bulk_create(
-            [
-                PersonAlias(person=person, name=alias, source="tmdb")
-                for alias in aliases
-            ],
-            ignore_conflicts=True,
-        )
+        if aliases:
+            PersonAlias.objects.bulk_create(
+                [
+                    PersonAlias(person=person, name=alias, source="tmdb")
+                    for alias in aliases
+                ],
+                ignore_conflicts=True,
+            )
 
     @classmethod
     def _load_person_details(cls, tmdb, person_id: int, cache: dict[int, object | None]):

@@ -65,6 +65,12 @@ class Person(models.Model):
     photo = models.CharField('Путь к фото', max_length=255, blank=True, null=True, help_text='Относительный путь к фото (например: /pynwU6PGLAdDE840rC9m6jEahWg.jpg)')
     biography = models.TextField('Биография', blank=True)
     popularity = models.FloatField('Популярность TMDB', null=True, blank=True, db_index=True)
+    person_details_synced_at = models.DateTimeField(
+        'Детали TMDB синхронизированы',
+        null=True,
+        blank=True,
+        db_index=True,
+    )
 
     class Meta:
         verbose_name = 'Персона'

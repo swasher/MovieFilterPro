@@ -204,6 +204,7 @@ class TMDBMovieSyncServiceTests(TestCase):
         self.assertEqual(actor.birth_date, date(1969, 11, 4))
         self.assertEqual(actor.place_of_birth, "Houston, Texas, USA")
         self.assertEqual(actor.known_for_department, "Acting")
+        self.assertIsNotNone(actor.person_details_synced_at)
         self.assertEqual(
             set(actor.aliases.values_list("name", flat=True)),
             {"Matty McConaughey"},
