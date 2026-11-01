@@ -4,11 +4,78 @@
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
+  import * as ImageZoom from "$lib/components/ui/image-zoom";
   import { ArrowLeft, Heart } from "@lucide/svelte";
   import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
 
+  type PersonImage = {
+    file_path: string;
+    url: string | null;
+    thumb_url: string | null;
+    width: number | null;
+    height: number | null;
+    aspect_ratio: number | null;
+    vote_average: number | null;
+    vote_count: number;
+  };
+
   let { data } = $props();
   const person = $derived(data.person);
+
+  const canLoadImages = $derived(!!person.tmdb_id && /^\d+$/.test(person.tmdb_id));
+  let images = $state<PersonImage[]>([]);
+  let imagesLoading = $state(true);
+  let imagesError = $state("");
+  let loadedImagesPersonId: number | null = null;
+  let imagesRequestId = 0;
+  const displayImages = $derived(images.filter((image) => !!image.url || !!image.thumb_url));
+
+  async function loadPersonImages(personId: number) {
+    const requestId = ++imagesRequestId;
+    imagesLoading = true;
+    imagesError = "";
+    images = [];
+
+    try {
+      const response = await fetch(`/api/vault/persons/${personId}/images?limit=8`);
+      const payload = (await response.json().catch(() => ({}))) as {
+        items?: PersonImage[];
+        error?: string | null;
+      };
+
+      if (requestId !== imagesRequestId) return;
+
+      if (!response.ok) {
+        imagesError = payload.error ?? `HTTP ${response.status}`;
+        return;
+      }
+
+      images = Array.isArray(payload.items) ? payload.items : [];
+      imagesError = payload.error ?? "";
+    } catch (error) {
+      if (requestId !== imagesRequestId) return;
+      imagesError = error instanceof Error ? error.message : "Не удалось загрузить фото";
+    } finally {
+      if (requestId === imagesRequestId) {
+        imagesLoading = false;
+      }
+    }
+  }
+
+  $effect(() => {
+    const personId = person.id;
+    if (loadedImagesPersonId === personId) return;
+    loadedImagesPersonId = personId;
+
+    if (!canLoadImages) {
+      imagesLoading = false;
+      images = [];
+      imagesError = "";
+      return;
+    }
+
+    void loadPersonImages(personId);
+  });
 
   let isFavorite = $state(person.is_favorite);
   let favoriteBusy = $state(false);
@@ -102,7 +169,9 @@
       <Card class="vd-poster-card !gap-0 !py-0">
         <CardContent class="!p-0">
           {#if person.photo_url}
-            <img src={person.photo_url} alt={person.name} class="vd-photo" />
+            <ImageZoom.Root>
+              <ImageZoom.Trigger src={person.photo_url} alt={person.name} class="vd-photo" />
+            </ImageZoom.Root>
           {:else}
             <div class="vd-photo-fallback">
               <Avatar.Root class="size-28">
@@ -250,6 +319,39 @@
           </CardContent>
         {/if}
       </Card>
+
+      {#if canLoadImages && (imagesLoading || displayImages.length || imagesError)}
+        <Card class="vd-card">
+          <CardHeader>
+            <CardTitle class="text-xl">Фото персоны</CardTitle>
+          </CardHeader>
+          <CardContent class="vd-card-content">
+            {#if imagesLoading}
+              <div class="vd-person-photos">
+                {#each Array.from({ length: 5 }) as _, index (index)}
+                  <div class="vd-person-photo-skeleton"></div>
+                {/each}
+              </div>
+            {:else if displayImages.length}
+              <ImageZoom.Root>
+                <div class="vd-person-photos">
+                  {#each displayImages as image (image.file_path)}
+                    <ImageZoom.Trigger
+                      src={image.url ?? image.thumb_url ?? ""}
+                      alt={person.name}
+                      class="vd-person-photo"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  {/each}
+                </div>
+              </ImageZoom.Root>
+            {:else if imagesError}
+              <p class="vd-empty">{imagesError}</p>
+            {/if}
+          </CardContent>
+        </Card>
+      {/if}
 
       <Card class="vd-card">
         <CardHeader>

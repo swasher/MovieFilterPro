@@ -104,6 +104,15 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _as_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_person_basic(tmdb: TMDbAPIs, person_id: int) -> Optional[PersonBasic]:
     """
     Лёгкий запрос /person/{id} без append_to_response.
@@ -139,3 +148,60 @@ def get_person_basic(tmdb: TMDbAPIs, person_id: int) -> Optional[PersonBasic]:
         biography=data.get("biography") or "",
         popularity=_as_float(data.get("popularity")),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class PersonImageBasic:
+    file_path: str
+    width: int | None
+    height: int | None
+    aspect_ratio: float | None
+    vote_average: float | None
+    vote_count: int
+    iso_639_1: str
+
+
+def get_person_images(
+    tmdb: TMDbAPIs,
+    person_id: int,
+    limit: int = 8,
+) -> list[PersonImageBasic]:
+    """Лёгкий запрос /person/{id}/images без append_to_response."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 8
+    limit = max(1, min(limit, 20))
+
+    data = tmdb._api.people_get_images(person_id)
+    if not isinstance(data, dict):
+        return []
+
+    profiles = data.get("profiles")
+    if not isinstance(profiles, list):
+        return []
+
+    result: list[PersonImageBasic] = []
+    for item in profiles:
+        if not isinstance(item, dict):
+            continue
+
+        file_path = item.get("file_path")
+        if not isinstance(file_path, str) or not file_path.strip():
+            continue
+
+        result.append(
+            PersonImageBasic(
+                file_path=file_path.strip(),
+                width=_as_int(item.get("width")),
+                height=_as_int(item.get("height")),
+                aspect_ratio=_as_float(item.get("aspect_ratio")),
+                vote_average=_as_float(item.get("vote_average")),
+                vote_count=_as_int(item.get("vote_count")) or 0,
+                iso_639_1=item.get("iso_639_1") or "",
+            )
+        )
+        if len(result) >= limit:
+            break
+
+    return result

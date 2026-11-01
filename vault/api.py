@@ -9,6 +9,7 @@ from ninja.errors import HttpError
 
 logger = logging.getLogger("vault.tmdb_writeback")
 logger_qbt = logging.getLogger("vault.qbittorrent")
+logger_tmdb_images = logging.getLogger("vault.tmdb.images")
 
 from qbittorrent.models import Torrent
 from qbittorrent.services import torrent_service as qbt_torrent_service
@@ -28,6 +29,7 @@ from vault.models import (
     UserMovie,
     UserSeason,
     VaultConnectionEvent,
+    _build_tmdb_image_url,
 )
 from vault.services.movie_search_service import MovieSearchService
 from vault.services.movie_status_service import MovieStatusService
@@ -485,6 +487,22 @@ class PersonDetailOut(Schema):
     writer_count: int
     showrunner_count: int
     is_favorite: bool
+
+
+class PersonImageOut(Schema):
+    file_path: str
+    url: str | None = None
+    thumb_url: str | None = None
+    width: int | None = None
+    height: int | None = None
+    aspect_ratio: float | None = None
+    vote_average: float | None = None
+    vote_count: int = 0
+
+
+class PersonImagesOut(Schema):
+    items: list[PersonImageOut] = []
+    error: str | None = None
 
 
 class TogglePersonFavoriteOut(Schema):
@@ -1815,6 +1833,57 @@ def person_detail(request, person_id: int):
         writer_count=count_movies_for_role("writer"),
         showrunner_count=count_movies_for_role("showrunner"),
         is_favorite=is_favorite,
+    )
+
+
+@api.get("/persons/{person_id}/images", response=PersonImagesOut)
+def person_images(request, person_id: int, limit: int = 8):
+    """Ленивая загрузка фотографий персоны напрямую из TMDB, без сохранения в БД."""
+    person = Person.objects.filter(id=person_id).first()
+    if person is None:
+        raise HttpError(404, "Person not found")
+
+    try:
+        tmdb_person_id = int(person.tmdb_id)
+    except (TypeError, ValueError):
+        return PersonImagesOut(items=[])
+
+    bounded = max(1, min(limit, 20))
+
+    try:
+        from tmdb_adapter.client_singleton import get_person_images, get_tmdb_client
+        from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+        TmdbRateLimiter.wait()
+        # +1, чтобы после исключения основного фото всё ещё осталось limit штук.
+        images = get_person_images(
+            get_tmdb_client(),
+            tmdb_person_id,
+            limit=min(bounded + 1, 20),
+        )
+    except Exception:
+        logger_tmdb_images.exception("Failed to load TMDB images for person_id=%s", person_id)
+        return PersonImagesOut(
+            items=[],
+            error="Не удалось загрузить фото из TMDB",
+        )
+
+    items = [image for image in images if image.file_path != person.photo][:bounded]
+
+    return PersonImagesOut(
+        items=[
+            PersonImageOut(
+                file_path=image.file_path,
+                url=_build_tmdb_image_url(image.file_path, "w500"),
+                thumb_url=_build_tmdb_image_url(image.file_path, "w185"),
+                width=image.width,
+                height=image.height,
+                aspect_ratio=image.aspect_ratio,
+                vote_average=image.vote_average,
+                vote_count=image.vote_count,
+            )
+            for image in items
+        ]
     )
 
 

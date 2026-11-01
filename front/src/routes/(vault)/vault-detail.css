@@ -380,6 +380,19 @@
     scrollbar-width: thin;
   }
 
+  .vd-person-photos {
+    @apply flex flex-nowrap items-start gap-3 overflow-x-auto overflow-y-hidden pb-2;
+    scrollbar-width: thin;
+  }
+
+  .vd-person-photo {
+    @apply h-[180px] w-[120px] shrink-0 rounded-xl object-cover;
+  }
+
+  .vd-person-photo-skeleton {
+    @apply h-[180px] w-[120px] shrink-0 animate-pulse rounded-xl bg-muted;
+  }
+
   .vd-person-card--compact {
     @apply w-[96px] shrink-0;
   }
