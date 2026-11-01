@@ -16,7 +16,7 @@ from moviefilter.services.favorite_actor_matcher import (
 )
 from tmdb_adapter.client_singleton import get_tmdb_client
 from web_logger import send_match_log
-from vault.models import Collection, Genre, Movie, MoviePerson, Episode, Person, Season, UserMovie, UserSeason
+from vault.models import Collection, Genre, Movie, MoviePerson, Episode, Person, PersonAlias, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
     TMDBCandidate,
     TMDBMovieMatchingService,
@@ -28,13 +28,6 @@ from vault.services.omdb_service import OMDBService
 SyncStatus = Literal["ok", "needs_confirmation", "needs_user_choice", "error"]
 MediaType = Literal["movie", "tv"]
 logger = logging.getLogger("vault.tmdb_sync")
-
-# R5 простой путь: процесс-локальный кэш персон для bulk (10K фильмов).
-# Избегает лишних tmdb.person вызовов: один SELECT на пачку ID + память.
-# Single-user, bulk sequential — достаточно. Инвалидация не нужна: новые персоны
-# вставляются в кэш сразу после создания.
-_GLOBAL_PERSON_CACHE: dict[int, Person] = {}
-_GLOBAL_PERSON_DETAILS_CACHE: dict[int, object | None] = {}
 
 
 @dataclass(slots=True, frozen=True)
@@ -599,8 +592,7 @@ class TMDBMovieSyncService:
 
         # R5 простой путь: батч SELECT уже существующих Person (DB есть → пропуск API).
         # Последовательно: фильм → список персон → кто в DB — пропуск, остальных — tmdb.person.
-        # Глобальный кэш (_GLOBAL_*) остаётся для наблюдения, но кросс-фильм дедуп
-        # делает DB (1 SELECT), чтобы не хранить stale Person после тестового rollback.
+        # Кэши живут только на время синхронизации текущего фильма и затем освобождаются.
         person_cache: dict[int, Person] = {}
         person_details_cache: dict[int, object | None] = {}
         # Батч-проверка DB для всех персон этого фильма (1 SELECT вместо N)
@@ -684,12 +676,6 @@ class TMDBMovieSyncService:
 
         # Для tv crew не синхронизируем — только showrunner + actors
         if is_tv:
-            # R5: прогреть глобальный кэш для следующих фильмов bulk
-            try:
-                _GLOBAL_PERSON_CACHE.update(person_cache)
-                _GLOBAL_PERSON_DETAILS_CACHE.update(person_details_cache)
-            except Exception:
-                pass
             after_keys = set(
                 movie.movie_persons.values_list("person_id", "role", "character_name")
             )
@@ -728,12 +714,6 @@ class TMDBMovieSyncService:
                 popularity=popularity,
             )
 
-        # R5: прогреть глобальный кэш для следующих фильмов bulk
-        try:
-            _GLOBAL_PERSON_CACHE.update(person_cache)
-            _GLOBAL_PERSON_DETAILS_CACHE.update(person_details_cache)
-        except Exception:
-            pass
         after_keys = set(
             movie.movie_persons.values_list("person_id", "role", "character_name")
         )
@@ -1051,6 +1031,11 @@ class TMDBMovieSyncService:
         known_for_department = cls._clean_text(
             getattr(details, "known_for_department", None), 50, ""
         )
+        aliases = cls._clean_aliases(
+            getattr(details, "also_known_as", None),
+            name,
+            original_name,
+        )
         biography = getattr(details, "biography", None) if details is not None else None
         popularity = cls._safe_float(
             cls._first_non_empty(getattr(credit, "popularity", None), getattr(details, "popularity", None))
@@ -1072,6 +1057,7 @@ class TMDBMovieSyncService:
                 biography=biography or "",
                 popularity=popularity,
             )
+            cls._sync_person_aliases(person, aliases)
             person_cache[person_id] = person
             return person
 
@@ -1131,8 +1117,65 @@ class TMDBMovieSyncService:
         if update_fields:
             person.save(update_fields=update_fields)
 
+        cls._sync_person_aliases(person, aliases)
         person_cache[person_id] = person
         return person
+
+    @classmethod
+    def _clean_aliases(
+        cls,
+        raw_aliases,
+        name: str,
+        original_name: str,
+    ) -> list[str]:
+        """Нормализует also_known_as из TMDB: убирает пустые, дубли и совпадения с именем."""
+        if not isinstance(raw_aliases, (list, tuple)):
+            return []
+
+        excluded = {
+            value.strip().casefold()
+            for value in (name, original_name)
+            if value and value.strip()
+        }
+        seen: set[str] = set()
+        aliases: list[str] = []
+
+        for raw in raw_aliases:
+            if not isinstance(raw, str):
+                continue
+
+            alias = cls._clean_text(raw, 255, "")
+            key = alias.casefold()
+            if not alias or key in excluded or key in seen:
+                continue
+
+            seen.add(key)
+            aliases.append(alias)
+            if len(aliases) >= 50:
+                break
+
+        return aliases
+
+    @classmethod
+    def _sync_person_aliases(cls, person: Person, aliases: list[str]) -> None:
+        """Синхронизирует TMDB-псевдонимы, не трогая ручные."""
+        if not aliases:
+            return
+
+        existing = set(
+            person.aliases.filter(source="tmdb").values_list("name", flat=True)
+        )
+        if existing == set(aliases):
+            return
+
+        person.aliases.filter(source="tmdb").delete()
+        PersonAlias.objects.bulk_create(
+            [
+                PersonAlias(person=person, name=alias, source="tmdb")
+                for alias in aliases
+            ],
+            ignore_conflicts=True,
+        )
 
     @classmethod
     def _load_person_details(cls, tmdb, person_id: int, cache: dict[int, object | None]):

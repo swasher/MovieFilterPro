@@ -19,6 +19,7 @@ from vault.models import (
     Movie,
     MoviePerson,
     Person,
+    PersonAlias,
     Season,
     SidebarLayout,
     TMDBSyncQueueItem,
@@ -470,6 +471,7 @@ class PersonDetailOut(Schema):
     death_date: str | None = None
     place_of_birth: str | None = None
     known_for_department: str | None = None
+    also_known_as: list[str] = []
     gender: str | None = None
     gender_display: str | None = None
     movies_count: int
@@ -1651,7 +1653,15 @@ def person_list(
     if q:
         query = (q or "").strip()
         if query:
-            qs = qs.filter(Q(name__icontains=query) | Q(original_name__icontains=query))
+            alias_match = PersonAlias.objects.filter(
+                person=OuterRef("pk"),
+                name__icontains=query,
+            )
+            qs = qs.filter(
+                Q(name__icontains=query)
+                | Q(original_name__icontains=query)
+                | Exists(alias_match)
+            )
     if is_favorite:
         if user is None:
             return []
@@ -1791,6 +1801,7 @@ def person_detail(request, person_id: int):
         death_date=_date_to_iso(person.death_date),
         place_of_birth=person.place_of_birth or None,
         known_for_department=person.known_for_department or None,
+        also_known_as=list(person.aliases.values_list("name", flat=True)),
         gender=person.gender or None,
         gender_display=person.get_gender_display() if person.gender else None,
         movies_count=len(filmography),

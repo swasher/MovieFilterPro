@@ -84,6 +84,30 @@ class Person(models.Model):
         return _build_tmdb_image_url(self.photo, size)
 
 
+class PersonAlias(models.Model):
+    """Альтернативное имя персоны (псевдоним, сценическое имя, вариант написания)."""
+    SOURCE_CHOICES = [
+        ('tmdb', 'TMDB'),
+        ('manual', 'Ручной'),
+    ]
+
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='aliases')
+    name = models.CharField('Псевдоним', max_length=255)
+    source = models.CharField('Источник', max_length=20, choices=SOURCE_CHOICES, default='tmdb')
+
+    class Meta:
+        verbose_name = 'Псевдоним персоны'
+        verbose_name_plural = 'Псевдонимы персон'
+        ordering = ['name']
+        unique_together = [('person', 'name')]
+        indexes = [
+            models.Index(fields=['name']),
+        ]
+
+    def __str__(self):
+        return f"{self.person}: {self.name}"
+
+
 class Genre(models.Model):
     """Модель жанров фильмов"""
     name = models.CharField('Название', max_length=50, unique=True)

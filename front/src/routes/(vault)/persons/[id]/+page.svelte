@@ -226,6 +226,17 @@
               </div>
             </div>
           </div>
+
+          {#if person.also_known_as.length}
+            <div class="vd-section">
+              <p class="vd-section-title">Also known as</p>
+              <div class="vd-tag-stack">
+                {#each person.also_known_as as alias (alias)}
+                  <span class="vd-chip">{alias}</span>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </CardHeader>
 
         {#if bioParagraphs.length}

@@ -26,6 +26,7 @@ type PersonDetail = {
   death_date: string | null;
   place_of_birth: string | null;
   known_for_department: string | null;
+  also_known_as: string[];
   gender: string | null;
   gender_display: string | null;
   movies_count: number;

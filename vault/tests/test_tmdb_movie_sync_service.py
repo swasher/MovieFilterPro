@@ -122,6 +122,12 @@ def _person_details():
             deathday=None,
             place_of_birth="Houston, Texas, USA",
             known_for_department="Acting",
+            also_known_as=[
+                "Matty McConaughey",
+                "matty mcconaughey",
+                "Matthew McConaughey",
+                "",
+            ],
             biography="Actor",
         ),
         1002: SimpleNamespace(
@@ -134,6 +140,7 @@ def _person_details():
             deathday=None,
             place_of_birth="London, England, UK",
             known_for_department="Directing",
+            also_known_as=[],
             biography="Director",
         ),
     }
@@ -192,6 +199,10 @@ class TMDBMovieSyncServiceTests(TestCase):
         self.assertEqual(actor.photo, "/actor1.jpg")
         self.assertEqual(actor.place_of_birth, "Houston, Texas, USA")
         self.assertEqual(actor.known_for_department, "Acting")
+        self.assertEqual(
+            set(actor.aliases.values_list("name", flat=True)),
+            {"Matty McConaughey"},
+        )
 
     @patch("vault.services.tmdb_movie_sync_service.get_tmdb_client")
     def test_sync_does_not_change_usermovie_state(self, get_tmdb_client_mock):

@@ -114,7 +114,7 @@
         <Input
           bind:value={searchQuery}
           type="search"
-          placeholder="Поиск персон..."
+          placeholder="Поиск по имени или псевдониму..."
           class="h-11 w-full pr-10"
           oninput={onSearchInput}
         />
