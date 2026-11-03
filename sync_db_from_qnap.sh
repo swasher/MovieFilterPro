@@ -11,20 +11,25 @@ set -euo pipefail
 # Подробности: ./sync_db_from_qnap.sh --help
 #
 # Настройки dev-базы берутся из .env: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
-# Настройки QNAP-базы — из .env: QNAP_POSTGRES_USER, QNAP_POSTGRES_PASSWORD, QNAP_POSTGRES_DB.
-# SSH на QNAP — по ключу, без пароля.
+# Настройки QNAP-базы (prod) — из .env.production: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
+# SSH на QNAP — под пользователем QNAP_USER (по умолчанию admin), по ключу, без пароля.
 # ------------------------------------------------------------------
 
 # ------------------------------------ #
 #              КОНСТАНТЫ               #
 # ------------------------------------ #
 QNAP_SSH_HOST="${QNAP_SSH_HOST:-qnap}"
-QNAP_CONTAINER_NAME="${QNAP_CONTAINER_NAME:-postgres-mfp}"
+QNAP_USER="${QNAP_USER:-admin}"
+QNAP_CONTAINER_NAME="${QNAP_CONTAINER_NAME:-mfp-postgres}"
+# Путь к docker на QNAP. Пусто = искать автоматически (Container Station
+# не добавляет свой bin в PATH неинтерактивного ssh-шелла).
+QNAP_DOCKER_BIN="${QNAP_DOCKER_BIN:-}"
 DEV_CONTAINER_NAME="${DEV_CONTAINER_NAME:-postgres-mfp}"
 DUMP_PREFIX="dump"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}"
+PROD_ENV_FILE="${PROD_ENV_FILE:-${SCRIPT_DIR}/.env.production}"
 
 usage() {
     cat <<EOF
@@ -38,25 +43,28 @@ usage() {
   --delete-dump удалить локальный файл дампа после успешного восстановления
   --help, -h    эта справка
 
-.env:
-  dev:  POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
-  QNAP: QNAP_POSTGRES_USER, QNAP_POSTGRES_PASSWORD, QNAP_POSTGRES_DB
+.env (dev):  POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+.env.production (QNAP/prod): POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+  (можно переопределить переменными окружения QNAP_POSTGRES_*)
 
 Константы в скрипте (можно переопределить переменными окружения):
   QNAP_SSH_HOST=${QNAP_SSH_HOST}
+  QNAP_USER=${QNAP_USER}
   QNAP_CONTAINER_NAME=${QNAP_CONTAINER_NAME}
+  QNAP_DOCKER_BIN=${QNAP_DOCKER_BIN:-<авто>}
   DEV_CONTAINER_NAME=${DEV_CONTAINER_NAME}
 EOF
 }
 
 # Читаем значение ключа из .env БЕЗ source: иначе bash-подстановка
 # ($var, !, `...`) ломается на спецсимволах в других строках (SECRET_KEY и т.п.).
+# Второй аргумент — файл (по умолчанию ENV_FILE).
 load_env_key() {
-    local key="$1" line val
-    line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" "${ENV_FILE}" \
+    local key="$1" file="${2:-${ENV_FILE}}" line val
+    line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" "${file}" \
         | grep -vE "^[[:space:]]*#" | tail -n 1 | tr -d '\r' || true)"
     if [[ -z "${line}" ]]; then
-        echo "ОШИБКА: в ${ENV_FILE} нет ${key}" >&2
+        echo "ОШИБКА: в ${file} нет ${key}" >&2
         return 1
     fi
     val="${line#*=}"
@@ -81,6 +89,19 @@ env_value() {
         return 0
     fi
     load_env_key "${key}"
+}
+
+# Значение из файла, с приоритетом переменной окружения с ДРУГИМ именем.
+# Нужно для prod: в .env.production ключи называются POSTGRES_*,
+# а переопределить их можно через QNAP_POSTGRES_* (чтобы не конфликтовать с dev).
+env_value_alt() {
+    local override_key="$1" file_key="$2" file="$3" override
+    override="${!override_key-}"
+    if [[ -n "${override}" ]]; then
+        printf '%s' "${override}"
+        return 0
+    fi
+    load_env_key "${file_key}" "${file}"
 }
 
 # ------------------------------------ #
@@ -120,6 +141,11 @@ if [[ ! -f "${ENV_FILE}" ]]; then
     exit 1
 fi
 
+if [[ ! -f "${PROD_ENV_FILE}" ]]; then
+    echo "ОШИБКА: .env.production не найден: ${PROD_ENV_FILE}" >&2
+    exit 1
+fi
+
 for tool in ssh docker; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         echo "ОШИБКА: ${tool} не найден в PATH." >&2
@@ -132,22 +158,32 @@ POSTGRES_USER="$(env_value POSTGRES_USER || true)"
 POSTGRES_PASSWORD="$(env_value POSTGRES_PASSWORD || true)"
 POSTGRES_DB="$(env_value POSTGRES_DB || true)"
 
-# -------------------- QNAP --------------------
-QNAP_POSTGRES_USER="$(env_value QNAP_POSTGRES_USER || true)"
-QNAP_POSTGRES_PASSWORD="$(env_value QNAP_POSTGRES_PASSWORD || true)"
-QNAP_POSTGRES_DB="$(env_value QNAP_POSTGRES_DB || true)"
+# -------------------- QNAP (prod) --------------------
+# Креды прод-базы лежат в .env.production под именами POSTGRES_*.
+# Переопределение через окружение — QNAP_POSTGRES_*.
+QNAP_POSTGRES_USER="$(env_value_alt QNAP_POSTGRES_USER POSTGRES_USER "${PROD_ENV_FILE}" || true)"
+QNAP_POSTGRES_PASSWORD="$(env_value_alt QNAP_POSTGRES_PASSWORD POSTGRES_PASSWORD "${PROD_ENV_FILE}" || true)"
+QNAP_POSTGRES_DB="$(env_value_alt QNAP_POSTGRES_DB POSTGRES_DB "${PROD_ENV_FILE}" || true)"
+
+MISSING_PROD=()
+[[ -n "${QNAP_POSTGRES_USER}" ]]     || MISSING_PROD+=("POSTGRES_USER")
+[[ -n "${QNAP_POSTGRES_PASSWORD}" ]] || MISSING_PROD+=("POSTGRES_PASSWORD")
+[[ -n "${QNAP_POSTGRES_DB}" ]]       || MISSING_PROD+=("POSTGRES_DB")
 
 MISSING=()
-[[ -n "${QNAP_POSTGRES_USER}" ]]     || MISSING+=("QNAP_POSTGRES_USER")
-[[ -n "${QNAP_POSTGRES_PASSWORD}" ]] || MISSING+=("QNAP_POSTGRES_PASSWORD")
-[[ -n "${QNAP_POSTGRES_DB}" ]]       || MISSING+=("QNAP_POSTGRES_DB")
 if [[ "${DO_RESTORE}" -eq 1 ]]; then
     [[ -n "${POSTGRES_USER}" ]]     || MISSING+=("POSTGRES_USER")
     [[ -n "${POSTGRES_PASSWORD}" ]] || MISSING+=("POSTGRES_PASSWORD")
     [[ -n "${POSTGRES_DB}" ]]       || MISSING+=("POSTGRES_DB")
 fi
-if [[ ${#MISSING[@]} -gt 0 ]]; then
-    echo "ОШИБКА: в ${ENV_FILE} не заданы: ${MISSING[*]}" >&2
+
+if [[ ${#MISSING_PROD[@]} -gt 0 || ${#MISSING[@]} -gt 0 ]]; then
+    if [[ ${#MISSING_PROD[@]} -gt 0 ]]; then
+        echo "ОШИБКА: в ${PROD_ENV_FILE} не заданы: ${MISSING_PROD[*]}" >&2
+    fi
+    if [[ ${#MISSING[@]} -gt 0 ]]; then
+        echo "ОШИБКА: в ${ENV_FILE} не заданы: ${MISSING[*]}" >&2
+    fi
     exit 1
 fi
 
@@ -181,9 +217,9 @@ mkdir -p "${DUMP_DIR}"
 # ------------------------------------ #
 # Значения передаем позиционными аргументами, экранируя их локальным %q:
 # ssh склеивает аргументы через пробел, поэтому кавычки ставим заранее.
-remote_args="$(printf '%q' "${QNAP_CONTAINER_NAME}") $(printf '%q' "${QNAP_POSTGRES_USER}") $(printf '%q' "${QNAP_POSTGRES_PASSWORD}") $(printf '%q' "${QNAP_POSTGRES_DB}")"
+remote_args="$(printf '%q' "${QNAP_CONTAINER_NAME}") $(printf '%q' "${QNAP_POSTGRES_USER}") $(printf '%q' "${QNAP_POSTGRES_PASSWORD}") $(printf '%q' "${QNAP_POSTGRES_DB}") $(printf '%q' "${QNAP_DOCKER_BIN}")"
 
-echo "==> Источник: ${QNAP_SSH_HOST}:${QNAP_CONTAINER_NAME} db=${QNAP_POSTGRES_DB}"
+echo "==> Источник: ${QNAP_USER}@${QNAP_SSH_HOST}:${QNAP_CONTAINER_NAME} db=${QNAP_POSTGRES_DB}"
 echo "==> Дамп:     ${DUMP_PATH}"
 
 cleanup_partial() {
@@ -194,33 +230,54 @@ cleanup_partial() {
 }
 trap cleanup_partial ERR
 
-if ! ssh -o BatchMode=yes "${QNAP_SSH_HOST}" "bash -s -- ${remote_args}" <<'REMOTE' > "${DUMP_PATH}"
+if ! ssh -o BatchMode=yes "${QNAP_USER}@${QNAP_SSH_HOST}" "bash -s -- ${remote_args}" <<'REMOTE' > "${DUMP_PATH}"
 set -euo pipefail
 container="$1"
 pguser="$2"
 pgpass="$3"
 pgdb="$4"
+docker_bin="${5:-}"
 
-if ! command -v docker >/dev/null 2>&1; then
+# Container Station на QNAP не добавляет свой bin в PATH неинтерактивного
+# ssh-шелла, поэтому если docker не задан явно — ищем бинарь сами.
+if [[ -z "${docker_bin}" ]]; then
+    docker_bin="$(command -v docker 2>/dev/null || true)"
+fi
+if [[ -z "${docker_bin}" ]]; then
+    for candidate in \
+        /share/*/.qpkg/container-station/bin/docker \
+        /share/*/.qpkg/*/bin/docker \
+        /usr/local/bin/docker \
+        /opt/bin/docker; do
+        if [[ -x "${candidate}" ]]; then
+            docker_bin="${candidate}"
+            break
+        fi
+    done
+fi
+if [[ -z "${docker_bin}" ]]; then
     echo "ОШИБКА: docker не найден на удаленном хосте." >&2
+    echo "Задай путь явно: QNAP_DOCKER_BIN=/share/.../container-station/bin/docker ./sync_db_from_qnap.sh" >&2
     exit 1
 fi
+echo "docker: ${docker_bin}" >&2
 
-if ! docker ps --format '{{.Names}}' | grep -qx "${container}"; then
+if ! "${docker_bin}" ps --format '{{.Names}}' | grep -qx "${container}"; then
     echo "ОШИБКА: контейнер '${container}' не найден среди запущенных на удаленном хосте." >&2
-    docker ps --format '{{.Names}}' >&2 || true
+    "${docker_bin}" ps --format '{{.Names}}' >&2 || true
     exit 1
 fi
 
-docker exec -e PGPASSWORD="${pgpass}" "${container}" pg_dump --version >&2
-exec docker exec -e PGPASSWORD="${pgpass}" "${container}" \
+"${docker_bin}" exec -e PGPASSWORD="${pgpass}" "${container}" pg_dump --version >&2
+exec "${docker_bin}" exec -e PGPASSWORD="${pgpass}" "${container}" \
     pg_dump -U "${pguser}" -d "${pgdb}" -F c -Z 9
 REMOTE
 then
     cleanup_partial
     trap - ERR
-    echo "ОШИБКА: не удалось снять дамп с ${QNAP_SSH_HOST}." >&2
-    echo "Проверь SSH-доступ (ключ), имя контейнера и QNAP_POSTGRES_* в .env." >&2
+    echo "ОШИБКА: не удалось снять дамп с ${QNAP_USER}@${QNAP_SSH_HOST}." >&2
+    echo "Проверь SSH-доступ (ключ), имя контейнера и POSTGRES_* в ${PROD_ENV_FILE}." >&2
+    echo "Если docker не в PATH — задай QNAP_DOCKER_BIN (например, /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker)." >&2
     exit 1
 fi
 
