@@ -5,8 +5,10 @@ set -euo pipefail
 # Обратный к sync_db_from_qnap.sh: dev -> QNAP (prod).
 #   1. Берем последний дамп из ./backups (или указанный через --file).
 #   2. (по умолчанию) Снимаем страховочный дамп прод-базы в ./backups.
-#   3. По SSH стримим дамп на QNAP и восстанавливаем в базу:
+#   3. Останавливаем приложение на QNAP (Django/huey).
+#   4. По SSH стримим дамп на QNAP и восстанавливаем в базу:
 #      DROP DATABASE ... WITH (FORCE) + CREATE + pg_restore (или psql для *.sql).
+#   5. Заново поднимаем приложение (в том числе если восстановление упало).
 #
 # Использование: ./restore_postgres_to_qnap.sh [опции]
 # Подробности: ./restore_postgres_to_qnap.sh --help
@@ -15,9 +17,7 @@ set -euo pipefail
 # POSTGRES_PASSWORD, POSTGRES_DB (переопределение — QNAP_POSTGRES_*).
 # SSH на QNAP — под пользователем QNAP_USER (по умолчанию admin), по ключу.
 #
-# ВНИМАНИЕ: скрипт пересоздает ПРОД-базу. Перед запуском останови
-# приложение (контейнер с Django/huey) на QNAP, иначе оно будет
-# переподключаться к базе прямо во время восстановления.
+# ВНИМАНИЕ: скрипт пересоздает ПРОД-базу.
 # ------------------------------------------------------------------
 
 # ------------------------------------ #
@@ -29,6 +29,13 @@ QNAP_CONTAINER_NAME="${QNAP_CONTAINER_NAME:-mfp-postgres}"
 # Путь к docker на QNAP. Пусто = искать автоматически (Container Station
 # не добавляет свой bin в PATH неинтерактивного ssh-шелла).
 QNAP_DOCKER_BIN="${QNAP_DOCKER_BIN:-}"
+# Контейнеры приложения (Django/huey), которые надо остановить на время
+# заливки. Список через пробел. Пусто = определить автоматически:
+# все запущенные контейнеры, кроме postgres-контейнера, у которых задан
+# POSTGRES_HOST / PGHOST / DATABASE_URL.
+QNAP_APP_CONTAINERS="${QNAP_APP_CONTAINERS:-}"
+# Сколько секунд ждать graceful stop приложения.
+QNAP_APP_STOP_TIMEOUT="${QNAP_APP_STOP_TIMEOUT:-30}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROD_ENV_FILE="${PROD_ENV_FILE:-${SCRIPT_DIR}/.env.production}"
@@ -44,6 +51,8 @@ usage() {
   --file FILE        конкретный файл дампа (вместо последнего из --dir)
   --dir DIR          папка с дампами (по умолчанию: ${SCRIPT_DIR}/backups)
   --no-safety-backup не снимать страховочный дамп прод-базы перед заливкой
+  --no-app-stop      не останавливать приложение на QNAP (по умолчанию
+                     скрипт сам останавливает его и поднимает обратно)
   --help, -h         эта справка
 
 Поддерживает: custom-формат pg_dump -Fc (*.dump) и plain SQL (*.sql).
@@ -56,6 +65,8 @@ usage() {
   QNAP_USER=${QNAP_USER}
   QNAP_CONTAINER_NAME=${QNAP_CONTAINER_NAME}
   QNAP_DOCKER_BIN=${QNAP_DOCKER_BIN:-<авто>}
+  QNAP_APP_CONTAINERS=${QNAP_APP_CONTAINERS:-<авто-определение>}
+  QNAP_APP_STOP_TIMEOUT=${QNAP_APP_STOP_TIMEOUT}
 EOF
 }
 
@@ -100,6 +111,7 @@ env_value_alt() {
 # ------------------------------------ #
 ASSUME_YES=0
 SAFETY_BACKUP=1
+APP_STOP=1
 DUMP_DIR="${SCRIPT_DIR}/backups"
 DUMP_FILE=""
 
@@ -107,6 +119,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -y|--yes)             ASSUME_YES=1 ;;
         --no-safety-backup)   SAFETY_BACKUP=0 ;;
+        --no-app-stop)        APP_STOP=0 ;;
         --dir)
             if [[ $# -lt 2 ]]; then
                 echo "ОШИБКА: --dir требует путь." >&2
@@ -219,13 +232,15 @@ read -r -d '' REMOTE_SCRIPT <<'REMOTE' || true
 set -euo pipefail
 
 # Аргументы (позиционные, переданы через ssh).
-mode="$1"                # dump | restore
+mode="$1"                # dump | restore | app-detect | app-stop | app-start
 container="$2"
 pguser="$3"
 pgpass="$4"
 pgdb="$5"
 docker_bin="${6:-}"
 dump_kind="${7:-dump}"   # dump (pg_dump -Fc) | sql (plain SQL)
+app_list="${8:-}"        # контейнеры приложения через запятую (для app-stop/start)
+stop_timeout="${9:-30}"  # сколько секунд ждать graceful stop приложения
 
 # Container Station на QNAP не добавляет свой bin в PATH неинтерактивного
 # ssh-шелла, поэтому если docker не задан явно — ищем бинарь сами.
@@ -250,6 +265,51 @@ if [[ -z "${docker_bin}" ]]; then
     exit 1
 fi
 echo "docker: ${docker_bin}" >&2
+
+# Контейнеры приложения: ищем те, что смотрят на postgres (POSTGRES_HOST,
+# PGHOST или DATABASE_URL в окружении), исключая сам postgres-контейнер.
+# Имена печатаем в stdout — их забирает локальная часть скрипта.
+detect_app_containers() {
+    local c env_out
+    for c in $("${docker_bin}" ps --format '{{.Names}}'); do
+        [[ "${c}" == "${container}" ]] && continue
+        env_out="$("${docker_bin}" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "${c}" 2>/dev/null || true)"
+        if printf '%s\n' "${env_out}" | grep -qE '^(POSTGRES_HOST|PGHOST|DATABASE_URL)='; then
+            printf '%s\n' "${c}"
+        fi
+    done
+}
+
+app_containers="${app_list//,/ }"
+
+case "${mode}" in
+    app-detect)
+        detect_app_containers
+        exit 0
+        ;;
+    app-stop)
+        for c in ${app_containers}; do
+            if ! "${docker_bin}" ps --format '{{.Names}}' | grep -qx "${c}"; then
+                echo "    ${c}: уже остановлен" >&2
+                continue
+            fi
+            echo "    останавливаю ${c}..." >&2
+            # -t: даем приложению время завершиться штатно.
+            "${docker_bin}" stop -t "${stop_timeout}" "${c}" >/dev/null
+        done
+        exit 0
+        ;;
+    app-start)
+        for c in ${app_containers}; do
+            echo "    запускаю ${c}..." >&2
+            "${docker_bin}" start "${c}" >/dev/null
+            if [[ "$("${docker_bin}" inspect -f '{{.State.Running}}' "${c}" 2>/dev/null || true)" != "true" ]]; then
+                echo "ВНИМАНИЕ: ${c} запущен, но не в состоянии running (проверь логи)." >&2
+            fi
+        done
+        exit 0
+        ;;
+esac
 
 if ! "${docker_bin}" ps --format '{{.Names}}' | grep -qx "${container}"; then
     echo "ОШИБКА: контейнер '${container}' не найден среди запущенных на удаленном хосте." >&2
@@ -296,9 +356,10 @@ REMOTE_SCRIPT_B64="$(printf '%s' "${REMOTE_SCRIPT}" | base64 | tr -d '\r\n')"
 # временный файл и запускает его с позиционными аргументами.
 # Значения экранируем локальным %q: ssh склеивает аргументы через пробел.
 remote_command() {
-    local mode="$1" kind="$2" args wrapper
+    local mode="$1" kind="${2:-}" apps="${3:-}" args wrapper
     args="$(printf '%q ' "${mode}" "${QNAP_CONTAINER_NAME}" "${QNAP_POSTGRES_USER}" \
-        "${QNAP_POSTGRES_PASSWORD}" "${QNAP_POSTGRES_DB}" "${QNAP_DOCKER_BIN}" "${kind}")"
+        "${QNAP_POSTGRES_PASSWORD}" "${QNAP_POSTGRES_DB}" "${QNAP_DOCKER_BIN}" "${kind}" \
+        "${apps}" "${QNAP_APP_STOP_TIMEOUT}")"
     wrapper=$(cat <<'WRAPPER'
 tmp_script="$(mktemp 2>/dev/null || echo /tmp/mfp_restore_$$.sh)"
 trap 'rm -f "${tmp_script}"' EXIT
@@ -316,9 +377,32 @@ SSH_TARGET="${QNAP_USER}@${QNAP_SSH_HOST}"
 echo "==> Цель:   ${SSH_TARGET}:${QNAP_CONTAINER_NAME} db=${QNAP_POSTGRES_DB} user=${QNAP_POSTGRES_USER}"
 echo "==> Дамп:   ${DUMP_FILE} ($(ls -lh "${DUMP_FILE}" | awk '{print $5}'), ${DUMP_KIND})"
 
+# ------------------------------------ #
+#          КОНТЕЙНЕРЫ ПРИЛОЖЕНИЯ       #
+# ------------------------------------ #
+# Пусто = определить автоматически на QNAP (контейнеры, смотрящие на postgres).
+APP_CONTAINERS="${QNAP_APP_CONTAINERS}"
+if [[ "${APP_STOP}" -eq 1 && -z "${APP_CONTAINERS}" ]]; then
+    echo "==> Ищу приложение на QNAP (контейнеры, смотрящие на postgres)..."
+    detected="$(ssh -n -o BatchMode=yes "${SSH_TARGET}" "$(remote_command app-detect)" 2>/dev/null \
+        | tr -d '\r' | grep -v '^[[:space:]]*$' || true)"
+    APP_CONTAINERS="$(printf '%s' "${detected}" | tr '\n' ' ' | sed -e 's/[[:space:]]*$//')"
+fi
+
+if [[ "${APP_STOP}" -eq 1 ]]; then
+    if [[ -n "${APP_CONTAINERS}" ]]; then
+        echo "==> Будет остановлено и запущено обратно: ${APP_CONTAINERS}"
+    else
+        echo "ВНИМАНИЕ: не удалось определить контейнер приложения на QNAP." >&2
+        echo "          Приложение НЕ будет остановлено. Если база занята — задай" >&2
+        echo "          QNAP_APP_CONTAINERS='имя_контейнера' и запусти снова." >&2
+    fi
+else
+    echo "==> --no-app-stop: приложение на QNAP не трогаем."
+fi
+
 echo "Цель: контейнер=${QNAP_CONTAINER_NAME} db=${QNAP_POSTGRES_DB} user=${QNAP_POSTGRES_USER} файл=${DUMP_FILE}"
 echo "ВНИМАНИЕ: ПРОД-база '${QNAP_POSTGRES_DB}' на ${SSH_TARGET} будет УДАЛЕНА и создана заново."
-echo "Останови приложение (Django/huey) на QNAP перед запуском."
 if [[ "${ASSUME_YES}" -eq 0 ]]; then
     read -r -p "Продолжить? [y/N] " confirm
     [[ "${confirm}" == "y" || "${confirm}" == "Y" ]] || { echo "Отмена."; exit 1; }
@@ -349,6 +433,44 @@ if [[ "${SAFETY_BACKUP}" -eq 1 ]]; then
 fi
 
 # ------------------------------------ #
+#            СТОП ПРИЛОЖЕНИЯ           #
+# ------------------------------------ #
+APP_STOPPED=0
+
+restart_app_at_exit() {
+    local rc=$?
+    if [[ "${APP_STOPPED}" -eq 1 ]]; then
+        APP_STOPPED=0
+        echo "==> Возвращаю приложение на QNAP: ${APP_CONTAINERS}"
+        if ! ssh -n -o BatchMode=yes "${SSH_TARGET}" \
+            "$(remote_command app-start '' "${APP_CONTAINERS}")"; then
+            echo "ВНИМАНИЕ: не удалось запустить приложение на QNAP." >&2
+            echo "          Подними контейнеры вручную: ${APP_CONTAINERS}" >&2
+        else
+            echo "==> Приложение запущено. После старта контейнер выполнит миграции."
+        fi
+    fi
+    return "${rc}"
+}
+trap restart_app_at_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [[ "${APP_STOP}" -eq 1 && -n "${APP_CONTAINERS}" ]]; then
+    echo "==> Останавливаю приложение на QNAP..."
+    # Флаг ставим ДО вызова: если stop частично прошел и упал,
+    # trap все равно поднимет контейнеры обратно.
+    APP_STOPPED=1
+    if ! ssh -n -o BatchMode=yes "${SSH_TARGET}" \
+        "$(remote_command app-stop '' "${APP_CONTAINERS}")"; then
+        echo "ОШИБКА: не удалось остановить приложение (${APP_CONTAINERS})." >&2
+        echo "База не тронута. Проверь имена контейнеров (QNAP_APP_CONTAINERS)." >&2
+        exit 1
+    fi
+    echo "    ок"
+fi
+
+# ------------------------------------ #
 #        ВОССТАНОВЛЕНИЕ НА QNAP        #
 # ------------------------------------ #
 # Дамп подается на stdin ssh-сессии и дальше в pg_restore/psql.
@@ -362,3 +484,7 @@ if ! ssh -o BatchMode=yes "${SSH_TARGET}" "$(remote_command restore "${DUMP_KIND
 fi
 
 echo "==> Готово. Прод-база '${QNAP_POSTGRES_DB}' на ${SSH_TARGET} восстановлена из ${DUMP_FILE}."
+
+# Поднимаем приложение сразу, не дожидаясь выхода (trap на случай ошибок выше).
+restart_app_at_exit
+trap - EXIT
