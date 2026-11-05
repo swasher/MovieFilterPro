@@ -94,6 +94,16 @@ build-and-push:
 	# упадёт на `uv sync --locked`)
 	uv version --bump patch --no-sync
 	python manage.py collectstatic --noinput
+	# Сразу фиксируем bump в git, чтобы `make push` не оставлял «грязное» дерево.
+	# pathspec (-- pyproject.toml uv.lock) коммитит только версию и не задевает
+	# уже проиндексированные/изменённые файлы пользователя.
+	git commit -m "Release v$$(uv version --short)" -- pyproject.toml uv.lock
+	# Если остались другие незакоммиченные файлы — образ собирается из состояния,
+	# которого нет в git. Не блокируем деплой, но предупреждаем.
+	if [ -n "$$(git status --porcelain)" ]; then
+		echo "WARNING: есть незакоммиченные изменения, их нет в релизном коммите:"
+		git status --short
+	fi
 	docker build $(CACHE_OPTION) -t swasher/movie-filter-pro-v2:amd64 . && docker push swasher/movie-filter-pro-v2:amd64
 	@echo "--- Образ успешно залит в Docker Hub! ---"
 	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
