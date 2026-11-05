@@ -92,7 +92,7 @@ build-and-push:
 	rm requirements.txt
 	@echo "--- Образ успешно залит в Docker Hub! ---"
 	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
-	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh'
+	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh && docker image prune -f'
 
 # Деплой с кэшем
 push: CACHE_OPTION=
