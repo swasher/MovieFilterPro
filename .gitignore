@@ -11,6 +11,7 @@ api.md
 .env
 .env.production
 media/cached_images/
+cache/
 .make_targets_cache
 *.sqlite3
 *.sqlite3-shm

@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import requests
+from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 from requests.cookies import RequestsCookieJar
 
@@ -85,6 +86,10 @@ def _build_paths(image_url, movie_pk):
 
 
 class ImageCachingTests(SimpleTestCase):
+    def test_cache_root_is_separate_from_media_root(self):
+        self.assertEqual(settings.CACHE_ROOT, settings.BASE_DIR / "cache")
+        self.assertFalse(settings.CACHE_ROOT.is_relative_to(settings.MEDIA_ROOT))
+
     def test_returns_placeholder_when_image_is_missing(self):
         image_url = "https://kinozal.guru/i/poster/9/5/1304395.jpg"
 
@@ -97,7 +102,7 @@ class ImageCachingTests(SimpleTestCase):
 
             with override_settings(
                 CACHE_ROOT=cache_root,
-                CACHE_URL="/media/cached_images/",
+                CACHE_URL="/cache/",
                 STATIC_URL="/static/",
             ):
                 with patch("moviefilter.image_caching.requests.Session") as session_mock:
@@ -115,7 +120,7 @@ class ImageCachingTests(SimpleTestCase):
             cache_root = Path(temp_dir)
             session = FakeFastpicSession()
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 image_caching._fastpic_cookies.clear()
                 self.addCleanup(image_caching._fastpic_cookies.clear)
                 with patch("moviefilter.image_caching.requests.Session", return_value=session):
@@ -136,7 +141,7 @@ class ImageCachingTests(SimpleTestCase):
         with TemporaryDirectory() as temp_dir:
             cache_root = Path(temp_dir)
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 image_caching._fastpic_cookies.clear()
                 self.addCleanup(image_caching._fastpic_cookies.clear)
 
@@ -158,7 +163,7 @@ class ImageCachingTests(SimpleTestCase):
             cache_root = Path(temp_dir)
             session = FakeFastpicSession(required_cookie_value="session-token")
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 image_caching._fastpic_cookies.clear()
                 image_caching._fastpic_cookies["fp_n_uid"] = "stale-token"
                 self.addCleanup(image_caching._fastpic_cookies.clear)
@@ -180,7 +185,7 @@ class ImageCachingTests(SimpleTestCase):
             cache_root = Path(temp_dir)
             session = FakeFastpicSession(image_status=404)
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 image_caching._fastpic_cookies.clear()
                 self.addCleanup(image_caching._fastpic_cookies.clear)
                 with patch("moviefilter.image_caching.requests.Session", return_value=session):
@@ -198,7 +203,7 @@ class ImageCachingTests(SimpleTestCase):
             cache_root = Path(temp_dir)
             session = FakeFastpicSession(homepage_status=500)
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 image_caching._fastpic_cookies.clear()
                 self.addCleanup(image_caching._fastpic_cookies.clear)
                 with patch("moviefilter.image_caching.requests.Session", return_value=session):
@@ -215,7 +220,7 @@ class ImageCachingTests(SimpleTestCase):
         with TemporaryDirectory() as temp_dir:
             cache_root = Path(temp_dir)
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 _, _, missing_marker_path, _ = _build_paths(image_url, 7)
                 missing_marker_path.write_bytes(b"")
 
@@ -233,7 +238,7 @@ class ImageCachingTests(SimpleTestCase):
         with TemporaryDirectory() as temp_dir:
             cache_root = Path(temp_dir)
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 _, _, missing_marker_path, _ = _build_paths(image_url, 7)
                 missing_marker_path.write_text(MISSING_MARKER_VERSION, encoding="utf-8")
 
@@ -250,7 +255,7 @@ class ImageCachingTests(SimpleTestCase):
         with TemporaryDirectory() as temp_dir:
             cache_root = Path(temp_dir)
 
-            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/media/cached_images/"):
+            with override_settings(CACHE_ROOT=cache_root, CACHE_URL="/cache/"):
                 _, _, missing_marker_path, _ = _build_paths(image_url, 7)
                 missing_marker_path.write_text(MISSING_MARKER_VERSION, encoding="utf-8")
                 expired_at = time.time() - MISSING_RETRY_SECONDS - 60

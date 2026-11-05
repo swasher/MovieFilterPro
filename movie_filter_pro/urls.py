@@ -34,6 +34,9 @@ if settings.DEBUG:
     # add serve for Media during development
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
+    # add serve for Cache during development (legacy get_cached_image_url)
+    urlpatterns += static(settings.CACHE_URL, document_root=settings.CACHE_ROOT)
+
     # add serve for Static during development
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 

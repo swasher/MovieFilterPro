@@ -64,7 +64,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /app/backup_torrents /app/logs
+RUN mkdir -p /app/backup_torrents /app/logs /app/media /app/cache
 
 # Готовое python-окружение из builder-стадии
 COPY --from=python-builder /opt/venv /opt/venv

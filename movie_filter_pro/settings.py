@@ -224,6 +224,8 @@ STORAGES = {
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# MEDIA — постоянные пользовательские данные (кастомные обложки и т.п.).
+# В Docker монтируется отдельным volume в /app/media и не должен очищаться.
 MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_URL = '/media/'
 
@@ -234,8 +236,10 @@ CACHES = {
     }
 }
 
-CACHE_ROOT = MEDIA_ROOT / "cached_images"
-CACHE_URL = MEDIA_URL + "cached_images/"
+# CACHE — временные производные данные (кеш постеров).
+# В Docker монтируется отдельным volume в /app/cache; содержимое можно удалять.
+CACHE_ROOT = BASE_DIR / 'cache'
+CACHE_URL = '/cache/'
 
 
 # Default primary key field type
