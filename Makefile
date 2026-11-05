@@ -22,7 +22,6 @@ export PRINT_HELP_PYSCRIPT
 # $$ -> shell variable => use two dollar signs
 
 include .env
-export WATCHTOWER_TOKEN
 
 help: ## make help to get help!
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
@@ -92,8 +91,8 @@ build-and-push:
 	docker build -t swasher/movie-filter-pro-v2:amd64 . && docker push swasher/movie-filter-pro-v2:amd64
 	rm requirements.txt
 	@echo "--- Образ успешно залит в Docker Hub! ---"
-	@echo "Отправляю сигнал на QNAP и жду, пока Watchtower скачает обновление..."
-	curl -H "Authorization: Bearer $$WATCHTOWER_TOKEN" qnap:9090/v1/update
+	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
+	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh'
 
 # Деплой с кэшем
 push: CACHE_OPTION=
