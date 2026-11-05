@@ -3,7 +3,7 @@
   import { ScanLogger } from "$lib/services/scanLogger.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
-  import { Play, Square, Trash2 } from "@lucide/svelte";
+  import { Play, Square, Trash2, History } from "@lucide/svelte";
 
   const logger = new ScanLogger();
   let terminalContainer = $state<HTMLDivElement | null>(null);
@@ -65,6 +65,11 @@
       <Button variant="outline" onclick={() => logger.clearLog()} class="gap-2">
         <Trash2 class="w-4 h-4" />
         Очистить лог
+      </Button>
+
+      <Button variant="outline" href="/scan-history" class="gap-2" title="История сканирований">
+        <History class="w-4 h-4" />
+        История
       </Button>
 
       <!-- Индикатор статуса WebSocket -->

@@ -6,7 +6,7 @@
   import type { HeaderLink } from "$lib/template-data";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
-  import { Moon, Sun, User, KeyRound, Settings, ShieldCheck, Cable, LogOut, ChevronDown, RefreshCw, List, ScrollText, History } from "@lucide/svelte";
+  import { Moon, Sun, User, KeyRound, Settings, ShieldCheck, Cable, LogOut, ChevronDown, RefreshCw, List, ScrollText } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   type Props = {
@@ -180,14 +180,6 @@
                     <a href="/match-log" {...props}>
                       <ScrollText class="mr-2 size-4" />
                       <span>Match Log</span>
-                    </a>
-                  {/snippet}
-                </DropdownMenu.Item>
-                <DropdownMenu.Item>
-                  {#snippet child({ props })}
-                    <a href="/scan-history" {...props}>
-                      <History class="mr-2 size-4" />
-                      <span>История сканирований</span>
                     </a>
                   {/snippet}
                 </DropdownMenu.Item>
