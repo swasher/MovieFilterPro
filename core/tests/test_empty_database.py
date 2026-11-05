@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 
@@ -31,3 +33,17 @@ class EmptyDatabaseTests(TestCase):
 
         # Повторный вызов не должен падать и не должен создавать вторую запись.
         self.assertEqual(UserPreferences.get().pk, 1)
+
+    def test_background_tasks_do_not_run_without_users(self):
+        from kinozal_scan.tasks import kinozal_scheduled_scan_tick
+        from vault.tasks import tmdb_sync_watchdog
+
+        # close_old_connections в тестовой транзакции закрыл бы соединение с БД.
+        with (
+            patch("kinozal_scan.tasks.close_old_connections"),
+            patch("vault.tasks.close_old_connections"),
+        ):
+            self.assertIsNone(kinozal_scheduled_scan_tick.call_local())
+            self.assertFalse(tmdb_sync_watchdog.call_local())
+
+        self.assertFalse(UserPreferences.objects.exists())

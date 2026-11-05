@@ -18,6 +18,7 @@ from django.db import close_old_connections
 from django.utils import timezone
 from huey import crontab
 
+from core.users import users_exist
 from movie_filter_pro.huey import HUEY
 from moviefilter.kinozal import CloudflareBlockedError
 from moviefilter.models import ScanRun, UserPreferences
@@ -65,8 +66,6 @@ def _should_run(prefs: UserPreferences, now) -> bool:
 
 def _run_scheduled_scan(prefs: UserPreferences) -> dict:
     """Выполняет полный скан (тот же код, что и ручной запуск)."""
-    # На пустой базе пользователя ещё нет — скан всё равно может выполняться
-    # (user в ScanRun и фильтрах не обязателен).
     user = prefs.user
     scan_to_date = prefs.last_scan or timezone.now().date()
     cancel_event = DBCancelEvent()
@@ -167,6 +166,9 @@ def _run_scheduled_scan(prefs: UserPreferences) -> dict:
 def kinozal_scheduled_scan_tick():
     """Тик планировщика (каждую минуту): запускает скан, если пора и свободно."""
     close_old_connections()
+    # На пустой базе нет ни пользователя, ни настроек — сканировать нечего.
+    if not users_exist():
+        return None
     prefs = UserPreferences.get()
     now = timezone.now()
 

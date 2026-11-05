@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.db import close_old_connections
 from huey import crontab
 
+from core.users import users_exist
 from movie_filter_pro.huey import HUEY
 from moviefilter.models import MovieRSS
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
@@ -17,6 +18,9 @@ def tmdb_sync_tick():
     """Один такт массовой синхронизации: обрабатывает один фильм и
     само-перепланирует следующий тик через delay_seconds."""
     close_old_connections()
+    # На пустой базе нет пользователя и настроек — синхронизировать нечего.
+    if not users_exist():
+        return None
     return TMDBSyncQueueService.process_one()
 
 
@@ -25,6 +29,9 @@ def tmdb_sync_watchdog():
     """Подстраховка: раз в минуту перезапускает цепочку тиков,
     если она заглохла (например, после рестарта воркера)."""
     close_old_connections()
+    # На пустой базе нет пользователя и настроек — запускать нечего.
+    if not users_exist():
+        return False
     return TMDBSyncQueueService.watchdog_run()
 
 
@@ -184,6 +191,9 @@ def tmdb_writeback_list_delete(tmdb_list_id):
 def tmdb_writeback_retry_tick():
     """Forever queue: каждые 10м ретрает pending write-back (до success)."""
     close_old_connections()
+    # На пустой базе нет пользователя и настроек — ретраить нечего.
+    if not users_exist():
+        return {"retried": 0}
     from django.utils import timezone
     from vault.models import TMDBWritebackQueueItem
 

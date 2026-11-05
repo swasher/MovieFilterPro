@@ -17,12 +17,14 @@
         <CardDescription>
           В системе нет ни одного пользователя, поэтому войти пока невозможно.
         </CardDescription>
+        <p class="text-muted-foreground text-xs">v. {data.siteVersion}</p>
       </CardHeader>
       <CardContent class="space-y-4 text-sm">
         <p class="text-muted-foreground">
+          Пока пользователя нет, сканирование и фоновые задачи не запускаются.
           Создайте суперпользователя на сервере, выполнив команду в каталоге приложения:
         </p>
-        <pre class="bg-muted overflow-x-auto rounded-lg px-4 py-3"><code>uv run python manage.py createsuperuser</code></pre>
+        <pre class="bg-muted overflow-x-auto rounded-lg px-4 py-3"><code>python manage.py createsuperuser</code></pre>
         <p class="text-muted-foreground">
           После создания пользователя обновите эту страницу и войдите в систему.
         </p>
