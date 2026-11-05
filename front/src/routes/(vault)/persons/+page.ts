@@ -9,6 +9,7 @@ type ApiPerson = {
   death_date: string | null;
   movies_count: number;
   is_favorite: boolean;
+  is_star: boolean;
 };
 
 const ALLOWED_ORDERS = new Set([
@@ -23,6 +24,7 @@ const ALLOWED_ORDERS = new Set([
 export const load: PageLoad = async ({ fetch, url }) => {
   const q = (url.searchParams.get("q") ?? "").trim();
   const isFavorite = url.searchParams.get("is_favorite") === "true";
+  const isStar = url.searchParams.get("is_star") === "true";
   const lang = url.searchParams.get("lang") === "en" ? "en" : "ru";
 
   let order = (url.searchParams.get("order") ?? "").trim();
@@ -33,6 +35,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
   const params = new URLSearchParams({ limit: "50" });
   if (q) params.set("q", q);
   if (isFavorite) params.set("is_favorite", "true");
+  if (isStar) params.set("is_star", "true");
   params.set("order", order);
 
   try {
@@ -43,18 +46,28 @@ export const load: PageLoad = async ({ fetch, url }) => {
         apiError: `API error: ${response.status}`,
         activeQuery: q,
         activeIsFavorite: isFavorite,
+        activeIsStar: isStar,
         activeOrder: order,
         activeLang: lang,
       };
     }
     const persons = (await response.json()) as ApiPerson[];
-    return { persons, apiError: "", activeQuery: q, activeIsFavorite: isFavorite, activeOrder: order, activeLang: lang };
+    return {
+      persons,
+      apiError: "",
+      activeQuery: q,
+      activeIsFavorite: isFavorite,
+      activeIsStar: isStar,
+      activeOrder: order,
+      activeLang: lang,
+    };
   } catch (err) {
     return {
       persons: [] as ApiPerson[],
       apiError: err instanceof Error ? err.message : "Unknown API error",
       activeQuery: q,
       activeIsFavorite: isFavorite,
+      activeIsStar: isStar,
       activeOrder: order,
       activeLang: lang,
     };

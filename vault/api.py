@@ -23,6 +23,7 @@ from vault.models import (
     PersonAlias,
     Season,
     SidebarLayout,
+    StarPerson,
     TMDBSyncQueueItem,
     UserList,
     UserListMovie,
@@ -173,6 +174,7 @@ class PersonCreditOut(Schema):
     photo_url: str | None = None
     character_name: str | None = None
     is_favorite: bool = False
+    is_star: bool = False
     popularity: float | None = None
     birth_date: str | None = None
     death_date: str | None = None
@@ -487,6 +489,7 @@ class PersonDetailOut(Schema):
     writer_count: int
     showrunner_count: int
     is_favorite: bool
+    is_star: bool
 
 
 class PersonImageOut(Schema):
@@ -509,6 +512,10 @@ class TogglePersonFavoriteOut(Schema):
     is_favorite: bool
 
 
+class TogglePersonStarOut(Schema):
+    is_star: bool
+
+
 class PersonListOut(Schema):
     id: int
     name: str
@@ -518,6 +525,7 @@ class PersonListOut(Schema):
     death_date: str | None = None
     movies_count: int = 0
     is_favorite: bool = False
+    is_star: bool = False
 
 
 api = NinjaAPI(title="Vault API", version="1.0")
@@ -1118,9 +1126,13 @@ def movie_detail(request, slug: str):
     user = _resolve_api_user(request)
 
     favorite_person_ids = set()
+    star_person_ids = set()
     if user is not None:
         favorite_person_ids = set(
             FavoritePerson.objects.filter(user=user).values_list("person_id", flat=True)
+        )
+        star_person_ids = set(
+            StarPerson.objects.filter(user=user).values_list("person_id", flat=True)
         )
 
     torrents = [
@@ -1190,6 +1202,7 @@ def movie_detail(request, slug: str):
                 original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
@@ -1203,6 +1216,7 @@ def movie_detail(request, slug: str):
                 original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
@@ -1216,6 +1230,7 @@ def movie_detail(request, slug: str):
                 original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
@@ -1229,6 +1244,7 @@ def movie_detail(request, slug: str):
                 original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
@@ -1242,6 +1258,7 @@ def movie_detail(request, slug: str):
                 original_name=item.person.original_name or None,
                 photo_url=item.person.photo_url,
                 is_favorite=item.person.id in favorite_person_ids,
+                is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
@@ -1256,6 +1273,7 @@ def movie_detail(request, slug: str):
                 photo_url=item.person.photo_url,
                 character_name=item.character_name or None,
                 is_favorite=item.person.id in favorite_person_ids,
+                is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
@@ -1662,9 +1680,10 @@ def person_list(
     limit: int = 50,
     q: str | None = None,
     is_favorite: bool | None = None,
+    is_star: bool | None = None,
     order: str = "name",
 ):
-    """Минимальный список персон: поиск по имени, фильтр избранного, сортировка."""
+    """Минимальный список персон: поиск по имени, фильтр избранного/звёзд, сортировка."""
     user = _resolve_api_user(request)
     bounded = max(1, min(limit, 50))
     qs = Person.objects.annotate(movies_count=Count("person_movies__movie", distinct=True))
@@ -1684,6 +1703,10 @@ def person_list(
         if user is None:
             return []
         qs = qs.filter(favorited_by__user=user)
+    if is_star:
+        if user is None:
+            return []
+        qs = qs.filter(starred_by__user=user)
     allowed_orders = {
         "name": ("name", "id"),
         "-name": ("-name", "id"),
@@ -1702,10 +1725,17 @@ def person_list(
         qs = qs.order_by(*ordering)
     persons = list(qs.distinct()[:bounded])
     favorite_ids: set[int] = set()
+    star_ids: set[int] = set()
     if user is not None and persons:
+        person_ids = [p.id for p in persons]
         favorite_ids = set(
             FavoritePerson.objects.filter(
-                user=user, person_id__in=[p.id for p in persons]
+                user=user, person_id__in=person_ids
+            ).values_list("person_id", flat=True)
+        )
+        star_ids = set(
+            StarPerson.objects.filter(
+                user=user, person_id__in=person_ids
             ).values_list("person_id", flat=True)
         )
     return [
@@ -1718,6 +1748,7 @@ def person_list(
             death_date=_date_to_iso(p.death_date),
             movies_count=getattr(p, "movies_count", 0) or 0,
             is_favorite=p.id in favorite_ids,
+            is_star=p.id in star_ids,
         )
         for p in persons
     ]
@@ -1731,8 +1762,10 @@ def person_detail(request, person_id: int):
 
     user = _resolve_api_user(request)
     is_favorite = False
+    is_star = False
     if user is not None:
         is_favorite = FavoritePerson.objects.filter(user=user, person=person).exists()
+        is_star = StarPerson.objects.filter(user=user, person=person).exists()
 
     filmography_qs = (
         MoviePerson.objects.filter(person=person)
@@ -1833,6 +1866,7 @@ def person_detail(request, person_id: int):
         writer_count=count_movies_for_role("writer"),
         showrunner_count=count_movies_for_role("showrunner"),
         is_favorite=is_favorite,
+        is_star=is_star,
     )
 
 
@@ -1900,6 +1934,21 @@ def person_toggle_favorite(request, person_id: int):
         favorite.delete()
 
     return TogglePersonFavoriteOut(is_favorite=created)
+
+
+@api.post("/persons/{person_id}/toggle-star", response=TogglePersonStarOut)
+def person_toggle_star(request, person_id: int):
+    person = Person.objects.filter(id=person_id).first()
+    if person is None:
+        raise HttpError(404, "Person not found")
+
+    user = _require_api_user(request)
+
+    star, created = StarPerson.objects.get_or_create(user=user, person=person)
+    if not created:
+        star.delete()
+
+    return TogglePersonStarOut(is_star=created)
 
 
 SYSTEM_SIDEBAR_KEYS = list(SYSTEM_LIST_LABELS.keys())

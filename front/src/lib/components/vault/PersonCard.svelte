@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { Heart } from "@lucide/svelte";
+  import { Heart, Star } from "@lucide/svelte";
 
   type PersonCredit = {
     id: number;
@@ -9,6 +9,7 @@
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     birth_date?: string | null;
     death_date?: string | null;
   };
@@ -101,6 +102,8 @@
               <div class="vd-crew-title-row">
                 {#if person.is_favorite}
                   <Heart class="size-3 shrink-0 fill-red-500 text-red-500" />
+                {:else if person.is_star}
+                  <Star class="size-3 shrink-0 fill-amber-400 text-amber-400" />
                 {/if}
                 <p class="vd-crew-title">{person.name}</p>
               </div>

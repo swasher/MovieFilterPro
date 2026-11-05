@@ -65,6 +65,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     popularity?: number | null;
     birth_date?: string | null;
     death_date?: string | null;
@@ -76,6 +77,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     popularity?: number | null;
     birth_date?: string | null;
     death_date?: string | null;
@@ -87,6 +89,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     popularity?: number | null;
     birth_date?: string | null;
     death_date?: string | null;
@@ -98,6 +101,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     popularity?: number | null;
     birth_date?: string | null;
     death_date?: string | null;
@@ -109,6 +113,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     popularity?: number | null;
     birth_date?: string | null;
     death_date?: string | null;
@@ -120,6 +125,7 @@ type ApiMovieDetail = {
     photo_url: string | null;
     character_name?: string | null;
     is_favorite?: boolean;
+    is_star?: boolean;
     popularity?: number | null;
     birth_date?: string | null;
     death_date?: string | null;

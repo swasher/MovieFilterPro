@@ -18,6 +18,7 @@
     death_date: string | null;
     movies_count: number;
     is_favorite: boolean;
+    is_star: boolean;
   };
 
   let { data } = $props();
@@ -28,6 +29,7 @@
   // $effect ниже со старым data и затрет ввод (как в Фильмах, коммит 492755b).
   let lastSubmittedSearchQuery = "";
   let onlyFavorites = $state(data.activeIsFavorite ?? false);
+  let onlyStars = $state(data.activeIsStar ?? false);
   let useEnglish = $state((data.activeLang ?? "ru") === "en");
   let activeOrder = $state(data.activeOrder ?? "name");
   let searchDebounceHandle = $state<ReturnType<typeof setTimeout> | null>(null);
@@ -39,6 +41,7 @@
       searchQuery = active;
     }
     onlyFavorites = data.activeIsFavorite ?? false;
+    onlyStars = data.activeIsStar ?? false;
     useEnglish = (data.activeLang ?? "ru") === "en";
     activeOrder = data.activeOrder ?? "name";
   });
@@ -61,6 +64,7 @@
     const trimmed = searchQuery.trim();
     if (trimmed) params.set("q", trimmed);
     if (onlyFavorites) params.set("is_favorite", "true");
+    if (onlyStars) params.set("is_star", "true");
     if (useEnglish) params.set("lang", "en");
     if (activeOrder && activeOrder !== defaultOrder) params.set("order", activeOrder);
     const queryString = params.toString();
@@ -92,6 +96,11 @@
 
   const onFavoritesToggle = async (checked: boolean) => {
     onlyFavorites = checked;
+    await applyParams();
+  };
+
+  const onStarsToggle = async (checked: boolean) => {
+    onlyStars = checked;
     await applyParams();
   };
 
@@ -134,6 +143,18 @@
         <SortSelect value={activeOrder} onChange={onOrderChange} options={sortOptions} />
 
         <div class="flex items-center gap-1.5">
+          <Switch id="persons-stars" checked={onlyStars} onCheckedChange={onStarsToggle} />
+          <Label
+            for="persons-stars"
+            class="cursor-pointer select-none font-mono text-[10px] transition-colors duration-150 {onlyStars
+              ? 'text-amber-500 font-bold'
+              : 'text-muted-foreground/50'}"
+          >
+            STAR
+          </Label>
+        </div>
+
+        <div class="flex items-center gap-1.5">
           <Switch id="persons-favorites" checked={onlyFavorites} onCheckedChange={onFavoritesToggle} />
           <Label
             for="persons-favorites"
@@ -159,8 +180,17 @@
       </div>
     </div>
 
-    {#if data.activeQuery || data.activeIsFavorite}
+    {#if data.activeQuery || data.activeIsFavorite || data.activeIsStar}
       <div class="flex flex-wrap items-center gap-3 text-sm">
+        {#if data.activeIsStar}
+          <p class="text-muted-foreground">
+            Только звёзды
+            <button class="underline hover:text-foreground" onclick={() => onStarsToggle(false)}>×</button>
+          </p>
+        {/if}
+        {#if data.activeIsStar && data.activeIsFavorite}
+          <span class="text-border">|</span>
+        {/if}
         {#if data.activeIsFavorite}
           <p class="text-muted-foreground">
             Только избранное
@@ -170,7 +200,7 @@
             >
           </p>
         {/if}
-        {#if data.activeIsFavorite && data.activeQuery}
+        {#if (data.activeIsFavorite || data.activeIsStar) && data.activeQuery}
           <span class="text-border">|</span>
         {/if}
         {#if data.activeQuery}

@@ -45,6 +45,7 @@ class Command(BaseCommand):
             # Пользовательский контент и связи
             v.UserMovie,
             v.FavoritePerson,
+            v.StarPerson,
             v.UserListMovie,
             v.MoviePerson,
             v.TMDBSyncQueueItem,

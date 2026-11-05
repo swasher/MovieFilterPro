@@ -783,11 +783,12 @@ class TMDBMovieSyncService:
     def _cleanup_orphan_persons(cls) -> int:
         """
         Удаляет персон без связей в MoviePerson.
-        Персоны из FavoritePerson защищены от удаления.
+        Персоны из FavoritePerson и StarPerson защищены от удаления.
         """
         orphan_qs = Person.objects.filter(
             person_movies__isnull=True,
             favorited_by__isnull=True,
+            starred_by__isnull=True,
         ).distinct()
         count = orphan_qs.count()
         if count:

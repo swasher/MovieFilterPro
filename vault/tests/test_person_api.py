@@ -1,10 +1,11 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.test import Client, SimpleTestCase, TestCase
 
 from tmdb_adapter.client_singleton import PersonImageBasic, get_person_images
-from vault.models import Person, PersonAlias
+from vault.models import FavoritePerson, Person, PersonAlias, StarPerson
 
 
 class PersonAliasSearchTests(TestCase):
@@ -200,3 +201,43 @@ class PersonImagesApiTests(TestCase):
         self.assertEqual(payload["items"], [])
         self.assertTrue(payload["error"])
         wait_mock.assert_called_once()
+
+
+class PersonStarApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username="star-api-user", password="secret")
+        self.client.force_login(self.user)
+        self.person = Person.objects.create(
+            tmdb_id="90100",
+            imdb_id="nm9010000",
+            name="Звезда Тестовая",
+            original_name="Test Star",
+        )
+
+    def test_toggle_star_does_not_touch_favorite(self):
+        response = self.client.post(f"/api/vault/persons/{self.person.id}/toggle-star")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_star"])
+        self.assertTrue(StarPerson.objects.filter(user=self.user, person=self.person).exists())
+        self.assertFalse(FavoritePerson.objects.filter(user=self.user, person=self.person).exists())
+
+        response = self.client.post(f"/api/vault/persons/{self.person.id}/toggle-star")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_star"])
+        self.assertFalse(StarPerson.objects.filter(user=self.user, person=self.person).exists())
+
+    def test_star_filter_and_detail(self):
+        StarPerson.objects.create(user=self.user, person=self.person)
+
+        list_response = self.client.get("/api/vault/persons", {"is_star": "true"})
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual([item["id"] for item in list_response.json()], [self.person.id])
+        self.assertTrue(list_response.json()[0]["is_star"])
+
+        detail_response = self.client.get(f"/api/vault/persons/{self.person.id}")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertTrue(detail_response.json()["is_star"])
+        self.assertFalse(detail_response.json()["is_favorite"])

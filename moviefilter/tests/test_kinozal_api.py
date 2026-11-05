@@ -13,7 +13,7 @@ from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, WAIT_TRANS
 from moviefilter.image_caching import CACHE_STATUS_MISSING, CACHE_STATUS_PENDING, CACHE_STATUS_READY
 from moviefilter.models import MovieRSS, UserPreferences
 from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher, normalize_actor_name
-from vault.models import FavoritePerson, Person
+from vault.models import FavoritePerson, Person, StarPerson
 
 
 class KinozalApiTests(TestCase):
@@ -381,6 +381,14 @@ class KinozalApiFavoriteActorsTests(TestCase):
         )
         FavoritePerson.objects.create(user=self.user, person=self.person)
 
+        self.star_person = Person.objects.create(
+            tmdb_id="101",
+            imdb_id="nm101",
+            name="Брэд Питт",
+            original_name="Brad Pitt",
+        )
+        StarPerson.objects.create(user=self.user, person=self.star_person)
+
         self.movie = MovieRSS.objects.create(
             priority=HIGH,
             kinozal_id=2001,
@@ -406,3 +414,12 @@ class KinozalApiFavoriteActorsTests(TestCase):
         item = payload["items"][0]
         self.assertEqual(item["favorite_actors"], ["Дайан Лейн"])
         self.assertEqual(item["favorite_directors"], [])
+
+    def test_movies_endpoint_marks_star_actors(self):
+        response = self.client.get("/api/kinozal/movies", {"priority": "ALL"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        item = payload["items"][0]
+        self.assertEqual(item["star_actors"], ["Брэд Питт"])
+        self.assertEqual(item["star_directors"], [])

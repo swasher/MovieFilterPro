@@ -5,7 +5,7 @@
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
   import * as ImageZoom from "$lib/components/ui/image-zoom";
-  import { ArrowLeft, Heart } from "@lucide/svelte";
+  import { ArrowLeft, Heart, Star } from "@lucide/svelte";
   import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
 
   type PersonImage = {
@@ -79,6 +79,24 @@
 
   let isFavorite = $state(person.is_favorite);
   let favoriteBusy = $state(false);
+  let isStar = $state(person.is_star);
+  let starBusy = $state(false);
+
+  const toggleStar = async () => {
+    if (starBusy) return;
+    starBusy = true;
+    try {
+      const res = await fetch(`/api/vault/persons/${person.id}/toggle-star`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const result = (await res.json()) as { is_star: boolean };
+        isStar = result.is_star;
+      }
+    } finally {
+      starBusy = false;
+    }
+  };
 
   const toggleFavorite = async () => {
     if (favoriteBusy) return;
@@ -181,16 +199,29 @@
           {/if}
         </CardContent>
       </Card>
-      <Button
-        variant={isFavorite ? "default" : "outline"}
-        class={isFavorite
-          ? "w-full bg-red-500 text-white hover:bg-red-600"
-          : "w-full text-red-500 hover:bg-red-500/10"}
-        onclick={toggleFavorite}
-      >
-        <Heart class={isFavorite ? "fill-current" : ""} />
-        {isFavorite ? "In favorites" : "Add to favorites"}
-      </Button>
+      <div class="flex w-full flex-col gap-2">
+        <Button
+          variant={isStar ? "default" : "outline"}
+          class={isStar
+            ? "w-full bg-amber-400 text-black hover:bg-amber-500"
+            : "w-full text-amber-500 hover:bg-amber-500/10"}
+          onclick={toggleStar}
+          disabled={starBusy}
+        >
+          <Star class={isStar ? "fill-current" : ""} />
+          {isStar ? "In stars" : "Add to stars"}
+        </Button>
+        <Button
+          variant={isFavorite ? "default" : "outline"}
+          class={isFavorite
+            ? "w-full bg-red-500 text-white hover:bg-red-600"
+            : "w-full text-red-500 hover:bg-red-500/10"}
+          onclick={toggleFavorite}
+        >
+          <Heart class={isFavorite ? "fill-current" : ""} />
+          {isFavorite ? "In favorites" : "Add to favorites"}
+        </Button>
+      </div>
     </div>
 
     <div class="space-y-5">

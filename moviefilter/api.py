@@ -26,7 +26,7 @@ from moviefilter.services.torrent_download_service import (
 )
 from qbittorrent.services import torrent_service
 from qbittorrent.services.errors import QbtError
-from vault.models import FavoritePerson
+from vault.models import FavoritePerson, StarPerson
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher
 
@@ -91,6 +91,8 @@ class KinozalMovieOut(Schema):
     actors: list[str]
     favorite_actors: list[str] = []
     favorite_directors: list[str] = []
+    star_actors: list[str] = []
+    star_directors: list[str] = []
     open_url: str | None = None
     kinorium_url: str | None = None
 
@@ -288,7 +290,27 @@ def _build_favorite_actor_matcher(user) -> FavoriteActorMatcher:
     return FavoriteActorMatcher(names)
 
 
-def _serialize_movie(request, movie: MovieRSS, favorite_matcher: FavoriteActorMatcher) -> KinozalMovieOut:
+def _build_star_actor_matcher(user) -> FavoriteActorMatcher:
+    stars = (
+        StarPerson.objects.filter(user=user)
+        .select_related("person")
+        .only("person__name", "person__original_name")
+    )
+    names: list[str] = []
+    for star in stars:
+        person = star.person
+        for raw in (person.name, person.original_name):
+            if raw:
+                names.append(raw)
+    return FavoriteActorMatcher(names)
+
+
+def _serialize_movie(
+    request,
+    movie: MovieRSS,
+    favorite_matcher: FavoriteActorMatcher,
+    star_matcher: FavoriteActorMatcher,
+) -> KinozalMovieOut:
     return KinozalMovieOut(
         id=movie.id,
         kinozal_id=movie.kinozal_id,
@@ -313,6 +335,8 @@ def _serialize_movie(request, movie: MovieRSS, favorite_matcher: FavoriteActorMa
         actors=movie.actors_as_list,
         favorite_actors=favorite_matcher.favorite_actors(movie.actors_as_list),
         favorite_directors=favorite_matcher.favorite_actors(movie.director_as_list),
+        star_actors=star_matcher.favorite_actors(movie.actors_as_list),
+        star_directors=star_matcher.favorite_actors(movie.director_as_list),
         open_url=_build_open_url(movie),
         kinorium_url=_build_kinorium_url(movie),
     )
@@ -498,9 +522,13 @@ def list_movies(
     next_cursor = str(offset + page_size) if has_more else None
 
     favorite_matcher = _build_favorite_actor_matcher(request.user)
+    star_matcher = _build_star_actor_matcher(request.user)
 
     return KinozalMoviesPageOut(
-        items=[_serialize_movie(request, movie, favorite_matcher) for movie in page_items],
+        items=[
+            _serialize_movie(request, movie, favorite_matcher, star_matcher)
+            for movie in page_items
+        ],
         next_cursor=next_cursor,
         has_more=has_more,
         limit=page_size,

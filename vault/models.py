@@ -532,6 +532,22 @@ class FavoritePerson(models.Model):
         return f"{self.user.username} -> {self.person}"
 
 
+class StarPerson(models.Model):
+    """Персоны-«звезды» пользователя (актеры, режиссеры)"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='star_persons')
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='starred_by')
+    created_at = models.DateTimeField('Добавлено', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Персона-звезда'
+        verbose_name_plural = 'Персоны-звезды'
+        unique_together = ['user', 'person']
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.person}"
+
+
 class UserMovie(models.Model):
     """Пользовательский статус фильма: статус просмотра, избранное и оценка"""
 
