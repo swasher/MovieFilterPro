@@ -38,9 +38,15 @@ DEBUG_LOG = os.path.join(BASE_DIR, 'logs', 'debug.log')
 ERROR_LOG = os.path.join(BASE_DIR, 'logs', 'error.log')
 SCAN_LOG = os.path.join(BASE_DIR, 'logs', 'scan.log')
 
-with open("pyproject.toml", "rb") as f:
-    pyproject = tomllib.load(f)
-    VERSION = pyproject["project"]["version"]
+# Актуальная версия релиза — в файле VERSION (его бампает `make push`).
+# В pyproject.toml/uv.lock версия заморожена на 0.0.0, чтобы bump версии не
+# инвалидировал слой зависимостей в Docker-образе.
+try:
+    VERSION = (BASE_DIR / "VERSION").read_text(encoding="utf-8").strip()
+except FileNotFoundError:
+    with open("pyproject.toml", "rb") as f:
+        pyproject = tomllib.load(f)
+        VERSION = pyproject["project"]["version"]
 
 INTERNAL_IPS = [
     "127.0.0.1",

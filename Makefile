@@ -89,15 +89,16 @@ build-and-push:
 	# make смотрит только на код возврата последней команды (то есть на финальный echo),
 	# поэтому упавшая сборка/деплой раньше выглядели как успех.
 	set -e
-	# --no-sync: обновляем версию в pyproject.toml и uv.lock, но не трогаем локальный .venv
-	# (без --frozen, иначе uv.lock останется со старой версией проекта и docker build
-	# упадёт на `uv sync --locked`)
-	uv version --bump patch --no-sync
+	# Бамп patch-версии в файле VERSION (pyproject.toml/uv.lock заморожены на 0.0.0,
+	# чтобы bump не инвалидировал слой зависимостей в Docker-образе).
+	python -c "import pathlib; p = pathlib.Path('VERSION'); v = p.read_text().split('.'); v[-1] = str(int(v[-1]) + 1); p.write_text('.'.join(v).strip() + '\n')"
 	python manage.py collectstatic --noinput
 	# Сразу фиксируем bump в git, чтобы `make push` не оставлял «грязное» дерево.
-	# pathspec (-- pyproject.toml uv.lock) коммитит только версию и не задевает
-	# уже проиндексированные/изменённые файлы пользователя.
-	git commit -m "Release v$$(uv version --short)" -- pyproject.toml uv.lock
+	# pathspec (-- VERSION) коммитит только версию и не задевает уже
+	# проиндексированные/изменённые файлы пользователя.
+	# git add нужен на случай, если VERSION ещё не отслеживается git.
+	git add -- VERSION
+	git commit -m "Release v$$(cat VERSION)" -- VERSION
 	# Если остались другие незакоммиченные файлы — образ собирается из состояния,
 	# которого нет в git. Не блокируем деплой, но предупреждаем.
 	if [ -n "$$(git status --porcelain)" ]; then
@@ -108,7 +109,7 @@ build-and-push:
 	@echo "--- Образ успешно залит в Docker Hub! ---"
 	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
 	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh && docker image prune -f'
-	@echo "updated to v.$$(uv version --short)"
+	@echo "updated to v.$$(cat VERSION)"
 
 # Деплой с кэшем (обычный релиз)
 push: CACHE_OPTION=

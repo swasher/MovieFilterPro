@@ -1,6 +1,9 @@
 [project]
 name = "moviefilterpro"
-version = "0.1.230"
+# Версия намеренно заморожена: актуальный релиз хранится в файле ./VERSION,
+# его бампает `make push`. Так bump не меняет pyproject.toml/uv.lock и не
+# инвалидирует слой зависимостей в Docker-образе (uv sync остаётся в кэше).
+version = "0.0.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
