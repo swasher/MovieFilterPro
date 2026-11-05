@@ -7,6 +7,7 @@ type AuthSession = {
     username: string;
     email: string;
   } | null;
+  users_exist?: boolean;
   site_version?: string;
 };
 

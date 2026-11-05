@@ -65,6 +65,8 @@ def _should_run(prefs: UserPreferences, now) -> bool:
 
 def _run_scheduled_scan(prefs: UserPreferences) -> dict:
     """Выполняет полный скан (тот же код, что и ручной запуск)."""
+    # На пустой базе пользователя ещё нет — скан всё равно может выполняться
+    # (user в ScanRun и фильтрах не обязателен).
     user = prefs.user
     scan_to_date = prefs.last_scan or timezone.now().date()
     cancel_event = DBCancelEvent()

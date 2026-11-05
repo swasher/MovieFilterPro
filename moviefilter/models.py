@@ -155,7 +155,17 @@ class UserPreferences(models.Model):
         preferences = UserPreferences.get()
         cookie_pass = preferences.cookie_pass
     """
-    user = models.OneToOneField(User, unique=True, on_delete=models.CASCADE, related_name='preferences')
+    # Legacy-поле: настройки глобальные (singleton pk=1), а не per-user.
+    # nullable, чтобы приложение могло стартовать на пустой базе до создания
+    # первого пользователя (см. UserPreferences.get()).
+    user = models.OneToOneField(
+        User,
+        unique=True,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='preferences',
+    )
     last_scan = models.DateField(blank=True, null=True, default=timezone.now)
     last_scan_kinozal_id = models.PositiveIntegerField(blank=True, null=True)
     scan_from_page = models.PositiveSmallIntegerField(blank=True, null=True, default=0, help_text='Если длительный скан оборвался, можно его продолжить с этой страницы до последней.')

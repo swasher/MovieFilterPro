@@ -1,9 +1,14 @@
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
+
+
+def _users_exist() -> bool:
+    """Есть ли в базе хотя бы один пользователь (нужно для заглушки на пустой БД)."""
+    return get_user_model().objects.exists()
 
 
 def _build_session_payload(request):
@@ -12,6 +17,7 @@ def _build_session_payload(request):
         return {
             "is_authenticated": False,
             "user": None,
+            "users_exist": _users_exist(),
             "site_version": settings.VERSION,
         }
 
@@ -22,6 +28,7 @@ def _build_session_payload(request):
             "username": user.username,
             "email": user.email,
         },
+        "users_exist": True,
         "site_version": settings.VERSION,
     }
 
