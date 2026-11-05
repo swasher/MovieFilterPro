@@ -85,20 +85,29 @@ remove: ## удалить контейнер
 
 build-and-push:
 	# build and upload
-	uv version --frozen --bump patch
+	# set -e обязателен: из-за .ONESHELL весь рецепт — один shell-скрипт, и без этого
+	# make смотрит только на код возврата последней команды (то есть на финальный echo),
+	# поэтому упавшая сборка/деплой раньше выглядели как успех.
+	set -e
+	# --no-sync: обновляем версию в pyproject.toml и uv.lock, но не трогаем локальный .venv
+	# (без --frozen, иначе uv.lock останется со старой версией проекта и docker build
+	# упадёт на `uv sync --locked`)
+	uv version --bump patch --no-sync
 	python manage.py collectstatic --noinput
-	uv export --no-dev --no-hashes --format requirements-txt > requirements.txt
-	docker build -t swasher/movie-filter-pro-v2:amd64 . && docker push swasher/movie-filter-pro-v2:amd64
-	rm requirements.txt
+	docker build $(CACHE_OPTION) -t swasher/movie-filter-pro-v2:amd64 . && docker push swasher/movie-filter-pro-v2:amd64
 	@echo "--- Образ успешно залит в Docker Hub! ---"
 	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
 	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh && docker image prune -f'
+	@echo "updated to v.$$(uv version --short)"
 
-# Деплой с кэшем
+# Деплой с кэшем (обычный релиз)
 push: CACHE_OPTION=
 push: build-and-push
 
-# Деплой без кэша
+# Деплой без кэша слоёв образа — только для диагностики «странных» сборок.
+# ВНИМАНИЕ: --no-cache НЕ чистит BuildKit cache-mount'ы (uv/pnpm/apt),
+# для полного сброса кэшей: docker builder prune -af
+# Стоимость: заново скачивается Chromium (~120 МБ) и собирается фронт.
 push-no-cache: CACHE_OPTION=--no-cache
 push-no-cache: build-and-push
 
