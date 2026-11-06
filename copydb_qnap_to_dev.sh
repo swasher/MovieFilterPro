@@ -7,8 +7,8 @@ set -euo pipefail
 #   2. Стримим дамп по SSH на dev-машину в локальный файл.
 #   3. Пересоздаем dev-базу (DROP + CREATE) и восстанавливаем в нее дамп.
 #
-# Использование: ./sync_db_from_qnap.sh [--yes] [--dir DIR] [--no-restore] [--delete-dump]
-# Подробности: ./sync_db_from_qnap.sh --help
+# Использование: ./copydb_qnap_to_dev.sh [--yes] [--dir DIR] [--no-restore] [--delete-dump]
+# Подробности: ./copydb_qnap_to_dev.sh --help
 #
 # Настройки dev-базы берутся из .env: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
 # Настройки QNAP-базы (prod) — из .env.production: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
@@ -257,7 +257,7 @@ if [[ -z "${docker_bin}" ]]; then
 fi
 if [[ -z "${docker_bin}" ]]; then
     echo "ОШИБКА: docker не найден на удаленном хосте." >&2
-    echo "Задай путь явно: QNAP_DOCKER_BIN=/share/.../container-station/bin/docker ./sync_db_from_qnap.sh" >&2
+    echo "Задай путь явно: QNAP_DOCKER_BIN=/share/.../container-station/bin/docker ./copydb_qnap_to_dev.sh" >&2
     exit 1
 fi
 echo "docker: ${docker_bin}" >&2
