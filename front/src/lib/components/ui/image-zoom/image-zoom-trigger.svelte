@@ -6,9 +6,11 @@
 
 	type Props = HTMLImgAttributes & {
 		class?: string;
+		/** Optional high-resolution source used only in the zoom overlay. */
+		zoomSrc?: string;
 	};
 
-	let { src, alt, class: className, ...rest }: Props = $props();
+	let { src, alt, class: className, zoomSrc, ...rest }: Props = $props();
 
 	const { registerImage, openImage } = getImageZoomContext();
 
@@ -19,7 +21,7 @@
 			console.warn("ImageZoom.Trigger requires a 'src' prop.");
 			return;
 		}
-		myIndex = registerImage({ src, alt: alt || '' });
+		myIndex = registerImage({ src: zoomSrc || src, alt: alt || '' });
 	});
 
 	function handleOpenZoom() {

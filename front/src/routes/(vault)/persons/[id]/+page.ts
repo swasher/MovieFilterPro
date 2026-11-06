@@ -21,6 +21,7 @@ type PersonDetail = {
   tmdb_id: string | null;
   imdb_id: string | null;
   photo_url: string | null;
+  photo_full_url: string | null;
   biography: string;
   birth_date: string | null;
   death_date: string | null;

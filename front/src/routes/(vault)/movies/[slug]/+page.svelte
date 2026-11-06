@@ -1091,7 +1091,12 @@
         <CardContent class="!p-0">
           {#if movie.poster_url}
             <ImageZoom.Root>
-              <ImageZoom.Trigger src={movie.poster_url} alt={movie.title} class="vd-poster" />
+              <ImageZoom.Trigger
+                src={movie.poster_url}
+                zoomSrc={movie.poster_full_url ?? movie.poster_url}
+                alt={movie.title}
+                class="vd-poster"
+              />
             </ImageZoom.Root>
           {:else}
             <div class="vd-poster-fallback">

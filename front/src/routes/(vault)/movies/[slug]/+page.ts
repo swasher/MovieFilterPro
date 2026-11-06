@@ -19,6 +19,7 @@ type ApiMovieDetail = {
   tvdb_id: number | null;
   homepage: string | null;
   poster_url: string | null;
+  poster_full_url: string | null;
   duration: number | null;
   age_rating: string | null;
   trailer_url: string | null;

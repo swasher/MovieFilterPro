@@ -106,6 +106,7 @@ class MovieDetailOut(Schema):
     tvdb_id: int | None = None
     homepage: str | None = None
     poster_url: str | None = None
+    poster_full_url: str | None = None
     backdrop_url: str | None = None
     duration: int | None = None
     age_rating: str | None = None
@@ -470,6 +471,7 @@ class PersonDetailOut(Schema):
     tmdb_id: str | None = None
     imdb_id: str | None = None
     photo_url: str | None = None
+    photo_full_url: str | None = None
     biography: str
     birth_date: str | None = None
     death_date: str | None = None
@@ -495,6 +497,7 @@ class PersonDetailOut(Schema):
 class PersonImageOut(Schema):
     file_path: str
     url: str | None = None
+    full_url: str | None = None
     thumb_url: str | None = None
     width: int | None = None
     height: int | None = None
@@ -1167,6 +1170,7 @@ def movie_detail(request, slug: str):
         tvdb_id=movie.tvdb_id or None,
         homepage=movie.homepage or None,
         poster_url=movie.poster_url,
+        poster_full_url=movie.get_poster_url("original"),
         backdrop_url=movie.backdrop_url,
         duration=movie.duration,
         age_rating=movie.age_rating or None,
@@ -1847,6 +1851,7 @@ def person_detail(request, person_id: int):
         tmdb_id=person.tmdb_id,
         imdb_id=person.imdb_id,
         photo_url=person.photo_url,
+        photo_full_url=person.get_photo_url("original"),
         biography=person.biography or "",
         birth_date=_date_to_iso(person.birth_date),
         death_date=_date_to_iso(person.death_date),
@@ -1909,6 +1914,7 @@ def person_images(request, person_id: int, limit: int = 8):
             PersonImageOut(
                 file_path=image.file_path,
                 url=_build_tmdb_image_url(image.file_path, "w500"),
+                full_url=_build_tmdb_image_url(image.file_path, "original"),
                 thumb_url=_build_tmdb_image_url(image.file_path, "w185"),
                 width=image.width,
                 height=image.height,

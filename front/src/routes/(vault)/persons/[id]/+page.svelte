@@ -11,6 +11,7 @@
   type PersonImage = {
     file_path: string;
     url: string | null;
+    full_url: string | null;
     thumb_url: string | null;
     width: number | null;
     height: number | null;
@@ -188,7 +189,12 @@
         <CardContent class="!p-0">
           {#if person.photo_url}
             <ImageZoom.Root>
-              <ImageZoom.Trigger src={person.photo_url} alt={person.name} class="vd-photo" />
+              <ImageZoom.Trigger
+                src={person.photo_url}
+                zoomSrc={person.photo_full_url ?? person.photo_url}
+                alt={person.name}
+                class="vd-photo"
+              />
             </ImageZoom.Root>
           {:else}
             <div class="vd-photo-fallback">
@@ -369,6 +375,7 @@
                   {#each displayImages as image (image.file_path)}
                     <ImageZoom.Trigger
                       src={image.url ?? image.thumb_url ?? ""}
+                      zoomSrc={image.full_url ?? image.url ?? image.thumb_url ?? ""}
                       alt={person.name}
                       class="vd-person-photo"
                       loading="lazy"

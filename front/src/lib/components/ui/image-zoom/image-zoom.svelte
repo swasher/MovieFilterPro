@@ -97,12 +97,12 @@
 		<div class="absolute inset-0" onclick={closeZoom} aria-label="Close" role="button"></div>
 
 		<div
-			class="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center pointer-events-none"
+			class="relative flex h-[90vh] w-[90vw] items-center justify-center pointer-events-none"
 		>
 			<img
 				src={currentImageData.src}
 				alt={currentImageData.alt}
-				class="block max-w-full max-h-full object-contain pointer-events-auto"
+				class="block h-full w-full object-contain pointer-events-none"
 				transition:fade={{ duration: 300, delay: 50 }}
 			/>
 		</div>
