@@ -132,11 +132,11 @@
         {#each logger.logs as line}
           {#if line.startsWith('ERROR:')}
             <div class="text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/10 font-medium">
-              {@html line}
+              {line}
             </div>
           {:else}
             <div class={line.startsWith('DEBUG:') ? 'text-slate-500' : 'text-emerald-400'}>
-              {@html line}
+              {line}
             </div>
           {/if}
         {/each}

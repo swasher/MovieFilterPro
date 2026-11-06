@@ -1,6 +1,9 @@
+from datetime import timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.utils import timezone
 
 from moviefilter.models import ScanLogEntry, ScanRun
 from web_logger import LogType, log, scan_log_context
@@ -52,3 +55,29 @@ class ScanHistoryPruneTests(TestCase):
         self.assertEqual(ScanRun.objects.count(), 3)
         # Каскадное удаление лог-строк вместе с запусками.
         self.assertEqual(ScanLogEntry.objects.count(), 3)
+
+
+class ScanHistoryApiOrderingTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="tester", password="x")
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_history_returns_newest_runs_first(self):
+        # Регрессия: annotate() с агрегатом сбрасывает Meta.ordering, поэтому
+        # порядок в /scan/history должен задаваться явно (свежие сверху).
+        base = timezone.now() - timedelta(days=1)
+        runs = []
+        for index in range(3):
+            run = ScanRun.objects.create(
+                trigger=ScanRun.Trigger.MANUAL,
+                status=ScanRun.Status.SUCCESS,
+            )
+            ScanRun.objects.filter(pk=run.pk).update(started_at=base + timedelta(hours=index))
+            runs.append(run)
+
+        response = self.client.get("/api/kinozal/scan/history?limit=10")
+
+        self.assertEqual(response.status_code, 200)
+        ids = [item["id"] for item in response.json()["items"]]
+        self.assertEqual(ids, [runs[2].id, runs[1].id, runs[0].id])

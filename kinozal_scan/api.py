@@ -108,7 +108,11 @@ def scan_history(request, limit: int = 50):
         return HttpResponse("Unauthorized", status=401)
 
     bounded = max(1, min(limit, 200))
-    runs = ScanRun.objects.annotate(entries_count=Count("entries"))[:bounded]
+    # ВАЖНО: при annotate() с агрегатом Django сбрасывает Meta.ordering (чтобы не добавлять
+    # поля сортировки в GROUP BY), поэтому порядок задаём явно: свежие запуски — сверху.
+    runs = ScanRun.objects.annotate(entries_count=Count("entries")).order_by(
+        "-started_at", "-id"
+    )[:bounded]
     return {"items": [_serialize_run(run, entries_count=run.entries_count) for run in runs]}
 
 

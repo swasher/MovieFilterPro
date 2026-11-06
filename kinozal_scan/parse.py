@@ -426,86 +426,6 @@ def get_details(m: KinozalMovie, cancel_event: asyncio.Event | None = None) -> t
     return m, response.elapsed.total_seconds()
 
 
-# def movie_audit(movies: list[KinozalMovie], user, cancel_event: asyncio.Event) -> list[KinozalMovie]:
-#     """
-#     Принимает на входе список объектов KinozalMovie.
-#     Объекты заполнены только самой просто инфой со страницы списка фильмов (но не со страницы фильма!)
-#     Каждый Объект сначала проходит простые проверки, нужно ли продолжать с ним работу.
-#     Если прошел, тогда парсер сканирует страницу фильма, заполняет объект.
-#
-#     Возвращает список объектов KinozalMovie, которые осталось только записать в базу.
-#     """
-#
-#     result = []
-#     for m in movies:
-#         """
-#         LOGIC:
-#         - если уже есть в базе RSS - пропускаем
-#             ◦ так же этот фильм может быть уже в базе как Игнорируемый - в коде никаких дополнительных действий не требуется, просто не добавляем.
-#         - если есть в базе kinorium - пропускаем (любой статус в кинориуме, - просмотрено, буду смотреть, не буду смотреть)
-#             ◦ проверяем также частичное совпадение, и тогда записываем в базу, а пользователю предлагаем установить связь через поля кинориума
-#         - если фильм прошел проверки по базам kinozal и kinorium, тогда вытягиваем для него данные со страницы
-#         - проверяем через пользовательские фильтры
-#         - и вот теперь только заносим в базу
-#         """
-#
-#         if cancel_event.is_set():
-#             log("movie_audit: Scan cancelled by user")
-#             # break - для более "мягкого" выхода, заканчивает цикл и записывает уже пройденные фильмы в базу
-#             # Если нужно прервать сразу и полностью, можно использовать `raise ScanCancelled()`
-#             # break
-#             raise ScanCancelled()
-#
-#         log(f'<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
-#         #kinozal_logger.info(f'PROCESS: {m.title} - {m.original_title} - {m.year}')
-#
-#         """
-#         В этом месте нужно проверить наличие у релиза нормальной озвучки.
-#         Если у фильма есть норм. озвучка И у такого же фильма в базе MovieRSS статус "жду озвучку", то присвоить статус "есть озвучка" и continue
-#         """
-#         if m.dubbed and need_dubbed(m):
-#             log(' ┣━ FOUND DUBBING [x]')
-#             movie_in_db = MovieRSS.objects.filter(title=m.title, original_title=m.original_title, year=m.year).first()
-#             movie_in_db.priority = TRANS_FOUND
-#             movie_in_db.save(update_fields=['priority'])
-#             continue
-#
-#         if exist_in_kinozal(m):
-#             log(' ┣━ SKIP [exist in kinozal]')
-#             continue
-#         """
-#         Возможна такая ситуация, что фильм попал в RSS, а потом я его посмотрел.
-#         Тогда уже существующий в RSS фильм нужно обновить (установить priority=SKIP)
-#         """
-#         exist, match_full, status = exist_in_kinorium(m)
-#         if exist and match_full:
-#             log(f" ┣━ SKIP [{status}]")
-#             continue
-#         elif exist and not match_full:
-#             log(f" ┣━ MARK AS PARTIAL [{status}]")
-#             m.kinorium_partial_match = True
-#
-#         m, sec = get_details(m)  # <--------------------------- MAIN FUNCTION FOR GET DETAILS FOR THE MOVIE
-#         log(f' ┣━ GET DETAILS: {sec:.1f}s')
-#
-#         # Эта проверка выкидывает все, что через него не прошло
-#         if check_users_filters(user, m, priority=HIGH):
-#             m.priority = HIGH
-#
-#             # Из оставшихся, некоторым назначаем низкий приоритет
-#             # тут логика такая - если фильм НЕ прошел проверку - то он подпадет как Low priority
-#             # А если прошел - остается в HIGH priority
-#             if not check_users_filters(user, m, priority=LOW):
-#                 m.priority = LOW
-#
-#         if m.priority in [LOW, HIGH]:  # Если фильм прошел проверки, то приорити будет или LOW или HIGH. Тогда записываем в базу, иначе - просто пропускаем.
-#             log(f' ┣━ ADD TO DB [prio={"low" if m.priority == LOW else "high"}] [partial={"YES" if m.kinorium_partial_match else "NO"}]')
-#
-#             result.append(m)
-#
-#     return result
-
-
 def movie_audit(
     movies: list[KinozalMovie],
     user,
@@ -585,7 +505,7 @@ def movie_audit(
             # break
             raise ScanCancelled()
 
-        log(f'<b>PROCESS:</b> {m.title} - {m.original_title} - {m.year}')
+        log(f'PROCESS: {m.title} - {m.original_title} - {m.year}')
         #kinozal_logger.info(f'PROCESS: {m.title} - {m.original_title} - {m.year}')
 
         # Используем быстрые проверки по данным в памяти ---
