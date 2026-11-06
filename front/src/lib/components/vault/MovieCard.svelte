@@ -60,7 +60,7 @@
 <Card class="relative h-[270px] w-[180px] flex-none overflow-hidden rounded-md border !gap-0 !py-0 transition hover:shadow-md">
   <CardContent class="h-full !p-0">
     <MovieStatusBadges
-      watch_status={activeStatus === movie.watch_status ? null : movie.watch_status}
+      watch_status={movie.watch_status}
       rating={movie.rating}
       is_favorite={movie.in_favorites && activeStatus !== "favorites"}
       year={movie.year}
