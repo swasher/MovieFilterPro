@@ -91,7 +91,10 @@ build-and-push:
 	set -e
 	# Бамп patch-версии в файле VERSION (pyproject.toml/uv.lock заморожены на 0.0.0,
 	# чтобы bump не инвалидировал слой зависимостей в Docker-образе).
-	python -c "import pathlib; p = pathlib.Path('VERSION'); v = p.read_text().split('.'); v[-1] = str(int(v[-1]) + 1); p.write_text('.'.join(v).strip() + '\n')"
+	# newline='\n' обязателен: на Windows write_text() по умолчанию пишет CRLF,
+	# из-за чего git ругался «CRLF will be replaced by LF» на каждый релиз
+	# (в репозитории все файлы хранятся с LF, см. .gitattributes).
+	python -c "import pathlib; p = pathlib.Path('VERSION'); v = p.read_text().split('.'); v[-1] = str(int(v[-1]) + 1); p.write_text('.'.join(v).strip() + '\n', newline='\n')"
 	python manage.py collectstatic --noinput
 	# Сразу фиксируем bump в git, чтобы `make push` не оставлял «грязное» дерево.
 	# pathspec (-- VERSION) коммитит только версию и не задевает уже
@@ -105,7 +108,19 @@ build-and-push:
 		echo "WARNING: есть незакоммиченные изменения, их нет в релизном коммите:"
 		git status --short
 	fi
-	docker build $(CACHE_OPTION) -t swasher/movie-filter-pro-v2:amd64 . && docker push swasher/movie-filter-pro-v2:amd64
+	# ВАЖНО: docker build и docker push — отдельными командами, НЕ через `&&`.
+	# `set -e` не прерывает скрипт для команды, которая стоит в && -списке не
+	# последней, поэтому раньше упавшая сборка молча продолжалась: скрипт
+	# «заливал» образ, дергал QNAP (pull старого образа) и рапортовал успех.
+	# Явные проверки ниже гарантируют, что при ошибке деплой не поедет.
+	if ! docker build $(CACHE_OPTION) -t swasher/movie-filter-pro-v2:amd64 .; then
+		echo "ERROR: сборка образа провалилась — деплой на QNAP отменён."
+		exit 1
+	fi
+	if ! docker push swasher/movie-filter-pro-v2:amd64; then
+		echo "ERROR: push образа в Docker Hub провалился — деплой на QNAP отменён."
+		exit 1
+	fi
 	@echo "--- Образ успешно залит в Docker Hub! ---"
 	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
 	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh && docker image prune -f'
