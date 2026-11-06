@@ -39,6 +39,7 @@
   import SeasonStatus from "$lib/components/vault/SeasonStatus.svelte";
   import PersonCard from "$lib/components/vault/PersonCard.svelte";
   import CollectionPartCard from "$lib/components/vault/CollectionPartCard.svelte";
+  import MovieWontWatchOverlay from "$lib/components/vault/MovieWontWatchOverlay.svelte";
   import { parseQbtApiError, type MovieTorrent, type QbtTorrent, type QbtTorrentDeleteResponse, type QbtTorrentsResponse } from "$lib/qbittorrent";
 
   let { data } = $props();
@@ -1088,7 +1089,7 @@
   <div class="vd-layout vd-layout--movie">
     <div class="vd-sidebar">
       <Card class="vd-poster-card !gap-0 !py-0">
-        <CardContent class="!p-0">
+        <CardContent class="relative !p-0">
           {#if movie.poster_url}
             <ImageZoom.Root>
               <ImageZoom.Trigger
@@ -1103,6 +1104,10 @@
               no poster
             </div>
           {/if}
+          <MovieWontWatchOverlay
+            watch_status={userState.in_wont_watch ? "wont_watch" : null}
+            size="lg"
+          />
         </CardContent>
       </Card>
 

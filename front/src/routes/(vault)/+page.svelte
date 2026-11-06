@@ -12,6 +12,7 @@ import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
 import MovieCard from "$lib/components/vault/MovieCard.svelte";
+import MovieWontWatchOverlay from "$lib/components/vault/MovieWontWatchOverlay.svelte";
 import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X, Link2, Link2Off } from "@lucide/svelte";
 import {
   QBT_DOWNLOADING_STATES,
@@ -813,19 +814,20 @@ type TmdbSearchResult = {
                   class="border-b last:border-b-0 transition hover:bg-accent/20"
                 >
                   <td class="px-2 py-2 align-middle">
-                    <a href={`/movies/${movie.slug}`} data-sveltekit-preload-data="hover">
+                    <a href={`/movies/${movie.slug}`} data-sveltekit-preload-data="hover" class="relative block h-12 w-8 overflow-hidden rounded">
                       {#if movie.poster_url}
                         <img
                           src={movie.poster_url}
                           alt={movie.title}
-                          class="h-12 w-8 object-cover rounded"
+                          class="h-full w-full object-cover"
                           loading="lazy"
                         />
                       {:else}
-                        <div class="bg-muted text-muted-foreground flex h-12 w-8 items-center justify-center text-[10px]">
+                        <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[10px]">
                           no
                         </div>
                       {/if}
+                      <MovieWontWatchOverlay watch_status={movie.watch_status} size="xs" />
                     </a>
                   </td>
                   <td class="px-3 py-2 align-middle font-medium">

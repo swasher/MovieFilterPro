@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Bookmark, Check, Heart, X } from "@lucide/svelte";
+  import MovieWontWatchOverlay from "./MovieWontWatchOverlay.svelte";
   import "./movie-status-badges.css";
 
   let {
@@ -14,6 +15,10 @@
     year?: number | null;
   } = $props();
 </script>
+
+<!-- Плашка — часть общего слоя статусов: рендерится здесь, чтобы
+     автоматически попадать во все карточки (лента, персона, коллекция). -->
+<MovieWontWatchOverlay {watch_status} />
 
 {#if watch_status === "wont_watch"}
   <span class="vd-status-badge vd-status-badge--wont" title="Не интересует">
