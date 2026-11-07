@@ -1,7 +1,6 @@
 import logging
 from decimal import Decimal
 
-from django.conf import settings
 from django.db.models import (
     Case,
     Count,
@@ -42,8 +41,8 @@ from vault.models import (
     UserMovie,
     UserSeason,
     VaultConnectionEvent,
-    _build_tmdb_image_url,
 )
+from vault.services.image_service import ImageService
 from vault.services.movie_search_service import MovieSearchService
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.season_status_service import UNSET, SeasonStatusService
@@ -571,6 +570,19 @@ def _require_api_user(request):
     return user
 
 
+@api.get("/images/{kind}/{size}/{path:image_path}", response=None)
+def vault_image(request, kind: str, size: str, image_path: str):
+    """Отдаёт изображение Vault из локального кеша.
+
+    URL формирует только ImageService; внешний CDN браузеру неизвестен.
+    Первый запрос может подождать скачивание, дальше файл отдаётся с диска.
+    """
+    _require_api_user(request)
+    if not ImageService.is_valid_request(kind, size, image_path):
+        raise HttpError(404, "Image not found")
+    return ImageService.serve(kind, size, image_path)
+
+
 def _build_user_state(user, movie) -> UserStateOut:
     if user is None:
         return UserStateOut(
@@ -608,23 +620,6 @@ def _date_to_iso(value) -> str | None:
 
 def _datetime_to_iso(value) -> str | None:
     return value.isoformat() if value else None
-
-
-def _tmdb_image_url(raw_path: str | None, size: str = "w342") -> str | None:
-    if not raw_path:
-        return None
-    value = str(raw_path).strip()
-    if not value:
-        return None
-    if value.startswith("http://") or value.startswith("https://"):
-        return value
-
-    base_url = getattr(settings, "TMDB_IMAGE_BASE_URL", "https://image.tmdb.org/t/p/")
-    if not base_url.endswith("/"):
-        base_url += "/"
-    normalized_size = str(size).strip("/") or "w342"
-    normalized_path = value if value.startswith("/") else f"/{value}"
-    return f"{base_url}{normalized_size}{normalized_path}"
 
 
 def _build_movie_user_lists(user, movie) -> list[MovieUserListOut]:
@@ -665,7 +660,7 @@ def _build_tmdb_candidate_out(item) -> TMDBCandidateOut:
         year=item.year,
         score=item.score,
         score_reasons=list(item.score_reasons),
-        poster_url=_tmdb_image_url(item.poster_path),
+        poster_url=ImageService.url(item.poster_path, "w342", kind="poster"),
         popularity=item.popularity,
         vote_average=item.vote_average,
         overview=getattr(item, "overview", None) or "",
@@ -784,7 +779,7 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
         title=season.title,
         description=season.description,
         release_date=_date_to_iso(season.release_date),
-        poster_url=_tmdb_image_url(season.poster),
+        poster_url=ImageService.url(season.poster, "w342", kind="poster"),
         episodes_count=episodes_count,
         air_year=air_year,
         is_unreleased=season.release_date is None,
@@ -871,7 +866,7 @@ def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
             watch_status = MovieStatusService.WATCH_STATUS_TO_STATUS_KEY.get(state.get("watch_status"))
             rating = state.get("rating")
             is_favorite = bool(state.get("is_favorite"))
-        poster_url = _tmdb_image_url(p.get("poster_path"), size="w342") if p.get("poster_path") else None
+        poster_url = ImageService.url(p.get("poster_path"), "w342", kind="poster") if p.get("poster_path") else None
         parts_out.append(
             CollectionPartOut(
                 tmdb_id=tmdb_id,
@@ -891,8 +886,8 @@ def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
         tmdb_id=coll.tmdb_id,
         name=coll.name,
         overview=coll.overview or None,
-        poster_url=_tmdb_image_url(coll.poster_path, size="w342") if coll.poster_path else None,
-        backdrop_url=_tmdb_image_url(coll.backdrop_path, size="w780") if coll.backdrop_path else None,
+        poster_url=ImageService.url(coll.poster_path, "w342", kind="poster") if coll.poster_path else None,
+        backdrop_url=ImageService.url(coll.backdrop_path, "w780", kind="backdrop") if coll.backdrop_path else None,
         parts=parts_out,
     )
 
@@ -2072,9 +2067,9 @@ def person_images(request, person_id: int, limit: int = 8):
         items=[
             PersonImageOut(
                 file_path=image.file_path,
-                url=_build_tmdb_image_url(image.file_path, "w500"),
-                full_url=_build_tmdb_image_url(image.file_path, "original"),
-                thumb_url=_build_tmdb_image_url(image.file_path, "w185"),
+                url=ImageService.url(image.file_path, "w500", kind="profile"),
+                full_url=ImageService.url(image.file_path, "original", kind="profile"),
+                thumb_url=ImageService.url(image.file_path, "w185", kind="profile"),
                 width=image.width,
                 height=image.height,
                 aspect_ratio=image.aspect_ratio,
@@ -2933,7 +2928,7 @@ def collection_refresh(request, tmdb_id: int):
                     title=str(p.get("title") or "").strip() or f"TMDB {pid}",
                     original_title=str(p.get("original_title") or "").strip() or None,
                     year=p.get("year"),
-                    poster_url=_tmdb_image_url(p.get("poster_path"), size="w342") if p.get("poster_path") else None,
+                    poster_url=ImageService.url(p.get("poster_path"), "w342", kind="poster") if p.get("poster_path") else None,
                     in_vault=False,
                     vault_slug=None,
                 )
@@ -2942,8 +2937,8 @@ def collection_refresh(request, tmdb_id: int):
             tmdb_id=coll.tmdb_id,
             name=coll.name,
             overview=coll.overview or None,
-            poster_url=_tmdb_image_url(coll.poster_path, size="w342") if coll.poster_path else None,
-            backdrop_url=_tmdb_image_url(coll.backdrop_path, size="w780") if coll.backdrop_path else None,
+            poster_url=ImageService.url(coll.poster_path, "w342", kind="poster") if coll.poster_path else None,
+            backdrop_url=ImageService.url(coll.backdrop_path, "w780", kind="backdrop") if coll.backdrop_path else None,
             parts=parts_out,
         )
     out = _build_collection_out(movie, user=user)

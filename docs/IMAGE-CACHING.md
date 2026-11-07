@@ -4,6 +4,9 @@
 > **сейчас**. Это живой документ: при изменении логики загрузки, состояний кеша
 > или endpoint-а обновляйте его.
 >
+> Кеш изображений Vault (постеры, бэкдропы и фото персон TMDB) устроен
+> отдельно и описан в [`VAULT-IMAGE-CACHING.md`](VAULT-IMAGE-CACHING.md).
+>
 > История решения и мотивация переделки — в корневом
 > [`PLAN-IMAGE-CACHE-REFACTORING.md`](../PLAN-IMAGE-CACHE-REFACTORING.md).
 

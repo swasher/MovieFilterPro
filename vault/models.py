@@ -10,6 +10,8 @@ import uuid
 
 import core
 
+from vault.services.image_service import ImageService
+
 from .constants import WATCHED_LABEL, WILL_WATCH_LABEL, WONT_WATCH_LABEL
 
 
@@ -23,25 +25,6 @@ def _build_unique_slug(model_class, raw_value: str | None, fallback: str, curren
         counter += 1
 
     return slug
-
-
-def _build_tmdb_image_url(raw_path: str | None, size: str) -> str | None:
-    if not raw_path:
-        return None
-    value = str(raw_path).strip()
-    if not value:
-        return None
-
-    if value.startswith('http://') or value.startswith('https://'):
-        return value
-
-    base_url = getattr(settings, 'TMDB_IMAGE_BASE_URL', 'https://image.tmdb.org/t/p/')
-    if not base_url.endswith('/'):
-        base_url += '/'
-
-    normalized_size = str(size or 'w500').strip('/') or 'w500'
-    normalized_path = value if value.startswith('/') else f'/{value}'
-    return f'{base_url}{normalized_size}{normalized_path}'
 
 
 class Person(models.Model):
@@ -84,11 +67,11 @@ class Person(models.Model):
     def photo_url(self):
         """Генерируем полный URL на лету"""
         default_size = getattr(settings, 'TMDB_IMAGE_SIZE', 'w500')
-        return _build_tmdb_image_url(self.photo, default_size)
+        return ImageService.url(self.photo, default_size, kind="profile")
 
     def get_photo_url(self, size='w500'):
         """Метод для получения URL с конкретным размером"""
-        return _build_tmdb_image_url(self.photo, size)
+        return ImageService.url(self.photo, size, kind="profile")
 
 
 class PersonAlias(models.Model):
@@ -160,14 +143,14 @@ class Collection(models.Model):
 
     @property
     def poster_url(self):
-        return _build_tmdb_image_url(self.poster_path, getattr(settings, "TMDB_IMAGE_SIZE", "w500"))
+        return ImageService.url(self.poster_path, getattr(settings, "TMDB_IMAGE_SIZE", "w500"), kind="poster")
 
     def get_poster_url(self, size="w500"):
-        return _build_tmdb_image_url(self.poster_path, size)
+        return ImageService.url(self.poster_path, size, kind="poster")
 
     @property
     def backdrop_url(self):
-        return _build_tmdb_image_url(self.backdrop_path, "w1280")
+        return ImageService.url(self.backdrop_path, "w1280", kind="backdrop")
 
 
 class Movie(models.Model):
@@ -348,17 +331,17 @@ class Movie(models.Model):
     @property
     def poster_url(self):
         default_size = getattr(settings, 'TMDB_IMAGE_SIZE', 'w500')
-        return _build_tmdb_image_url(self.poster, default_size)
+        return ImageService.url(self.poster, default_size, kind="poster")
 
     def get_poster_url(self, size='w500'):
-        return _build_tmdb_image_url(self.poster, size)
+        return ImageService.url(self.poster, size, kind="poster")
 
     @property
     def backdrop_url(self):
-        return _build_tmdb_image_url(self.backdrop_path, 'w1280')
+        return ImageService.url(self.backdrop_path, 'w1280', kind="backdrop")
 
     def get_backdrop_url(self, size='w1280'):
-        return _build_tmdb_image_url(self.backdrop_path, size)
+        return ImageService.url(self.backdrop_path, size, kind="backdrop")
 
     def get_directors(self):
         return self.movie_persons.filter(role='director').order_by('order', '-popularity', 'id')

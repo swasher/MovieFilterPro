@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360" role="img" aria-labelledby="title desc">
+  <title id="title">Profile photo placeholder</title>
+  <desc id="desc">Fallback placeholder when a person photo is unavailable.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f3f4f6" />
+      <stop offset="100%" stop-color="#d1d5db" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="360" rx="18" fill="url(#bg)" />
+  <rect x="24" y="24" width="192" height="312" rx="14" fill="none" stroke="#94a3b8" stroke-dasharray="8 8" stroke-width="4" />
+  <g fill="none" stroke="#64748b" stroke-linecap="round" stroke-linejoin="round" stroke-width="8">
+    <circle cx="120" cy="132" r="34" />
+    <path d="M56 230c8-32 33-50 64-50s56 18 64 50" />
+  </g>
+  <text x="120" y="278" fill="#475569" font-family="Arial, sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    PHOTO
+  </text>
+  <text x="120" y="304" fill="#64748b" font-family="Arial, sans-serif" font-size="14" text-anchor="middle">
+    unavailable
+  </text>
+</svg>
