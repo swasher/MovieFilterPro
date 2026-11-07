@@ -15,7 +15,7 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Coalesce, Substr
+from django.db.models.functions import Coalesce, Random, Substr
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
@@ -1821,6 +1821,17 @@ def _person_base_queryset():
     return Person.objects.annotate(movies_count=Count("person_movies__movie", distinct=True))
 
 
+def _persons_by_ids(person_ids: list[int]):
+    """Достаёт персон по id, сохраняя переданный порядок (для random-подборок)."""
+    if not person_ids:
+        return []
+    persons_by_id = {
+        person.id: person
+        for person in _person_base_queryset().filter(id__in=person_ids)
+    }
+    return [persons_by_id[person_id] for person_id in person_ids if person_id in persons_by_id]
+
+
 @api.get("/persons/home", response=PersonHomeOut)
 def person_home_data(request):
     """Главный экран персон: избранные, звёзды, недавно обновлённые и самые «занятые»."""
@@ -1828,77 +1839,78 @@ def person_home_data(request):
     groups: list[HomePersonGroupOut] = []
 
     if user is not None:
-        favorite_persons = list(
-            _person_base_queryset()
-            .filter(favorited_by__user=user)
-            .order_by(
-                "-movies_count",
-                F("popularity").desc(nulls_last=True),
-                "name",
-                "id",
-            )
-            .distinct()[:HOME_PERSON_SECTION_SIZE]
+        # Избранные и звёзды показываем в случайном порядке: набор у
+        # single-user приложения небольшой, RANDOM() по таблице связей дешёвый.
+        favorite_ids = list(
+            FavoritePerson.objects.filter(user=user)
+            .order_by(Random())
+            .values_list("person_id", flat=True)[:HOME_PERSON_SECTION_SIZE]
         )
         groups.append(
             HomePersonGroupOut(
                 id="favorite",
                 title="Избранные персоны",
                 see_all_href="/persons?is_favorite=true",
-                persons=_serialize_person_list(favorite_persons, user),
+                persons=_serialize_person_list(_persons_by_ids(favorite_ids), user),
             )
         )
 
-        star_persons = list(
-            _person_base_queryset()
-            .filter(starred_by__user=user)
-            .order_by(
-                "-movies_count",
-                F("popularity").desc(nulls_last=True),
-                "name",
-                "id",
-            )
-            .distinct()[:HOME_PERSON_SECTION_SIZE]
+        star_ids = list(
+            StarPerson.objects.filter(user=user)
+            .order_by(Random())
+            .values_list("person_id", flat=True)[:HOME_PERSON_SECTION_SIZE]
         )
         groups.append(
             HomePersonGroupOut(
                 id="star",
                 title="Звёзды",
                 see_all_href="/persons?is_star=true",
-                persons=_serialize_person_list(star_persons, user),
+                persons=_serialize_person_list(_persons_by_ids(star_ids), user),
             )
         )
 
-    updated_persons = list(
-        _person_base_queryset()
-        .filter(person_details_synced_at__isnull=False)
-        .order_by("-person_details_synced_at", "-movies_count", "id")[
-            :HOME_PERSON_SECTION_SIZE
-        ]
+    # Сначала берём только id по индексу/агрегату, а Person с movies_count
+    # подтягиваем уже для 7 выбранных — так не считаем Count по всей таблице.
+    updated_ids = list(
+        Person.objects.filter(person_details_synced_at__isnull=False)
+        .order_by("-person_details_synced_at", "id")
+        .values_list("id", flat=True)[:HOME_PERSON_SECTION_SIZE]
     )
     groups.append(
         HomePersonGroupOut(
             id="updated",
             title="Недавно обновлённые",
             see_all_href="/persons?order=-updated_at",
-            persons=_serialize_person_list(updated_persons, user),
+            persons=_serialize_person_list(_persons_by_ids(updated_ids), user),
         )
     )
 
-    busiest_persons = list(
-        _person_base_queryset()
-        .order_by(
-            "-movies_count",
-            F("popularity").desc(nulls_last=True),
-            "name",
-            "id",
-        )[:HOME_PERSON_SECTION_SIZE]
+    popular_ids = list(
+        Person.objects.filter(popularity__isnull=False)
+        .order_by("-popularity", "id")
+        .values_list("id", flat=True)[:HOME_PERSON_SECTION_SIZE]
     )
+    groups.append(
+        HomePersonGroupOut(
+            id="popular",
+            title="Самые популярные",
+            see_all_href="/persons?order=-popularity",
+            persons=_serialize_person_list(_persons_by_ids(popular_ids), user),
+        )
+    )
+
+    busiest_ids = [
+        row["person_id"]
+        for row in MoviePerson.objects.values("person_id")
+        .annotate(movies_count=Count("movie_id", distinct=True))
+        .order_by("-movies_count", "person_id")[:HOME_PERSON_SECTION_SIZE]
+    ]
     groups.append(
         HomePersonGroupOut(
             id="most_movies",
             title="Больше всего фильмов",
             see_all_href="/persons?order=-movies_count",
-            persons=_serialize_person_list(busiest_persons, user),
+            persons=_serialize_person_list(_persons_by_ids(busiest_ids), user),
         )
     )
 
