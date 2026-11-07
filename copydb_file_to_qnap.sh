@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ------------------------------------------------------------------
-# Обратный к copydb_qnap_to_dev.sh: dev -> QNAP (prod).
+# Обратный к copydb_qnap_to_dev.sh / copydb_qnap_to_file.sh: файл -> QNAP (prod).
 #   1. Берем последний дамп из ./backups (или указанный через --file).
 #   2. (по умолчанию) Снимаем страховочный дамп прод-базы в ./backups.
 #   3. Останавливаем приложение на QNAP (Django/huey).
@@ -10,8 +10,8 @@ set -euo pipefail
 #      DROP DATABASE ... WITH (FORCE) + CREATE + pg_restore (или psql для *.sql).
 #   5. Заново поднимаем приложение (в том числе если восстановление упало).
 #
-# Использование: ./copydb_dev_to_qnap.sh [опции]
-# Подробности: ./copydb_dev_to_qnap.sh --help
+# Использование: ./copydb_file_to_qnap.sh [опции]
+# Подробности: ./copydb_file_to_qnap.sh --help
 #
 # Настройки QNAP-базы (prod) берутся из .env.production: POSTGRES_USER,
 # POSTGRES_PASSWORD, POSTGRES_DB (переопределение — QNAP_POSTGRES_*).
@@ -261,7 +261,7 @@ if [[ -z "${docker_bin}" ]]; then
 fi
 if [[ -z "${docker_bin}" ]]; then
     echo "ОШИБКА: docker не найден на удаленном хосте." >&2
-    echo "Задай путь явно: QNAP_DOCKER_BIN=/share/.../container-station/bin/docker ./copydb_dev_to_qnap.sh" >&2
+    echo "Задай путь явно: QNAP_DOCKER_BIN=/share/.../container-station/bin/docker ./copydb_file_to_qnap.sh" >&2
     exit 1
 fi
 echo "docker: ${docker_bin}" >&2
@@ -478,7 +478,7 @@ if ! ssh -o BatchMode=yes "${SSH_TARGET}" "$(remote_command restore "${DUMP_KIND
     echo "ОШИБКА: восстановление на ${SSH_TARGET} не удалось." >&2
     if [[ "${SAFETY_BACKUP}" -eq 1 ]]; then
         echo "Страховочный дамп прод-базы сохранен: ${SAFETY_FILE}" >&2
-        echo "Вернуть его можно так: ./copydb_dev_to_qnap.sh --file \"${SAFETY_FILE}\" --no-safety-backup" >&2
+        echo "Вернуть его можно так: ./copydb_file_to_qnap.sh --file \"${SAFETY_FILE}\" --no-safety-backup" >&2
     fi
     exit 1
 fi

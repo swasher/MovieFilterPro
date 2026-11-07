@@ -4,11 +4,13 @@ set -euo pipefail
 # ------------------------------------------------------------------
 # Полный цикл: QNAP -> dev.
 #   1. По SSH заходим на QNAP и снимаем дамп PostgreSQL из docker-контейнера.
-#   2. Стримим дамп по SSH на dev-машину в локальный файл.
+#   2. Стримим дамп по SSH на dev-машину в локальный файл (./backups).
 #   3. Пересоздаем dev-базу (DROP + CREATE) и восстанавливаем в нее дамп.
 #
-# Использование: ./copydb_qnap_to_dev.sh [--yes] [--dir DIR] [--no-restore] [--delete-dump]
+# Использование: ./copydb_qnap_to_dev.sh [--yes] [--dir DIR] [--delete-dump]
 # Подробности: ./copydb_qnap_to_dev.sh --help
+#
+# Нужен только сам дамп, без заливки в dev? Используй copydb_qnap_to_file.sh.
 #
 # Настройки dev-базы берутся из .env: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
 # Настройки QNAP-базы (prod) — из .env.production: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB.
@@ -38,8 +40,7 @@ usage() {
 Снимает дамп с QNAP по SSH и восстанавливает его в dev-базу.
 
   --yes, -y     не спрашивать подтверждение перед пересозданием dev-базы
-  --dir DIR     куда сохранить дамп (по умолчанию: ${SCRIPT_DIR}/backups)
-  --no-restore  только забрать дамп, dev-базу не трогать
+  --dir DIR     куда сохранить промежуточный дамп (по умолчанию: ${SCRIPT_DIR}/backups)
   --delete-dump удалить локальный файл дампа после успешного восстановления
   --help, -h    эта справка
 
@@ -108,14 +109,12 @@ env_value_alt() {
 #           РАЗБОР АРГУМЕНТОВ          #
 # ------------------------------------ #
 ASSUME_YES=0
-DO_RESTORE=1
 DELETE_DUMP=0
 DUMP_DIR="${SCRIPT_DIR}/backups"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -y|--yes)     ASSUME_YES=1 ;;
-        --no-restore) DO_RESTORE=0 ;;
         --delete-dump) DELETE_DUMP=1 ;;
         --dir)
             if [[ $# -lt 2 ]]; then
@@ -171,11 +170,9 @@ MISSING_PROD=()
 [[ -n "${QNAP_POSTGRES_DB}" ]]       || MISSING_PROD+=("POSTGRES_DB")
 
 MISSING=()
-if [[ "${DO_RESTORE}" -eq 1 ]]; then
-    [[ -n "${POSTGRES_USER}" ]]     || MISSING+=("POSTGRES_USER")
-    [[ -n "${POSTGRES_PASSWORD}" ]] || MISSING+=("POSTGRES_PASSWORD")
-    [[ -n "${POSTGRES_DB}" ]]       || MISSING+=("POSTGRES_DB")
-fi
+[[ -n "${POSTGRES_USER}" ]]     || MISSING+=("POSTGRES_USER")
+[[ -n "${POSTGRES_PASSWORD}" ]] || MISSING+=("POSTGRES_PASSWORD")
+[[ -n "${POSTGRES_DB}" ]]       || MISSING+=("POSTGRES_DB")
 
 if [[ ${#MISSING_PROD[@]} -gt 0 || ${#MISSING[@]} -gt 0 ]]; then
     if [[ ${#MISSING_PROD[@]} -gt 0 ]]; then
@@ -190,20 +187,18 @@ fi
 # ------------------------------------ #
 #         ПРОВЕРКИ ПЕРЕД ЗАПИСЬЮ       #
 # ------------------------------------ #
-if [[ "${DO_RESTORE}" -eq 1 ]]; then
-    case "${POSTGRES_DB}" in
-        postgres|template0|template1)
-            echo "ОШИБКА: отказываюсь пересоздавать системную базу '${POSTGRES_DB}'." >&2
-            exit 1
-            ;;
-    esac
-
-    echo "==> Проверка: dev-контейнер '${DEV_CONTAINER_NAME}' запущен..."
-    if ! docker ps --format '{{.Names}}' | grep -qx "${DEV_CONTAINER_NAME}"; then
-        echo "ОШИБКА: контейнер '${DEV_CONTAINER_NAME}' не найден среди запущенных." >&2
-        docker ps --format '{{.Names}}' >&2 || true
+case "${POSTGRES_DB}" in
+    postgres|template0|template1)
+        echo "ОШИБКА: отказываюсь пересоздавать системную базу '${POSTGRES_DB}'." >&2
         exit 1
-    fi
+        ;;
+esac
+
+echo "==> Проверка: dev-контейнер '${DEV_CONTAINER_NAME}' запущен..."
+if ! docker ps --format '{{.Names}}' | grep -qx "${DEV_CONTAINER_NAME}"; then
+    echo "ОШИБКА: контейнер '${DEV_CONTAINER_NAME}' не найден среди запущенных." >&2
+    docker ps --format '{{.Names}}' >&2 || true
+    exit 1
 fi
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
@@ -296,12 +291,6 @@ if [[ "$(head -c 5 "${DUMP_PATH}")" != "PGDMP" ]]; then
 fi
 
 echo "==> Дамп получен: $(ls -lh "${DUMP_PATH}" | awk '{print $5}')"
-
-if [[ "${DO_RESTORE}" -eq 0 ]]; then
-    echo "==> --no-restore: dev-база не тронута."
-    echo "Готово: ${DUMP_PATH}"
-    exit 0
-fi
 
 # ------------------------------------ #
 #        ВОССТАНОВЛЕНИЕ В DEV          #
