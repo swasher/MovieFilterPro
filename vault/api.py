@@ -2,8 +2,20 @@ import logging
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Count, DateTimeField, Exists, F, OuterRef, Q, Subquery
-from django.db.models.functions import Coalesce
+from django.db.models import (
+    Case,
+    Count,
+    DateTimeField,
+    Exists,
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce, Substr
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
@@ -529,6 +541,17 @@ class PersonListOut(Schema):
     movies_count: int = 0
     is_favorite: bool = False
     is_star: bool = False
+
+
+class HomePersonGroupOut(Schema):
+    id: str
+    title: str
+    see_all_href: str
+    persons: list[PersonListOut]
+
+
+class PersonHomeOut(Schema):
+    groups: list[HomePersonGroupOut]
 
 
 api = NinjaAPI(title="Vault API", version="1.0")
@@ -1718,16 +1741,49 @@ def person_list(
         "-original_name": ("-original_name", "id"),
         "birth_date": ("birth_date", "id"),
         "-birth_date": ("-birth_date", "id"),
+        "updated_at": ("person_details_synced_at", "id"),
+        "-updated_at": ("-person_details_synced_at", "id"),
+        "popularity": ("popularity", "id"),
+        "-popularity": ("-popularity", "id"),
+        "movies_count": ("movies_count", "id"),
+        "-movies_count": ("-movies_count", "id"),
     }
     ordering = allowed_orders.get((order or "name").strip(), allowed_orders["name"])
-    # Даты без года рождения — всегда внизу, в обе стороны (иначе DESC тянет NULL наверх)
-    if ordering[0] == "birth_date":
-        qs = qs.order_by(F("birth_date").asc(nulls_last=True), "id")
-    elif ordering[0] == "-birth_date":
-        qs = qs.order_by(F("birth_date").desc(nulls_last=True), "id")
+    # Даты/популярность без значения — всегда внизу, в обе стороны
+    # (иначе DESC тянет NULL наверх).
+    sort_field = ordering[0].lstrip("-")
+    sort_desc = ordering[0].startswith("-")
+    if sort_field == "name":
+        # В русском режиме персоны без русского имени (латиница) не должны
+        # открывать список: сначала имена на кириллице, затем остальные.
+        # Группа всегда идёт первой, направление сортировки — внутри группы.
+        # Кириллица определяется по первому символу: диапазон U+0400–U+04FF.
+        qs = qs.annotate(
+            _name_first_char=Substr("name", 1, 1),
+        ).annotate(
+            _name_ru_first=Case(
+                When(Q(_name_first_char__range=("Ѐ", "ӿ")), then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        ).order_by(
+            "_name_ru_first",
+            F("name").desc() if sort_desc else F("name"),
+            "id",
+        )
+    elif sort_field in ("birth_date", "person_details_synced_at", "popularity"):
+        expr = F(sort_field)
+        qs = qs.order_by(
+            expr.desc(nulls_last=True) if sort_desc else expr.asc(nulls_last=True),
+            "id",
+        )
     else:
         qs = qs.order_by(*ordering)
     persons = list(qs.distinct()[:bounded])
+    return _serialize_person_list(persons, user)
+
+
+def _serialize_person_list(persons, user) -> list[PersonListOut]:
     favorite_ids: set[int] = set()
     star_ids: set[int] = set()
     if user is not None and persons:
@@ -1756,6 +1812,97 @@ def person_list(
         )
         for p in persons
     ]
+
+
+HOME_PERSON_SECTION_SIZE = 7
+
+
+def _person_base_queryset():
+    return Person.objects.annotate(movies_count=Count("person_movies__movie", distinct=True))
+
+
+@api.get("/persons/home", response=PersonHomeOut)
+def person_home_data(request):
+    """Главный экран персон: избранные, звёзды, недавно обновлённые и самые «занятые»."""
+    user = _resolve_api_user(request)
+    groups: list[HomePersonGroupOut] = []
+
+    if user is not None:
+        favorite_persons = list(
+            _person_base_queryset()
+            .filter(favorited_by__user=user)
+            .order_by(
+                "-movies_count",
+                F("popularity").desc(nulls_last=True),
+                "name",
+                "id",
+            )
+            .distinct()[:HOME_PERSON_SECTION_SIZE]
+        )
+        groups.append(
+            HomePersonGroupOut(
+                id="favorite",
+                title="Избранные персоны",
+                see_all_href="/persons?is_favorite=true",
+                persons=_serialize_person_list(favorite_persons, user),
+            )
+        )
+
+        star_persons = list(
+            _person_base_queryset()
+            .filter(starred_by__user=user)
+            .order_by(
+                "-movies_count",
+                F("popularity").desc(nulls_last=True),
+                "name",
+                "id",
+            )
+            .distinct()[:HOME_PERSON_SECTION_SIZE]
+        )
+        groups.append(
+            HomePersonGroupOut(
+                id="star",
+                title="Звёзды",
+                see_all_href="/persons?is_star=true",
+                persons=_serialize_person_list(star_persons, user),
+            )
+        )
+
+    updated_persons = list(
+        _person_base_queryset()
+        .filter(person_details_synced_at__isnull=False)
+        .order_by("-person_details_synced_at", "-movies_count", "id")[
+            :HOME_PERSON_SECTION_SIZE
+        ]
+    )
+    groups.append(
+        HomePersonGroupOut(
+            id="updated",
+            title="Недавно обновлённые",
+            see_all_href="/persons?order=-updated_at",
+            persons=_serialize_person_list(updated_persons, user),
+        )
+    )
+
+    busiest_persons = list(
+        _person_base_queryset()
+        .order_by(
+            "-movies_count",
+            F("popularity").desc(nulls_last=True),
+            "name",
+            "id",
+        )[:HOME_PERSON_SECTION_SIZE]
+    )
+    groups.append(
+        HomePersonGroupOut(
+            id="most_movies",
+            title="Больше всего фильмов",
+            see_all_href="/persons?order=-movies_count",
+            persons=_serialize_person_list(busiest_persons, user),
+        )
+    )
+
+    return PersonHomeOut(groups=groups)
 
 
 @api.get("/persons/{person_id}", response=PersonDetailOut)

@@ -21,8 +21,21 @@
     is_star: boolean;
   };
 
+  type HomePersonGroup = {
+    id: string;
+    title: string;
+    see_all_href: string;
+    persons: ApiPerson[];
+  };
+
   let { data } = $props();
   const persons = $derived(data.persons ?? []);
+  const isHome = $derived(data.isHome === true);
+  const homeGroups = $derived(
+    ((data.homeGroups ?? []) as HomePersonGroup[]).filter(
+      (group) => group.persons.length > 0
+    )
+  );
 
   let searchQuery = $state(data.activeQuery ?? "");
   // Обычная переменная, НЕ $state: иначе присвоение в applyParams перезапустит
@@ -51,6 +64,9 @@
   const sortOptions = $derived([
     { field: nameField, label: "По имени" },
     { field: "birth_date", label: "По году рождения" },
+    { field: "updated_at", label: "По дате обновления" },
+    { field: "movies_count", label: "По числу фильмов" },
+    { field: "popularity", label: "По популярности" },
   ]);
 
   // В EN-режиме основным показываем английское имя (с fallback на русское)
@@ -210,22 +226,63 @@
     {/if}
   </div>
 
-  <Card class="vd-card">
-    <CardHeader>
-      <CardTitle class="vd-section-title">Все персоны ({persons.length})</CardTitle>
-    </CardHeader>
-    <CardContent class="vd-card-content">
-      {#if data.apiError}
-        <p class="vd-empty">{data.apiError}</p>
-      {:else if persons.length}
-        <div class="vd-crew-grid">
-          {#each persons as person (person.id)}
-            <PersonCard person={displayPerson(person)} />
-          {/each}
+  {#if isHome}
+    {#if data.apiError}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ошибка API</CardTitle>
+        </CardHeader>
+        <CardContent class="vd-card-content">
+          <p class="vd-empty">{data.apiError}</p>
+        </CardContent>
+      </Card>
+    {:else if homeGroups.length}
+      {#each homeGroups as group (group.id)}
+        <div class="mb-8">
+          <div class="mb-3 flex items-baseline justify-between gap-4">
+            <h2 class="text-lg font-semibold tracking-tight">{group.title}</h2>
+            <a
+              href={group.see_all_href}
+              class="text-muted-foreground shrink-0 text-sm transition-colors hover:text-foreground"
+            >
+              Все
+            </a>
+          </div>
+          <div class="vd-crew-grid">
+            {#each group.persons as person (person.id)}
+              <PersonCard person={person} />
+            {/each}
+          </div>
         </div>
-      {:else}
-        <p class="vd-empty">Нет данных</p>
-      {/if}
-    </CardContent>
-  </Card>
+      {/each}
+    {:else}
+      <Card>
+        <CardHeader>
+          <CardTitle>Персон пока нет</CardTitle>
+        </CardHeader>
+        <CardContent class="vd-card-content">
+          <p class="vd-empty">Персоны появятся после синхронизации фильмов с TMDB.</p>
+        </CardContent>
+      </Card>
+    {/if}
+  {:else}
+    <Card class="vd-card">
+      <CardHeader>
+        <CardTitle class="vd-section-title">Все персоны ({persons.length})</CardTitle>
+      </CardHeader>
+      <CardContent class="vd-card-content">
+        {#if data.apiError}
+          <p class="vd-empty">{data.apiError}</p>
+        {:else if persons.length}
+          <div class="vd-crew-grid">
+            {#each persons as person (person.id)}
+              <PersonCard person={displayPerson(person)} />
+            {/each}
+          </div>
+        {:else}
+          <p class="vd-empty">Нет данных</p>
+        {/if}
+      </CardContent>
+    </Card>
+  {/if}
 </div>
