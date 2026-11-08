@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
+  import { goto, invalidateAll } from "$app/navigation";
   import { onMount, tick } from "svelte";
   import { toast } from "svelte-sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
@@ -369,6 +369,9 @@ type TmdbSearchResult = {
 
     addMovieDialogOpen = false;
     toast.error(message ?? "Нужно войти в систему.");
+    // Сессия могла истечь: обновляем auth в layout, иначе он продолжит
+    // считать пользователя залогиненным.
+    await invalidateAll();
     await goto("/login");
     return true;
   };

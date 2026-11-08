@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { toast } from "svelte-sonner";
-  import { goto } from "$app/navigation";
+  import { goto, invalidateAll } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import { Input } from "$lib/components/ui/input";
@@ -117,6 +117,9 @@
   const handleUnauthorized = async (status: number, message?: string): Promise<boolean> => {
     if (status !== 401) return false;
     toast.error(message ?? "Нужно войти в систему.");
+    // Сессия могла истечь: обновляем auth в layout, иначе он продолжит
+    // считать пользователя залогиненным.
+    await invalidateAll();
     await goto("/login");
     return true;
   };

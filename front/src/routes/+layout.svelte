@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppShell from "$lib/components/AppShell.svelte";
+  import LoginForm from "$lib/components/LoginForm.svelte";
   import { headerLinks } from "$lib/template-data";
   import { Toaster } from "$lib/components/ui/sonner";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
@@ -9,7 +10,15 @@
 </script>
 
 <Toaster position="top-center" />
-{#if data.auth?.users_exist === false}
+{#if data.backendDown}
+  <div class="flex min-h-svh items-center justify-center bg-black p-6">
+    <p class="text-center text-5xl font-bold tracking-tight text-white md:text-7xl">Backend is down.</p>
+  </div>
+{:else if data.databaseDown}
+  <div class="flex min-h-svh items-center justify-center bg-black p-6">
+    <p class="text-center text-5xl font-bold tracking-tight text-white md:text-7xl">Database is down.</p>
+  </div>
+{:else if data.auth?.users_exist === false}
   <div class="bg-background flex min-h-svh items-center justify-center p-6">
     <Card class="w-full max-w-xl rounded-2xl border-border/70 bg-card/90 shadow-sm">
       <CardHeader class="space-y-2">
@@ -31,6 +40,8 @@
       </CardContent>
     </Card>
   </div>
+{:else if !data.auth?.is_authenticated}
+  <LoginForm siteVersion={data.siteVersion} />
 {:else}
   <AppShell {headerLinks} auth={data.auth} siteVersion={data.siteVersion} appName="MovieFilter Pro">
     {@render children?.()}
