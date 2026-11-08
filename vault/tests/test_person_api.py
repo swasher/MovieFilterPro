@@ -26,17 +26,14 @@ class PersonAliasSearchTests(TestCase):
         PersonAlias.objects.create(
             person=self.stallone,
             name="Sly Stallone",
-            source="tmdb",
         )
         PersonAlias.objects.create(
             person=self.stallone,
             name="Sylvester Gardenzio Stallone",
-            source="tmdb",
         )
         PersonAlias.objects.create(
             person=self.schwarzenegger,
             name="Arnie",
-            source="tmdb",
         )
 
     def test_search_finds_person_by_alias(self):
@@ -82,15 +79,7 @@ class PersonImagesAdapterTests(SimpleTestCase):
             _api=SimpleNamespace(
                 people_get_images=lambda person_id: {
                     "profiles": [
-                        {
-                            "file_path": "/first.jpg",
-                            "width": "100",
-                            "height": "150",
-                            "aspect_ratio": 0.667,
-                            "vote_average": 5.5,
-                            "vote_count": "2",
-                            "iso_639_1": None,
-                        },
+                        {"file_path": "/first.jpg"},
                         {"file_path": "/second.jpg"},
                         {"file_path": None},
                         "not-a-dict",
@@ -103,10 +92,6 @@ class PersonImagesAdapterTests(SimpleTestCase):
 
         self.assertEqual(len(images), 1)
         self.assertEqual(images[0].file_path, "/first.jpg")
-        self.assertEqual(images[0].width, 100)
-        self.assertEqual(images[0].height, 150)
-        self.assertEqual(images[0].vote_count, 2)
-        self.assertEqual(images[0].iso_639_1, "")
 
 
 class PersonImagesApiTests(TestCase):
@@ -131,24 +116,8 @@ class PersonImagesApiTests(TestCase):
     ):
         get_tmdb_client_mock.return_value = object()
         get_person_images_mock.return_value = [
-            PersonImageBasic(
-                file_path="/profile1.jpg",
-                width=1000,
-                height=1500,
-                aspect_ratio=0.667,
-                vote_average=5.5,
-                vote_count=3,
-                iso_639_1="",
-            ),
-            PersonImageBasic(
-                file_path="/profile2.jpg",
-                width=800,
-                height=1200,
-                aspect_ratio=0.667,
-                vote_average=4.5,
-                vote_count=2,
-                iso_639_1="",
-            ),
+            PersonImageBasic(file_path="/profile1.jpg"),
+            PersonImageBasic(file_path="/profile2.jpg"),
         ]
 
         response = self.client.get(

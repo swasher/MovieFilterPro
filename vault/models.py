@@ -76,14 +76,9 @@ class Person(models.Model):
 
 class PersonAlias(models.Model):
     """Альтернативное имя персоны (псевдоним, сценическое имя, вариант написания)."""
-    SOURCE_CHOICES = [
-        ('tmdb', 'TMDB'),
-        ('manual', 'Ручной'),
-    ]
 
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='aliases')
     name = models.CharField('Псевдоним', max_length=255)
-    source = models.CharField('Источник', max_length=20, choices=SOURCE_CHOICES, default='tmdb')
 
     class Meta:
         verbose_name = 'Псевдоним персоны'

@@ -48,6 +48,7 @@ class Command(BaseCommand):
             v.StarPerson,
             v.UserListMovie,
             v.MoviePerson,
+            v.PersonAlias,
             v.TMDBSyncQueueItem,
 
             # События связи приложений

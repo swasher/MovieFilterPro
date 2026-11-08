@@ -510,11 +510,6 @@ class PersonImageOut(Schema):
     url: str | None = None
     full_url: str | None = None
     thumb_url: str | None = None
-    width: int | None = None
-    height: int | None = None
-    aspect_ratio: float | None = None
-    vote_average: float | None = None
-    vote_count: int = 0
 
 
 class PersonImagesOut(Schema):
@@ -2070,11 +2065,6 @@ def person_images(request, person_id: int, limit: int = 8):
                 url=ImageService.url(image.file_path, "w500", kind="profile"),
                 full_url=ImageService.url(image.file_path, "original", kind="profile"),
                 thumb_url=ImageService.url(image.file_path, "w185", kind="profile"),
-                width=image.width,
-                height=image.height,
-                aspect_ratio=image.aspect_ratio,
-                vote_average=image.vote_average,
-                vote_count=image.vote_count,
             )
             for image in items
         ]

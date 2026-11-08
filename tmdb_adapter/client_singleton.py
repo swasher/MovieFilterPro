@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Optional
 from tmdbapis import TMDbAPIs
-from tmdbapis.exceptions import Authentication
 from threading import Lock
 from moviefilter.models import UserPreferences
 
@@ -72,7 +71,6 @@ def get_tmdb_config() -> Optional[dict]:
 class PersonBasic:
     """Только базовые поля TMDB-персоны, без кредитов, фото и переводов."""
 
-    id: int | None
     name: str
     imdb_id: str | None
     birthday: date | None
@@ -104,15 +102,6 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
-def _as_int(value: Any) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def get_person_basic(tmdb: TMDbAPIs, person_id: int) -> Optional[PersonBasic]:
     """
     Лёгкий запрос /person/{id} без append_to_response.
@@ -135,7 +124,6 @@ def get_person_basic(tmdb: TMDbAPIs, person_id: int) -> Optional[PersonBasic]:
     )
 
     return PersonBasic(
-        id=data.get("id"),
         name=data.get("name") or "",
         imdb_id=data.get("imdb_id") or None,
         birthday=_parse_tmdb_date(data.get("birthday")),
@@ -153,12 +141,6 @@ def get_person_basic(tmdb: TMDbAPIs, person_id: int) -> Optional[PersonBasic]:
 @dataclass(frozen=True, slots=True)
 class PersonImageBasic:
     file_path: str
-    width: int | None
-    height: int | None
-    aspect_ratio: float | None
-    vote_average: float | None
-    vote_count: int
-    iso_639_1: str
 
 
 def get_person_images(
@@ -190,17 +172,7 @@ def get_person_images(
         if not isinstance(file_path, str) or not file_path.strip():
             continue
 
-        result.append(
-            PersonImageBasic(
-                file_path=file_path.strip(),
-                width=_as_int(item.get("width")),
-                height=_as_int(item.get("height")),
-                aspect_ratio=_as_float(item.get("aspect_ratio")),
-                vote_average=_as_float(item.get("vote_average")),
-                vote_count=_as_int(item.get("vote_count")) or 0,
-                iso_639_1=item.get("iso_639_1") or "",
-            )
-        )
+        result.append(PersonImageBasic(file_path=file_path.strip()))
         if len(result) >= limit:
             break
 

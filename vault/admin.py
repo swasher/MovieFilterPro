@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
-    Collection, Movie, Person, Genre, MoviePerson,
+    Collection, Movie, Person, PersonAlias, Genre, MoviePerson,
     UserList, UserListMovie, UserMovie
 )
 from core.models import Country
@@ -30,35 +30,53 @@ class CountryAdmin(admin.ModelAdmin):
     movies_count.short_description = 'Фильмов'
 
 
+class PersonAliasInline(admin.TabularInline):
+    model = PersonAlias
+    extra = 0
+    fields = ['name']
+
+
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'birth_date', 'gender', 'photo_preview']
-    list_filter = ['gender', 'birth_date']
-    search_fields = ['first_name', 'last_name']
+    list_display = [
+        'name',
+        'original_name',
+        'birth_date',
+        'gender',
+        'place_of_birth',
+        'known_for_department',
+        'photo_preview',
+    ]
+    list_filter = ['gender', 'known_for_department', 'birth_date']
+    search_fields = ['name', 'original_name']
     date_hierarchy = 'birth_date'
+    readonly_fields = ['person_details_synced_at']
+    inlines = [PersonAliasInline]
 
     fieldsets = (
         ('Основная информация', {
-            'fields': ('first_name', 'last_name', 'photo', 'gender')
+            'fields': ('name', 'original_name', 'photo', 'gender')
         }),
         ('Даты', {
             'fields': ('birth_date', 'death_date')
         }),
         ('Дополнительно', {
-            'fields': ('biography',),
+            'fields': (
+                'place_of_birth',
+                'known_for_department',
+                'biography',
+                'person_details_synced_at',
+            ),
             'classes': ('collapse',)
         }),
     )
 
-    def full_name(self, obj):
-        return f"{obj.first_name} {obj.last_name}"
-
-    full_name.short_description = 'ФИО'
-
     def photo_preview(self, obj):
         if obj.photo:
-            return format_html('<img src="{}" width="50" height="50" style="object-fit: cover; border-radius: 50%;" />',
-                               obj.photo.url)
+            return format_html(
+                '<img src="{}" width="50" height="50" style="object-fit: cover; border-radius: 50%;" />',
+                obj.photo_url,
+            )
         return '-'
 
     photo_preview.short_description = 'Фото'
@@ -107,7 +125,10 @@ class MovieAdmin(admin.ModelAdmin):
 
     def poster_preview(self, obj):
         if obj.poster:
-            return format_html('<img src="{}" width="40" height="60" style="object-fit: cover;" />', obj.poster.url)
+            return format_html(
+                '<img src="{}" width="40" height="60" style="object-fit: cover;" />',
+                obj.poster_url,
+            )
         return '-'
 
     poster_preview.short_description = 'Постер'
@@ -141,7 +162,7 @@ class CollectionAdmin(admin.ModelAdmin):
 class MoviePersonAdmin(admin.ModelAdmin):
     list_display = ['movie', 'person', 'role', 'character_name', 'order']
     list_filter = ['role']
-    search_fields = ['movie__title', 'person__first_name', 'person__last_name', 'character_name']
+    search_fields = ['movie__title', 'person__name', 'person__original_name', 'character_name']
     autocomplete_fields = ['movie', 'person']
 
 

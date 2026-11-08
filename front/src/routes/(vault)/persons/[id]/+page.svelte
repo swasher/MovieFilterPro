@@ -13,17 +13,14 @@
     url: string | null;
     full_url: string | null;
     thumb_url: string | null;
-    width: number | null;
-    height: number | null;
-    aspect_ratio: number | null;
-    vote_average: number | null;
-    vote_count: number;
   };
 
   let { data } = $props();
   const person = $derived(data.person);
 
   const canLoadImages = $derived(!!person.tmdb_id && /^\d+$/.test(person.tmdb_id));
+  const hasTmdbLink = $derived(/^\d+$/.test(person.tmdb_id ?? ""));
+  const hasImdbLink = $derived(/^nm\d+$/.test(person.imdb_id ?? ""));
   let images = $state<PersonImage[]>([]);
   let imagesLoading = $state(true);
   let imagesError = $state("");
@@ -136,6 +133,7 @@
     Crew: "Съемочная группа",
     "Visual Effects": "Визуальные эффекты",
     Lighting: "Освещение",
+    Creator: "Создатель",
   };
 
   function formatPersonDate(iso: string | null | undefined): string {
@@ -249,7 +247,7 @@
 
           <div class="vd-facts-row">
             <span class="vd-service-badges">
-              {#if person.tmdb_id}
+              {#if hasTmdbLink}
                 <a
                   href="https://www.themoviedb.org/person/{person.tmdb_id}"
                   target="_blank"
@@ -259,8 +257,15 @@
                 >
                   TMDB
                 </a>
+              {:else}
+                <span
+                  class="vd-service-badge vd-service-badge--empty"
+                  title="TMDB ID отсутствует или имеет синтетический формат"
+                >
+                  empty tmdb id
+                </span>
               {/if}
-              {#if person.imdb_id}
+              {#if hasImdbLink}
                 <a
                   href="https://www.imdb.com/name/{person.imdb_id}"
                   target="_blank"
@@ -270,6 +275,13 @@
                 >
                   IMDb
                 </a>
+              {:else}
+                <span
+                  class="vd-service-badge vd-service-badge--empty"
+                  title="Реальный IMDb ID отсутствует или имеет синтетический формат"
+                >
+                  empty imdb id
+                </span>
               {/if}
             </span>
           </div>

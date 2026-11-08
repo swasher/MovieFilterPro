@@ -1164,32 +1164,23 @@ class TMDBMovieSyncService:
         return aliases
 
     @classmethod
-    def _sync_person_aliases(
-        cls,
-        person: Person,
-        aliases: list[str],
-        *,
-        clear_empty: bool = False,
-    ) -> None:
-        """Синхронизирует TMDB-псевдонимы, не трогая ручные."""
-        if not aliases and not clear_empty:
+    def _sync_person_aliases(cls, person: Person, aliases: list[str]) -> None:
+        """Синхронизирует TMDB-псевдонимы."""
+        if not aliases:
             return
 
-        existing = set(
-            person.aliases.filter(source="tmdb").values_list("name", flat=True)
-        )
+        existing = set(person.aliases.values_list("name", flat=True))
         if existing == set(aliases):
             return
 
-        person.aliases.filter(source="tmdb").delete()
-        if aliases:
-            PersonAlias.objects.bulk_create(
-                [
-                    PersonAlias(person=person, name=alias, source="tmdb")
-                    for alias in aliases
-                ],
-                ignore_conflicts=True,
-            )
+        person.aliases.all().delete()
+        PersonAlias.objects.bulk_create(
+            [
+                PersonAlias(person=person, name=alias)
+                for alias in aliases
+            ],
+            ignore_conflicts=True,
+        )
 
     @classmethod
     def _load_person_details(cls, tmdb, person_id: int, cache: dict[int, object | None]):
