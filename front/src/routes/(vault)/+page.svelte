@@ -12,6 +12,7 @@ import * as Dialog from "$lib/components/ui/dialog";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
 import MovieCard from "$lib/components/vault/MovieCard.svelte";
+import VaultImage from "$lib/components/vault/VaultImage.svelte";
 import MovieWontWatchOverlay from "$lib/components/vault/MovieWontWatchOverlay.svelte";
 import { LayoutGrid, TextAlignJustify, Eye, Heart, Plus, Filter, RotateCcw, X, Link2, Link2Off } from "@lucide/svelte";
 import {
@@ -819,10 +820,11 @@ type TmdbSearchResult = {
                   <td class="px-2 py-2 align-middle">
                     <a href={`/movies/${movie.slug}`} data-sveltekit-preload-data="hover" class="relative block h-12 w-8 overflow-hidden rounded">
                       {#if movie.poster_url}
-                        <img
+                        <VaultImage
                           src={movie.poster_url}
                           alt={movie.title}
                           class="h-full w-full object-cover"
+                          slotClass="h-full w-full"
                           loading="lazy"
                         />
                       {:else}
@@ -1012,10 +1014,11 @@ type TmdbSearchResult = {
                     <td class="px-3 py-2 align-middle">
                       <div class="bg-muted flex h-[72px] w-12 items-center justify-center overflow-hidden rounded-md">
                         {#if candidate.poster_url}
-                          <img
+                          <VaultImage
                             src={candidate.poster_url}
                             alt={candidate.title}
                             class="h-full w-full object-cover"
+                            slotClass="h-full w-full"
                             loading="lazy"
                           />
                         {:else}

@@ -1,8 +1,9 @@
 from pathlib import Path
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
+from moviefilter.models import UserPreferences
 from vault.models import Collection, Movie, Person
 from vault.services.image_service import ImageService
 
@@ -143,3 +144,35 @@ class ImageServiceValidationTests(SimpleTestCase):
     def test_rejects_empty_and_too_long_paths(self):
         self.assertFalse(ImageService.is_valid_request("poster", "w500", ""))
         self.assertFalse(ImageService.is_valid_request("poster", "w500", "a" * 513))
+
+
+class ImageServiceDiskCacheToggleTests(TestCase):
+    def setUp(self):
+        self.preferences = UserPreferences.get()
+        ImageService.invalidate_cache_settings()
+        self.addCleanup(ImageService.invalidate_cache_settings)
+
+    def _set_enabled(self, enabled: bool) -> None:
+        self.preferences.vault_image_cache_enabled = enabled
+        self.preferences.save()
+        ImageService.invalidate_cache_settings()
+
+    def test_enabled_switch_returns_internal_endpoint(self):
+        self._set_enabled(True)
+
+        self.assertEqual(
+            ImageService.url("/poster.jpg"),
+            "/api/vault/images/poster/w500/poster.jpg",
+        )
+
+    def test_disabled_switch_returns_direct_cdn_url(self):
+        self._set_enabled(False)
+
+        self.assertEqual(
+            ImageService.url("/poster.jpg"),
+            "https://image.tmdb.org/t/p/w500/poster.jpg",
+        )
+        self.assertEqual(
+            ImageService.url("/poster.jpg", "original", kind="profile"),
+            "https://image.tmdb.org/t/p/original/poster.jpg",
+        )

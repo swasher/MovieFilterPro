@@ -38,6 +38,7 @@ export type PreferencesData = {
   ai_model: string | null;
   groq_api_key: string | null;
   groq_model: string | null;
+  vault_image_cache_enabled: boolean;
 };
 
 export type PreferencesUpdatePayload = {
@@ -73,6 +74,7 @@ export type PreferencesUpdatePayload = {
   ai_model: string | null;
   groq_api_key: string | null;
   groq_model: string | null;
+  vault_image_cache_enabled: boolean;
 };
 
 export type PreferencesApiErrorPayload = {
@@ -137,5 +139,6 @@ export const emptyPreferences = (): PreferencesData => ({
   ai_api_key: null,
   ai_model: null,
   groq_api_key: null,
-  groq_model: null
+  groq_model: null,
+  vault_image_cache_enabled: true
 });

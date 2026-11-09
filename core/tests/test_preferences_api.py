@@ -58,6 +58,19 @@ class PreferencesApiTests(TestCase):
             self.assertEqual(payload["qbt_password"], "qbt-pass")
             self.assertEqual(payload["tmdb_v4_authenticated_access_token"], "tmdb-auth-token")
             self.assertEqual(payload["omdb_api_key"], "omdb-key")
+            self.assertTrue(payload["vault_image_cache_enabled"])
+
+    def test_put_preferences_can_disable_vault_image_cache(self):
+        response = self.client.put(
+            "/api/core/preferences",
+            data=self._preferences_payload(vault_image_cache_enabled=False),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.preferences.refresh_from_db()
+        self.assertFalse(self.preferences.vault_image_cache_enabled)
+        self.assertFalse(response.json()["vault_image_cache_enabled"])
 
     def test_put_preferences_updates_values_and_trims_optional_fields(self):
         response = self.client.put(

@@ -393,6 +393,10 @@
     @apply h-[180px] w-[120px] shrink-0 rounded-xl object-cover;
   }
 
+  .vd-person-photo-slot {
+    @apply relative h-[180px] w-[120px] shrink-0 overflow-hidden rounded-xl;
+  }
+
   .vd-person-photo-skeleton {
     @apply h-[180px] w-[120px] shrink-0 animate-pulse rounded-xl bg-muted;
   }

@@ -24,6 +24,7 @@
     type PreferencesUpdatePayload
   } from "$lib/preferences";
   import KinozalMirrorDialog from "$lib/components/KinozalMirrorDialog.svelte";
+  import PasswordChangeForm from "$lib/components/PasswordChangeForm.svelte";
 
   type PreferencesFormState = {
     last_scan: string;
@@ -59,6 +60,7 @@
     ai_model: string;
     groq_api_key: string;
     groq_model: string;
+    vault_image_cache_enabled: boolean;
   };
 
   let { data } = $props();
@@ -114,7 +116,8 @@
       ai_api_key: preferences.ai_api_key ?? "",
       ai_model: preferences.ai_model ?? "",
       groq_api_key: preferences.groq_api_key ?? "",
-      groq_model: preferences.groq_model ?? ""
+      groq_model: preferences.groq_model ?? "",
+      vault_image_cache_enabled: preferences.vault_image_cache_enabled ?? true
     };
   };
 
@@ -152,7 +155,8 @@
     ai_api_key: asOptionalText(formState.ai_api_key),
     ai_model: asOptionalText(formState.ai_model),
     groq_api_key: asOptionalText(formState.groq_api_key),
-    groq_model: asOptionalText(formState.groq_model)
+    groq_model: asOptionalText(formState.groq_model),
+    vault_image_cache_enabled: formState.vault_image_cache_enabled
   });
 
   const payloadSnapshot = (formState: PreferencesFormState) => JSON.stringify(buildPayload(formState));
@@ -781,6 +785,29 @@
 
         <Card class="border-border/70">
           <CardHeader>
+            <CardTitle class="text-xl">Изображения</CardTitle>
+            <CardDescription>Постеры, бэкдропы и фото персон Vault.</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <Label for="vault-image-cache" class="text-sm font-medium">Дисковый кеш изображений</Label>
+                <div class="text-xs text-muted-foreground">
+                  Вкл — картинки идут через Vault и кешируются на диске сервера. Выкл — напрямую с CDN TMDB
+                  с обычным браузерным кешированием.
+                </div>
+              </div>
+              <Switch
+                id="vault-image-cache"
+                bind:checked={form.vault_image_cache_enabled}
+                onCheckedChange={(v) => { form.vault_image_cache_enabled = v; formRevision++; hasUnsavedChanges = true; return v; }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/70">
+          <CardHeader>
             <CardTitle class="text-xl">OMDB</CardTitle>
             <CardDescription>Ключ OMDB API для рейтингов IMDb, Rotten Tomatoes и Metacritic.</CardDescription>
           </CardHeader>
@@ -986,6 +1013,8 @@
         {isSaving ? "Saving..." : "Save Preferences"}
       </Button>
     </div>
+
+    <PasswordChangeForm />
 
     <KinozalMirrorDialog
       bind:open={addMirrorOpen}

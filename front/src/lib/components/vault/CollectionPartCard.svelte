@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Tooltip from "$lib/components/ui/tooltip";
   import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
+  import VaultImage from "$lib/components/vault/VaultImage.svelte";
 
   type Part = {
     tmdb_id: number;
@@ -79,7 +80,7 @@
             >
               <div class="vd-collection-poster-wrap vd-collection-poster-wrap--compact">
                 {#if part.poster_url}
-                  <img src={part.poster_url} alt={part.title} class="vd-collection-poster" loading="lazy" />
+                  <VaultImage src={part.poster_url} alt={part.title} class="vd-collection-poster" slotClass="h-full w-full" loading="lazy" />
                 {:else}
                   <div class="vd-collection-poster-fallback text-[10px]">no poster</div>
                 {/if}
@@ -101,7 +102,7 @@
             >
               <div class="vd-collection-poster-wrap vd-collection-poster-wrap--compact">
                 {#if part.poster_url}
-                  <img src={part.poster_url} alt={part.title} class="vd-collection-poster vd-collection-poster--dim group-hover:opacity-100 group-hover:grayscale-0" loading="lazy" />
+                  <VaultImage src={part.poster_url} alt={part.title} class="vd-collection-poster vd-collection-poster--dim group-hover:opacity-100 group-hover:grayscale-0" slotClass="h-full w-full" loading="lazy" />
                 {:else}
                   <div class="vd-collection-poster-fallback text-[10px]">no poster</div>
                 {/if}

@@ -40,6 +40,7 @@
   import PersonCard from "$lib/components/vault/PersonCard.svelte";
   import CollectionPartCard from "$lib/components/vault/CollectionPartCard.svelte";
   import MovieWontWatchOverlay from "$lib/components/vault/MovieWontWatchOverlay.svelte";
+  import VaultImage from "$lib/components/vault/VaultImage.svelte";
   import { parseQbtApiError, type MovieTorrent, type QbtTorrent, type QbtTorrentDeleteResponse, type QbtTorrentsResponse } from "$lib/qbittorrent";
 
   let { data } = $props();
@@ -1092,11 +1093,13 @@
         <CardContent class="relative !p-0">
           {#if movie.poster_url}
             <ImageZoom.Root>
-              <ImageZoom.Trigger
+              <VaultImage
                 src={movie.poster_url}
                 zoomSrc={movie.poster_full_url ?? movie.poster_url}
                 alt={movie.title}
                 class="vd-poster"
+                slotClass="w-full"
+                spinnerClass="size-6"
               />
             </ImageZoom.Root>
           {:else}
@@ -1675,7 +1678,7 @@
                 <div class={`vd-card vd-season-card${season.is_unreleased ? " vd-season-card--unreleased" : ""}`}>
                   <div class="vd-season-poster-block">
                     {#if season.poster_url}
-                      <img src={season.poster_url} alt={`Постер сезона ${season.season_number}`} class="vd-season-poster-img" />
+                      <VaultImage src={season.poster_url} alt={`Постер сезона ${season.season_number}`} class="vd-season-poster-img" slotClass="h-full w-full" />
                       {#if season.is_unreleased}
                         <div class="vd-season-unreleased-overlay">
                           <span class="vd-season-unreleased-badge">Не выпущен</span>
@@ -1868,10 +1871,11 @@
           <div class="flex gap-3">
             <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
               {#if candidate.poster_url}
-                <img
+                <VaultImage
                   src={candidate.poster_url}
                   alt={candidate.title}
                   class="h-full w-full object-cover"
+                  slotClass="h-full w-full"
                   loading="lazy"
                 />
               {:else}
@@ -1960,10 +1964,11 @@
               <div class="flex gap-3">
                 <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md relative">
                   {#if candidate.poster_url}
-                    <img
+                    <VaultImage
                       src={candidate.poster_url}
                       alt={candidate.title}
                       class="h-full w-full object-cover"
+                      slotClass="h-full w-full"
                       loading="lazy"
                     />
                   {:else}
@@ -2107,7 +2112,7 @@
       <div class="flex gap-3 rounded-lg border border-border/50 bg-muted/20 p-3">
         <div class="flex h-[84px] w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
           {#if pendingCollectionPart.poster_url}
-            <img src={pendingCollectionPart.poster_url} alt={pendingCollectionPart.title} class="h-full w-full object-cover" loading="lazy" />
+            <VaultImage src={pendingCollectionPart.poster_url} alt={pendingCollectionPart.title} class="h-full w-full object-cover" slotClass="h-full w-full" loading="lazy" />
           {:else}
             <span class="text-[10px] text-muted-foreground">no poster</span>
           {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { Heart, Star } from "@lucide/svelte";
+  import VaultImage from "./VaultImage.svelte";
 
   type PersonCredit = {
     id: number;
@@ -88,10 +89,11 @@
         <a {...props} href={`/persons/${person.id}`} data-sveltekit-preload-data="hover" class="block">
           <div class="vd-filmography-card">
             {#if person.photo_url}
-              <img
+              <VaultImage
                 src={person.photo_url}
                 alt={person.name}
                 class="vd-photo"
+                slotClass="w-full"
                 loading="lazy"
                 decoding="async"
               />

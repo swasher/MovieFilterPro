@@ -11,6 +11,15 @@
 маркеры ``.missing`` / ``.failed`` и single-flight-загрузка в пределах процесса.
 Но переиспользовать сам модуль Kinozal нельзя: он жёстко связан с
 ``MovieRSS`` (``movie_pk``), приоритетами и антибот-логикой fastpic.
+
+Два режима доступа:
+
+* :meth:`ImageCache.get` — блокирующий (скачивает файл прямо в вызывающем
+  потоке); удобен для тестов и фоновых задач.
+* :meth:`ImageCache.get_or_schedule` — неблокирующий: возвращает текущее
+  состояние и при промахе ставит загрузку в общий пул. Именно им пользуется
+  HTTP-endpoint, чтобы не заставлять браузер ждать, пока сервер скачает
+  картинку у TMDB.
 """
 
 from __future__ import annotations
@@ -22,6 +31,7 @@ import os
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -43,6 +53,15 @@ DEFAULT_MISSING_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_FAILED_TTL_SECONDS = 30
 DEFAULT_REQUEST_TIMEOUT = (5, 20)
 
+# Состояния кеша для неблокирующего режима.
+CACHE_STATUS_READY = "ready"
+CACHE_STATUS_PENDING = "pending"
+CACHE_STATUS_MISSING = "missing"
+
+# Сколько картинок прогреваем одновременно. Браузер всё равно откроет
+# не больше шести соединений к нашему origin, а загрузки идут в фоне.
+DEFAULT_DOWNLOAD_WORKERS = 8
+
 # Защита от случайного/вредоносного ответа гигантского размера.
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
@@ -55,6 +74,25 @@ IMAGE_REQUEST_USER_AGENT = (
 )
 
 _SAFE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+
+_download_executor: ThreadPoolExecutor | None = None
+_download_executor_guard = threading.Lock()
+
+
+def _get_download_executor() -> ThreadPoolExecutor:
+    """Общий на процесс пул фоновых загрузок.
+
+    Потоки пула живут долго, поэтому thread-local ``requests.Session``
+    внутри них переиспользует TCP/TLS-соединения к TMDB между картинками.
+    """
+    global _download_executor
+    with _download_executor_guard:
+        if _download_executor is None:
+            _download_executor = ThreadPoolExecutor(
+                max_workers=DEFAULT_DOWNLOAD_WORKERS,
+                thread_name_prefix="vault-image",
+            )
+        return _download_executor
 
 
 class ImageCacheError(Exception):
@@ -101,6 +139,8 @@ class ImageCache:
         self.request_timeout = request_timeout
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
+        self._in_flight: set[str] = set()
+        self._in_flight_guard = threading.Lock()
         self._session_local = threading.local()
 
     def cache_path(self, key: str, source_url: str) -> Path:
@@ -114,6 +154,8 @@ class ImageCache:
         вызывающая сторона должна показать заглушку. Повторные запросы не
         долбят источник: 404 кешируется маркером ``.missing``, сетевые ошибки —
         коротким маркером ``.failed``.
+
+        Метод блокирующий. HTTP-endpoint использует :meth:`get_or_schedule`.
         """
         cached_path = self.cache_path(key, source_url)
         ready = self._read_ready(cached_path)
@@ -137,25 +179,104 @@ class ImageCache:
             if self._is_failed_active(failed_marker):
                 return None
 
-            self._clear_marker(failed_marker)
-            try:
-                self._download(source_url, cached_path)
-            except ImageNotFoundError:
-                self._mark_missing(missing_marker)
-                logger.debug("Image is missing at source: %s", source_url)
-                return None
-            except Exception as exc:  # noqa: BLE001 - любая ошибка = временная заглушка
-                self._mark_failed(failed_marker)
-                logger.warning(
-                    "Failed to cache image %s: %s",
-                    source_url,
-                    str(exc) or exc.__class__.__name__,
-                )
-                return None
-
-            self._clear_marker(missing_marker)
-            self._clear_marker(failed_marker)
+            self._download_and_update_markers(
+                source_url, cached_path, missing_marker, failed_marker
+            )
             return self._read_ready(cached_path)
+
+    def get_or_schedule(self, key: str, source_url: str) -> tuple[str, CachedImage | None]:
+        """Неблокирующий вариант :meth:`get`.
+
+        Возвращает состояние кеша:
+
+        * ``CACHE_STATUS_READY`` — файл уже на диске, можно отдавать;
+        * ``CACHE_STATUS_MISSING`` — источник подтвердил 404, нужна заглушка;
+        * ``CACHE_STATUS_PENDING`` — файла нет, загрузка поставлена в фон
+          (или недавно падала). Пока кеш холодный, клиенту выгоднее отдать
+          ссылку на источник напрямую, чем ждать сервер.
+
+        Загрузка дедуплицируется в пределах процесса и не блокирует запрос.
+        """
+        cached_path = self.cache_path(key, source_url)
+        ready = self._read_ready(cached_path)
+        if ready is not None:
+            return CACHE_STATUS_READY, ready
+
+        missing_marker = _marker_path(cached_path, MISSING_MARKER_SUFFIX)
+        if self._is_missing_active(missing_marker):
+            return CACHE_STATUS_MISSING, None
+
+        failed_marker = _marker_path(cached_path, FAILED_MARKER_SUFFIX)
+        if self._is_failed_active(failed_marker):
+            # Недавняя неудача: не долбим источник снова, но и не блокируем
+            # браузер — пусть попробует загрузить картинку сам.
+            return CACHE_STATUS_PENDING, None
+
+        self._schedule_download(key, source_url, cached_path)
+        return CACHE_STATUS_PENDING, None
+
+    def _schedule_download(self, key: str, source_url: str, cached_path: Path) -> None:
+        with self._in_flight_guard:
+            if key in self._in_flight:
+                return
+            self._in_flight.add(key)
+
+        try:
+            _get_download_executor().submit(
+                self._background_download, key, source_url, cached_path
+            )
+        except Exception as exc:  # noqa: BLE001 - фоновый прогрев не должен ломать запрос
+            with self._in_flight_guard:
+                self._in_flight.discard(key)
+            logger.warning("Failed to schedule image download %s: %s", source_url, exc)
+
+    def _background_download(self, key: str, source_url: str, cached_path: Path) -> None:
+        try:
+            missing_marker = _marker_path(cached_path, MISSING_MARKER_SUFFIX)
+            failed_marker = _marker_path(cached_path, FAILED_MARKER_SUFFIX)
+            lock = self._lock_for(key)
+            with lock:
+                # Пока задача ждала в очереди, файл мог появиться.
+                if self._read_ready(cached_path) is not None:
+                    return
+                if self._is_missing_active(missing_marker):
+                    return
+                if self._is_failed_active(failed_marker):
+                    return
+                self._download_and_update_markers(
+                    source_url, cached_path, missing_marker, failed_marker
+                )
+        except Exception as exc:  # noqa: BLE001 - фоновый поток не должен падать молча
+            logger.warning("Background image download failed %s: %s", source_url, exc)
+        finally:
+            with self._in_flight_guard:
+                self._in_flight.discard(key)
+
+    def _download_and_update_markers(
+        self,
+        source_url: str,
+        cached_path: Path,
+        missing_marker: Path,
+        failed_marker: Path,
+    ) -> None:
+        self._clear_marker(failed_marker)
+        try:
+            self._download(source_url, cached_path)
+        except ImageNotFoundError:
+            self._mark_missing(missing_marker)
+            logger.debug("Image is missing at source: %s", source_url)
+            return
+        except Exception as exc:  # noqa: BLE001 - любая ошибка = временная заглушка
+            self._mark_failed(failed_marker)
+            logger.warning(
+                "Failed to cache image %s: %s",
+                source_url,
+                str(exc) or exc.__class__.__name__,
+            )
+            return
+
+        self._clear_marker(missing_marker)
+        self._clear_marker(failed_marker)
 
     def _download(self, source_url: str, target: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)

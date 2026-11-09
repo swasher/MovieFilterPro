@@ -63,6 +63,7 @@ class PreferencesOut(Schema):
     ai_model: str | None = None
     groq_api_key: str | None = None
     groq_model: str | None = None
+    vault_image_cache_enabled: bool = True
 
 
 class PreferencesUpdateIn(Schema):
@@ -99,6 +100,7 @@ class PreferencesUpdateIn(Schema):
     ai_model: str | None = None
     groq_api_key: str | None = None
     groq_model: str | None = None
+    vault_image_cache_enabled: bool = True
 
 
 class AiModelsOut(Schema):
@@ -246,6 +248,7 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         ai_model=preferences.ai_model or None,
         groq_api_key=preferences.groq_api_key or None,
         groq_model=preferences.groq_model or None,
+        vault_image_cache_enabled=preferences.vault_image_cache_enabled,
     )
 
 
@@ -296,7 +299,14 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.ai_model = _normalized_optional_string(payload.ai_model)
     preferences.groq_api_key = _normalized_optional_string(payload.groq_api_key)
     preferences.groq_model = _normalized_optional_string(payload.groq_model)
+    preferences.vault_image_cache_enabled = payload.vault_image_cache_enabled
     preferences.save()
+
+    # Переключатель изображений кешируется в ImageService на несколько секунд,
+    # чтобы не читать Preferences на каждый URL. Сбрасываем сразу после записи.
+    from vault.services.image_service import ImageService
+
+    ImageService.invalidate_cache_settings()
     return preferences
 
 

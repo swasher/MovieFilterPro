@@ -330,6 +330,16 @@ class UserPreferences(models.Model):
         help_text='Имя Groq-модели, например llama-3.3-70b-versatile',
     )
 
+    vault_image_cache_enabled = models.BooleanField(
+        'Дисковый кеш изображений Vault',
+        default=True,
+        help_text=(
+            'Вкл — постеры и фото Vault отдаются через /api/vault/images/... '
+            'с дисковым кешем. Выкл — картинки грузятся напрямую с CDN TMDB '
+            'и кешируются браузером.'
+        ),
+    )
+
     def save(self, *args, **kwargs):
         self.pk = 1  # всегда используем один и тот же primary key, потому что это БД-синглтон с одной записью
         super().save(*args, **kwargs)

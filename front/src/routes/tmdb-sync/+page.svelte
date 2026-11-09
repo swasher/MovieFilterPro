@@ -25,6 +25,7 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { CheckCheck, ExternalLink, Play, Plus, RefreshCw, RotateCw, Square, Trash2 } from "@lucide/svelte";
   import * as Pagination from "$lib/components/ui/pagination";
+  import VaultImage from "$lib/components/vault/VaultImage.svelte";
 
   let { data } = $props();
 
@@ -724,10 +725,11 @@
                       <HoverCard.Content class="w-96" side="right" align="start">
                         <div class="flex gap-3">
                           {#if item.movie_poster_url}
-                            <img
+                            <VaultImage
                               src={item.movie_poster_url}
                               alt={item.movie_title || item.snapshot_title}
-                              class="h-36 w-24 shrink-0 rounded-md object-cover"
+                              class="h-full w-full object-cover"
+                              slotClass="h-36 w-24 shrink-0 overflow-hidden rounded-md"
                               loading="lazy"
                             />
                           {/if}
@@ -974,10 +976,11 @@
           <div class="flex gap-3">
             <div class="bg-muted flex h-[96px] w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
               {#if candidate.poster_url}
-                <img
+                <VaultImage
                   src={candidate.poster_url}
                   alt={candidate.title}
                   class="h-full w-full object-cover"
+                  slotClass="h-full w-full"
                   loading="lazy"
                 />
               {:else}

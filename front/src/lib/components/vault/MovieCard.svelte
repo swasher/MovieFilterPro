@@ -4,6 +4,7 @@
   import { Link2, Link2Off } from "@lucide/svelte";
   import { QBT_DOWNLOADING_STATES } from "$lib/qbittorrent";
   import MovieStatusBadges from "./MovieStatusBadges.svelte";
+  import VaultImage from "./VaultImage.svelte";
 
   type MovieCardData = {
     id: number;
@@ -94,10 +95,11 @@
     {/if}
 
     {#if movie.poster_url}
-      <img
+      <VaultImage
         src={movie.poster_url}
         alt={movie.title}
         class="h-full w-full object-cover"
+        slotClass="h-full w-full"
         loading="lazy"
       />
     {:else}

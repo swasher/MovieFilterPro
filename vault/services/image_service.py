@@ -3,12 +3,15 @@
 
 Приложение (модели, API-сериализаторы) вызывает только :meth:`ImageService.url`
 и ничего не знает про локальный кеш. Все URL указывают на внутренний endpoint
-``/api/vault/images/...``; он отдаёт файл из дискового кеша и сам решает,
-скачать ли изображение у TMDB.
+``/api/vault/images/...``; он отдаёт файл из дискового кеша, а пока файла нет —
+временно перенаправляет браузер на TMDB и прогревает кеш в фоне.
 
 Почему так:
 
-* браузер никогда не зависит от внешнего CDN и его антибот-политик;
+* браузер никогда не ждёт, пока сервер скачает картинку: холодный кеш
+  отдаётся редиректом на CDN, поэтому первая загрузка страницы быстрая;
+* глобальный тумблер в Preferences полностью выключает дисковый кеш и
+  возвращает прямые CDN-URL (для сравнения и отладки);
 * URL изображения стабилен и не меняется при очистке кеша;
 * кеш можно удалить целиком — приложение об этом не узнает;
 * все правила (размеры, виды изображений, заглушки, безопасность пути)
@@ -20,13 +23,19 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import time
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from django.conf import settings
 from django.http import FileResponse, HttpResponseRedirect
 
-from vault.services.image_cache import ImageCache
+from vault.services.image_cache import (
+    CACHE_STATUS_MISSING,
+    CACHE_STATUS_READY,
+    CachedImage,
+    ImageCache,
+)
 
 logger = logging.getLogger("vault.image_service")
 
@@ -67,6 +76,14 @@ _MAX_IMAGE_PATH_LENGTH = 512
 _IMAGE_CACHES: dict[str, ImageCache] = {}
 _IMAGE_CACHES_LOCK = threading.Lock()
 
+# Настройка кеширования живёт в UserPreferences, но :meth:`ImageService.url`
+# вызывается десятки раз на один ответ API. Держим значение в памяти с
+# коротким TTL и сбрасываем его при сохранении Preferences.
+_IMAGE_CACHE_ENABLED_TTL_SECONDS = 5.0
+_image_cache_enabled_value = True
+_image_cache_enabled_expires_at = 0.0
+_image_cache_enabled_lock = threading.Lock()
+
 
 class ImageService:
     """Единый контракт «путь TMDB -> URL изображения Vault»."""
@@ -78,7 +95,11 @@ class ImageService:
         size: str = DEFAULT_IMAGE_SIZE,
         kind: str = DEFAULT_IMAGE_KIND,
     ) -> str | None:
-        """Возвращает внутренний URL изображения или ``None``.
+        """Возвращает URL изображения или ``None``.
+
+        По умолчанию — внутренний URL ``/api/vault/images/...`` (дисковый кеш
+        Vault). Если глобальный тумблер в Preferences выключен — прямой URL CDN
+        TMDB, чтобы работало только браузерное кеширование.
 
         ``raw_path`` — относительный путь TMDB (``/abc.jpg``), полный URL TMDB
         или уже готовый локальный URL. Чужие абсолютные URL не проксируются:
@@ -104,8 +125,48 @@ class ImageService:
 
         normalized_kind = kind if kind in IMAGE_KINDS else DEFAULT_IMAGE_KIND
         normalized_size = size if size in ALLOWED_IMAGE_SIZES else DEFAULT_IMAGE_SIZE
+
+        if not cls._is_disk_cache_enabled():
+            # Глобальный тумблер выключен: отдаём CDN-URL, чтобы работало
+            # обычное браузерное кеширование (HTTP/2, параллельная загрузка).
+            return cls.source_url(normalized_size, value)
+
         encoded_path = quote(value.lstrip("/"), safe="/")
         return f"{API_PREFIX}/{normalized_kind}/{normalized_size}/{encoded_path}"
+
+    @classmethod
+    def _is_disk_cache_enabled(cls) -> bool:
+        global _image_cache_enabled_value, _image_cache_enabled_expires_at
+
+        now = time.monotonic()
+        if now < _image_cache_enabled_expires_at:
+            return _image_cache_enabled_value
+
+        try:
+            from moviefilter.models import UserPreferences
+
+            value = (
+                UserPreferences.objects.filter(pk=1)
+                .values_list("vault_image_cache_enabled", flat=True)
+                .first()
+            )
+            enabled = True if value is None else bool(value)
+        except Exception:  # noqa: BLE001 - пустая/недоступная БД не должна ломать картинки
+            enabled = True
+
+        with _image_cache_enabled_lock:
+            _image_cache_enabled_value = enabled
+            _image_cache_enabled_expires_at = (
+                time.monotonic() + _IMAGE_CACHE_ENABLED_TTL_SECONDS
+            )
+        return enabled
+
+    @classmethod
+    def invalidate_cache_settings(cls) -> None:
+        """Сбрасывает закешированное значение тумблера после сохранения Preferences."""
+        global _image_cache_enabled_expires_at
+        with _image_cache_enabled_lock:
+            _image_cache_enabled_expires_at = 0.0
 
     @classmethod
     def source_url(cls, size: str, image_path: str) -> str:
@@ -133,15 +194,29 @@ class ImageService:
 
     @classmethod
     def serve(cls, kind: str, size: str, image_path: str):
-        """Отдаёт изображение из кеша; при неудаче — заглушку."""
+        """Отдаёт изображение из кеша, не дожидаясь скачивания.
+
+        Горячий кеш — локальный файл с долгим браузерным кешем. Холодный —
+        временный редирект на источник: браузер тянет картинку с CDN
+        параллельно и быстро, а сервер в это время прогревает кеш в фоне.
+        Заглушка нужна только когда источник подтвердил отсутствие файла.
+        """
         if not cls.is_valid_request(kind, size, image_path):
             raise ValueError("Invalid image request")
 
         cache = cls._get_cache(kind, size)
-        cached = cache.get(image_path, cls.source_url(size, image_path))
-        if cached is None:
+        status, cached = cache.get_or_schedule(
+            image_path, cls.source_url(size, image_path)
+        )
+        if status == CACHE_STATUS_READY and cached is not None:
+            return cls._file_response(cached, kind)
+        if status == CACHE_STATUS_MISSING:
             return cls._placeholder_response(kind)
 
+        return cls._source_redirect_response(size, image_path)
+
+    @classmethod
+    def _file_response(cls, cached: CachedImage, kind: str) -> FileResponse:
         try:
             file_handle = cached.path.open("rb")
         except OSError:
@@ -158,6 +233,15 @@ class ImageService:
             pass
         else:
             response["ETag"] = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+        return response
+
+    @classmethod
+    def _source_redirect_response(cls, size: str, image_path: str):
+        response = HttpResponseRedirect(cls.source_url(size, image_path))
+        # Пока файл не скачан, тот же URL должен перенаправлять на источник.
+        # Как только кеш прогреется, браузер получит уже локальную картинку,
+        # поэтому сам редирект запоминать нельзя.
+        response["Cache-Control"] = "no-store"
         return response
 
     @classmethod

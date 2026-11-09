@@ -32,6 +32,7 @@
   } from "@lucide/svelte";
   import MovieStatusBadges from "./MovieStatusBadges.svelte";
   import MovieWontWatchOverlay from "./MovieWontWatchOverlay.svelte";
+  import VaultImage from "./VaultImage.svelte";
 
   let { filmography }: { filmography: FilmographyItem[] } = $props();
 
@@ -105,7 +106,7 @@
         <div class="vd-filmography-card">
           <div class="relative">
             {#if item.poster_url}
-              <img src={item.poster_url} alt={item.title} class="vd-poster" />
+              <VaultImage src={item.poster_url} alt={item.title} class="vd-poster" slotClass="w-full" loading="lazy" decoding="async" />
             {:else}
               <div class="vd-poster-fallback">
                 no poster
@@ -157,10 +158,11 @@
                 class="relative block h-14 w-10 overflow-hidden rounded"
               >
                 {#if item.poster_url}
-                  <img
+                  <VaultImage
                     src={item.poster_url}
                     alt={item.title}
                     class="h-full w-full object-cover"
+                    slotClass="h-full w-full"
                     loading="lazy"
                   />
                 {:else}

@@ -570,7 +570,8 @@ def vault_image(request, kind: str, size: str, image_path: str):
     """Отдаёт изображение Vault из локального кеша.
 
     URL формирует только ImageService; внешний CDN браузеру неизвестен.
-    Первый запрос может подождать скачивание, дальше файл отдаётся с диска.
+    Горячий кеш отдаётся локальным файлом, холодный — временным редиректом
+    на источник, пока загрузка идёт в фоне.
     """
     _require_api_user(request)
     if not ImageService.is_valid_request(kind, size, image_path):

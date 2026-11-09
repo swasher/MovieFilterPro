@@ -7,6 +7,7 @@
   import * as ImageZoom from "$lib/components/ui/image-zoom";
   import { ArrowLeft, Heart, Star } from "@lucide/svelte";
   import PersonFilmography from "$lib/components/vault/PersonFilmography.svelte";
+  import VaultImage from "$lib/components/vault/VaultImage.svelte";
 
   type PersonImage = {
     file_path: string;
@@ -187,11 +188,13 @@
         <CardContent class="!p-0">
           {#if person.photo_url}
             <ImageZoom.Root>
-              <ImageZoom.Trigger
+              <VaultImage
                 src={person.photo_url}
                 zoomSrc={person.photo_full_url ?? person.photo_url}
                 alt={person.name}
                 class="vd-photo"
+                slotClass="w-full"
+                spinnerClass="size-6"
               />
             </ImageZoom.Root>
           {:else}
@@ -385,11 +388,12 @@
               <ImageZoom.Root>
                 <div class="vd-person-photos">
                   {#each displayImages as image (image.file_path)}
-                    <ImageZoom.Trigger
+                    <VaultImage
                       src={image.url ?? image.thumb_url ?? ""}
                       zoomSrc={image.full_url ?? image.url ?? image.thumb_url ?? ""}
                       alt={person.name}
                       class="vd-person-photo"
+                      slotClass="vd-person-photo-slot"
                       loading="lazy"
                       decoding="async"
                     />
