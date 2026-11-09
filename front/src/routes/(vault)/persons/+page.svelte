@@ -237,7 +237,7 @@
         </CardContent>
       </Card>
     {:else if homeGroups.length}
-      {#each homeGroups as group (group.id)}
+      {#each homeGroups as group, groupIndex (group.id)}
         <div class="mb-8">
           <div class="mb-3 flex items-baseline justify-between gap-4">
             <h2 class="text-lg font-semibold tracking-tight">{group.title}</h2>
@@ -249,8 +249,8 @@
             </a>
           </div>
           <div class="vd-crew-grid">
-            {#each group.persons as person (person.id)}
-              <PersonCard person={person} />
+            {#each group.persons as person, index (person.id)}
+              <PersonCard person={person} priority={groupIndex === 0 && index < 5} />
             {/each}
           </div>
         </div>
@@ -275,8 +275,8 @@
           <p class="vd-empty">{data.apiError}</p>
         {:else if persons.length}
           <div class="vd-crew-grid">
-            {#each persons as person (person.id)}
-              <PersonCard person={displayPerson(person)} />
+            {#each persons as person, index (person.id)}
+              <PersonCard person={displayPerson(person)} priority={index < 5} />
             {/each}
           </div>
         {:else}

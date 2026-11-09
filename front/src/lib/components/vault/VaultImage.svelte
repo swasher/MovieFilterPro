@@ -14,6 +14,8 @@
     spinnerClass?: string;
     loading?: "eager" | "lazy";
     decoding?: "sync" | "async" | "auto";
+    /** Приоритет загрузки: high — для LCP-картинок первого экрана. */
+    fetchpriority?: "high" | "low" | "auto";
     title?: string;
   };
 
@@ -26,6 +28,7 @@
     spinnerClass = "size-4",
     loading,
     decoding,
+    fetchpriority,
     title
   }: Props = $props();
 
@@ -73,6 +76,7 @@
       class={className}
       {loading}
       {decoding}
+      {fetchpriority}
       {title}
       onload={handleLoad}
       onerror={handleError}
@@ -84,6 +88,7 @@
       class={className}
       {loading}
       {decoding}
+      {fetchpriority}
       {title}
       onload={handleLoad}
       onerror={handleError}

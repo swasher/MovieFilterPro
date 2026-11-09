@@ -746,7 +746,7 @@ type TmdbSearchResult = {
         </CardHeader>
       </Card>
     {:else if isHome}
-      {#each homeGroups as group (group.id)}
+      {#each homeGroups as group, groupIndex (group.id)}
         <div class="mb-8">
           <div class="mb-3 flex items-baseline justify-between gap-4">
             <h2 class="text-lg font-semibold tracking-tight">{group.title}</h2>
@@ -758,7 +758,7 @@ type TmdbSearchResult = {
             </a>
           </div>
           <div class="flex flex-wrap gap-4">
-            {#each group.movies as movie (movie.id)}
+            {#each group.movies as movie, index (movie.id)}
               {@const progress = progressFor(movie)}
               <a
                 href={`/movies/${movie.slug}`}
@@ -772,6 +772,7 @@ type TmdbSearchResult = {
                   {movie}
                   torrentProgress={progress?.progress ?? null}
                   torrentState={progress?.state ?? null}
+                  priority={groupIndex === 0 && index < 5}
                 />
               </a>
             {/each}
@@ -904,7 +905,7 @@ type TmdbSearchResult = {
         </div>
       {:else}
         <div class="flex flex-wrap gap-4">
-          {#each allMovies as movie (movie.id)}
+          {#each allMovies as movie, index (movie.id)}
             {@const progress = progressFor(movie)}
             <a
               href={`/movies/${movie.slug}`}
@@ -919,6 +920,7 @@ type TmdbSearchResult = {
                 activeStatus={data.activeStatus}
                 torrentProgress={progress?.progress ?? null}
                 torrentState={progress?.state ?? null}
+                priority={index < 5}
               />
             </a>
           {/each}

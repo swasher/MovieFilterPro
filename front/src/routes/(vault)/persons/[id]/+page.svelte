@@ -140,6 +140,7 @@
                 class="vd-photo"
                 slotClass="w-full"
                 spinnerClass="size-6"
+                fetchpriority="high"
               />
             </ImageZoom.Root>
           {:else}

@@ -24,12 +24,15 @@
     movie,
     activeStatus = null,
     torrentProgress = null,
-    torrentState = null
+    torrentState = null,
+    priority = false
   }: {
     movie: MovieCardData;
     activeStatus?: string | null;
     torrentProgress?: number | null;
     torrentState?: string | null;
+    /** Первый экран: грузим постер сразу и с высоким приоритетом (LCP). */
+    priority?: boolean;
   } = $props();
 
   const showTorrentStatus = $derived(
@@ -100,7 +103,8 @@
         alt={movie.title}
         class="h-full w-full object-cover"
         slotClass="h-full w-full"
-        loading="lazy"
+        loading={priority ? "eager" : "lazy"}
+        fetchpriority={priority ? "high" : undefined}
       />
     {:else}
       <div class="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs">

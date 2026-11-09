@@ -1100,6 +1100,7 @@
                 class="vd-poster"
                 slotClass="w-full"
                 spinnerClass="size-6"
+                fetchpriority="high"
               />
             </ImageZoom.Root>
           {:else}
