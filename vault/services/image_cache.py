@@ -51,7 +51,10 @@ MISSING_MARKER_VERSION = "1"
 
 DEFAULT_MISSING_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_FAILED_TTL_SECONDS = 30
-DEFAULT_REQUEST_TIMEOUT = (5, 20)
+
+# Загрузки идут в фоне, поэтому таймауты короткие: «плохая» картинка не должна
+# держать воркер пула десятки секунд и тормозить прогрев остальных.
+DEFAULT_REQUEST_TIMEOUT = (3, 8)
 
 # Состояния кеша для неблокирующего режима.
 CACHE_STATUS_READY = "ready"
@@ -344,9 +347,11 @@ class ImageCache:
         if session is None:
             session = requests.Session()
             session.headers["User-Agent"] = IMAGE_REQUEST_USER_AGENT
+            # Одна повторная попытка для транзиентных 429/5xx. Больше не нужно:
+            # фоновая догрузка не критична, а лишние ретраи занимают воркер.
             retry = Retry(
-                total=2,
-                backoff_factor=0.5,
+                total=1,
+                backoff_factor=0.2,
                 status_forcelist=(429, 500, 502, 503, 504),
                 allowed_methods=("GET",),
             )
