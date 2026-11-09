@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import threading
@@ -28,7 +29,7 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from django.conf import settings
-from django.http import FileResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect, StreamingHttpResponse
 
 from vault.services.image_cache import (
     CACHE_STATUS_MISSING,
@@ -39,9 +40,57 @@ from vault.services.image_cache import (
 
 logger = logging.getLogger("vault.image_service")
 
+# Размер чанка при отдаче файла. Держим его умеренным, чтобы не читать
+# многомегабайтный original в память целиком.
+FILE_STREAM_CHUNK_SIZE = 64 * 1024
+
+
+class _AsyncFileIterator:
+    """Читает файл чанками, не блокируя event loop.
+
+    У объекта намеренно нет ``__iter__``: Django определяет async-ответ по
+    неудачному ``iter(value)`` (``StreamingHttpResponse._set_streaming_content``).
+    Если добавить sync-итератор, ASGI-путь снова начнёт материализовать весь
+    файл через ``sync_to_async(list)(...)``.
+    """
+
+    def __init__(self, file_handle, chunk_size: int = FILE_STREAM_CHUNK_SIZE):
+        self._file = file_handle
+        self._chunk_size = chunk_size
+
+    def _read(self) -> bytes:
+        return self._file.read(self._chunk_size)
+
+    def close(self) -> None:
+        try:
+            self._file.close()
+        except OSError:
+            pass
+
+    async def __aiter__(self):
+        try:
+            while True:
+                chunk = await asyncio.to_thread(self._read)
+                if not chunk:
+                    return
+                yield chunk
+        finally:
+            self.close()
+
 DEFAULT_IMAGE_KIND = "poster"
 DEFAULT_IMAGE_SIZE = "w500"
 API_PREFIX = "/api/vault/images"
+
+# Размеры под конкретные места интерфейса. Каждый размер — отдельный файл
+# дискового кеша, поэтому карточки в списках не должны тянуть те же файлы,
+# что и крупные изображения на страницах-деталях: это лишние байты, лишняя
+# загрузка и лишний файл на диске.
+POSTER_CARD_SIZE = "w342"       # сетки фильмов, фильмография, сезоны, коллекции
+POSTER_DETAIL_SIZE = "w500"     # постер на странице фильма
+PROFILE_CARD_SIZE = "w185"      # карточки персон и состав на странице фильма
+PROFILE_DETAIL_SIZE = "w500"    # главное фото на странице персоны
+BACKDROP_CARD_SIZE = "w780"     # бэкдропы коллекций в карточках
+BACKDROP_DETAIL_SIZE = "w1280"  # бэкдроп на странице фильма
 
 IMAGE_KINDS = frozenset({"poster", "backdrop", "profile"})
 
@@ -216,23 +265,33 @@ class ImageService:
         return cls._source_redirect_response(size, image_path)
 
     @classmethod
-    def _file_response(cls, cached: CachedImage, kind: str) -> FileResponse:
+    def _file_response(cls, cached: CachedImage, kind: str) -> StreamingHttpResponse:
         try:
             file_handle = cached.path.open("rb")
         except OSError:
             logger.warning("Cached image disappeared before serving: %s", cached.path)
             return cls._placeholder_response(kind)
 
-        response = FileResponse(file_handle, content_type=cached.content_type)
+        try:
+            file_stat = cached.path.stat()
+        except OSError:
+            logger.warning("Cached image disappeared before serving: %s", cached.path)
+            file_handle.close()
+            return cls._placeholder_response(kind)
+
+        # Стримим файл чанками: ASGI больше не читает его целиком в память
+        # перед отправкой (см. _AsyncFileIterator).
+        response = StreamingHttpResponse(
+            _AsyncFileIterator(file_handle),
+            content_type=cached.content_type,
+        )
+        response["Content-Length"] = str(file_stat.st_size)
         # Путь TMDB иммутабелен: один и тот же URL всегда отдаёт один и тот же
         # файл. Поэтому браузер может держать его в кеше очень долго.
+        # private, а не public: endpoint требует сессию, а общего
+        # reverse-proxy кеша в деплое нет. Браузерный кеш private не ограничивает.
         response["Cache-Control"] = "private, max-age=31536000, immutable"
-        try:
-            stat = cached.path.stat()
-        except OSError:
-            pass
-        else:
-            response["ETag"] = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+        response["ETag"] = f'"{file_stat.st_mtime_ns:x}-{file_stat.st_size:x}"'
         return response
 
     @classmethod
@@ -245,12 +304,55 @@ class ImageService:
         return response
 
     @classmethod
-    def _placeholder_response(cls, kind: str):
-        response = HttpResponseRedirect(cls.placeholder_url(kind))
-        # Промежуточное состояние нельзя запоминать: после появления файла
-        # браузер должен получить уже настоящую картинку.
-        response["Cache-Control"] = "no-store"
+    def _placeholder_response(cls, kind: str) -> StreamingHttpResponse | HttpResponseRedirect:
+        """Отдаёт заглушку сразу, без редиректа на статику.
+
+        Редирект добавлял лишний round-trip на каждую картинку, которой нет в
+        источнике. Заглушка одинакова для всех запросов и не является секретом,
+        поэтому отдаём её с ``200`` и коротким кешем: если источник позже
+        начнёт отдавать файл (или маркер ``.missing`` истечёт), браузер
+        подхватит его в пределах часа.
+        """
+        path = cls._placeholder_file(kind)
+        if path is None:
+            # Статика не найдена (например, не выполнен collectstatic):
+            # не ломаем страницу, откатываемся на редирект.
+            response = HttpResponseRedirect(cls.placeholder_url(kind))
+            response["Cache-Control"] = "no-store"
+            return response
+
+        try:
+            file_handle = path.open("rb")
+            file_stat = path.stat()
+        except OSError:
+            logger.warning("Placeholder image disappeared before serving: %s", path)
+            response = HttpResponseRedirect(cls.placeholder_url(kind))
+            response["Cache-Control"] = "no-store"
+            return response
+
+        response = StreamingHttpResponse(
+            _AsyncFileIterator(file_handle),
+            content_type="image/svg+xml",
+        )
+        response["Content-Length"] = str(file_stat.st_size)
+        response["Cache-Control"] = "private, max-age=3600"
         return response
+
+    @staticmethod
+    def _placeholder_file(kind: str) -> Path | None:
+        # Импорт внутри функции: заглушка — редкий путь, а finders тянет
+        # настройки статики, которые нужны не всем потребителям ImageService.
+        from django.contrib.staticfiles import finders
+
+        filename = PLACEHOLDER_FILENAMES.get(kind, PLACEHOLDER_FILENAMES[DEFAULT_IMAGE_KIND])
+        try:
+            found = finders.find(f"img/{filename}")
+        except Exception:  # noqa: BLE001 - заглушка не должна ломать отдачу
+            return None
+        if not found:
+            return None
+        path = Path(found)
+        return path if path.is_file() else None
 
     @classmethod
     def _get_cache(cls, kind: str, size: str) -> ImageCache:

@@ -19,10 +19,13 @@
     person,
     movieYear,
     compact = false,
+    priority = false,
   }: {
     person: PersonCredit;
     movieYear?: number | null;
     compact?: boolean;
+    /** Первый экран: грузим фото сразу и с высоким приоритетом (LCP). */
+    priority?: boolean;
   } = $props();
 
   let pointer = $state({ x: 0, y: 0 });
@@ -94,8 +97,9 @@
                 alt={person.name}
                 class="vd-photo"
                 slotClass="w-full"
-                loading="lazy"
+                loading={priority ? "eager" : "lazy"}
                 decoding="async"
+                fetchpriority={priority ? "high" : undefined}
               />
             {:else}
               <div class="vd-photo-fallback">{initials(person.name)}</div>

@@ -9,72 +9,17 @@
   import PersonFilmography from "$lib/components/vault/PersonFilmography.svelte";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
 
-  type PersonImage = {
-    file_path: string;
-    url: string | null;
-    full_url: string | null;
-    thumb_url: string | null;
-  };
-
   let { data } = $props();
   const person = $derived(data.person);
 
   const canLoadImages = $derived(!!person.tmdb_id && /^\d+$/.test(person.tmdb_id));
   const hasTmdbLink = $derived(/^\d+$/.test(person.tmdb_id ?? ""));
   const hasImdbLink = $derived(/^nm\d+$/.test(person.imdb_id ?? ""));
-  let images = $state<PersonImage[]>([]);
-  let imagesLoading = $state(true);
-  let imagesError = $state("");
-  let loadedImagesPersonId: number | null = null;
-  let imagesRequestId = 0;
+
+  // Фото приходят из +page.ts параллельно с данными персоны.
+  const images = $derived(data.images ?? []);
+  const imagesError = $derived(data.imagesError ?? "");
   const displayImages = $derived(images.filter((image) => !!image.url || !!image.thumb_url));
-
-  async function loadPersonImages(personId: number) {
-    const requestId = ++imagesRequestId;
-    imagesLoading = true;
-    imagesError = "";
-    images = [];
-
-    try {
-      const response = await fetch(`/api/vault/persons/${personId}/images?limit=8`);
-      const payload = (await response.json().catch(() => ({}))) as {
-        items?: PersonImage[];
-        error?: string | null;
-      };
-
-      if (requestId !== imagesRequestId) return;
-
-      if (!response.ok) {
-        imagesError = payload.error ?? `HTTP ${response.status}`;
-        return;
-      }
-
-      images = Array.isArray(payload.items) ? payload.items : [];
-      imagesError = payload.error ?? "";
-    } catch (error) {
-      if (requestId !== imagesRequestId) return;
-      imagesError = error instanceof Error ? error.message : "Не удалось загрузить фото";
-    } finally {
-      if (requestId === imagesRequestId) {
-        imagesLoading = false;
-      }
-    }
-  }
-
-  $effect(() => {
-    const personId = person.id;
-    if (loadedImagesPersonId === personId) return;
-    loadedImagesPersonId = personId;
-
-    if (!canLoadImages) {
-      imagesLoading = false;
-      images = [];
-      imagesError = "";
-      return;
-    }
-
-    void loadPersonImages(personId);
-  });
 
   let isFavorite = $state(person.is_favorite);
   let favoriteBusy = $state(false);
@@ -195,6 +140,7 @@
                 class="vd-photo"
                 slotClass="w-full"
                 spinnerClass="size-6"
+                fetchpriority="high"
               />
             </ImageZoom.Root>
           {:else}
@@ -372,24 +318,18 @@
         {/if}
       </Card>
 
-      {#if canLoadImages && (imagesLoading || displayImages.length || imagesError)}
+      {#if canLoadImages && (displayImages.length || imagesError)}
         <Card class="vd-card">
           <CardHeader>
             <CardTitle class="text-xl">Фото персоны</CardTitle>
           </CardHeader>
           <CardContent class="vd-card-content">
-            {#if imagesLoading}
-              <div class="vd-person-photos">
-                {#each Array.from({ length: 5 }) as _, index (index)}
-                  <div class="vd-person-photo-skeleton"></div>
-                {/each}
-              </div>
-            {:else if displayImages.length}
+            {#if displayImages.length}
               <ImageZoom.Root>
                 <div class="vd-person-photos">
                   {#each displayImages as image (image.file_path)}
                     <VaultImage
-                      src={image.url ?? image.thumb_url ?? ""}
+                      src={image.thumb_url ?? image.url ?? ""}
                       zoomSrc={image.full_url ?? image.url ?? image.thumb_url ?? ""}
                       alt={person.name}
                       class="vd-person-photo"

@@ -13,6 +13,7 @@ from vault.services.image_cache import (
     CACHE_STATUS_PENDING,
     CACHE_STATUS_READY,
     FAILED_MARKER_SUFFIX,
+    LOCK_STRIPES,
     MISSING_MARKER_SUFFIX,
     ImageCache,
 )
@@ -225,6 +226,24 @@ class ImageCacheTests(SimpleTestCase):
             self.assertEqual(status, CACHE_STATUS_PENDING)
             self.assertIsNone(cached)
             self.assertEqual(session.calls, 0)
+
+    def test_caches_share_one_session_per_thread(self):
+        with TemporaryDirectory() as temp_dir:
+            first = ImageCache(Path(temp_dir) / "first")
+            second = ImageCache(Path(temp_dir) / "second")
+
+            self.assertIs(first._get_session(), second._get_session())
+
+    def test_download_locks_are_bounded_and_stable_per_key(self):
+        with TemporaryDirectory() as temp_dir:
+            cache = ImageCache(Path(temp_dir))
+            first = cache._lock_for("/poster.jpg")
+
+            for index in range(1000):
+                cache._lock_for(f"/image-{index}.jpg")
+
+            self.assertIs(first, cache._lock_for("/poster.jpg"))
+            self.assertEqual(len(cache._locks), LOCK_STRIPES)
 
     def test_get_or_schedule_deduplicates_in_flight_downloads(self):
         with TemporaryDirectory() as temp_dir:

@@ -5,6 +5,7 @@ from .models import (
     UserList, UserListMovie, UserMovie
 )
 from core.models import Country
+from vault.services.image_service import POSTER_CARD_SIZE, PROFILE_CARD_SIZE
 
 
 @admin.register(Genre)
@@ -75,7 +76,7 @@ class PersonAdmin(admin.ModelAdmin):
         if obj.photo:
             return format_html(
                 '<img src="{}" width="50" height="50" style="object-fit: cover; border-radius: 50%;" />',
-                obj.photo_url,
+                obj.get_photo_url(PROFILE_CARD_SIZE),
             )
         return '-'
 
@@ -127,7 +128,7 @@ class MovieAdmin(admin.ModelAdmin):
         if obj.poster:
             return format_html(
                 '<img src="{}" width="40" height="60" style="object-fit: cover;" />',
-                obj.poster_url,
+                obj.get_poster_url(POSTER_CARD_SIZE),
             )
         return '-'
 

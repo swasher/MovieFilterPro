@@ -51,7 +51,10 @@ MISSING_MARKER_VERSION = "1"
 
 DEFAULT_MISSING_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_FAILED_TTL_SECONDS = 30
-DEFAULT_REQUEST_TIMEOUT = (5, 20)
+
+# Загрузки идут в фоне, поэтому таймауты короткие: «плохая» картинка не должна
+# держать воркер пула десятки секунд и тормозить прогрев остальных.
+DEFAULT_REQUEST_TIMEOUT = (3, 8)
 
 # Состояния кеша для неблокирующего режима.
 CACHE_STATUS_READY = "ready"
@@ -62,8 +65,16 @@ CACHE_STATUS_MISSING = "missing"
 # не больше шести соединений к нашему origin, а загрузки идут в фоне.
 DEFAULT_DOWNLOAD_WORKERS = 8
 
+# Дедупликация загрузок: фиксированный набор локов-«полос». Словарь локов на
+# каждый ключ рос бы вместе с числом увиденных картинок и жил бы до рестарта.
+LOCK_STRIPES = 128
+
 # Защита от случайного/вредоносного ответа гигантского размера.
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
+
+# Чанк при скачивании. 8 КБ давало сотни итераций на original в несколько МБ;
+# 64 КБ — разумный компромисс между числом итераций и памятью.
+DOWNLOAD_CHUNK_SIZE = 64 * 1024
 
 # Некоторые CDN отвечают 403 на User-Agent python-requests, поэтому
 # представляемся обычным браузером.
@@ -77,6 +88,11 @@ _SAFE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 
 _download_executor: ThreadPoolExecutor | None = None
 _download_executor_guard = threading.Lock()
+
+# Одна requests.Session на поток процесса, а не на каждый ImageCache.
+# Воркеры пула живут долго, поэтому TCP/TLS-соединения к TMDB
+# переиспользуются между разными kind/size, а не только внутри одной пары.
+_session_local = threading.local()
 
 
 def _get_download_executor() -> ThreadPoolExecutor:
@@ -137,11 +153,11 @@ class ImageCache:
         self.missing_ttl_seconds = missing_ttl_seconds
         self.failed_ttl_seconds = failed_ttl_seconds
         self.request_timeout = request_timeout
-        self._locks: dict[str, threading.Lock] = {}
-        self._locks_guard = threading.Lock()
+        # Полосы фиксированного размера: один и тот же ключ всегда берёт один
+        # и тот же лок, но память не зависит от числа увиденных изображений.
+        self._locks = tuple(threading.Lock() for _ in range(LOCK_STRIPES))
         self._in_flight: set[str] = set()
         self._in_flight_guard = threading.Lock()
-        self._session_local = threading.local()
 
     def cache_path(self, key: str, source_url: str) -> Path:
         digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
@@ -313,7 +329,7 @@ class ImageCache:
                 ) as temp_file:
                     temp_path = Path(temp_file.name)
                     total_bytes = 0
-                    for chunk in response.iter_content(chunk_size=8192):
+                    for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                         if not chunk:
                             continue
                         total_bytes += len(chunk)
@@ -340,20 +356,22 @@ class ImageCache:
             response.close()
 
     def _get_session(self) -> requests.Session:
-        session = getattr(self._session_local, "session", None)
+        session = getattr(_session_local, "session", None)
         if session is None:
             session = requests.Session()
             session.headers["User-Agent"] = IMAGE_REQUEST_USER_AGENT
+            # Одна повторная попытка для транзиентных 429/5xx. Больше не нужно:
+            # фоновая догрузка не критична, а лишние ретраи занимают воркер.
             retry = Retry(
-                total=2,
-                backoff_factor=0.5,
+                total=1,
+                backoff_factor=0.2,
                 status_forcelist=(429, 500, 502, 503, 504),
                 allowed_methods=("GET",),
             )
             adapter = HTTPAdapter(max_retries=retry)
             session.mount("http://", adapter)
             session.mount("https://", adapter)
-            self._session_local.session = session
+            _session_local.session = session
         return session
 
     @staticmethod
@@ -368,12 +386,9 @@ class ImageCache:
         return CachedImage(path=path, content_type=content_type or "image/jpeg")
 
     def _lock_for(self, key: str) -> threading.Lock:
-        with self._locks_guard:
-            lock = self._locks.get(key)
-            if lock is None:
-                lock = threading.Lock()
-                self._locks[key] = lock
-            return lock
+        # hash() стабилен в пределах процесса — этого достаточно, чтобы один
+        # ключ всегда попадал в одну и ту же полосу.
+        return self._locks[hash(key) % LOCK_STRIPES]
 
     def _is_missing_active(self, marker: Path) -> bool:
         if not marker.exists():
