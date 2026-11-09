@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import Client, SimpleTestCase, TestCase
 
 from tmdb_adapter.client_singleton import PersonImageBasic, get_person_images
@@ -97,6 +98,9 @@ class PersonImagesAdapterTests(SimpleTestCase):
 class PersonImagesApiTests(TestCase):
     def setUp(self):
         self.client = Client()
+        # Кеш списка фото живёт в LocMem и не откатывается транзакцией.
+        cache.clear()
+        self.addCleanup(cache.clear)
         self.person = Person.objects.create(
             tmdb_id="12345",
             imdb_id="nm12345",
@@ -106,8 +110,8 @@ class PersonImagesApiTests(TestCase):
         )
 
     @patch("vault.services.tmdb_rate_limiter.TmdbRateLimiter.wait")
-    @patch("tmdb_adapter.client_singleton.get_person_images")
-    @patch("tmdb_adapter.client_singleton.get_tmdb_client")
+    @patch("vault.services.person_images_service.get_person_images")
+    @patch("vault.services.person_images_service.get_tmdb_client")
     def test_returns_images_from_tmdb(
         self,
         get_tmdb_client_mock,
@@ -133,8 +137,10 @@ class PersonImagesApiTests(TestCase):
         self.assertTrue(payload["items"][0]["url"].endswith("/w500/profile2.jpg"))
         self.assertTrue(payload["items"][0]["thumb_url"].endswith("/w185/profile2.jpg"))
         self.assertNotIn("is_primary", payload["items"][0])
-        self.assertEqual(get_person_images_mock.call_args.kwargs["limit"], 6)
-        wait_mock.assert_called_once()
+        # Список кешируется целиком (до 20 файлов), limit применяется на выдаче.
+        self.assertEqual(get_person_images_mock.call_args.kwargs["limit"], 20)
+        # Интерактивное чтение намеренно не идёт через глобальный лимитер.
+        wait_mock.assert_not_called()
 
     def test_non_numeric_tmdb_id_returns_empty(self):
         person = Person.objects.create(
@@ -149,14 +155,12 @@ class PersonImagesApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"items": [], "error": None})
 
-    @patch("vault.services.tmdb_rate_limiter.TmdbRateLimiter.wait")
-    @patch("tmdb_adapter.client_singleton.get_person_images")
-    @patch("tmdb_adapter.client_singleton.get_tmdb_client")
+    @patch("vault.services.person_images_service.get_person_images")
+    @patch("vault.services.person_images_service.get_tmdb_client")
     def test_tmdb_error_returns_empty_with_error(
         self,
         get_tmdb_client_mock,
         get_person_images_mock,
-        wait_mock,
     ):
         get_tmdb_client_mock.return_value = object()
         get_person_images_mock.side_effect = RuntimeError("tmdb down")
@@ -169,7 +173,6 @@ class PersonImagesApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["items"], [])
         self.assertTrue(payload["error"])
-        wait_mock.assert_called_once()
 
 
 class PersonStarApiTests(TestCase):

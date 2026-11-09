@@ -2027,7 +2027,7 @@ def person_detail(request, person_id: int):
 
 @api.get("/persons/{person_id}/images", response=PersonImagesOut)
 def person_images(request, person_id: int, limit: int = 8):
-    """Ленивая загрузка фотографий персоны напрямую из TMDB, без сохранения в БД."""
+    """Фотографии персоны из TMDB (список файлов кешируется без истечения)."""
     person = Person.objects.filter(id=person_id).first()
     if person is None:
         raise HttpError(404, "Person not found")
@@ -2040,16 +2040,11 @@ def person_images(request, person_id: int, limit: int = 8):
     bounded = max(1, min(limit, 20))
 
     try:
-        from tmdb_adapter.client_singleton import get_person_images, get_tmdb_client
-        from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+        from vault.services.person_images_service import get_person_image_paths
 
-        TmdbRateLimiter.wait()
-        # +1, чтобы после исключения основного фото всё ещё осталось limit штук.
-        images = get_person_images(
-            get_tmdb_client(),
-            tmdb_person_id,
-            limit=min(bounded + 1, 20),
-        )
+        # +1 не нужен: сервис отдаёт весь кешированный список (до 20),
+        # основное фото отфильтровываем ниже.
+        paths = get_person_image_paths(tmdb_person_id)
     except Exception:
         logger_tmdb_images.exception("Failed to load TMDB images for person_id=%s", person_id)
         return PersonImagesOut(
@@ -2057,17 +2052,17 @@ def person_images(request, person_id: int, limit: int = 8):
             error="Не удалось загрузить фото из TMDB",
         )
 
-    items = [image for image in images if image.file_path != person.photo][:bounded]
+    items = [path for path in paths if path != person.photo][:bounded]
 
     return PersonImagesOut(
         items=[
             PersonImageOut(
-                file_path=image.file_path,
-                url=ImageService.url(image.file_path, "w500", kind="profile"),
-                full_url=ImageService.url(image.file_path, "original", kind="profile"),
-                thumb_url=ImageService.url(image.file_path, "w185", kind="profile"),
+                file_path=path,
+                url=ImageService.url(path, "w500", kind="profile"),
+                full_url=ImageService.url(path, "original", kind="profile"),
+                thumb_url=ImageService.url(path, "w185", kind="profile"),
             )
-            for image in items
+            for path in items
         ]
     )
 
