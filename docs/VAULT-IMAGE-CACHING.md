@@ -32,7 +32,7 @@
     ▼
 ImageService → ImageCache
     │
-    ├── файл есть ─────────────► FileResponse (200)
+    ├── файл есть ─────────────► StreamingHttpResponse (200, чанками)
     ├── 404/410 от TMDB ───────► маркер .missing, 302 на заглушку
     ├── сеть/5xx/не image ─────► маркер .failed, 302 на CDN
     └── файла нет ─────────────► 302 на CDN + фоновая загрузка
@@ -78,7 +78,7 @@ GET /api/vault/images/{kind}/{size}/{path}
 
 | Ситуация | Ответ | Заголовки |
 | --- | --- | --- |
-| Файл в кеше | `200` + `FileResponse` | `Cache-Control: private, max-age=31536000, immutable`, `ETag` |
+| Файл в кеше | `200` + `StreamingHttpResponse` (чанки по 64 КБ) | `Cache-Control: private, max-age=31536000, immutable`, `ETag`, `Content-Length` |
 | Файла нет (холодный кеш) | `302` на `TMDB_IMAGE_BASE_URL/<size>/<path>` + фоновая загрузка | `Cache-Control: no-store` |
 | Изображения нет в источнике | `302` на `/static/img/<kind>-placeholder.svg` | `Cache-Control: no-store` |
 | Недавняя ошибка (`.failed`) | `302` на CDN (браузер может попробовать сам) | `Cache-Control: no-store` |
@@ -128,6 +128,13 @@ thread-local `requests.Session` — одна на поток процесса, �
 картинками. Иначе каждая пара kind/size держала бы свою сессию на каждый
 воркер и платила отдельный TLS-handshake.
 
+Горячий файл отдаётся `StreamingHttpResponse` с async-итератором: чанки по
+64 КБ читаются в `asyncio.to_thread`. Так ASGI не материализует файл целиком
+в память — `FileResponse` с sync-итератором под ASGI делает именно это через
+`sync_to_async(list)(...)`, что для `original` на несколько МБ даёт лишний пик
+памяти и задержку. `Content-Length` выставляется явно, поэтому браузер видит
+размер и прогресс.
+
 Сам модуль Kinozal не переиспользуется напрямую: он связан с `MovieRSS`,
 `movie_pk`, приоритетами и fastpic. В `vault/services/image_cache.py` вынесена
 только общая, независимая от источника механика.
@@ -136,7 +143,7 @@ thread-local `requests.Session` — одна на поток процесса, �
 
 `ImageCache.get_or_schedule()` не скачивает файл в запросе:
 
-- файл есть → `200 FileResponse`;
+- файл есть → `200` + стриминг файла чанками;
 - `404/410` → маркер `.missing` + заглушка;
 - иначе → загрузка ставится в общий пул (8 потоков), а клиент сразу получает
   `302` на CDN TMDB с `Cache-Control: no-store`.

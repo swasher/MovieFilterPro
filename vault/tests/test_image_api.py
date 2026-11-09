@@ -2,11 +2,24 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client, TestCase, override_settings
 
 from vault.services.image_cache import CACHE_STATUS_MISSING
-from vault.services.image_service import ImageService
+from vault.services.image_service import FILE_STREAM_CHUNK_SIZE, ImageService
+
+
+def _read_streaming_body(response) -> bytes:
+    """Дочитывает async-streaming ответ в синхронном тесте."""
+
+    async def collect() -> bytes:
+        chunks = []
+        async for chunk in response:
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+    return async_to_sync(collect)()
 
 
 class VaultImageEndpointTests(TestCase):
@@ -34,10 +47,13 @@ class VaultImageEndpointTests(TestCase):
         response = self.client.get("/api/vault/images/poster/w500/poster.jpg")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(b"".join(response.streaming_content), b"image-bytes")
+        self.assertEqual(_read_streaming_body(response), b"image-bytes")
         self.assertEqual(response["Content-Type"], "image/jpeg")
         self.assertIn("immutable", response["Cache-Control"])
         self.assertTrue(response["ETag"])
+        # Файл отдаётся async-итератором, а не целиком через FileResponse.
+        self.assertTrue(response.is_async)
+        self.assertEqual(response["Content-Length"], str(len(b"image-bytes")))
 
     def test_serves_nested_path(self):
         self._seed_cached_image("poster", "w500", "nested/poster.jpg")
@@ -45,7 +61,17 @@ class VaultImageEndpointTests(TestCase):
         response = self.client.get("/api/vault/images/poster/w500/nested/poster.jpg")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(b"".join(response.streaming_content), b"image-bytes")
+        self.assertEqual(_read_streaming_body(response), b"image-bytes")
+
+    def test_streams_large_file_in_chunks(self):
+        payload = b"x" * (FILE_STREAM_CHUNK_SIZE * 3 + 123)
+        self._seed_cached_image("poster", "w500", "big.jpg", content=payload)
+
+        response = self.client.get("/api/vault/images/poster/w500/big.jpg")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Length"], str(len(payload)))
+        self.assertEqual(_read_streaming_body(response), payload)
 
     @patch(
         "vault.services.image_cache.ImageCache.get_or_schedule",
