@@ -6,7 +6,7 @@
   import * as Avatar from "$lib/components/ui/avatar";
   import * as ImageZoom from "$lib/components/ui/image-zoom";
   import { ArrowLeft, Heart, Star } from "@lucide/svelte";
-  import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
+  import PersonFilmography from "$lib/components/vault/PersonFilmography.svelte";
 
   type PersonImage = {
     file_path: string;
@@ -403,50 +403,7 @@
         </Card>
       {/if}
 
-      <Card class="vd-card">
-        <CardHeader>
-          <CardTitle class="text-xl">Filmography</CardTitle>
-        </CardHeader>
-        <CardContent class="vd-card-content">
-          {#if person.filmography.length}
-            <div class="vd-filmography-grid">
-              {#each person.filmography as item (`${item.id}`)}
-                <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
-                  <div class="vd-filmography-card">
-                    <div class="relative">
-                      {#if item.poster_url}
-                        <img src={item.poster_url} alt={item.title} class="vd-poster" />
-                      {:else}
-                        <div class="vd-poster-fallback">
-                          no poster
-                        </div>
-                      {/if}
-                      <MovieStatusBadges
-                        watch_status={item.watch_status}
-                        rating={item.rating}
-                        is_favorite={item.is_favorite}
-                        year={item.year}
-                      />
-                    </div>
-
-                    <div class="vd-filmography-copy">
-                      <p class="vd-related-title">{item.title}</p>
-                      <div class="vd-facts-row vd-facts-row--muted">
-                        <span class="vd-fact-inline">{item.roles.join(", ")}</span>
-                      </div>
-                      {#if item.character_names.length}
-                        <p class="vd-related-subtitle">{item.character_names.join(", ")}</p>
-                      {/if}
-                    </div>
-                  </div>
-                </a>
-              {/each}
-            </div>
-          {:else}
-            <p class="vd-empty">No filmography yet.</p>
-          {/if}
-        </CardContent>
-      </Card>
+      <PersonFilmography filmography={person.filmography} />
     </div>
   </div>
 </div>
