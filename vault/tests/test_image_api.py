@@ -77,12 +77,14 @@ class VaultImageEndpointTests(TestCase):
         "vault.services.image_cache.ImageCache.get_or_schedule",
         return_value=(CACHE_STATUS_MISSING, None),
     )
-    def test_redirects_to_kind_specific_placeholder_when_image_is_unavailable(self, _mock):
+    def test_serves_kind_specific_placeholder_when_image_is_unavailable(self, _mock):
         response = self.client.get("/api/vault/images/profile/w500/missing.jpg")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/static/img/profile-placeholder.svg")
-        self.assertEqual(response["Cache-Control"], "no-store")
+        # Заглушка отдаётся сразу (200), без лишнего редиректа на /static.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/svg+xml")
+        self.assertEqual(response["Cache-Control"], "private, max-age=3600")
+        self.assertIn(b"<svg", _read_streaming_body(response))
 
     @patch("vault.services.image_cache.ImageCache._schedule_download")
     def test_redirects_to_tmdb_source_while_cache_is_cold(self, schedule_mock):

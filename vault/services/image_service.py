@@ -304,12 +304,55 @@ class ImageService:
         return response
 
     @classmethod
-    def _placeholder_response(cls, kind: str):
-        response = HttpResponseRedirect(cls.placeholder_url(kind))
-        # Промежуточное состояние нельзя запоминать: после появления файла
-        # браузер должен получить уже настоящую картинку.
-        response["Cache-Control"] = "no-store"
+    def _placeholder_response(cls, kind: str) -> StreamingHttpResponse | HttpResponseRedirect:
+        """Отдаёт заглушку сразу, без редиректа на статику.
+
+        Редирект добавлял лишний round-trip на каждую картинку, которой нет в
+        источнике. Заглушка одинакова для всех запросов и не является секретом,
+        поэтому отдаём её с ``200`` и коротким кешем: если источник позже
+        начнёт отдавать файл (или маркер ``.missing`` истечёт), браузер
+        подхватит его в пределах часа.
+        """
+        path = cls._placeholder_file(kind)
+        if path is None:
+            # Статика не найдена (например, не выполнен collectstatic):
+            # не ломаем страницу, откатываемся на редирект.
+            response = HttpResponseRedirect(cls.placeholder_url(kind))
+            response["Cache-Control"] = "no-store"
+            return response
+
+        try:
+            file_handle = path.open("rb")
+            file_stat = path.stat()
+        except OSError:
+            logger.warning("Placeholder image disappeared before serving: %s", path)
+            response = HttpResponseRedirect(cls.placeholder_url(kind))
+            response["Cache-Control"] = "no-store"
+            return response
+
+        response = StreamingHttpResponse(
+            _AsyncFileIterator(file_handle),
+            content_type="image/svg+xml",
+        )
+        response["Content-Length"] = str(file_stat.st_size)
+        response["Cache-Control"] = "private, max-age=3600"
         return response
+
+    @staticmethod
+    def _placeholder_file(kind: str) -> Path | None:
+        # Импорт внутри функции: заглушка — редкий путь, а finders тянет
+        # настройки статики, которые нужны не всем потребителям ImageService.
+        from django.contrib.staticfiles import finders
+
+        filename = PLACEHOLDER_FILENAMES.get(kind, PLACEHOLDER_FILENAMES[DEFAULT_IMAGE_KIND])
+        try:
+            found = finders.find(f"img/{filename}")
+        except Exception:  # noqa: BLE001 - заглушка не должна ломать отдачу
+            return None
+        if not found:
+            return None
+        path = Path(found)
+        return path if path.is_file() else None
 
     @classmethod
     def _get_cache(cls, kind: str, size: str) -> ImageCache:
