@@ -42,7 +42,15 @@ from vault.models import (
     UserSeason,
     VaultConnectionEvent,
 )
-from vault.services.image_service import ImageService
+from vault.services.image_service import (
+    BACKDROP_CARD_SIZE,
+    BACKDROP_DETAIL_SIZE,
+    POSTER_CARD_SIZE,
+    POSTER_DETAIL_SIZE,
+    PROFILE_CARD_SIZE,
+    PROFILE_DETAIL_SIZE,
+    ImageService,
+)
 from vault.services.movie_search_service import MovieSearchService
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.season_status_service import UNSET, SeasonStatusService
@@ -655,7 +663,7 @@ def _build_tmdb_candidate_out(item) -> TMDBCandidateOut:
         year=item.year,
         score=item.score,
         score_reasons=list(item.score_reasons),
-        poster_url=ImageService.url(item.poster_path, "w342", kind="poster"),
+        poster_url=ImageService.url(item.poster_path, POSTER_CARD_SIZE, kind="poster"),
         popularity=item.popularity,
         vote_average=item.vote_average,
         overview=getattr(item, "overview", None) or "",
@@ -706,7 +714,7 @@ def _build_movie_out(
         original_title=movie.original_title,
         year=movie.year,
         slug=movie.slug,
-        poster_url=movie.poster_url,
+        poster_url=movie.get_poster_url(POSTER_CARD_SIZE),
         movie_type=movie.movie_type,
         watch_status=watch_status,
         rating=rating,
@@ -774,7 +782,7 @@ def _build_season_out(season: Season, user=None) -> SeasonOut:
         title=season.title,
         description=season.description,
         release_date=_date_to_iso(season.release_date),
-        poster_url=ImageService.url(season.poster, "w342", kind="poster"),
+        poster_url=ImageService.url(season.poster, POSTER_CARD_SIZE, kind="poster"),
         episodes_count=episodes_count,
         air_year=air_year,
         is_unreleased=season.release_date is None,
@@ -861,7 +869,7 @@ def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
             watch_status = MovieStatusService.WATCH_STATUS_TO_STATUS_KEY.get(state.get("watch_status"))
             rating = state.get("rating")
             is_favorite = bool(state.get("is_favorite"))
-        poster_url = ImageService.url(p.get("poster_path"), "w342", kind="poster") if p.get("poster_path") else None
+        poster_url = ImageService.url(p.get("poster_path"), POSTER_CARD_SIZE, kind="poster") if p.get("poster_path") else None
         parts_out.append(
             CollectionPartOut(
                 tmdb_id=tmdb_id,
@@ -881,8 +889,8 @@ def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
         tmdb_id=coll.tmdb_id,
         name=coll.name,
         overview=coll.overview or None,
-        poster_url=ImageService.url(coll.poster_path, "w342", kind="poster") if coll.poster_path else None,
-        backdrop_url=ImageService.url(coll.backdrop_path, "w780", kind="backdrop") if coll.backdrop_path else None,
+        poster_url=ImageService.url(coll.poster_path, POSTER_CARD_SIZE, kind="poster") if coll.poster_path else None,
+        backdrop_url=ImageService.url(coll.backdrop_path, BACKDROP_CARD_SIZE, kind="backdrop") if coll.backdrop_path else None,
         parts=parts_out,
     )
 
@@ -1182,9 +1190,9 @@ def movie_detail(request, slug: str):
         kinopoisk_id=movie.kinopoisk_id or None,
         tvdb_id=movie.tvdb_id or None,
         homepage=movie.homepage or None,
-        poster_url=movie.poster_url,
+        poster_url=movie.get_poster_url(POSTER_DETAIL_SIZE),
         poster_full_url=movie.get_poster_url("original"),
-        backdrop_url=movie.backdrop_url,
+        backdrop_url=movie.get_backdrop_url(BACKDROP_DETAIL_SIZE),
         duration=movie.duration,
         age_rating=movie.age_rating or None,
         trailer_url=movie.trailer_url or None,
@@ -1217,7 +1225,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 original_name=item.person.original_name or None,
-                photo_url=item.person.photo_url,
+                photo_url=item.person.get_photo_url(PROFILE_CARD_SIZE),
                 is_favorite=item.person.id in favorite_person_ids,
                 is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
@@ -1231,7 +1239,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 original_name=item.person.original_name or None,
-                photo_url=item.person.photo_url,
+                photo_url=item.person.get_photo_url(PROFILE_CARD_SIZE),
                 is_favorite=item.person.id in favorite_person_ids,
                 is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
@@ -1245,7 +1253,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 original_name=item.person.original_name or None,
-                photo_url=item.person.photo_url,
+                photo_url=item.person.get_photo_url(PROFILE_CARD_SIZE),
                 is_favorite=item.person.id in favorite_person_ids,
                 is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
@@ -1259,7 +1267,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 original_name=item.person.original_name or None,
-                photo_url=item.person.photo_url,
+                photo_url=item.person.get_photo_url(PROFILE_CARD_SIZE),
                 is_favorite=item.person.id in favorite_person_ids,
                 is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
@@ -1273,7 +1281,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 original_name=item.person.original_name or None,
-                photo_url=item.person.photo_url,
+                photo_url=item.person.get_photo_url(PROFILE_CARD_SIZE),
                 is_favorite=item.person.id in favorite_person_ids,
                 is_star=item.person.id in star_person_ids,
                 popularity=item.popularity,
@@ -1287,7 +1295,7 @@ def movie_detail(request, slug: str):
                 id=item.person.id,
                 name=item.person.name,
                 original_name=item.person.original_name or None,
-                photo_url=item.person.photo_url,
+                photo_url=item.person.get_photo_url(PROFILE_CARD_SIZE),
                 character_name=item.character_name or None,
                 is_favorite=item.person.id in favorite_person_ids,
                 is_star=item.person.id in star_person_ids,
@@ -1793,7 +1801,7 @@ def _serialize_person_list(persons, user) -> list[PersonListOut]:
             id=p.id,
             name=p.name,
             original_name=p.original_name or None,
-            photo_url=p.photo_url,
+            photo_url=p.get_photo_url(PROFILE_CARD_SIZE),
             birth_date=_date_to_iso(p.birth_date),
             death_date=_date_to_iso(p.death_date),
             movies_count=getattr(p, "movies_count", 0) or 0,
@@ -1936,7 +1944,7 @@ def person_detail(request, person_id: int):
                 "title": movie.title,
                 "slug": movie.slug,
                 "year": movie.year,
-                "poster_url": movie.poster_url,
+                "poster_url": movie.get_poster_url(POSTER_CARD_SIZE),
                 "roles": [],
                 "character_names": [],
             }
@@ -1999,7 +2007,7 @@ def person_detail(request, person_id: int):
         original_name=person.original_name,
         tmdb_id=person.tmdb_id,
         imdb_id=person.imdb_id,
-        photo_url=person.photo_url,
+        photo_url=person.get_photo_url(PROFILE_DETAIL_SIZE),
         photo_full_url=person.get_photo_url("original"),
         biography=person.biography or "",
         birth_date=_date_to_iso(person.birth_date),
@@ -2057,9 +2065,9 @@ def person_images(request, person_id: int, limit: int = 8):
         items=[
             PersonImageOut(
                 file_path=path,
-                url=ImageService.url(path, "w500", kind="profile"),
+                url=ImageService.url(path, PROFILE_DETAIL_SIZE, kind="profile"),
                 full_url=ImageService.url(path, "original", kind="profile"),
-                thumb_url=ImageService.url(path, "w185", kind="profile"),
+                thumb_url=ImageService.url(path, PROFILE_CARD_SIZE, kind="profile"),
             )
             for path in items
         ]
@@ -2301,7 +2309,7 @@ def _build_tmdb_sync_queue_item_out(item: "TMDBSyncQueueItem") -> TMDBSyncQueueI
         movie_original_title=item.movie.original_title or "" if item.movie_id else "",
         movie_year=item.movie.year if item.movie_id else None,
         movie_description=item.movie.description or "" if item.movie_id else "",
-        movie_poster_url=item.movie.poster_url if item.movie_id else None,
+        movie_poster_url=item.movie.get_poster_url(POSTER_CARD_SIZE) if item.movie_id else None,
         movie_has_tmdb=bool(item.movie.tmdb_id) if item.movie_id else False,
         snapshot_title=item.snapshot_title,
         snapshot_original_title=item.snapshot_original_title,
@@ -2913,7 +2921,7 @@ def collection_refresh(request, tmdb_id: int):
                     title=str(p.get("title") or "").strip() or f"TMDB {pid}",
                     original_title=str(p.get("original_title") or "").strip() or None,
                     year=p.get("year"),
-                    poster_url=ImageService.url(p.get("poster_path"), "w342", kind="poster") if p.get("poster_path") else None,
+                    poster_url=ImageService.url(p.get("poster_path"), POSTER_CARD_SIZE, kind="poster") if p.get("poster_path") else None,
                     in_vault=False,
                     vault_slug=None,
                 )
@@ -2922,8 +2930,8 @@ def collection_refresh(request, tmdb_id: int):
             tmdb_id=coll.tmdb_id,
             name=coll.name,
             overview=coll.overview or None,
-            poster_url=ImageService.url(coll.poster_path, "w342", kind="poster") if coll.poster_path else None,
-            backdrop_url=ImageService.url(coll.backdrop_path, "w780", kind="backdrop") if coll.backdrop_path else None,
+            poster_url=ImageService.url(coll.poster_path, POSTER_CARD_SIZE, kind="poster") if coll.poster_path else None,
+            backdrop_url=ImageService.url(coll.backdrop_path, BACKDROP_CARD_SIZE, kind="backdrop") if coll.backdrop_path else None,
             parts=parts_out,
         )
     out = _build_collection_out(movie, user=user)
