@@ -1,5 +1,7 @@
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
@@ -93,3 +95,61 @@ def logout_view(request):
     )
     get_token(request)
     return response
+
+
+@csrf_exempt
+@require_POST
+def password_change_view(request):
+    """Смена пароля текущего пользователя.
+
+    Нужен, потому что на проде не всегда есть доступ к Django Admin.
+    Текущий пароль обязателен: endpoint меняет пароль только у уже
+    авторизованной сессии, которая его знает.
+    """
+    user = request.user
+    if not user.is_authenticated:
+        return JsonResponse({"message": "Требуется авторизация."}, status=401)
+
+    current_password = request.POST.get("current_password") or ""
+    new_password = request.POST.get("new_password") or ""
+
+    if not current_password or not new_password:
+        return JsonResponse(
+            {"message": "Укажи текущий и новый пароль."}, status=400
+        )
+
+    if not user.check_password(current_password):
+        return JsonResponse({"message": "Текущий пароль неверен."}, status=400)
+
+    if new_password == current_password:
+        return JsonResponse(
+            {"message": "Новый пароль должен отличаться от текущего."}, status=400
+        )
+
+    if settings.DEBUG:
+        # В dev разрешаем простой пароль (например, «1234»), чтобы не мешать
+        # локальной отладке. На проде работают штатные AUTH_PASSWORD_VALIDATORS.
+        if len(new_password) < 4:
+            return JsonResponse(
+                {"message": "Пароль должен быть не короче 4 символов."}, status=400
+            )
+    else:
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as exc:
+            return JsonResponse(
+                {
+                    "message": " ".join(exc.messages),
+                    "errors": exc.messages,
+                },
+                status=400,
+            )
+
+    user.set_password(new_password)
+    user.save(update_fields=["password"])
+
+    # Не разлогиниваем текущую вкладку: обновляем auth-hash её сессии.
+    # Остальные сессии пользователя станут невалидными из-за смены хеша.
+    update_session_auth_hash(request, user)
+
+    return JsonResponse({"message": "Пароль изменён."})

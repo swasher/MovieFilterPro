@@ -6,7 +6,7 @@
   import type { HeaderLink } from "$lib/template-data";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
-  import { Moon, Sun, User, KeyRound, Settings, ShieldCheck, Cable, LogOut, ChevronDown, RefreshCw, List, ScrollText } from "@lucide/svelte";
+  import { Moon, Sun, User, KeyRound, Lock, Settings, ShieldCheck, Cable, LogOut, ChevronDown, RefreshCw, List, ScrollText } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   type Props = {
@@ -130,6 +130,14 @@
                   <a href="/preferences" {...props}>
                     <Settings class="mr-2 size-4" />
                     <span>Preferences</span>
+                  </a>
+                {/snippet}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item>
+                {#snippet child({ props })}
+                  <a href="/preferences#password" {...props}>
+                    <Lock class="mr-2 size-4" />
+                    <span>Сменить пароль</span>
                   </a>
                 {/snippet}
               </DropdownMenu.Item>

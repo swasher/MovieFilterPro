@@ -10,6 +10,7 @@ collectstatic
 api.md
 .env
 .env.production
+.env.agent
 media/cached_images/
 cache/
 .make_targets_cache

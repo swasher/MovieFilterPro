@@ -8,4 +8,5 @@ urlpatterns = [
     path('api/auth/session/', api_auth.session_view, name='api_auth_session'),
     path('api/auth/login/', api_auth.login_view, name='api_auth_login'),
     path('api/auth/logout/', api_auth.logout_view, name='api_auth_logout'),
+    path('api/auth/password/', api_auth.password_change_view, name='api_auth_password_change'),
 ]
