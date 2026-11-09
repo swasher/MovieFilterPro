@@ -65,6 +65,10 @@ CACHE_STATUS_MISSING = "missing"
 # не больше шести соединений к нашему origin, а загрузки идут в фоне.
 DEFAULT_DOWNLOAD_WORKERS = 8
 
+# Дедупликация загрузок: фиксированный набор локов-«полос». Словарь локов на
+# каждый ключ рос бы вместе с числом увиденных картинок и жил бы до рестарта.
+LOCK_STRIPES = 128
+
 # Защита от случайного/вредоносного ответа гигантского размера.
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
@@ -145,8 +149,9 @@ class ImageCache:
         self.missing_ttl_seconds = missing_ttl_seconds
         self.failed_ttl_seconds = failed_ttl_seconds
         self.request_timeout = request_timeout
-        self._locks: dict[str, threading.Lock] = {}
-        self._locks_guard = threading.Lock()
+        # Полосы фиксированного размера: один и тот же ключ всегда берёт один
+        # и тот же лок, но память не зависит от числа увиденных изображений.
+        self._locks = tuple(threading.Lock() for _ in range(LOCK_STRIPES))
         self._in_flight: set[str] = set()
         self._in_flight_guard = threading.Lock()
 
@@ -377,12 +382,9 @@ class ImageCache:
         return CachedImage(path=path, content_type=content_type or "image/jpeg")
 
     def _lock_for(self, key: str) -> threading.Lock:
-        with self._locks_guard:
-            lock = self._locks.get(key)
-            if lock is None:
-                lock = threading.Lock()
-                self._locks[key] = lock
-            return lock
+        # hash() стабилен в пределах процесса — этого достаточно, чтобы один
+        # ключ всегда попадал в одну и ту же полосу.
+        return self._locks[hash(key) % LOCK_STRIPES]
 
     def _is_missing_active(self, marker: Path) -> bool:
         if not marker.exists():
