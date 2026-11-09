@@ -72,6 +72,10 @@ LOCK_STRIPES = 128
 # Защита от случайного/вредоносного ответа гигантского размера.
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
+# Чанк при скачивании. 8 КБ давало сотни итераций на original в несколько МБ;
+# 64 КБ — разумный компромисс между числом итераций и памятью.
+DOWNLOAD_CHUNK_SIZE = 64 * 1024
+
 # Некоторые CDN отвечают 403 на User-Agent python-requests, поэтому
 # представляемся обычным браузером.
 IMAGE_REQUEST_USER_AGENT = (
@@ -325,7 +329,7 @@ class ImageCache:
                 ) as temp_file:
                     temp_path = Path(temp_file.name)
                     total_bytes = 0
-                    for chunk in response.iter_content(chunk_size=8192):
+                    for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                         if not chunk:
                             continue
                         total_bytes += len(chunk)

@@ -277,6 +277,8 @@ class ImageService:
         response["Content-Length"] = str(file_stat.st_size)
         # Путь TMDB иммутабелен: один и тот же URL всегда отдаёт один и тот же
         # файл. Поэтому браузер может держать его в кеше очень долго.
+        # private, а не public: endpoint требует сессию, а общего
+        # reverse-proxy кеша в деплое нет. Браузерный кеш private не ограничивает.
         response["Cache-Control"] = "private, max-age=31536000, immutable"
         response["ETag"] = f'"{file_stat.st_mtime_ns:x}-{file_stat.st_size:x}"'
         return response
