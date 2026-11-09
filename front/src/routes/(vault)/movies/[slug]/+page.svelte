@@ -1106,7 +1106,6 @@
           {/if}
           <MovieWontWatchOverlay
             watch_status={userState.in_wont_watch ? "wont_watch" : null}
-            size="lg"
           />
         </CardContent>
       </Card>

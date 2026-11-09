@@ -1,20 +1,11 @@
 @reference "../../../routes/layout.css";
 
-/* Полупрозрачная плашка поверх постера для статуса «Не интересует». */
+/* Затемнение постера для статуса «Не интересует». */
 .vd-wont-watch-overlay {
-  @apply pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-zinc-950/55;
+  @apply pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-zinc-950/65;
 }
 
-.vd-wont-watch-plaque {
-  @apply max-w-[92%] rounded-md border border-red-500/40 bg-zinc-950/70 px-2 py-1 text-center text-[10px] font-semibold leading-tight tracking-wide text-red-50 shadow-md;
-}
-
-/* Табличный вид: постер слишком маленький для текста — оставляем только крест. */
+/* Табличный вид: постер слишком маленький для бейджа — оставляем крест. */
 .vd-wont-watch-overlay--xs {
-  @apply z-[1] bg-zinc-950/45 text-red-400;
-}
-
-/* Крупный постер на странице фильма. */
-.vd-wont-watch-overlay--lg .vd-wont-watch-plaque {
-  @apply px-4 py-2 text-sm;
+  @apply z-[1] bg-zinc-950/55 text-red-400;
 }

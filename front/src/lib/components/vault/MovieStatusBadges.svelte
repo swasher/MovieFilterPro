@@ -22,7 +22,7 @@
 
 {#if watch_status === "wont_watch"}
   <span class="vd-status-badge vd-status-badge--wont" title="Не интересует">
-    <X class="size-3" />
+    <X class="size-3 text-red-500" />
   </span>
 {:else if watch_status === "will_watch"}
   <span class="vd-status-badge vd-status-badge--will" title="Буду смотреть">
