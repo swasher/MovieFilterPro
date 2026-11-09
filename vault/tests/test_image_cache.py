@@ -226,6 +226,13 @@ class ImageCacheTests(SimpleTestCase):
             self.assertIsNone(cached)
             self.assertEqual(session.calls, 0)
 
+    def test_caches_share_one_session_per_thread(self):
+        with TemporaryDirectory() as temp_dir:
+            first = ImageCache(Path(temp_dir) / "first")
+            second = ImageCache(Path(temp_dir) / "second")
+
+            self.assertIs(first._get_session(), second._get_session())
+
     def test_get_or_schedule_deduplicates_in_flight_downloads(self):
         with TemporaryDirectory() as temp_dir:
             cache = ImageCache(Path(temp_dir))

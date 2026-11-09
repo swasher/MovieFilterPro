@@ -81,6 +81,11 @@ _SAFE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 _download_executor: ThreadPoolExecutor | None = None
 _download_executor_guard = threading.Lock()
 
+# Одна requests.Session на поток процесса, а не на каждый ImageCache.
+# Воркеры пула живут долго, поэтому TCP/TLS-соединения к TMDB
+# переиспользуются между разными kind/size, а не только внутри одной пары.
+_session_local = threading.local()
+
 
 def _get_download_executor() -> ThreadPoolExecutor:
     """Общий на процесс пул фоновых загрузок.
@@ -144,7 +149,6 @@ class ImageCache:
         self._locks_guard = threading.Lock()
         self._in_flight: set[str] = set()
         self._in_flight_guard = threading.Lock()
-        self._session_local = threading.local()
 
     def cache_path(self, key: str, source_url: str) -> Path:
         digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
@@ -343,7 +347,7 @@ class ImageCache:
             response.close()
 
     def _get_session(self) -> requests.Session:
-        session = getattr(self._session_local, "session", None)
+        session = getattr(_session_local, "session", None)
         if session is None:
             session = requests.Session()
             session.headers["User-Agent"] = IMAGE_REQUEST_USER_AGENT
@@ -358,7 +362,7 @@ class ImageCache:
             adapter = HTTPAdapter(max_retries=retry)
             session.mount("http://", adapter)
             session.mount("https://", adapter)
-            self._session_local.session = session
+            _session_local.session = session
         return session
 
     @staticmethod
