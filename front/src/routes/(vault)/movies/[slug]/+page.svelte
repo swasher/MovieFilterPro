@@ -40,7 +40,6 @@
   import SeasonStatus from "$lib/components/vault/SeasonStatus.svelte";
   import PersonCard from "$lib/components/vault/PersonCard.svelte";
   import CollectionPartCard from "$lib/components/vault/CollectionPartCard.svelte";
-  import MovieWontWatchOverlay from "$lib/components/vault/MovieWontWatchOverlay.svelte";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
   import { parseQbtApiError, type MovieTorrent, type QbtTorrent, type QbtTorrentDeleteResponse, type QbtTorrentsResponse } from "$lib/qbittorrent";
 
@@ -1118,9 +1117,6 @@
               no poster
             </div>
           {/if}
-          <MovieWontWatchOverlay
-            watch_status={userState.in_wont_watch ? "wont_watch" : null}
-          />
         </CardContent>
       </Card>
 
