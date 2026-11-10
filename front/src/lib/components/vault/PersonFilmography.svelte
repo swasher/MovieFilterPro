@@ -1,4 +1,10 @@
 <script lang="ts" module>
+  export type FilmographyCredit = {
+    role: string;
+    role_display: string;
+    character_names: string[];
+  };
+
   export type FilmographyItem = {
     id: number;
     title: string;
@@ -7,6 +13,7 @@
     year: number | null;
     poster_url: string | null;
     roles: string[];
+    credits: FilmographyCredit[];
     character_names: string[];
     watch_status: "watched" | "will_watch" | "wont_watch" | null;
     rating: number | null;
@@ -42,6 +49,20 @@
 
   let viewMode = $state<ViewMode>("grid");
   let groupMode = $state<GroupMode>("status");
+
+  // Актёру показываем сыгранную роль, съёмочной группе — должность.
+  function creditLine(item: FilmographyItem): string {
+    const characters = item.credits
+      .filter((credit) => credit.role === "actor")
+      .flatMap((credit) => credit.character_names);
+    if (characters.length) {
+      return characters.join(", ");
+    }
+    const crewRoles = item.credits
+      .filter((credit) => credit.role !== "actor")
+      .map((credit) => credit.role_display);
+    return crewRoles.join(", ");
+  }
 
   const statusGroupOrder = ["will_watch", "watched", "wont_watch", "none"] as const;
 
@@ -103,6 +124,7 @@
 {#snippet filmographyGrid(items: FilmographyItem[])}
   <div class="vd-filmography-grid">
     {#each items as item (`${item.id}`)}
+      {@const credit = creditLine(item)}
       <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
         <div class="vd-filmography-card">
           <div class="relative">
@@ -122,10 +144,12 @@
           </div>
 
           <div class="vd-filmography-copy">
-            <p class="vd-related-title">{item.title}</p>
-            {#if item.character_names.length}
-              <p class="vd-related-subtitle">{item.character_names.join(", ")}</p>
-            {/if}
+            <div class="space-y-1.5">
+              <p class="vd-related-title">{item.title}</p>
+              {#if credit}
+                <p class="vd-related-subtitle">{credit}</p>
+              {/if}
+            </div>
           </div>
         </div>
       </a>

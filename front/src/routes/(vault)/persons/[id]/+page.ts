@@ -9,6 +9,7 @@ type PersonMovie = {
   year: number | null;
   poster_url: string | null;
   roles: string[];
+  credits: { role: string; role_display: string; character_names: string[] }[];
   character_names: string[];
   watch_status: "watched" | "will_watch" | "wont_watch" | null;
   rating: number | null;

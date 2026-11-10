@@ -471,6 +471,12 @@ class SetSeasonStatusOut(Schema):
     user_state: UserSeasonStateOut
 
 
+class PersonMovieCreditOut(Schema):
+    role: str
+    role_display: str
+    character_names: list[str] = []
+
+
 class PersonMovieOut(Schema):
     id: int
     title: str
@@ -479,6 +485,7 @@ class PersonMovieOut(Schema):
     year: int | None = None
     poster_url: str | None = None
     roles: list[str]
+    credits: list[PersonMovieCreditOut] = []
     character_names: list[str]
     watch_status: str | None = None
     rating: int | None = None
@@ -1975,12 +1982,21 @@ def person_detail(request, person_id: int):
                 "year": movie.year,
                 "poster_url": movie.get_poster_url(POSTER_CARD_SIZE),
                 "roles": [],
+                "credits": [],
                 "character_names": [],
             }
             grouped[movie.id] = entry
         role_display = item.get_role_display()
         if role_display not in entry["roles"]:
             entry["roles"].append(role_display)
+        # Кредиты держим по ролям: у актёра роль — сыгранный персонаж,
+        # у съёмочной группы character_name пустой, а «должность» — role_display.
+        credit = next((c for c in entry["credits"] if c["role"] == item.role), None)
+        if credit is None:
+            credit = {"role": item.role, "role_display": role_display, "character_names": []}
+            entry["credits"].append(credit)
+        if item.character_name and item.character_name not in credit["character_names"]:
+            credit["character_names"].append(item.character_name)
         if item.character_name and item.character_name not in entry["character_names"]:
             entry["character_names"].append(item.character_name)
 
