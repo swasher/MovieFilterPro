@@ -11,6 +11,7 @@ from django.db.models import (
     OuterRef,
     Q,
     Subquery,
+    Sum,
     Value,
     When,
 )
@@ -1743,14 +1744,32 @@ def person_list(
         "-updated_at": ("-person_details_synced_at", "id"),
         "popularity": ("popularity", "id"),
         "-popularity": ("-popularity", "id"),
+        "lead_votes": ("lead_votes", "id"),
+        "-lead_votes": ("-lead_votes", "id"),
         "movies_count": ("movies_count", "id"),
         "-movies_count": ("-movies_count", "id"),
     }
     ordering = allowed_orders.get((order or "name").strip(), allowed_orders["name"])
-    # Даты/популярность без значения — всегда внизу, в обе стороны
+    # Даты без значения — всегда внизу, в обе стороны
     # (иначе DESC тянет NULL наверх).
     sort_field = ordering[0].lstrip("-")
     sort_desc = ordering[0].startswith("-")
+    if sort_field == "lead_votes":
+        # «Популярность» считаем по коллекции: сумма голосов TMDB фильмов,
+        # где персона входит в топ-5 титров. Person.popularity — глобальный
+        # тренд TMDB на момент синка и даёт случайных «неизвестных» персон.
+        qs = qs.annotate(
+            lead_votes=Coalesce(
+                Sum(
+                    "person_movies__movie__tmdb_vote_count",
+                    filter=Q(
+                        person_movies__role="actor",
+                        person_movies__order__lt=5,
+                    ),
+                ),
+                0,
+            )
+        )
     if sort_field == "name":
         # В русском режиме персоны без русского имени (латиница) не должны
         # открывать список: сначала имена на кириллице, затем остальные.
@@ -1832,7 +1851,7 @@ def _persons_by_ids(person_ids: list[int]):
 
 @api.get("/persons/home", response=PersonHomeOut)
 def person_home_data(request):
-    """Главный экран персон: избранные, звёзды, недавно обновлённые и самые «занятые»."""
+    """Главный экран персон: избранные, звёзды, недавно обновлённые, популярные по коллекции и самые «занятые»."""
     user = _resolve_api_user(request)
     groups: list[HomePersonGroupOut] = []
 
@@ -1883,16 +1902,24 @@ def person_home_data(request):
         )
     )
 
-    popular_ids = list(
-        Person.objects.filter(popularity__isnull=False)
-        .order_by("-popularity", "id")
-        .values_list("id", flat=True)[:HOME_PERSON_SECTION_SIZE]
-    )
+    # «Популярные» — по коллекции, а не по глобальному тренду TMDB:
+    # сумма голосов фильмов, где персона входит в топ-5 титров.
+    popular_ids = [
+        row["person_id"]
+        for row in MoviePerson.objects.filter(
+            role="actor",
+            order__lt=5,
+            movie__tmdb_vote_count__isnull=False,
+        )
+        .values("person_id")
+        .annotate(lead_votes=Sum("movie__tmdb_vote_count"))
+        .order_by("-lead_votes", "person_id")[:HOME_PERSON_SECTION_SIZE]
+    ]
     groups.append(
         HomePersonGroupOut(
             id="popular",
             title="Самые популярные",
-            see_all_href="/persons?order=-popularity",
+            see_all_href="/persons?order=-lead_votes",
             persons=_serialize_person_list(_persons_by_ids(popular_ids), user),
         )
     )

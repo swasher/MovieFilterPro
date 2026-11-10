@@ -30,6 +30,8 @@ const ALLOWED_ORDERS = new Set([
   "-updated_at",
   "popularity",
   "-popularity",
+  "lead_votes",
+  "-lead_votes",
   "movies_count",
   "-movies_count",
 ]);

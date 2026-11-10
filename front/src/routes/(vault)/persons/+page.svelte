@@ -66,7 +66,8 @@
     { field: "birth_date", label: "По году рождения" },
     { field: "updated_at", label: "По дате обновления" },
     { field: "movies_count", label: "По числу фильмов" },
-    { field: "popularity", label: "По популярности" },
+    { field: "lead_votes", label: "По популярности" },
+    { field: "popularity", label: "По тренду TMDB" },
   ]);
 
   // В EN-режиме основным показываем английское имя (с fallback на русское)
