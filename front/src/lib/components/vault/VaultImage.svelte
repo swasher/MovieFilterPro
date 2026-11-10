@@ -35,11 +35,22 @@
   let loaded = $state(false);
   let showSpinner = $state(false);
   let spinnerTimer: ReturnType<typeof setTimeout> | null = null;
+  let imgElement = $state<HTMLImageElement | null>(null);
+  // Реактивная зависимость от src сбрасывается при обновлении родительских
+  // пропсов даже если URL остался тем же (например, страница Vault получила
+  // новые объекты фильмов с тем же постером). Сравниваем именно значение:
+  // для того же URL загрузку заново не ждём и спиннер не показываем.
+  let lastSrc: string | null | undefined;
 
   $effect(() => {
+    const nextSrc = src ?? "";
+    if (nextSrc === lastSrc) {
+      return;
+    }
+    lastSrc = nextSrc;
+
     // Новый источник — снова ждём загрузку. Спиннер показываем с задержкой:
     // мгновенные (закешированные браузером) картинки не должны мигать.
-    src;
     loaded = false;
     showSpinner = false;
 
@@ -49,6 +60,10 @@
       }
     }, 150);
 
+    // Страховка от потерянного события load: картинка могла успеть
+    // загрузиться из кеша до того, как эффект сбросил состояние.
+    queueMicrotask(checkAlreadyLoaded);
+
     return () => {
       if (spinnerTimer) {
         clearTimeout(spinnerTimer);
@@ -56,6 +71,12 @@
       }
     };
   });
+
+  function checkAlreadyLoaded() {
+    if (imgElement?.complete && imgElement.naturalWidth > 0) {
+      loaded = true;
+    }
+  }
 
   function handleLoad() {
     loaded = true;
@@ -83,6 +104,7 @@
     />
   {:else}
     <img
+      bind:this={imgElement}
       src={src ?? ""}
       {alt}
       class={className}
