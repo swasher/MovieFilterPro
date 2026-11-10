@@ -175,3 +175,8 @@ get_details_one_movie:
 
 cloc:
 	cloc . --exclude-dir=.venv,migrations,.idea,.git,__pycache__,static,collectstatic,.svelte-kit,build,node_modules,components,media
+
+
+ngrok:
+	@ngrok config add-authtoken $(NGROK_AUTHTOKEN)
+	ngrok http 5173
