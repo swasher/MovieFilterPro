@@ -115,7 +115,7 @@
   }
 
   .vd-kicker {
-    @apply inline-flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/80;
+    @apply inline-flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground/80;
   }
 
   .vd-kicker-dot {
