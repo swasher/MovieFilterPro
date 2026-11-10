@@ -31,6 +31,7 @@
     Star,
     Trash,
     Trash2,
+    Wallet,
     X,
     XCircle
   } from "@lucide/svelte";
@@ -45,6 +46,15 @@
 
   let { data } = $props();
   const movie = $derived(data.movie);
+  const nativeOriginalTitle = $derived(
+    movie.original_title &&
+      movie.original_title !== movie.title &&
+      movie.original_title !== movie.title_en
+      ? movie.original_title.trim()
+      : null
+  );
+  const languageCode = $derived(movie.tmdb_original_language?.toUpperCase() ?? null);
+  const hasLanguageFact = $derived(Boolean(languageCode || nativeOriginalTitle));
   const systemLabels = $derived(data.systemLabels ?? {});
   const wb = $derived(movie.writeback);
 
@@ -1362,23 +1372,24 @@
     </div>
 
     <div class="space-y-5">
-      <Card class="vd-card px-6">
+      <Card class="vd-card vd-hero-card px-6">
+        <div class="vd-intro">
           <div class="vd-title-block">
-            <div class="flex flex-wrap items-center gap-2">
-              {#if isSeries}
-                <p class="vd-overline">{movie.movie_type === "miniseries" ? "MINISERIES" : "SERIES"}</p>
-              {:else}
-                <p class="vd-overline">Movie</p>
-              {/if}
-              {#if isSeries}
-                <span class="vd-service-badge vd-service-badge--status vd-service-badge--lg">{movie.status_display}</span>
-                {#if releasedSeasonsCount > 0}
-                  <span class="vd-service-badge vd-service-badge--info vd-service-badge--lg">{seasonsLabel}</span>
+            <div class="vd-kicker-row">
+              <div class="vd-kicker">
+                <span class="vd-kicker-accent"></span>
+                <span>{isSeries ? (movie.movie_type === "miniseries" ? "Miniseries" : "Series") : "Movie"}</span>
+                {#if yearLabel}
+                  <span class="vd-kicker-dot">·</span>
+                  <span class="vd-kicker-year">{yearLabel}</span>
                 {/if}
-              {/if}
-              {#if yearLabel}
-                <span class="vd-service-badge vd-service-badge--info vd-service-badge--lg">{yearLabel}</span>
-              {/if}
+                {#if isSeries}
+                  <span class="vd-status-pill vd-status-pill--primary">{movie.status_display}</span>
+                  {#if releasedSeasonsCount > 0}
+                    <span class="vd-status-pill vd-status-pill--secondary">{seasonsLabel}</span>
+                  {/if}
+                {/if}
+              </div>
               <span class="vd-service-badges ml-auto">
                 {#if movie.tmdb_id}
                   {@const tmdbType = movie.tmdb_media_type || (movie.movie_type === 'series' || movie.movie_type === 'miniseries' ? 'tv' : 'movie')}
@@ -1451,50 +1462,48 @@
                 {/if}
               </span>
             </div>
-            <CardTitle class="vd-title">{movie.title}</CardTitle>
-            {#if movie.title_en}
-              <CardDescription class="vd-subtitle">{movie.title_en}</CardDescription>
-            {/if}
-            {#if movie.original_title && movie.original_title !== movie.title && movie.original_title !== movie.title_en}
-              <p class="vd-title-native">{movie.original_title}</p>
-            {/if}
+
+            <div class="vd-heading">
+              <CardTitle class="vd-title">{movie.title}</CardTitle>
+              {#if movie.title_en}
+                <CardDescription class="vd-subtitle">{movie.title_en}</CardDescription>
+              {/if}
+            </div>
           </div>
 
           <div class="vd-facts-row">
             {#if movie.duration}
-              <span class="vd-fact-inline inline-flex items-center gap-1.5">
-                <Clock3 class="size-3.5" />
+              <span class="vd-fact-chip">
+                <Clock3 class="vd-fact-chip-icon" />
                 {movie.duration} min
               </span>
             {/if}
-            {#if movie.duration && movie.age_rating}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
             {#if movie.age_rating}
-              <span class="vd-fact-inline inline-flex items-center gap-1.5">
-                <Shield class="size-3.5" />
+              <span class="vd-fact-chip">
+                <Shield class="vd-fact-chip-icon" />
                 {movie.age_rating}
               </span>
             {/if}
-            {#if (movie.duration || movie.age_rating) && movie.tmdb_original_language}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
-            {#if movie.tmdb_original_language}
-              <span class="vd-fact-inline inline-flex items-center gap-1.5">
-                <Globe class="size-3.5" />
-                {movie.tmdb_original_language.toUpperCase()}
+            {#if hasLanguageFact}
+              <span class="vd-fact-chip vd-fact-chip--language">
+                <Globe class="vd-fact-chip-icon" />
+                {#if languageCode}
+                  <span class="vd-fact-chip-code">{languageCode}</span>
+                {/if}
+                {#if nativeOriginalTitle}
+                  {#if languageCode}<span class="vd-kicker-dot">·</span>{/if}
+                  <span class="vd-fact-chip-title">{nativeOriginalTitle}</span>
+                {/if}
               </span>
             {/if}
-            {#if movie.tmdb_original_language && movie.budget}
-              <Separator orientation="vertical" class="h-4" />
-            {/if}
             {#if movie.budget}
-              <span class="vd-fact-inline inline-flex items-center gap-1.5">
-                <Link2 class="size-3.5" />
+              <span class="vd-fact-chip" title="Бюджет">
+                <Wallet class="vd-fact-chip-icon" />
                 ${(movie.budget / 1_000_000).toFixed(1)}M
               </span>
             {/if}
-           </div>
+          </div>
+        </div>
 
           <div class="vd-facts-grid">
             {#if movie.tmdb_vote_average !== null || movie.omdb_imdb_rating !== null || movie.omdb_imdb_votes !== null || movie.omdb_rotten_tomatoes !== null || movie.omdb_metacritic !== null}
