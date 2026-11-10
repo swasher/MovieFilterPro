@@ -118,10 +118,6 @@
     @apply inline-flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/80;
   }
 
-  .vd-kicker-accent {
-    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-primary;
-  }
-
   .vd-kicker-dot {
     @apply text-muted-foreground/40;
   }
@@ -130,8 +126,16 @@
     @apply tabular-nums tracking-[0.16em];
   }
 
-  .vd-kicker .vd-status-pill {
-    @apply normal-case tracking-normal;
+  .vd-kicker-status {
+    @apply inline-flex items-center gap-1.5 text-[11px] font-medium normal-case tracking-normal text-cyan-600 dark:text-cyan-300;
+  }
+
+  .vd-kicker-status-dot {
+    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-current;
+  }
+
+  .vd-kicker-seasons {
+    @apply text-[11px] font-medium normal-case tracking-normal text-muted-foreground;
   }
 
   .vd-heading {
@@ -139,11 +143,23 @@
   }
 
   .vd-title {
-    @apply max-w-4xl text-3xl leading-[1.06] font-semibold tracking-[-0.03em] text-balance sm:text-4xl xl:text-5xl;
+    @apply text-3xl leading-[1.06] text-pretty sm:text-4xl xl:text-5xl;
+    font-family: "Merriweather", Georgia, serif;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+
+  .vd-title-en {
+    @apply max-w-3xl text-lg leading-snug text-muted-foreground/75 sm:text-xl;
+    font-family: "Forum", Georgia, serif;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .vd-subtitle {
-    @apply max-w-3xl text-base font-normal text-muted-foreground/80 sm:text-lg;
+    @apply max-w-3xl text-lg leading-snug font-normal text-muted-foreground/85 sm:text-xl;
+    letter-spacing: 0.01em;
   }
 
   .vd-overline {
@@ -155,27 +171,27 @@
   }
 
   .vd-service-badge {
-    @apply inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold leading-none no-underline transition-colors;
+    @apply inline-flex h-5 shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[10px] font-bold leading-none tracking-wide text-muted-foreground no-underline transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
 
   .vd-service-badge--tmdb {
-    @apply border-violet-500/20 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300;
+    @apply hover:border-violet-500/60 hover:text-violet-500 dark:hover:text-violet-300;
   }
 
   .vd-service-badge--imdb {
-    @apply border-amber-500/20 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300;
+    @apply hover:border-amber-500/60 hover:text-amber-600 dark:hover:text-amber-300;
   }
 
   .vd-service-badge--kinopoisk {
-    @apply border-blue-500/20 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-300;
+    @apply hover:border-blue-500/60 hover:text-blue-500 dark:hover:text-blue-300;
   }
 
   .vd-service-badge--tvdb {
-    @apply border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300;
+    @apply hover:border-emerald-500/60 hover:text-emerald-600 dark:hover:text-emerald-300;
   }
 
   .vd-service-badge--site {
-    @apply border-slate-500/20 bg-slate-500/10 text-slate-400 hover:bg-slate-500/20 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-300;
+    @apply hover:border-slate-500/60 hover:text-slate-600 dark:hover:text-slate-300;
   }
 
   .vd-service-badge--empty {
@@ -195,7 +211,7 @@
   }
 
   .vd-facts-row {
-    @apply flex flex-wrap items-center gap-2 text-sm text-foreground/90;
+    @apply flex flex-wrap items-center gap-2 text-sm text-muted-foreground;
   }
 
   .vd-facts-row--muted {
@@ -206,24 +222,28 @@
     @apply leading-none;
   }
 
-  .vd-fact-chip {
-    @apply inline-flex min-w-0 items-center gap-2 rounded-full border border-border/60 bg-muted/35 px-3 py-1.5 text-xs font-medium leading-none text-foreground/80;
+  .vd-meta-pill {
+    @apply inline-flex h-6 min-w-0 items-center gap-1.5 rounded border border-border px-2 text-[11px] font-semibold leading-none tracking-wide text-muted-foreground;
   }
 
-  .vd-fact-chip-icon {
-    @apply size-3.5 shrink-0 text-muted-foreground;
+  .vd-meta-pill-icon {
+    @apply size-3.5 shrink-0 opacity-60;
   }
 
-  .vd-fact-chip--language {
+  .vd-meta-pill--language {
     @apply max-w-full;
   }
 
-  .vd-fact-chip-code {
-    @apply text-[11px] font-bold tracking-[0.08em] text-primary;
+  .vd-meta-pill-code {
+    @apply text-[10px] font-bold tracking-[0.08em] text-foreground/80;
   }
 
-  .vd-fact-chip-title {
-    @apply min-w-0 break-words text-muted-foreground;
+  .vd-meta-pill-title {
+    @apply min-w-0 truncate text-muted-foreground;
+  }
+
+  .vd-meta-pill-dot {
+    @apply text-muted-foreground/40;
   }
 
   .vd-omdb-row {

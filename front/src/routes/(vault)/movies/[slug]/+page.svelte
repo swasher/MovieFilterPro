@@ -8,7 +8,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
-  import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
+  import { Card, CardContent, CardHeader, CardTitle } from "$lib/components/ui/card";
   import * as StarRating from "$lib/components/ui/star-rating";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -1373,16 +1373,18 @@
           <div class="vd-title-block">
             <div class="vd-kicker-row">
               <div class="vd-kicker">
-                <span class="vd-kicker-accent"></span>
                 <span>{isSeries ? (movie.movie_type === "miniseries" ? "Miniseries" : "Series") : "Movie"}</span>
                 {#if yearLabel}
                   <span class="vd-kicker-dot">·</span>
                   <span class="vd-kicker-year">{yearLabel}</span>
                 {/if}
                 {#if isSeries}
-                  <span class="vd-status-pill vd-status-pill--primary">{movie.status_display}</span>
+                  <span class="vd-kicker-status">
+                    <span class="vd-kicker-status-dot"></span>
+                    {movie.status_display}
+                  </span>
                   {#if releasedSeasonsCount > 0}
-                    <span class="vd-status-pill vd-status-pill--secondary">{seasonsLabel}</span>
+                    <span class="vd-kicker-seasons">{seasonsLabel}</span>
                   {/if}
                 {/if}
               </div>
@@ -1462,39 +1464,39 @@
             <div class="vd-heading">
               <CardTitle class="vd-title">{movie.title}</CardTitle>
               {#if movie.title_en}
-                <CardDescription class="vd-subtitle">{movie.title_en}</CardDescription>
+                <p class="vd-title-en">{movie.title_en}</p>
               {/if}
             </div>
           </div>
 
           <div class="vd-facts-row">
             {#if movie.duration}
-              <span class="vd-fact-chip">
-                <Clock3 class="vd-fact-chip-icon" />
+              <span class="vd-meta-pill">
+                <Clock3 class="vd-meta-pill-icon" />
                 {movie.duration} min
               </span>
             {/if}
             {#if movie.age_rating}
-              <span class="vd-fact-chip">
-                <Shield class="vd-fact-chip-icon" />
+              <span class="vd-meta-pill">
+                <Shield class="vd-meta-pill-icon" />
                 {movie.age_rating}
               </span>
             {/if}
             {#if hasLanguageFact}
-              <span class="vd-fact-chip vd-fact-chip--language">
-                <Globe class="vd-fact-chip-icon" />
+              <span class="vd-meta-pill vd-meta-pill--language" title={nativeOriginalTitle ?? undefined}>
+                <Globe class="vd-meta-pill-icon" />
                 {#if languageCode}
-                  <span class="vd-fact-chip-code">{languageCode}</span>
+                  <span class="vd-meta-pill-code">{languageCode}</span>
                 {/if}
                 {#if nativeOriginalTitle}
-                  {#if languageCode}<span class="vd-kicker-dot">·</span>{/if}
-                  <span class="vd-fact-chip-title">{nativeOriginalTitle}</span>
+                  {#if languageCode}<span class="vd-meta-pill-dot">·</span>{/if}
+                  <span class="vd-meta-pill-title">{nativeOriginalTitle}</span>
                 {/if}
               </span>
             {/if}
             {#if movie.budget}
-              <span class="vd-fact-chip" title="Бюджет">
-                <Wallet class="vd-fact-chip-icon" />
+              <span class="vd-meta-pill" title="Бюджет">
+                <Wallet class="vd-meta-pill-icon" />
                 ${(movie.budget / 1_000_000).toFixed(1)}M
               </span>
             {/if}
