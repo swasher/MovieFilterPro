@@ -27,8 +27,8 @@ class KinozalApiTests(TestCase):
             cookie_uid="uid123",
             cookie_pass="pass123",
             qbt_url="http://qbittorrent:8080",
-            qbt_username="admin",
-            qbt_password="qbt-pass",
+            qbt_api_key="qbt-test-key",
+            qbt_skip_cert_verify=True,
             torrents_backup_folder=r"C:\temp\backup_torrents",
         )
 

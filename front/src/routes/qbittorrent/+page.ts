@@ -24,6 +24,7 @@ export const load: PageLoad = async ({ fetch }) => {
           error.code === "qbt_auth_failed" ||
           error.code === "qbt_invalid_url" ||
           error.code === "qbt_unreachable" ||
+          error.code === "qbt_ssl_error" ||
           error.code === "qbt_forbidden" ||
           error.code === "qbt_unauthorized"
       };

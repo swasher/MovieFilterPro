@@ -116,8 +116,8 @@ class TorrentServiceTests(TestCase):
         self.preferences = UserPreferences.objects.create(
             user=self.user,
             qbt_url='http://qbittorrent:8080',
-            qbt_username='admin',
-            qbt_password='qbt-pass',
+            qbt_api_key='qbt-test-key',
+            qbt_skip_cert_verify=True,
             torrents_backup_folder=self.temp_dir.name,
             kinozal_domain='kinozal.tv',
         )

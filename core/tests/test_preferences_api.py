@@ -31,8 +31,8 @@ class PreferencesApiTests(TestCase):
             kinozal_domain="kinozal.tv",
             kinozal_mirrors=["kinozal.tv"],
             qbt_url="http://qbittorrent:8080",
-            qbt_username="admin",
-            qbt_password="qbt-pass",
+            qbt_api_key="qbt-key",
+            qbt_skip_cert_verify=True,
             torrents_backup_folder=r"C:\temp\backup_torrents",
             ignore_title="camrip",
             tmdb_api_key="tmdb-key",
@@ -54,8 +54,8 @@ class PreferencesApiTests(TestCase):
             self.assertEqual(payload["resolved_torrents_backup_folder"], str(Path(temp_dir)))
             self.assertTrue(payload["backup_folder_exists"])
             self.assertEqual(payload["qbt_url"], "http://qbittorrent:8080")
-            self.assertEqual(payload["qbt_username"], "admin")
-            self.assertEqual(payload["qbt_password"], "qbt-pass")
+            self.assertEqual(payload["qbt_api_key"], "qbt-key")
+            self.assertTrue(payload["qbt_skip_cert_verify"])
             self.assertEqual(payload["tmdb_v4_authenticated_access_token"], "tmdb-auth-token")
             self.assertEqual(payload["omdb_api_key"], "omdb-key")
             self.assertTrue(payload["vault_image_cache_enabled"])
@@ -93,8 +93,8 @@ class PreferencesApiTests(TestCase):
                 "kinozal_domain": "  kinozal.guru  ",
                 "kinozal_mirrors": ["kinozal.guru"],
                 "qbt_url": "  http://new-qbt:8080  ",
-                "qbt_username": "  new-admin  ",
-                "qbt_password": "new-qbt-pass",
+                "qbt_api_key": "  new-qbt-key  ",
+                "qbt_skip_cert_verify": False,
                 "torrents_backup_folder": "  C:\\downloads\\backup_torrents  ",
                 "ignore_title": "ts, camrip",
                 "tmdb_api_key": "  new-tmdb-key  ",
@@ -110,8 +110,8 @@ class PreferencesApiTests(TestCase):
         self.assertEqual(self.preferences.scan_from_page, 9)
         self.assertEqual(self.preferences.kinozal_domain, "kinozal.guru")
         self.assertEqual(self.preferences.qbt_url, "http://new-qbt:8080")
-        self.assertEqual(self.preferences.qbt_username, "new-admin")
-        self.assertEqual(self.preferences.qbt_password, "new-qbt-pass")
+        self.assertEqual(self.preferences.qbt_api_key, "new-qbt-key")
+        self.assertFalse(self.preferences.qbt_skip_cert_verify)
         self.assertEqual(self.preferences.torrents_backup_folder, r"C:\downloads\backup_torrents")
         self.assertEqual(self.preferences.plex_address, "http://new-plex:32400")
         self.assertEqual(self.preferences.tmdb_api_key, "new-tmdb-key")
@@ -139,8 +139,8 @@ class PreferencesApiTests(TestCase):
             "kinozal_domain": "kinozal.tv",
             "kinozal_mirrors": ["kinozal.tv"],
             "qbt_url": "http://qbittorrent:8080",
-            "qbt_username": "admin",
-            "qbt_password": "qbt-pass",
+            "qbt_api_key": "qbt-key",
+            "qbt_skip_cert_verify": True,
             "torrents_backup_folder": r"C:\temp\backup_torrents",
             "ignore_title": "camrip",
             "tmdb_api_key": "tmdb-key",

@@ -45,8 +45,8 @@
     kinozal_domain: string;
     kinozal_mirrors: string[];
     qbt_url: string;
-    qbt_username: string;
-    qbt_password: string;
+    qbt_api_key: string;
+    qbt_skip_cert_verify: boolean;
     torrents_backup_folder: string;
     ignore_title: string;
     tmdb_api_key: string;
@@ -102,8 +102,8 @@
       kinozal_domain: mirrors.includes(domain) ? domain : "",
       kinozal_mirrors: mirrors,
       qbt_url: preferences.qbt_url ?? "",
-      qbt_username: preferences.qbt_username ?? "",
-      qbt_password: preferences.qbt_password ?? "",
+      qbt_api_key: preferences.qbt_api_key ?? "",
+      qbt_skip_cert_verify: preferences.qbt_skip_cert_verify ?? false,
       torrents_backup_folder: preferences.torrents_backup_folder ?? "",
       ignore_title: preferences.ignore_title,
       tmdb_api_key: preferences.tmdb_api_key ?? "",
@@ -141,8 +141,8 @@
     kinozal_domain: asOptionalText(formState.kinozal_domain),
     kinozal_mirrors: formState.kinozal_mirrors,
     qbt_url: asOptionalText(formState.qbt_url),
-    qbt_username: asOptionalText(formState.qbt_username),
-    qbt_password: asOptionalSecret(formState.qbt_password),
+    qbt_api_key: asOptionalSecret(formState.qbt_api_key),
+    qbt_skip_cert_verify: formState.qbt_skip_cert_verify,
     torrents_backup_folder: asOptionalText(formState.torrents_backup_folder),
     ignore_title: formState.ignore_title.trim(),
     tmdb_api_key: asOptionalText(formState.tmdb_api_key),
@@ -382,8 +382,11 @@
     if (typeof detail === "string" && detail.trim()) return detail.trim();
     if (detail && typeof detail === "object") {
       const record = detail as { message?: unknown; hint?: unknown };
-      if (typeof record.message === "string" && record.message.trim()) return record.message.trim();
-      if (typeof record.hint === "string" && record.hint.trim()) return record.hint.trim();
+      const message = typeof record.message === "string" ? record.message.trim() : "";
+      const hint = typeof record.hint === "string" ? record.hint.trim() : "";
+      if (message && hint) return `${message} ${hint}`;
+      if (message) return message;
+      if (hint) return hint;
     }
     return fallback;
   };
@@ -399,8 +402,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: asOptionalText(form.qbt_url),
-          username: asOptionalText(form.qbt_username),
-          password: asOptionalSecret(form.qbt_password)
+          api_key: asOptionalSecret(form.qbt_api_key),
+          skip_cert_verify: form.qbt_skip_cert_verify
         })
       });
       const payload = await response.json();
@@ -594,17 +597,22 @@
                 <Input bind:value={form.qbt_url} placeholder="http://qbittorrent:8080" />
               </div>
               <div class="space-y-2">
-                <div class="text-sm font-medium">Логин</div>
-                <Input bind:value={form.qbt_username} placeholder="admin" autocomplete="username" />
-              </div>
-              <div class="space-y-2">
-                <div class="text-sm font-medium">Пароль</div>
-                <Input bind:value={form.qbt_password} type="password" autocomplete="current-password" />
+                <div class="text-sm font-medium">API-ключ</div>
+                <Input bind:value={form.qbt_api_key} type="password" placeholder="qbt_..." autocomplete="off" />
+                <div class="text-xs text-muted-foreground">qBittorrent 5.2+: Options → Web UI → API keys.</div>
               </div>
               <div class="space-y-2">
                 <div class="text-sm font-medium">Папка backup .torrent</div>
                 <Input bind:value={form.torrents_backup_folder} placeholder="/app/backup_torrents" />
               </div>
+            </div>
+
+            <div class="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <div class="space-y-1">
+                <Label for="qbt-skip-cert-verify" class="text-sm font-medium">Не проверять TLS-сертификат</Label>
+                <div class="text-xs text-muted-foreground">Включи, если WebUI работает по HTTPS с самоподписанным сертификатом.</div>
+              </div>
+              <Switch id="qbt-skip-cert-verify" bind:checked={form.qbt_skip_cert_verify} onCheckedChange={(v) => { form.qbt_skip_cert_verify = v; formRevision++; hasUnsavedChanges = true; return v; }} />
             </div>
 
             <div class="flex flex-wrap items-center gap-3">

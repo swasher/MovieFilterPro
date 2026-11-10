@@ -651,6 +651,7 @@
           "qbt_auth_failed",
           "qbt_invalid_url",
           "qbt_unreachable",
+          "qbt_ssl_error",
           "qbt_backup_folder_not_configured",
           "qbt_backup_folder_invalid"
         ].includes(error.code)

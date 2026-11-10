@@ -44,8 +44,8 @@ class PreferencesOut(Schema):
     kinozal_domain: str | None = None
     kinozal_mirrors: list[str] = []
     qbt_url: str | None = None
-    qbt_username: str | None = None
-    qbt_password: str | None = None
+    qbt_api_key: str | None = None
+    qbt_skip_cert_verify: bool = False
     torrents_backup_folder: str | None = None
     resolved_torrents_backup_folder: str | None = None
     backup_folder_exists: bool = False
@@ -85,8 +85,8 @@ class PreferencesUpdateIn(Schema):
     kinozal_domain: str | None = None
     kinozal_mirrors: list[str] = []
     qbt_url: str | None = None
-    qbt_username: str | None = None
-    qbt_password: str | None = None
+    qbt_api_key: str | None = None
+    qbt_skip_cert_verify: bool = False
     torrents_backup_folder: str | None = None
     ignore_title: str = ""
     tmdb_api_key: str | None = None
@@ -229,8 +229,8 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         kinozal_domain=preferences.kinozal_domain or None,
         kinozal_mirrors=list(preferences.kinozal_mirrors or []),
         qbt_url=preferences.qbt_url or None,
-        qbt_username=preferences.qbt_username or None,
-        qbt_password=preferences.qbt_password or None,
+        qbt_api_key=preferences.qbt_api_key or None,
+        qbt_skip_cert_verify=preferences.qbt_skip_cert_verify,
         torrents_backup_folder=preferences.torrents_backup_folder or None,
         resolved_torrents_backup_folder=resolved_backup_folder,
         backup_folder_exists=backup_folder_exists,
@@ -283,9 +283,8 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.kinozal_mirrors = mirrors
     preferences.kinozal_domain = active
     preferences.qbt_url = _normalized_optional_string(payload.qbt_url)
-    preferences.qbt_username = _normalized_optional_string(payload.qbt_username)
-    raw_qbt_password = payload.qbt_password
-    preferences.qbt_password = raw_qbt_password if raw_qbt_password and raw_qbt_password.strip() else None
+    preferences.qbt_api_key = _normalized_optional_string(payload.qbt_api_key)
+    preferences.qbt_skip_cert_verify = payload.qbt_skip_cert_verify
     preferences.torrents_backup_folder = _normalized_optional_string(payload.torrents_backup_folder)
     preferences.ignore_title = payload.ignore_title
     preferences.tmdb_api_key = _normalized_optional_string(payload.tmdb_api_key)
