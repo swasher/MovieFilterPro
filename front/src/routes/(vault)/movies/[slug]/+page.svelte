@@ -43,6 +43,30 @@
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
   import { parseQbtApiError, type MovieTorrent, type QbtTorrent, type QbtTorrentDeleteResponse, type QbtTorrentsResponse } from "$lib/qbittorrent";
 
+  const languageDisplayNames =
+    typeof Intl !== "undefined" && "DisplayNames" in Intl
+      ? new Intl.DisplayNames(["ru"], { type: "language" })
+      : null;
+
+  function getLanguageName(code: string | null): string | null {
+    const normalized = (code ?? "").trim().toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+
+    // TMDB иногда отдаёт нестандартный код cn вместо zh.
+    const isoCode = normalized === "cn" ? "zh" : normalized;
+    try {
+      const name = languageDisplayNames?.of(isoCode);
+      if (!name || name.toLowerCase() === isoCode) {
+        return null;
+      }
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    } catch {
+      return null;
+    }
+  }
+
   let { data } = $props();
   const movie = $derived(data.movie);
   const nativeOriginalTitle = $derived(
@@ -53,6 +77,10 @@
       : null
   );
   const languageCode = $derived(movie.tmdb_original_language?.toUpperCase() ?? null);
+  const languageName = $derived(getLanguageName(languageCode));
+  const languageTooltip = $derived(
+    [languageName ?? languageCode, nativeOriginalTitle].filter(Boolean).join(": ") || undefined
+  );
   const hasLanguageFact = $derived(Boolean(languageCode || nativeOriginalTitle));
   const systemLabels = $derived(data.systemLabels ?? {});
   const wb = $derived(movie.writeback);
@@ -1483,7 +1511,7 @@
               </span>
             {/if}
             {#if hasLanguageFact}
-              <span class="vd-meta-pill vd-meta-pill--language" title={nativeOriginalTitle ?? undefined}>
+              <span class="vd-meta-pill vd-meta-pill--language" title={languageTooltip}>
                 <Globe class="vd-meta-pill-icon" />
                 {#if languageCode}
                   <span class="vd-meta-pill-code">{languageCode}</span>
