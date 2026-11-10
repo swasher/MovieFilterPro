@@ -42,7 +42,11 @@ class MovieSearchService:
             return queryset
 
         # Базовое условие по названию — без стемминга, сохраняет точные формы / короткие слова / бренды
-        title_condition = Q(title__icontains=raw) | Q(original_title__icontains=raw)
+        title_condition = (
+            Q(title__icontains=raw)
+            | Q(original_title__icontains=raw)
+            | Q(title_en__icontains=raw)
+        )
 
         # Режим 1: только название
         if not search_plot:
@@ -66,6 +70,7 @@ class MovieSearchService:
         vector = (
             SearchVector("title", weight="A", config="russian")
             + SearchVector("original_title", weight="A", config="russian")
+            + SearchVector("title_en", weight="A", config="russian")
             + SearchVector("description", weight="B", config="russian")
         )
         # plain — разбивает на лексемы через &, применяет стемминг russian

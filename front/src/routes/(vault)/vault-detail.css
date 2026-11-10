@@ -105,6 +105,10 @@
     @apply text-base text-muted-foreground;
   }
 
+  .vd-title-native {
+    @apply text-xs leading-tight text-muted-foreground/75;
+  }
+
   .vd-overline {
     @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground;
   }

@@ -151,6 +151,38 @@ def _person_details():
 
 
 class TMDBMovieSyncServiceTests(TestCase):
+    @patch("vault.services.tmdb_rate_limiter.TmdbRateLimiter.wait")
+    @patch("vault.services.tmdb_movie_sync_service.get_english_title", return_value="Interstellar")
+    def test_resolve_title_en_fetches_english_for_english_original(self, get_english_title_mock, _wait_mock):
+        movie = Movie(tmdb_id=321)
+        details = SimpleNamespace(
+            title="Интерстеллар",
+            original_title="Interstellar",
+            original_language="en",
+        )
+
+        self.assertEqual(
+            TMDBMovieSyncService._resolve_title_en(movie, details, "movie"),
+            "Interstellar",
+        )
+        get_english_title_mock.assert_called_once_with(321, "movie")
+
+    @patch("vault.services.tmdb_rate_limiter.TmdbRateLimiter.wait")
+    @patch("vault.services.tmdb_movie_sync_service.get_english_title", return_value="Mongrel")
+    def test_resolve_title_en_fetches_english_for_non_english(self, get_english_title_mock, _wait_mock):
+        movie = Movie(tmdb_id=123)
+        details = SimpleNamespace(
+            title="Дворняга",
+            original_title="白衣蒼狗",
+            original_language="zh",
+        )
+
+        self.assertEqual(
+            TMDBMovieSyncService._resolve_title_en(movie, details, "movie"),
+            "Mongrel",
+        )
+        get_english_title_mock.assert_called_once_with(123, "movie")
+
     @patch("vault.services.tmdb_movie_sync_service.get_tmdb_client")
     def test_sync_updates_movie_genres_countries_people_and_photo(self, get_tmdb_client_mock):
         fake_tmdb = _FakeTMDBClient(

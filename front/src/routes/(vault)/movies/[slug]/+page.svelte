@@ -1452,8 +1452,11 @@
               </span>
             </div>
             <CardTitle class="vd-title">{movie.title}</CardTitle>
-            {#if movie.original_title}
-              <CardDescription class="vd-subtitle">{movie.original_title}</CardDescription>
+            {#if movie.title_en}
+              <CardDescription class="vd-subtitle">{movie.title_en}</CardDescription>
+            {/if}
+            {#if movie.original_title && movie.original_title !== movie.title && movie.original_title !== movie.title_en}
+              <p class="vd-title-native">{movie.original_title}</p>
             {/if}
           </div>
 

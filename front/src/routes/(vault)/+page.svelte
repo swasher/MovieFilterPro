@@ -25,6 +25,7 @@ type MovieCard = {
   id: number;
   title: string;
   original_title: string | null;
+  title_en: string | null;
   year: number | null;
   slug: string;
   poster_url: string | null;
@@ -67,6 +68,7 @@ type TmdbSearchResult = {
   let hoveredMovie = $state<{
     title: string;
     original_title: string | null;
+    title_en: string | null;
     year: number | null;
   } | null>(null);
   let tooltipX = $state(0);
@@ -350,7 +352,7 @@ type TmdbSearchResult = {
     tmdbSearchResults.find((item) => buildTmdbSelectionKey(item) === selectedTmdbKey) ?? null
   );
 
-  const onMovieEnter = (movie: { title: string; original_title: string | null; year: number | null }) => {
+  const onMovieEnter = (movie: { title: string; original_title: string | null; title_en: string | null; year: number | null }) => {
     hoveredMovie = movie;
   };
 
@@ -611,7 +613,7 @@ type TmdbSearchResult = {
   >
     <p class="line-clamp-2 text-sm font-semibold leading-tight">{hoveredMovie?.title}</p>
     <p class="text-muted-foreground mt-1 line-clamp-2 text-[12px] leading-snug">
-      {hoveredMovie?.original_title || "—"}
+      {hoveredMovie?.title_en || "—"}
     </p>
     <p class="text-muted-foreground mt-1 text-[11px] font-medium">
       {hoveredMovie?.year ?? "—"}
@@ -806,7 +808,7 @@ type TmdbSearchResult = {
               <tr>
                 <th class="w-14 px-2 py-2 font-medium">Poster</th>
                 <th class="px-3 py-2 font-medium">Title</th>
-                <th class="px-3 py-2 font-medium">Original title</th>
+                <th class="px-3 py-2 font-medium">English title</th>
                 <th class="w-20 px-3 py-2 font-medium">Year</th>
                 <th class="w-20 px-3 py-2 font-medium">Type</th>
                 <th class="w-24 px-3 py-2 font-medium">Torrent</th>
@@ -842,7 +844,7 @@ type TmdbSearchResult = {
                     </a>
                   </td>
                   <td class="text-muted-foreground px-3 py-2 align-middle">
-                    {movie.original_title || "—"}
+                    {movie.title_en || "—"}
                   </td>
                   <td class="px-3 py-2 align-middle">{movie.year ?? "—"}</td>
                   <td class="px-3 py-2 align-middle">

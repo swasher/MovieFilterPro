@@ -5,6 +5,7 @@ type PersonMovie = {
   id: number;
   title: string;
   original_title: string | null;
+  title_en: string | null;
   slug: string;
   year: number | null;
   poster_url: string | null;

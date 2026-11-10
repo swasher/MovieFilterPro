@@ -14,7 +14,7 @@ from moviefilter.services.favorite_actor_matcher import (
     DEFAULT_SCORE_CUTOFF,
     normalize_actor_name,
 )
-from tmdb_adapter.client_singleton import get_person_basic, get_tmdb_client
+from tmdb_adapter.client_singleton import get_english_title, get_person_basic, get_tmdb_client
 from web_logger import send_match_log
 from vault.models import Collection, Genre, Movie, MoviePerson, Episode, Person, PersonAlias, Season, UserMovie, UserSeason
 from vault.services.tmdb_movie_matching_service import (
@@ -315,6 +315,9 @@ class TMDBMovieSyncService:
 
         set_field("title", getattr(details, "title", None) or movie.title)
         set_field("original_title", getattr(details, "original_title", None) or "")
+        title_en = cls._resolve_title_en(movie, details, media_type="movie")
+        if title_en:
+            set_field("title_en", title_en)
         overview = (getattr(details, "overview", None) or "").strip()
         if overview:
             set_field("description", overview)
@@ -362,6 +365,9 @@ class TMDBMovieSyncService:
 
         set_field("title", getattr(details, "name", None) or movie.title)
         set_field("original_title", getattr(details, "original_name", None) or "")
+        title_en = cls._resolve_title_en(movie, details, media_type="tv")
+        if title_en:
+            set_field("title_en", title_en)
         overview = (getattr(details, "overview", None) or "").strip()
         if overview:
             set_field("description", overview)
@@ -407,6 +413,51 @@ class TMDBMovieSyncService:
         )
         if movie.movie_type in (Movie.MovieType.MOVIE, Movie.MovieType.SERIES) and movie.movie_type != target_type:
             set_field("movie_type", target_type)
+
+    @classmethod
+    def _resolve_title_en(cls, movie: Movie, details, media_type: MediaType) -> str | None:
+        """Английское (международное) название из TMDB en-US.
+
+        Всегда запрашиваем en-US детали, без эвристик по языку оригинала:
+        title_en должен быть реальным ответом TMDB, а не догадкой.
+        Ошибка запроса не должна ломать основной sync.
+        """
+        original_language = (
+            cls._extract_language_code(getattr(details, "original_language", None)) or ""
+        ).strip().lower()
+        original_title = cls._clean_text(
+            getattr(details, "original_title", None)
+            if media_type == "movie"
+            else getattr(details, "original_name", None),
+            255,
+        )
+        local_title = cls._clean_text(
+            getattr(details, "title", None)
+            if media_type == "movie"
+            else getattr(details, "name", None),
+            255,
+        )
+
+        # Если TMDB не отдал язык, сеть не дёргаем: в тестах/старых данных
+        # original_language может отсутствовать.
+        if not original_language or not movie.tmdb_id:
+            return original_title or local_title or None
+
+        try:
+            from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+            TmdbRateLimiter.wait()
+            value = get_english_title(movie.tmdb_id, media_type)
+        except Exception:
+            logger.debug(
+                "english title fetch failed for movie_id=%s tmdb_id=%s",
+                movie.pk,
+                movie.tmdb_id,
+                exc_info=True,
+            )
+            return None
+
+        return cls._clean_text(value, 255) or None
 
     @classmethod
     def _sync_collection(cls, movie: Movie, details, media_type: MediaType) -> bool:

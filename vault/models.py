@@ -177,6 +177,13 @@ class Movie(models.Model):
 
     title = models.CharField('Название', max_length=255)
     original_title = models.CharField('Оригинальное название', max_length=255, blank=True, null=True)
+    title_en = models.CharField(
+        'Английское название (TMDB en-US)',
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='Международное/английское название из TMDB (language=en-US).',
+    )
     slug = models.SlugField('URL', max_length=255, unique=True, blank=True)
     description = models.TextField('Описание', blank=True)
 
@@ -275,10 +282,15 @@ class Movie(models.Model):
                 OpClass('original_title', name='gin_trgm_ops'),
                 name='movie_orig_title_trgm_gin_idx',
             ),
-            # GIN FTS — ускоряет полнотекстовый поиск title + original_title (A) + description (B) со стеммингом russian
+            GinIndex(
+                OpClass('title_en', name='gin_trgm_ops'),
+                name='movie_title_en_trgm_gin_idx',
+            ),
+            # GIN FTS — ускоряет полнотекстовый поиск title + original_title + title_en (A) + description (B) со стеммингом russian
             GinIndex(
                 SearchVector('title', config='russian', weight='A')
                 + SearchVector('original_title', config='russian', weight='A')
+                + SearchVector('title_en', config='russian', weight='A')
                 + SearchVector('description', config='russian', weight='B'),
                 name='movie_fts_ru_gin_idx',
             ),

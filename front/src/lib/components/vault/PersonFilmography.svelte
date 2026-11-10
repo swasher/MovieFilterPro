@@ -9,6 +9,7 @@
     id: number;
     title: string;
     original_title: string | null;
+    title_en: string | null;
     slug: string;
     year: number | null;
     poster_url: string | null;
@@ -200,9 +201,9 @@
             <Table.Cell class="px-3 font-medium whitespace-normal">
               <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
                 <span class="block text-base leading-snug">{item.title}</span>
-                {#if item.original_title && item.original_title !== item.title}
+                {#if item.title_en}
                   <span class="text-muted-foreground block text-xs leading-tight font-normal">
-                    {item.original_title}
+                    {item.title_en}
                   </span>
                 {/if}
               </a>

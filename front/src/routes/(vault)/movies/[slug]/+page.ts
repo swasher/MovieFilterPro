@@ -6,6 +6,7 @@ type ApiMovieDetail = {
   id: number;
   title: string;
   original_title: string | null;
+  title_en: string | null;
   year: number | null;
   slug: string;
   description: string;

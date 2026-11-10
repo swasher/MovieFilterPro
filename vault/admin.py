@@ -94,7 +94,7 @@ class MoviePersonInline(admin.TabularInline):
 class MovieAdmin(admin.ModelAdmin):
     list_display = ['title', 'year', 'movie_type', 'status', 'imdb_rating', 'poster_preview', 'created_at']
     list_filter = ['status', 'movie_type', 'year', 'genres', 'countries']
-    search_fields = ['title', 'original_title', 'description']
+    search_fields = ['title', 'original_title', 'title_en', 'description']
     prepopulated_fields = {'slug': ('title',)}
     filter_horizontal = ['genres', 'countries']
     date_hierarchy = 'created_at'
@@ -102,7 +102,7 @@ class MovieAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Основная информация', {
-            'fields': ('title', 'original_title', 'slug', 'description', 'poster')
+            'fields': ('title', 'original_title', 'title_en', 'slug', 'description', 'poster')
         }),
         ('Классификация', {
             'fields': ('movie_type', 'status', 'genres', 'countries', 'age_rating')

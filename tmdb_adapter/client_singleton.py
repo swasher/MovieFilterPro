@@ -67,6 +67,40 @@ def get_tmdb_config() -> Optional[dict]:
     return _tmdb_config
 
 
+def get_english_title(
+    tmdb_id: int,
+    media_type: str = "movie",
+    tmdb: Optional[TMDbAPIs] = None,
+) -> Optional[str]:
+    """Возвращает en-US title/name для фильма или сериала.
+
+    Дёргает только базовые детали TMDB (без credits/images), чтобы backfill
+    английских названий был дешёвым. Сетевые/API-ошибки наружу не пробрасываются:
+    вызывающий код просто получает None и сохраняет прежнее значение.
+
+    `tmdb` позволяет переиспользовать один EN-клиент в цикле backfill.
+    """
+    if not tmdb_id:
+        return None
+
+    normalized_media_type = (media_type or "movie").strip().lower()
+    try:
+        tmdb = tmdb or get_tmdb_client_en()
+        if normalized_media_type == "tv":
+            data = tmdb._api.tv_get_details(int(tmdb_id), language="en-US")
+            value = data.get("name") if isinstance(data, dict) else None
+        else:
+            data = tmdb._api.movies_get_details(int(tmdb_id), language="en-US")
+            value = data.get("title") if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split())
+    return text or None
+
+
 @dataclass(frozen=True, slots=True)
 class PersonBasic:
     """Только базовые поля TMDB-персоны, без кредитов, фото и переводов."""
