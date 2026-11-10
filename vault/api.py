@@ -474,6 +474,7 @@ class SetSeasonStatusOut(Schema):
 class PersonMovieOut(Schema):
     id: int
     title: str
+    original_title: str | None = None
     slug: str
     year: int | None = None
     poster_url: str | None = None
@@ -1969,6 +1970,7 @@ def person_detail(request, person_id: int):
             entry = {
                 "id": movie.id,
                 "title": movie.title,
+                "original_title": movie.original_title or None,
                 "slug": movie.slug,
                 "year": movie.year,
                 "poster_url": movie.get_poster_url(POSTER_CARD_SIZE),

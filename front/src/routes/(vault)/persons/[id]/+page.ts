@@ -4,6 +4,7 @@ import type { PageLoad } from "./$types";
 type PersonMovie = {
   id: number;
   title: string;
+  original_title: string | null;
   slug: string;
   year: number | null;
   poster_url: string | null;

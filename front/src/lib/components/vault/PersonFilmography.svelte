@@ -2,6 +2,7 @@
   export type FilmographyItem = {
     id: number;
     title: string;
+    original_title: string | null;
     slug: string;
     year: number | null;
     poster_url: string | null;
@@ -122,9 +123,6 @@
 
           <div class="vd-filmography-copy">
             <p class="vd-related-title">{item.title}</p>
-            <div class="vd-facts-row vd-facts-row--muted">
-              <span class="vd-fact-inline">{item.roles.join(", ")}</span>
-            </div>
             {#if item.character_names.length}
               <p class="vd-related-subtitle">{item.character_names.join(", ")}</p>
             {/if}
@@ -137,14 +135,14 @@
 
 {#snippet filmographyTable(items: FilmographyItem[])}
   <div class="overflow-hidden rounded-xl border border-border/50">
-    <Table.Root>
+    <Table.Root class="table-fixed min-w-[640px]">
       <Table.Header class="bg-muted/60">
         <Table.Row class="hover:bg-transparent">
           <Table.Head class="w-14 px-2">Poster</Table.Head>
           <Table.Head class="px-3">Title</Table.Head>
           <Table.Head class="w-20 px-3">Year</Table.Head>
-          <Table.Head class="px-3">Roles</Table.Head>
-          <Table.Head class="px-3">Character</Table.Head>
+          <Table.Head class="w-40 px-3">Roles</Table.Head>
+          <Table.Head class="w-40 px-3">Character</Table.Head>
           <Table.Head class="w-24 px-3">Status</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -176,8 +174,13 @@
               </a>
             </Table.Cell>
             <Table.Cell class="px-3 font-medium whitespace-normal">
-              <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover">
-                {item.title}
+              <a href={`/movies/${item.slug}`} data-sveltekit-preload-data="hover" class="block">
+                <span class="block text-base leading-snug">{item.title}</span>
+                {#if item.original_title && item.original_title !== item.title}
+                  <span class="text-muted-foreground block text-xs leading-tight font-normal">
+                    {item.original_title}
+                  </span>
+                {/if}
               </a>
             </Table.Cell>
             <Table.Cell class="px-3">{item.year ?? "—"}</Table.Cell>
