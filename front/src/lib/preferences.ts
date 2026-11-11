@@ -19,8 +19,8 @@ export type PreferencesData = {
   kinozal_domain: string | null;
   kinozal_mirrors: string[];
   qbt_url: string | null;
-  qbt_username: string | null;
-  qbt_password: string | null;
+  qbt_api_key: string | null;
+  qbt_skip_cert_verify: boolean;
   torrents_backup_folder: string | null;
   resolved_torrents_backup_folder: string | null;
   backup_folder_exists: boolean;
@@ -59,8 +59,8 @@ export type PreferencesUpdatePayload = {
   kinozal_domain: string | null;
   kinozal_mirrors: string[];
   qbt_url: string | null;
-  qbt_username: string | null;
-  qbt_password: string | null;
+  qbt_api_key: string | null;
+  qbt_skip_cert_verify: boolean;
   torrents_backup_folder: string | null;
   ignore_title: string;
   tmdb_api_key: string | null;
@@ -121,8 +121,8 @@ export const emptyPreferences = (): PreferencesData => ({
   kinozal_domain: null,
   kinozal_mirrors: [],
   qbt_url: null,
-  qbt_username: null,
-  qbt_password: null,
+  qbt_api_key: null,
+  qbt_skip_cert_verify: false,
   torrents_backup_folder: null,
   resolved_torrents_backup_folder: null,
   backup_folder_exists: false,

@@ -16,6 +16,8 @@ QBT_URL_HINT = (
     '(например, http://qbittorrent:8080), а не localhost.'
 )
 
+QBT_SETUP_HINT = 'Укажи URL и API-ключ в Preferences → qBittorrent.'
+
 
 def normalize_qbt_url(raw_url: str | None) -> str:
     value = (raw_url or '').strip()
@@ -45,8 +47,8 @@ def build_client(
     *,
     preferences: UserPreferences | None = None,
     url: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
+    api_key: str | None = None,
+    skip_cert_verify: bool | None = None,
 ) -> qbittorrentapi.Client:
     preferences = preferences or UserPreferences.get()
 
@@ -55,19 +57,46 @@ def build_client(
         raise QbtError(
             'qbt_not_configured',
             'qBittorrent не настроен.',
-            hint='Заполни URL, логин и пароль в Preferences → qBittorrent.',
+            hint=QBT_SETUP_HINT,
             status_code=400,
         )
 
-    resolved_username = (username if username is not None else preferences.qbt_username or '').strip()
-    resolved_password = password if password is not None else (preferences.qbt_password or '')
+    resolved_api_key = (
+        api_key if api_key is not None else preferences.qbt_api_key or ''
+    ).strip()
+    if not resolved_api_key:
+        raise QbtError(
+            'qbt_not_configured',
+            'Не указан API-ключ qBittorrent.',
+            hint=(
+                'Создай ключ в qBittorrent 5.2+ (Options → Web UI → API keys) '
+                'и укажи его в Preferences → qBittorrent.'
+            ),
+            status_code=400,
+        )
+
+    resolved_skip_cert_verify = (
+        preferences.qbt_skip_cert_verify if skip_cert_verify is None else skip_cert_verify
+    )
 
     return qbittorrentapi.Client(
         host=resolved_url,
-        username=resolved_username or None,
-        password=resolved_password or None,
+        api_key=resolved_api_key,
         REQUESTS_ARGS={'timeout': QBT_TIMEOUT},
+        VERIFY_WEBUI_CERTIFICATE=not resolved_skip_cert_verify,
     )
+
+
+def _ssl_error_cause(exc: BaseException) -> requests.exceptions.SSLError | None:
+    """Ищет SSL-ошибку в цепочке причин исключения qbittorrentapi."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, requests.exceptions.SSLError):
+            return current
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def qbt_error_from_exception(exc: Exception, *, action: str) -> QbtError:
@@ -82,8 +111,8 @@ def qbt_error_from_exception(exc: Exception, *, action: str) -> QbtError:
     if isinstance(exc, qbittorrentapi.LoginFailed):
         return QbtError(
             'qbt_auth_failed',
-            'qBittorrent отклонил логин или пароль.',
-            hint='Проверь логин/пароль в Preferences → qBittorrent.',
+            'qBittorrent отклонил API-ключ.',
+            hint='Проверь API-ключ в Preferences → qBittorrent.',
             status_code=502,
         )
 
@@ -91,7 +120,7 @@ def qbt_error_from_exception(exc: Exception, *, action: str) -> QbtError:
         return QbtError(
             'qbt_forbidden',
             'qBittorrent запретил доступ (403).',
-            hint='Проверь бан IP, настройки аутентификации и Host header в qBittorrent.',
+            hint='Проверь API-ключ, бан IP и Host header в qBittorrent.',
             status_code=502,
         )
 
@@ -99,7 +128,7 @@ def qbt_error_from_exception(exc: Exception, *, action: str) -> QbtError:
         return QbtError(
             'qbt_unauthorized',
             'qBittorrent отклонил запрос (401).',
-            hint='Проверь Host header validation / Server domains в qBittorrent.',
+            hint='Проверь API-ключ, Host header validation и Server domains в qBittorrent.',
             status_code=502,
         )
 
@@ -126,6 +155,16 @@ def qbt_error_from_exception(exc: Exception, *, action: str) -> QbtError:
         )
 
     if isinstance(exc, qbittorrentapi.APIConnectionError):
+        if _ssl_error_cause(exc) is not None:
+            return QbtError(
+                'qbt_ssl_error',
+                'qBittorrent отвечает по HTTPS с самоподписанным сертификатом.',
+                hint=(
+                    'Включи «Не проверять TLS-сертификат» в Preferences → qBittorrent '
+                    'или выключи «Use HTTPS» в qBittorrent (Options → Web UI).'
+                ),
+                status_code=502,
+            )
         return QbtError(
             'qbt_unreachable',
             f'Не удалось связаться с qBittorrent ({action}).',

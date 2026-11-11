@@ -231,6 +231,20 @@ class UserPreferences(models.Model):
     )
     qbt_username = models.CharField('qBittorrent логин', max_length=200, blank=True, null=True)
     qbt_password = models.CharField('qBittorrent пароль', max_length=200, blank=True, null=True)
+    # DEPRECATED: логин/пароль больше не используются (убраны из Preferences).
+    # Оставлены в схеме, чтобы не делать разрушительную миграцию на production db.
+    qbt_api_key = models.CharField(
+        'qBittorrent API key',
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text='API-ключ Web API qBittorrent 5.2+ (передаётся в заголовке Authorization: Bearer).',
+    )
+    qbt_skip_cert_verify = models.BooleanField(
+        'Не проверять TLS-сертификат',
+        default=False,
+        help_text='Отключить проверку сертификата, если WebUI работает по HTTPS с самоподписанным сертификатом.',
+    )
     torrents_backup_folder = models.CharField(
         'Папка backup .torrent',
         max_length=500,

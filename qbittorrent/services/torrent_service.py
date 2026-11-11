@@ -11,7 +11,12 @@ from moviefilter.models import UserPreferences
 from vault.models import Movie
 
 from ..models import Torrent, TorrentEvent
-from .client import build_client, normalize_qbt_url, qbt_error_from_exception
+from .client import (
+    QBT_SETUP_HINT,
+    build_client,
+    normalize_qbt_url,
+    qbt_error_from_exception,
+)
 from .errors import QbtError
 from .metadata import TorrentMetadataError, parse_torrent_metadata
 from .paths import (
@@ -175,7 +180,7 @@ def validate_ready() -> None:
         raise QbtError(
             'qbt_not_configured',
             'qBittorrent не настроен.',
-            hint='Заполни URL, логин и пароль в Preferences → qBittorrent.',
+            hint=QBT_SETUP_HINT,
             status_code=400,
         )
 
@@ -233,8 +238,8 @@ def get_status() -> QbtStatus:
 def test_connection(
     *,
     url: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
+    api_key: str | None = None,
+    skip_cert_verify: bool | None = None,
 ) -> QbtStatus:
     preferences = _preferences()
     resolved_url = normalize_qbt_url(url if url is not None else preferences.qbt_url)
@@ -242,7 +247,7 @@ def test_connection(
         raise QbtError(
             'qbt_not_configured',
             'qBittorrent не настроен.',
-            hint='Заполни URL, логин и пароль в Preferences → qBittorrent.',
+            hint=QBT_SETUP_HINT,
             status_code=400,
         )
 
@@ -250,8 +255,8 @@ def test_connection(
         client = build_client(
             preferences=preferences,
             url=resolved_url,
-            username=username,
-            password=password,
+            api_key=api_key,
+            skip_cert_verify=skip_cert_verify,
         )
         return QbtStatus(
             configured=True,
@@ -355,7 +360,7 @@ def add_torrent_from_kinozal(
         raise QbtError(
             'qbt_not_configured',
             'qBittorrent не настроен.',
-            hint='Заполни URL, логин и пароль в Preferences → qBittorrent.',
+            hint=QBT_SETUP_HINT,
             status_code=400,
         )
 

@@ -26,8 +26,8 @@ class QbtStatusOut(Schema):
 
 class QbtTestIn(Schema):
     url: str | None = None
-    username: str | None = None
-    password: str | None = None
+    api_key: str | None = None
+    skip_cert_verify: bool | None = None
 
 
 class QbtLinkedMovieOut(Schema):
@@ -209,18 +209,18 @@ def test_connection(request, payload: QbtTestIn | None = None):
     _require_api_user(request)
 
     url = None
-    username = None
-    password = None
+    api_key = None
+    skip_cert_verify = None
     if payload is not None:
         url = (payload.url or '').strip() or None
-        username = payload.username
-        password = payload.password
+        api_key = payload.api_key
+        skip_cert_verify = payload.skip_cert_verify
 
     try:
         status_data = torrent_service.test_connection(
             url=url,
-            username=username,
-            password=password,
+            api_key=api_key,
+            skip_cert_verify=skip_cert_verify,
         )
     except QbtError as exc:
         _raise_qbt_error(exc)
