@@ -6,8 +6,9 @@
 
 - [x] Создан Django app `bestfilmsof` и подключён (`INSTALLED_APPS`, `/api/bestfilmsof/`, Huey tasks).
 - [x] Перенесён прототип из `bestfilmsof/example_code` в MVP-виде.
-- [x] Бэкенд: модели, сервисный слой, Ninja API, фоновые задачи, тесты (26 тестов).
+- [x] Бэкенд: модели, сервисный слой, Ninja API, фоновые задачи, тесты (28 тестов).
 - [x] Frontend: пункт меню **BestMovies** и страница `/best-movies` (Svelte 5 + shadcn-svelte).
+- [x] Фильтр по статусам Vault: все / непросмотренные / «буду смотреть» + счётчики.
 - [x] Проверено вживую: синк `2010/western`, RU-backfill из TMDB, чтение с приоритетом коллекции Vault.
 - [ ] Дизайн/вёрстка под общий стиль (следующий этап).
 - [ ] Интеграция со статусами Vault (просмотрено/избранное/рейтинг) (следующий этап).
@@ -68,6 +69,10 @@ API отдаёт готовый рейтинг по году/жанру. Вес�
    выбранный год+жанр. Догрузка чанками — будущий этап.
 8. **Связь с Vault — только логическая, по `tmdb_id`.** FK нет. Синк
    bestfilmsof пишет только свои таблицы.
+9. **Статусы Vault читаются, но не меняются.** `status_service` одним запросом
+   достаёт `UserMovie` для всех tmdb_id пары и считает три режима:
+   `all`, `unwatched` (всё, кроме `WATCHED`), `will_watch` (`PLAN`). Фильмы без
+   `UserMovie` считаются непросмотренными. Экшены записи статусов — следующий этап.
 
 ## Файлы
 
@@ -86,8 +91,9 @@ bestfilmsof/
     collection_service.py       # чтение метаданных из vault.Movie
     metadata_service.py         # RU backfill из TMDB
     read_service.py             # списки/сводки из своей БД
+    status_service.py           # статусы Vault + счётчики по режимам
     sync_service.py             # claim/run + дифф слепка + TTL
-  tests/                        # 26 тестов (scoring, sync, read, api)
+  tests/                        # 28 тестов (scoring, sync, read, api)
   example_code/                 # исходный прототип (эталон, не трогать)
 front/src/routes/best-movies/   # страница BestMovies
 front/src/lib/bestfilmsof.ts    # типы и подписи
@@ -113,9 +119,12 @@ movie_filter_pro/huey.py        # импорт bestfilmsof.tasks
 Все endpoint-ы требуют авторизации (Django session).
 
 - `GET /api/bestfilmsof/filters` — годы, жанры, пресеты, `year_min/year_max`.
-- `GET /api/bestfilmsof/movies?year=&genre=&page=&limit=&preset=&w_*=` —
+- `GET /api/bestfilmsof/movies?year=&genre=&page=&limit=&preset=&status_filter=&w_*=` —
   список; при необходимости ставит синк в очередь; `state`:
-  `idle | syncing | ready | error`.
+  `idle | queued | syncing | ready | error`.
+  `status_filter`: `all | unwatched | will_watch`; в ответе есть `counts`
+  (`all/unwatched/will_watch`) и поля статуса каждого фильма
+  (`watch_status`, `in_favorites`, `rating`).
 - `POST /api/bestfilmsof/movies/refresh?year=&genre=` — принудительный синк.
 - `GET /api/bestfilmsof/genres/{genre}` — сводка по годам.
 - `POST /api/bestfilmsof/genres/{genre}/refresh` — принудительный синк сводки.
@@ -184,7 +193,7 @@ Python-код сам), затем открыть страницу заново �
   `in_collection=true`.
 - RU-backfill: `requested=2, fetched=1, skipped_collection=1, errors=[]`
   (`Red Hill` → «Красный холм»).
-- `manage.py test bestfilmsof` — 26 OK.
+- `manage.py test bestfilmsof` — 28 OK.
 - `pnpm run check` — 0 ошибок (только старые warnings проекта).
 - `pnpm run build` — успешно.
 
@@ -196,6 +205,38 @@ Python-код сам), затем открыть страницу заново �
 - Без `genre` — весь год (можно).
 - Origin сериализует конкурентные запросы; страницы тянем последовательно.
 - В `metadata` нет бюджета, только `gross`.
+
+## UX backlog (идеи, не реализовано)
+
+Быстрые победы:
+- состояние фильтров/сортировки/страницы в URL query params (back/forward, ссылка на подборку);
+- запоминать последний выбранный год/жанр/веса в localStorage;
+- пагинация или infinite scroll вместо таблицы на 500 строк;
+- сохранять предыдущие строки при перезагрузке фильтра и показывать skeleton/overlay, а не пустой экран;
+- sticky header таблицы и компактный режим;
+- «Скрыть неинтересные» (`wont_watch`) отдельным переключателем.
+
+Фильтры:
+- только в коллекции / только не в коллекции;
+- диапазоны IMDb/RT/Meta/скора bestfilmsof и минимальное число голосов;
+- награды: Oscar win/nominee, Best Picture;
+- касса: есть/диапазон;
+- избранное Vault, мои списки, мой рейтинг;
+- провайдеры просмотра (в ответе bestfilmsof есть `watch`, сейчас не храним);
+- исключить фильмы без постера/описания.
+
+Сортировки:
+- IMDb, голоса, RT, Meta, касса, award_points, дата выхода, название;
+- мой рейтинг Vault и разница «мой рейтинг − скор сайта»;
+- «удиви меня» (random).
+
+Сценарии:
+- быстрые действия в строке: «Буду смотреть», «Просмотрено», избранное, оценка 1–10 (оптимистичный UI);
+- «Добавить в Vault» для фильмов не из коллекции (через существующий TMDB import flow);
+- hover-превью постера, клик по фильму → Vault detail;
+- объяснение скора: раскрыть компоненты IMDb/критики/награды/касса;
+- сохранённые пресеты подборок («вечер: 2010-е, триллер, IMDb 7+, не просмотрено»);
+- экспорт CSV и «поделиться ссылкой».
 
 ## Следующие шаги
 

@@ -43,7 +43,12 @@ export type BestfilmsofMovie = {
   other_awards: unknown[];
   in_collection: boolean;
   collection_slug: string | null;
+  watch_status: "watched" | "will_watch" | "wont_watch" | null;
+  in_favorites: boolean;
+  rating: number | null;
 };
+
+export type BestfilmsofStatusFilter = "all" | "unwatched" | "will_watch";
 
 export type BestfilmsofMovieList = {
   mode: "list";
@@ -55,6 +60,8 @@ export type BestfilmsofMovieList = {
   movies: BestfilmsofMovie[];
   weights: Record<string, number> | null;
   preset: string;
+  status_filter: BestfilmsofStatusFilter;
+  counts: Record<BestfilmsofStatusFilter, number>;
   state: "idle" | "queued" | "syncing" | "ready" | "error";
   synced_at: string | null;
   is_stale: boolean;

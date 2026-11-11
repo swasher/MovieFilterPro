@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from bestfilmsof.models import BestfilmsEntry, BestfilmsSync
+from vault.models import Movie, UserMovie
 
 
 class BestfilmsofApiTests(TestCase):
@@ -120,3 +121,60 @@ class BestfilmsofApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["state"], "queued")
         task.assert_called_once()
+
+    def _create_user_movie(self, tmdb_id: int, watch_status):
+        movie = Movie.objects.create(
+            title=f"Vault {tmdb_id}",
+            tmdb_id=tmdb_id,
+            tmdb_media_type=Movie.TMDBMediaType.MOVIE,
+        )
+        return UserMovie.objects.create(
+            user=self.user,
+            movie=movie,
+            watch_status=watch_status,
+        )
+
+    def test_status_filters_and_counts(self):
+        self.client.force_login(self.user)
+        self._entry(1, "tt1", 101, "Watched")
+        self._entry(2, "tt2", 102, "Planned")
+        self._entry(3, "tt3", 103, "Unknown")
+        self._mark_synced()
+        self._create_user_movie(101, UserMovie.WatchStatus.WATCHED)
+        self._create_user_movie(102, UserMovie.WatchStatus.PLAN)
+
+        response = self.client.get(
+            "/api/bestfilmsof/movies?year=2010&genre=drama&status_filter=all"
+        )
+        payload = response.json()
+        self.assertEqual(payload["counts"], {"all": 3, "unwatched": 2, "will_watch": 1})
+        self.assertEqual(len(payload["movies"]), 3)
+        states = {movie["tmdb_id"]: movie["watch_status"] for movie in payload["movies"]}
+        self.assertEqual(
+            states, {101: "watched", 102: "will_watch", 103: None}
+        )
+
+        response = self.client.get(
+            "/api/bestfilmsof/movies?year=2010&genre=drama&status_filter=unwatched"
+        )
+        payload = response.json()
+        self.assertEqual(
+            [movie["imdb_id"] for movie in payload["movies"]], ["tt2", "tt3"]
+        )
+        self.assertEqual(payload["counts"]["unwatched"], 2)
+
+        response = self.client.get(
+            "/api/bestfilmsof/movies?year=2010&genre=drama&status_filter=will_watch"
+        )
+        payload = response.json()
+        self.assertEqual(
+            [movie["imdb_id"] for movie in payload["movies"]], ["tt2"]
+        )
+        self.assertEqual(payload["movies"][0]["watch_status"], "will_watch")
+
+    def test_unknown_status_filter_is_rejected(self):
+        self.client.force_login(self.user)
+        response = self.client.get(
+            "/api/bestfilmsof/movies?year=2010&genre=drama&status_filter=bad"
+        )
+        self.assertEqual(response.status_code, 400)

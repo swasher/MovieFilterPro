@@ -20,7 +20,7 @@ from bestfilmsof.constants import (
 )
 from bestfilmsof.models import BestfilmsSync
 from bestfilmsof.scoring import parse_weights, resolve_preset
-from bestfilmsof.services import read_service
+from bestfilmsof.services import read_service, status_service
 from bestfilmsof.services.sync_service import SyncService, is_stale, sync_key
 
 api = NinjaAPI(title="BestFilmsof API", version="1.0", urls_namespace="bestfilmsof-api")
@@ -78,6 +78,9 @@ class MovieOut(Schema):
     other_awards: list[Any] = []
     in_collection: bool = False
     collection_slug: str | None = None
+    watch_status: str | None = None
+    in_favorites: bool = False
+    rating: int | None = None
 
 
 class MovieListOut(Schema):
@@ -90,6 +93,8 @@ class MovieListOut(Schema):
     movies: list[MovieOut]
     weights: dict[str, int] | None = None
     preset: str = "default"
+    status_filter: str = "all"
+    counts: dict[str, int] = {}
     state: str
     synced_at: str | None = None
     is_stale: bool = False
@@ -251,23 +256,38 @@ def get_movies(
     page: int = 1,
     limit: int = 500,
     preset: str = "default",
+    status_filter: str = "all",
     w_imdb: int = 25,
     w_critics: int = 25,
     w_awards: int = 25,
     w_boxoffice: int = 25,
 ):
-    _require_api_user(request)
+    user = _require_api_user(request)
     year = _validate_year(year)
     genre = _validate_genre(genre)
     page = max(1, page)
     limit = _bounded(limit, 1, 500)
+    if status_filter not in status_service.STATUS_FILTERS:
+        raise HttpError(400, f"unknown status filter: {status_filter!r}")
     preset, weights = _weights_payload(preset, w_imdb, w_critics, w_awards, w_boxoffice)
 
     row = _ensure_sync(year, genre)
+    candidate_ids = read_service.get_pair_tmdb_ids(year, genre)
+    status_map = status_service.get_status_map(user, candidate_ids)
+    allowed_ids = status_service.filter_tmdb_ids(
+        candidate_ids, status_map, status_filter
+    )
+    counts = status_service.count_by_status(candidate_ids, status_map)
+
     if weights:
-        data = read_service.get_movies_weighted(year, genre, weights, page, limit)
+        data = read_service.get_movies_weighted(
+            year, genre, weights, page, limit, allowed_tmdb_ids=allowed_ids
+        )
     else:
-        data = read_service.get_movies(year, genre, page, limit)
+        data = read_service.get_movies(
+            year, genre, page, limit, allowed_tmdb_ids=allowed_ids
+        )
+    status_service.apply_user_state(data["movies"], status_map)
 
     return MovieListOut(
         **data,
@@ -275,6 +295,8 @@ def get_movies(
         genre=genre,
         weights=weights,
         preset=preset,
+        status_filter=status_filter,
+        counts=counts,
         state=_state(row),
         synced_at=_iso(row.synced_at) if row else None,
         is_stale=is_stale(year, genre, row.synced_at if row else None),

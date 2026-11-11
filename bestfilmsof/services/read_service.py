@@ -68,6 +68,9 @@ def _movie_payload(
         "other_awards": entry.other_awards or [],
         "in_collection": False,
         "collection_slug": None,
+        "watch_status": None,
+        "in_favorites": False,
+        "rating": None,
     }
     data.update(_cache_payload(cache))
     if collection:
@@ -83,17 +86,29 @@ def _collection_map(entries) -> dict[int, dict]:
     return get_collection_metadata(entry.tmdb_id for entry in entries)
 
 
+def get_pair_tmdb_ids(year: int, genre: str | None = None) -> list[int]:
+    """Все tmdb_id выбранной пары (для фильтрации по статусам)."""
+    return list(
+        BestfilmsEntry.objects.filter(year=year, genre=norm_genre(genre)).values_list(
+            "tmdb_id", flat=True
+        )
+    )
+
+
 def get_movies(
     year: int,
     genre: str | None = None,
     page: int = 1,
     limit: int = 20,
+    allowed_tmdb_ids: set[int] | None = None,
 ) -> dict:
     """Произвольная пагинация уже сохранённого слепка."""
     page = max(1, page)
     limit = max(1, limit)
     norm = norm_genre(genre)
     queryset = BestfilmsEntry.objects.filter(year=year, genre=norm).order_by("position")
+    if allowed_tmdb_ids is not None:
+        queryset = queryset.filter(tmdb_id__in=allowed_tmdb_ids)
     total = queryset.count()
     entries = list(queryset[(page - 1) * limit : page * limit])
     caches = BestfilmsCache.objects.in_bulk(entry.tmdb_id for entry in entries)
@@ -111,13 +126,17 @@ def get_movies_weighted(
     weights: dict[str, int],
     page: int = 1,
     limit: int = 20,
+    allowed_tmdb_ids: set[int] | None = None,
 ) -> dict:
     """Тот же слепок, но position/score пересчитаны под свои веса."""
     page = max(1, page)
     limit = max(1, limit)
     norm = norm_genre(genre)
+    queryset = BestfilmsEntry.objects.filter(year=year, genre=norm)
+    if allowed_tmdb_ids is not None:
+        queryset = queryset.filter(tmdb_id__in=allowed_tmdb_ids)
     ranked = []
-    for entry in BestfilmsEntry.objects.filter(year=year, genre=norm):
+    for entry in queryset:
         score = rescore(entry, weights)
         if score is not None:
             ranked.append((score, entry))

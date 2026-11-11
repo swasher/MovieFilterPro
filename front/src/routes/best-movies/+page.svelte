@@ -11,6 +11,7 @@
   } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
+  import * as ButtonGroup from "$lib/components/ui/button-group";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -22,10 +23,18 @@
     WEIGHT_LABELS,
     type BestfilmsofGenreSummary,
     type BestfilmsofMovie,
-    type BestfilmsofMovieList
+    type BestfilmsofMovieList,
+    type BestfilmsofStatusFilter
   } from "$lib/bestfilmsof";
 
   type Mode = "list" | "summary";
+
+  type ListQuery = {
+    year: string;
+    genre: string;
+    preset: string;
+    customWeights: Record<string, string>;
+  };
 
   let { data } = $props();
 
@@ -49,6 +58,8 @@
   let lastMode = $state<Mode | null>(null);
   let lastYear = $state("none");
   let lastGenre = $state("all");
+  let lastQuery = $state<ListQuery | null>(null);
+  let statusFilter = $state<BestfilmsofStatusFilter>("all");
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -66,17 +77,18 @@
 
   onDestroy(clearPoll);
 
-  function buildListUrl(): string {
+  function buildListUrl(query: ListQuery, status: BestfilmsofStatusFilter): string {
     const params = new URLSearchParams({
-      year,
-      genre: genre === "all" ? "" : genre,
+      year: query.year,
+      genre: query.genre === "all" ? "" : query.genre,
       page: "1",
       limit: "500",
-      preset
+      preset: query.preset,
+      status_filter: status
     });
-    if (preset === "custom") {
+    if (query.preset === "custom") {
       for (const key of ["imdb", "critics", "awards", "boxoffice"]) {
-        params.set(`w_${key}`, customWeights[key] || "0");
+        params.set(`w_${key}`, query.customWeights[key] || "0");
       }
     }
     return `/api/bestfilmsof/movies?${params.toString()}`;
@@ -131,14 +143,27 @@
     lastMode = hasYear ? "list" : "summary";
     lastYear = year;
     lastGenre = genre;
+    lastQuery = { year, genre, preset, customWeights: { ...customWeights } };
     lastUrl = hasYear
-      ? buildListUrl()
+      ? buildListUrl(lastQuery, statusFilter)
       : `/api/bestfilmsof/genres/${encodeURIComponent(genre)}`;
 
     result = null;
     summary = null;
 
     const state = await fetchData(lastUrl, lastMode);
+    if (state === "syncing" || state === "queued") {
+      schedulePoll();
+    }
+  }
+
+  async function reloadListWithStatus(status: BestfilmsofStatusFilter) {
+    statusFilter = status;
+    if (lastMode !== "list" || !lastQuery) return;
+
+    clearPoll();
+    lastUrl = buildListUrl(lastQuery, status);
+    const state = await fetchData(lastUrl, "list");
     if (state === "syncing" || state === "queued") {
       schedulePoll();
     }
@@ -379,6 +404,45 @@
           </div>
         </CardHeader>
         <CardContent>
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <ButtonGroup.Root>
+              <Button
+                size="sm"
+                variant={statusFilter === "all" ? "secondary" : "outline"}
+                aria-pressed={statusFilter === "all"}
+                onclick={() => reloadListWithStatus("all")}
+                disabled={loading}
+              >
+                Все фильмы
+                <span class="text-muted-foreground ml-1 text-xs">{result.counts.all}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant={statusFilter === "unwatched" ? "secondary" : "outline"}
+                aria-pressed={statusFilter === "unwatched"}
+                onclick={() => reloadListWithStatus("unwatched")}
+                disabled={loading}
+              >
+                Непросмотренные
+                <span class="text-muted-foreground ml-1 text-xs">{result.counts.unwatched}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant={statusFilter === "will_watch" ? "secondary" : "outline"}
+                aria-pressed={statusFilter === "will_watch"}
+                title="Непросмотренные фильмы со статусом «Буду смотреть»"
+                onclick={() => reloadListWithStatus("will_watch")}
+                disabled={loading}
+              >
+                Буду смотреть
+                <span class="text-muted-foreground ml-1 text-xs">{result.counts.will_watch}</span>
+              </Button>
+            </ButtonGroup.Root>
+            <span class="text-muted-foreground text-xs">
+              Показано: {result.total} из {result.counts.all}
+            </span>
+          </div>
+
           {#if (result.state === "syncing" || result.state === "queued") && result.total === 0}
             <div class="text-muted-foreground flex items-center gap-3 py-10 text-sm">
               <Loader2 class="h-5 w-5 animate-spin" />
@@ -396,7 +460,11 @@
             </div>
           {:else if result.movies.length === 0}
             <p class="text-muted-foreground py-8 text-sm">
-              Для этой пары год + жанр на bestfilmsof.com нет фильмов.
+              {#if result.counts.all > 0 && statusFilter !== "all"}
+                Под выбранный фильтр статусов ничего не попало. В списке всего {result.counts.all} фильмов.
+              {:else}
+                Для этой пары год + жанр на bestfilmsof.com нет фильмов.
+              {/if}
             </p>
           {:else}
             <div class="overflow-x-auto rounded-lg border">
@@ -432,6 +500,23 @@
                         <div class="font-medium">{movieTitle(movie)}</div>
                         {#if movie.title_ru && movie.title !== movie.title_ru}
                           <div class="text-muted-foreground text-xs">{movie.title}</div>
+                        {/if}
+                        {#if movie.watch_status || movie.in_favorites || movie.rating != null}
+                          <div class="mt-1 flex flex-wrap items-center gap-1">
+                            {#if movie.watch_status === "watched"}
+                              <Badge variant="secondary">Просмотрено</Badge>
+                            {:else if movie.watch_status === "will_watch"}
+                              <Badge variant="outline">Буду смотреть</Badge>
+                            {:else if movie.watch_status === "wont_watch"}
+                              <Badge variant="outline">Не интересует</Badge>
+                            {/if}
+                            {#if movie.in_favorites}
+                              <Badge variant="outline">★ Избранное</Badge>
+                            {/if}
+                            {#if movie.rating != null}
+                              <Badge variant="outline">Оценка {movie.rating}</Badge>
+                            {/if}
+                          </div>
                         {/if}
                         {#if movie.overview_ru || movie.overview}
                           <p class="text-muted-foreground mt-1 line-clamp-2 max-w-xl text-xs">
