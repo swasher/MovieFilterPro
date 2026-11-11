@@ -101,7 +101,6 @@
   let sortKey = $state<SortKey>("default");
   let sortDir = $state<SortDir>("desc");
   let pageNum = $state(1);
-  let tableScrollRef = $state<HTMLDivElement | null>(null);
   let sentinelRef = $state<HTMLDivElement | null>(null);
   let loadingGuard = false;
 
@@ -232,7 +231,7 @@
   }
 
   function scrollTableTop() {
-    tableScrollRef?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   function showMore() {
@@ -251,7 +250,6 @@
 
   $effect(() => {
     const sentinel = sentinelRef;
-    const root = tableScrollRef;
     if (!sentinel) return;
 
     const observer = new IntersectionObserver(
@@ -261,7 +259,7 @@
           showMore();
         }
       },
-      { root, rootMargin: "200px", threshold: 0.1 }
+      { rootMargin: "200px", threshold: 0.1 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -357,7 +355,6 @@
     }
 
     const state = await fetchData(lastUrl, lastMode);
-    scrollTableTop();
     loadingGuard = false;
     if (state === "syncing" || state === "queued") {
       schedulePoll();
@@ -453,6 +450,7 @@
     pageNum = 1;
     commitUrl();
     await loadFromState();
+    scrollTableTop();
   }
 
   function restoreLastQueryState() {
@@ -471,6 +469,7 @@
     if (lastMode !== "list" || !lastQuery) return;
     commitUrl();
     await loadFromState();
+    scrollTableTop();
   }
 
   function changeSort(next: SortKey) {
@@ -831,18 +830,18 @@
               {/if}
             </p>
           {:else}
-            <div bind:this={tableScrollRef} class="max-h-[70vh] overflow-auto rounded-lg border">
-              <table class="w-full caption-bottom text-sm">
-                <Table.Header class="[&_th]:bg-card [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
+            <div class="rounded-lg border">
+              <table class="w-full table-fixed caption-bottom text-sm">
+                <Table.Header class="bg-card sticky top-14 z-10 border-b backdrop-blur">
                   <Table.Row>
-                    <Table.Head class="w-12" title="Позиция в рейтинге bestfilmsof"># сайта</Table.Head>
+                    <Table.Head class="w-16" title="Позиция в рейтинге bestfilmsof"># сайта</Table.Head>
                     <Table.Head class="w-16">Постер</Table.Head>
                     <Table.Head>Фильм</Table.Head>
                     <Table.Head class="w-20 text-right">Скор</Table.Head>
-                    <Table.Head class="w-24 text-right">IMDb</Table.Head>
-                    <Table.Head class="w-24 text-right">RT / Meta</Table.Head>
-                    <Table.Head class="w-28 text-right">Награды</Table.Head>
-                    <Table.Head class="w-20" />
+                    <Table.Head class="hidden w-24 text-right sm:table-cell">IMDb</Table.Head>
+                    <Table.Head class="hidden w-24 text-right lg:table-cell">RT / Meta</Table.Head>
+                    <Table.Head class="hidden w-28 text-right xl:table-cell">Награды</Table.Head>
+                    <Table.Head class="hidden w-20 md:table-cell" />
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
@@ -891,24 +890,24 @@
                       <Table.Cell class="text-right font-semibold">
                         {movie.score == null ? "—" : movie.score.toFixed(2)}
                       </Table.Cell>
-                      <Table.Cell class="text-right">
+                      <Table.Cell class="hidden text-right sm:table-cell">
                         {movie.imdb_rating == null ? "—" : movie.imdb_rating.toFixed(1)}
                         {#if movie.imdb_votes}
                           <div class="text-muted-foreground text-xs">{number(movie.imdb_votes)}</div>
                         {/if}
                       </Table.Cell>
-                      <Table.Cell class="text-right">
+                      <Table.Cell class="hidden text-right lg:table-cell">
                         {movie.tomato_meter == null ? "—" : movie.tomato_meter}
                         /
                         {movie.metascore == null ? "—" : movie.metascore}
                       </Table.Cell>
-                      <Table.Cell class="text-right text-xs">
+                      <Table.Cell class="hidden text-right text-xs xl:table-cell">
                         {movie.oscar_wins}W / {movie.oscar_nominations}N
                         {#if movie.best_picture}
                           <div class="text-amber-600 dark:text-amber-400">Best Picture</div>
                         {/if}
                       </Table.Cell>
-                      <Table.Cell>
+                      <Table.Cell class="hidden md:table-cell">
                         {#if movie.in_collection && movie.collection_slug}
                           <a href={`/movies/${movie.collection_slug}`}>
                             <Badge variant="secondary" class="gap-1">
