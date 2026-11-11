@@ -21,6 +21,7 @@
     ExternalLink,
     Globe,
     Heart,
+    Layers,
     Link,
     Link2,
     Link2Off,
@@ -128,6 +129,24 @@
     movie.seasons.filter((s) => s.season_number > 0 && s.episodes_count > 0).length
   );
   const seasonsLabel = $derived(pluralizeSeasons(releasedSeasonsCount));
+
+  // Тон «капсулы» статуса сериала: пауза/активен — янтарный, финал — нейтральный, отмена — красный, в производстве — синий
+  const seriesStatusTone = $derived.by(() => {
+    switch (movie.status) {
+      case "cancelled":
+        return "danger";
+      case "announced":
+      case "production":
+      case "post_production":
+        return "upcoming";
+      case "completed":
+        return "finished";
+      case "hiatus":
+      case "released":
+      default:
+        return "paused";
+    }
+  });
 
   // Невышедшие сезоны (is_unreleased) показываем в конце сетки
   const sortedSeasons = $derived(
@@ -1403,16 +1422,18 @@
               <div class="vd-kicker">
                 <span>{isSeries ? (movie.movie_type === "miniseries" ? "Miniseries" : "Series") : "Movie"}</span>
                 {#if yearLabel}
-                  <span class="vd-kicker-dot">·</span>
-                  <span class="vd-kicker-year">{yearLabel}</span>
+                  <span class="vd-series-badge vd-series-badge--year">{yearLabel}</span>
                 {/if}
                 {#if isSeries}
-                  <span class="vd-kicker-status">
-                    <span class="vd-kicker-status-dot"></span>
+                  <span class="vd-series-badge">
+                    <span class={`vd-series-badge-dot vd-series-dot--${seriesStatusTone}`}></span>
                     {movie.status_display}
                   </span>
                   {#if releasedSeasonsCount > 0}
-                    <span class="vd-kicker-seasons">{seasonsLabel}</span>
+                    <span class="vd-series-badge vd-series-badge--seasons">
+                      <Layers class="vd-series-badge-icon" />
+                      {seasonsLabel}
+                    </span>
                   {/if}
                 {/if}
               </div>
@@ -1470,7 +1491,7 @@
                     class="vd-service-badge vd-service-badge--site"
                     title="Официальный сайт"
                   >
-                    <Globe class="size-3" />
+                    <Globe class="size-3.5" />
                     Site
                   </a>
                 {/if}
@@ -1482,7 +1503,7 @@
                     class="vd-service-badge vd-service-badge--site"
                     title="Trailer"
                   >
-                    <Link2 class="size-3" />
+                    <Link2 class="size-3.5" />
                     Trailer
                   </a>
                 {/if}

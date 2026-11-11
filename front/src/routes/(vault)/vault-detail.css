@@ -118,24 +118,41 @@
     @apply inline-flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground/80;
   }
 
-  .vd-kicker-dot {
-    @apply text-muted-foreground/40;
+  .vd-series-badge {
+    @apply inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-bold leading-none tracking-wide text-muted-foreground uppercase;
   }
 
-  .vd-kicker-year {
-    @apply tabular-nums tracking-[0.16em];
+  .vd-series-badge--year {
+    @apply font-medium tracking-normal normal-case tabular-nums;
   }
 
-  .vd-kicker-status {
-    @apply inline-flex items-center gap-1.5 text-[11px] font-medium normal-case tracking-normal text-cyan-600 dark:text-cyan-300;
+  .vd-series-badge--seasons {
+    @apply font-medium tracking-normal normal-case;
   }
 
-  .vd-kicker-status-dot {
-    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-current;
+  .vd-series-badge-dot {
+    @apply size-2 shrink-0 rounded-full bg-current;
+    box-shadow: 0 0 0 2px color-mix(in oklab, currentColor 22%, transparent);
   }
 
-  .vd-kicker-seasons {
-    @apply text-[11px] font-medium normal-case tracking-normal text-muted-foreground;
+  .vd-series-dot--paused {
+    @apply text-amber-500;
+  }
+
+  .vd-series-dot--finished {
+    @apply text-muted-foreground/50;
+  }
+
+  .vd-series-dot--upcoming {
+    @apply text-sky-500;
+  }
+
+  .vd-series-dot--danger {
+    @apply text-rose-500;
+  }
+
+  .vd-series-badge-icon {
+    @apply size-3.5 opacity-70;
   }
 
   .vd-heading {
@@ -167,11 +184,11 @@
   }
 
   .vd-service-badges {
-    @apply inline-flex items-center gap-1.5;
+    @apply inline-flex items-center gap-2;
   }
 
   .vd-service-badge {
-    @apply inline-flex h-5 shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[10px] font-bold leading-none tracking-wide text-muted-foreground no-underline transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-bold leading-none tracking-wide text-muted-foreground no-underline transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
 
   .vd-service-badge--tmdb {

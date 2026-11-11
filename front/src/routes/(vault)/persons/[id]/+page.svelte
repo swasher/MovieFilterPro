@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import "../../vault-detail.css";
   import { Button } from "$lib/components/ui/button";
-  import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
+  import { Card, CardContent, CardHeader, CardTitle } from "$lib/components/ui/card";
   import * as Avatar from "$lib/components/ui/avatar";
   import * as ImageZoom from "$lib/components/ui/image-zoom";
   import { ArrowLeft, Heart, Star } from "@lucide/svelte";
@@ -181,10 +181,50 @@
       <Card class="vd-card">
         <CardHeader class="vd-hero">
           <div class="vd-title-block">
-              <p class="vd-overline">Person</p>
+              <div class="vd-kicker-row">
+                <p class="vd-overline">Person</p>
+                <span class="vd-service-badges ml-auto">
+                  {#if hasTmdbLink}
+                    <a
+                      href="https://www.themoviedb.org/person/{person.tmdb_id}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="vd-service-badge vd-service-badge--tmdb"
+                      title="Open on TMDB"
+                    >
+                      TMDB
+                    </a>
+                  {:else}
+                    <span
+                      class="vd-service-badge vd-service-badge--empty"
+                      title="TMDB ID отсутствует или имеет синтетический формат"
+                    >
+                      empty tmdb id
+                    </span>
+                  {/if}
+                  {#if hasImdbLink}
+                    <a
+                      href="https://www.imdb.com/name/{person.imdb_id}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="vd-service-badge vd-service-badge--imdb"
+                      title="Open on IMDb"
+                    >
+                      IMDb
+                    </a>
+                  {:else}
+                    <span
+                      class="vd-service-badge vd-service-badge--empty"
+                      title="Реальный IMDb ID отсутствует или имеет синтетический формат"
+                    >
+                      empty imdb id
+                    </span>
+                  {/if}
+                </span>
+              </div>
               <CardTitle class="vd-title">{person.name}</CardTitle>
               {#if person.original_name && person.original_name !== person.name}
-                <CardDescription class="vd-subtitle">{person.original_name}</CardDescription>
+                <p class="vd-title-en">{person.original_name}</p>
               {/if}
             </div>
 
@@ -192,47 +232,6 @@
             <span class="vd-fact-inline">{person.movies_count} films</span>
             <span class="vd-fact-inline">{person.roles_count} roles</span>
             <span class="vd-fact-inline">{person.career_years} career years</span>
-          </div>
-
-          <div class="vd-facts-row">
-            <span class="vd-service-badges">
-              {#if hasTmdbLink}
-                <a
-                  href="https://www.themoviedb.org/person/{person.tmdb_id}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="vd-service-badge vd-service-badge--tmdb"
-                  title="Open on TMDB"
-                >
-                  TMDB
-                </a>
-              {:else}
-                <span
-                  class="vd-service-badge vd-service-badge--empty"
-                  title="TMDB ID отсутствует или имеет синтетический формат"
-                >
-                  empty tmdb id
-                </span>
-              {/if}
-              {#if hasImdbLink}
-                <a
-                  href="https://www.imdb.com/name/{person.imdb_id}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="vd-service-badge vd-service-badge--imdb"
-                  title="Open on IMDb"
-                >
-                  IMDb
-                </a>
-              {:else}
-                <span
-                  class="vd-service-badge vd-service-badge--empty"
-                  title="Реальный IMDb ID отсутствует или имеет синтетический формат"
-                >
-                  empty imdb id
-                </span>
-              {/if}
-            </span>
           </div>
 
           <div class="vd-facts-grid">
