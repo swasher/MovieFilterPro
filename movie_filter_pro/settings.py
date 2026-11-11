@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'plex',
     'kinorium',
     'vault',
+    'bestfilmsof',
     'qbittorrent',
     'kinozal_scan',
     'web_logger',
@@ -359,6 +360,11 @@ LOGGING = {
         'vault.tmdb_sync': {
             'handlers': ['debug_log', 'console'],
             'level': 'DEBUG',
+            'propagate': False,
+        },
+        'bestfilmsof': {
+            'handlers': ['debug_log', 'console'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

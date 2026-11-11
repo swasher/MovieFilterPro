@@ -35,3 +35,4 @@ HUEY = SqliteHuey(filename=str(huey_db_path))
 # Ensure tasks are imported when the consumer loads this module.
 import vault.tasks  # noqa: E402,F401
 import kinozal_scan.tasks  # noqa: E402,F401
+import bestfilmsof.tasks  # noqa: E402,F401

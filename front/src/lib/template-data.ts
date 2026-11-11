@@ -13,6 +13,7 @@ export type SidebarItem = {
 
 export const headerLinks: HeaderLink[] = [
   { label: "Vault", href: "/" },
+  { label: "BestMovies", href: "/best-movies" },
   { label: "Kinozal", href: "/kinozal" },
   { label: "qBittorrent", href: "/qbittorrent" },
   { label: "Plex", href: "/plex" },
