@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { onDestroy, untrack } from "svelte";
-  import { page as pageState } from "$app/state";
-  import { pushState, replaceState } from "$app/navigation";
+  import { onDestroy, onMount } from "svelte";
+  import { afterNavigate, goto, replaceState } from "$app/navigation";
   import { toast } from "svelte-sonner";
   import {
     AlertCircle,
@@ -102,7 +101,6 @@
   let sortKey = $state<SortKey>("default");
   let sortDir = $state<SortDir>("desc");
   let pageNum = $state(1);
-  let appliedPath = "";
   let tableScrollRef = $state<HTMLDivElement | null>(null);
   let sentinelRef = $state<HTMLDivElement | null>(null);
   let loadingGuard = false;
@@ -181,7 +179,8 @@
   onDestroy(clearPoll);
 
   function currentPath(): string {
-    return `${pageState.url.pathname}${pageState.url.search}`;
+    if (typeof window === "undefined") return "";
+    return `${window.location.pathname}${window.location.search}`;
   }
 
   function isValidPreset(value: string): boolean {
@@ -217,16 +216,19 @@
   function commitUrl() {
     const path = buildPath();
     if (path === currentPath()) return;
-    // Ставим метку до pushState, чтобы effect не сделал повторный запрос.
-    appliedPath = path;
-    pushState(path, {});
+    // Обычная навигация SvelteKit: URL, page.url и история остаются согласованными.
+    // Shallow pushState здесь использовать нельзя — он не обновляет page.url и
+    // ломает load при возврате назад (SvelteKit issue #13569/#11465).
+    void goto(path, { noScroll: true, keepFocus: true }).catch((err) => {
+      error = err instanceof Error ? err.message : String(err);
+    });
   }
 
   function replaceUrlSilently() {
     const path = buildPath();
     if (path === currentPath()) return;
-    appliedPath = path;
-    replaceState(path, {});
+    // Только прогресс infinite scroll: без навигации и без перезапуска load.
+    void replaceState(path, {});
   }
 
   function scrollTableTop() {
@@ -265,8 +267,15 @@
     return () => observer.disconnect();
   });
 
-  function applyUrl(url: URL) {
+  function applyUrl(url: URL): boolean {
     const params = url.searchParams;
+    const previous = {
+      year,
+      genre,
+      preset,
+      status: statusFilter,
+      weights: JSON.stringify(customWeights)
+    };
 
     const rawYear = params.get("year");
     const validYear =
@@ -308,6 +317,14 @@
 
     const parsedPage = Number.parseInt(params.get("page") ?? "1", 10);
     pageNum = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+    return (
+      previous.year !== year ||
+      previous.genre !== genre ||
+      previous.preset !== preset ||
+      previous.status !== statusFilter ||
+      (preset === "custom" && previous.weights !== JSON.stringify(customWeights))
+    );
   }
 
   async function loadFromState() {
@@ -347,14 +364,20 @@
     }
   }
 
-  $effect(() => {
-    const path = currentPath();
-    if (path === appliedPath) return;
-    appliedPath = path;
-    untrack(() => {
-      applyUrl(pageState.url);
-      void loadFromState();
-    });
+  function syncFromLocation() {
+    if (window.location.pathname !== "/best-movies") return;
+    const changed = applyUrl(new URL(window.location.href));
+    if (!changed && (result || summary || loading)) return;
+    void loadFromState();
+  }
+
+  onMount(() => {
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  });
+
+  afterNavigate(() => {
+    syncFromLocation();
   });
 
   function buildListUrl(query: ListQuery, status: BestfilmsofStatusFilter): string {
