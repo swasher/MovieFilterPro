@@ -548,10 +548,6 @@
         <Film class="h-8 w-8 text-amber-500" />
         BestMovies
       </h1>
-      <p class="text-muted-foreground mt-1 max-w-3xl text-sm">
-        Рейтинги bestfilmsof.com: фильтр по году и жанру, пресеты весов и локальный
-        пересчёт скора. Данные синхронизируются в фоне и потом отдаются из кеша.
-      </p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
@@ -588,12 +584,6 @@
     </Card>
   {:else if filters}
     <Card>
-      <CardHeader class="pb-3">
-        <CardTitle class="text-lg">Фильтры</CardTitle>
-        <CardDescription>
-          Год + жанр — полный список. Только жанр — сводка по годам (топ-фильм и количество).
-        </CardDescription>
-      </CardHeader>
       <CardContent class="space-y-4">
         <div class="grid gap-4 md:grid-cols-3">
           <div class="space-y-2">
