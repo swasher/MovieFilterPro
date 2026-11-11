@@ -1,14 +1,12 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
   import { page as pageState } from "$app/state";
-  import { pushState } from "$app/navigation";
+  import { pushState, replaceState } from "$app/navigation";
   import { toast } from "svelte-sonner";
   import {
     AlertCircle,
     ArrowDown,
     ArrowUp,
-    ChevronLeft,
-    ChevronRight,
     ExternalLink,
     Film,
     Loader2,
@@ -105,6 +103,9 @@
   let sortDir = $state<SortDir>("desc");
   let pageNum = $state(1);
   let appliedPath = "";
+  let tableScrollRef = $state<HTMLDivElement | null>(null);
+  let sentinelRef = $state<HTMLDivElement | null>(null);
+  let loadingGuard = false;
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -164,16 +165,11 @@
   const pageCount = $derived(
     Math.max(1, Math.ceil((result?.movies.length ?? 0) / PAGE_SIZE))
   );
-  const currentPage = $derived(Math.min(pageNum, pageCount));
-  const pagedMovies = $derived(
-    sortedMovies.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const visibleCount = $derived(
+    Math.min(pageNum * PAGE_SIZE, sortedMovies.length)
   );
-  const rangeStart = $derived(
-    (result?.movies.length ?? 0) === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
-  );
-  const rangeEnd = $derived(
-    Math.min(currentPage * PAGE_SIZE, result?.movies.length ?? 0)
-  );
+  const visibleMovies = $derived(sortedMovies.slice(0, visibleCount));
+  const hasMore = $derived(visibleCount < sortedMovies.length);
 
   function clearPoll() {
     if (pollTimer) {
@@ -225,6 +221,49 @@
     appliedPath = path;
     pushState(path, {});
   }
+
+  function replaceUrlSilently() {
+    const path = buildPath();
+    if (path === currentPath()) return;
+    appliedPath = path;
+    replaceState(path, {});
+  }
+
+  function scrollTableTop() {
+    tableScrollRef?.scrollTo({ top: 0 });
+  }
+
+  function showMore() {
+    if (!hasMore) {
+      loadingGuard = false;
+      return;
+    }
+    restoreLastQueryState();
+    pageNum = Math.min(pageNum + 1, pageCount);
+    replaceUrlSilently();
+    // Даём DOM дорисовать строки, чтобы observer не сработал повторно сразу.
+    setTimeout(() => {
+      loadingGuard = false;
+    }, 120);
+  }
+
+  $effect(() => {
+    const sentinel = sentinelRef;
+    const root = tableScrollRef;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !loadingGuard && hasMore) {
+          loadingGuard = true;
+          showMore();
+        }
+      },
+      { root, rootMargin: "200px", threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  });
 
   function applyUrl(url: URL) {
     const params = url.searchParams;
@@ -301,6 +340,8 @@
     }
 
     const state = await fetchData(lastUrl, lastMode);
+    scrollTableTop();
+    loadingGuard = false;
     if (state === "syncing" || state === "queued") {
       schedulePoll();
     }
@@ -349,7 +390,7 @@
         );
         if (pageNum > maxPage) {
           pageNum = maxPage;
-          commitUrl();
+          replaceUrlSilently();
         }
       } else {
         summary = payload as BestfilmsofGenreSummary;
@@ -415,6 +456,7 @@
     sortDir = defaultSortDir(next);
     pageNum = 1;
     commitUrl();
+    scrollTableTop();
   }
 
   function toggleSortDir() {
@@ -423,17 +465,7 @@
     sortDir = sortDir === "asc" ? "desc" : "asc";
     pageNum = 1;
     commitUrl();
-  }
-
-  function changePage(next: number) {
-    restoreLastQueryState();
-    const target = Math.min(Math.max(1, next), pageCount);
-    if (target === currentPage) return;
-    pageNum = target;
-    commitUrl();
-    document
-      .getElementById("best-movies-table")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollTableTop();
   }
 
   async function refresh() {
@@ -740,10 +772,15 @@
             </div>
           </div>
 
-          <div class="text-muted-foreground mb-2 text-xs">
-            Показано: {rangeStart}–{rangeEnd} из {result.total}
-            {#if statusFilter !== "all"}
-              (всего в списке {result.counts.all})
+          <div class="text-muted-foreground mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span>
+              Показано: {visibleCount} из {result.total}
+              {#if statusFilter !== "all"}
+                (всего в списке {result.counts.all})
+              {/if}
+            </span>
+            {#if hasMore}
+              <span>Прокрутите таблицу, чтобы подгрузить ещё</span>
             {/if}
           </div>
 
@@ -771,9 +808,9 @@
               {/if}
             </p>
           {:else}
-            <div id="best-movies-table" class="overflow-x-auto rounded-lg border">
-              <Table.Root>
-                <Table.Header>
+            <div bind:this={tableScrollRef} class="max-h-[70vh] overflow-auto rounded-lg border">
+              <table class="w-full caption-bottom text-sm">
+                <Table.Header class="[&_th]:bg-card [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
                   <Table.Row>
                     <Table.Head class="w-12" title="Позиция в рейтинге bestfilmsof"># сайта</Table.Head>
                     <Table.Head class="w-16">Постер</Table.Head>
@@ -786,7 +823,7 @@
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {#each pagedMovies as movie (movie.imdb_id)}
+                  {#each visibleMovies as movie (movie.imdb_id)}
                     {@const poster = posterUrl(movie.poster_path)}
                     <Table.Row>
                       <Table.Cell class="text-muted-foreground font-mono text-xs">{movie.position}</Table.Cell>
@@ -861,35 +898,18 @@
                     </Table.Row>
                   {/each}
                 </Table.Body>
-              </Table.Root>
-            </div>
-            {#if pageCount > 1}
-              <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <span class="text-muted-foreground text-xs">
-                  Страница {currentPage} из {pageCount}
-                </span>
-                <div class="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onclick={() => changePage(currentPage - 1)}
-                    disabled={currentPage <= 1}
-                  >
-                    <ChevronLeft class="mr-1 h-4 w-4" />
-                    Назад
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onclick={() => changePage(currentPage + 1)}
-                    disabled={currentPage >= pageCount}
-                  >
-                    Вперёд
-                    <ChevronRight class="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
+              </table>
+              <div bind:this={sentinelRef} class="flex h-12 items-center justify-center">
+                {#if hasMore}
+                  <span class="text-muted-foreground flex items-center gap-2 text-xs">
+                    <Loader2 class="h-4 w-4 animate-spin" />
+                    Загружаем ещё…
+                  </span>
+                {:else}
+                  <span class="text-muted-foreground text-xs">Это все фильмы</span>
+                {/if}
               </div>
-            {/if}
+            </div>
           {/if}
         </CardContent>
       </Card>
