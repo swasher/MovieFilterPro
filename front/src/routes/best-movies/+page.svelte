@@ -8,9 +8,11 @@
     ArrowUp,
     ExternalLink,
     Film,
+    LayoutGrid,
     Loader2,
     RefreshCw,
-    Star
+    Star,
+    TextAlignJustify
   } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
@@ -21,6 +23,8 @@
   import * as Select from "$lib/components/ui/select";
   import { Separator } from "$lib/components/ui/separator";
   import * as Table from "$lib/components/ui/table";
+  import VaultImage from "$lib/components/vault/VaultImage.svelte";
+  import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
   import {
     PRESET_LABELS,
     WEIGHT_LABELS,
@@ -101,6 +105,7 @@
   let sortKey = $state<SortKey>("default");
   let sortDir = $state<SortDir>("desc");
   let pageNum = $state(1);
+  let isListView = $state(false);
   let sentinelRef = $state<HTMLDivElement | null>(null);
   let loadingGuard = false;
 
@@ -536,8 +541,8 @@
     return movie.title_ru || movie.title;
   }
 
-  function posterUrl(path: string | null): string | null {
-    return path ? `https://image.tmdb.org/t/p/w185${path}` : null;
+  function posterUrl(path: string | null, size: "w185" | "w342" = "w185"): string | null {
+    return path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
   }
 </script>
 
@@ -781,6 +786,19 @@
                   <ArrowDown class="h-4 w-4" />
                 {/if}
               </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onclick={() => (isListView = !isListView)}
+                title={isListView ? "Показать обложками" : "Показать списком"}
+                aria-label="Переключить вид"
+              >
+                {#if isListView}
+                  <TextAlignJustify class="h-4 w-4" />
+                {:else}
+                  <LayoutGrid class="h-4 w-4" />
+                {/if}
+              </Button>
             </div>
           </div>
 
@@ -820,8 +838,9 @@
               {/if}
             </p>
           {:else}
-            <div class="rounded-lg border">
-              <table class="w-full table-fixed caption-bottom text-sm">
+            {#if isListView}
+              <div class="rounded-lg border">
+                <table class="w-full table-fixed caption-bottom text-sm">
                 <Table.Header class="bg-card sticky top-14 z-10 border-b backdrop-blur">
                   <Table.Row>
                     <Table.Head class="w-16" title="Позиция в рейтинге bestfilmsof"># сайта</Table.Head>
@@ -910,17 +929,80 @@
                     </Table.Row>
                   {/each}
                 </Table.Body>
-              </table>
-              <div bind:this={sentinelRef} class="flex h-12 items-center justify-center">
-                {#if hasMore}
-                  <span class="text-muted-foreground flex items-center gap-2 text-xs">
-                    <Loader2 class="h-4 w-4 animate-spin" />
-                    Загружаем ещё…
-                  </span>
-                {:else}
-                  <span class="text-muted-foreground text-xs">Это все фильмы</span>
-                {/if}
+                </table>
               </div>
+            {:else}
+              <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+                {#each visibleMovies as movie (movie.imdb_id)}
+                  {@const poster = posterUrl(movie.poster_path, "w342")}
+                  {@const href = movie.in_collection && movie.collection_slug ? `/movies/${movie.collection_slug}` : null}
+                  <div class="group overflow-hidden rounded-lg border bg-card transition hover:shadow-md">
+                    <a href={href ?? undefined} class="block">
+                      <div class="relative aspect-[2/3] bg-muted">
+                        {#if poster}
+                          <VaultImage
+                            src={poster}
+                            alt={movieTitle(movie)}
+                            class="h-full w-full object-cover"
+                            slotClass="h-full w-full"
+                            loading="lazy"
+                          />
+                        {:else}
+                          <div class="text-muted-foreground flex h-full w-full items-center justify-center text-xs">
+                            нет постера
+                          </div>
+                        {/if}
+                        <Badge variant="secondary" class="absolute top-2 left-2 font-mono text-[10px]">
+                          #{movie.position}
+                        </Badge>
+                        <MovieStatusBadges
+                          watch_status={movie.watch_status}
+                          rating={movie.rating}
+                          is_favorite={movie.in_favorites}
+                          year={movie.release_date ? Number(movie.release_date.slice(0, 4)) : null}
+                        />
+                        {#if movie.score != null}
+                          <Badge class="absolute bottom-2 left-2 font-mono text-[10px]">
+                            {movie.score.toFixed(2)}
+                          </Badge>
+                        {/if}
+                      </div>
+                      <div class="space-y-1 p-2">
+                        <div class="line-clamp-2 text-sm font-medium" title={movieTitle(movie)}>
+                          {movieTitle(movie)}
+                        </div>
+                        <div class="text-muted-foreground flex items-center gap-2 text-xs">
+                          {#if movie.imdb_rating != null}
+                            <span>IMDb {movie.imdb_rating.toFixed(1)}</span>
+                          {/if}
+                          {#if movie.imdb_votes}
+                            <span>{number(movie.imdb_votes)}</span>
+                          {/if}
+                        </div>
+                      </div>
+                    </a>
+                    {#if href}
+                      <a
+                        href={href}
+                        class="text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 pb-2 text-[10px]"
+                      >
+                        <ExternalLink class="h-3 w-3" />
+                        В Vault
+                      </a>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            <div bind:this={sentinelRef} class="flex h-12 items-center justify-center">
+              {#if hasMore}
+                <span class="text-muted-foreground flex items-center gap-2 text-xs">
+                  <Loader2 class="h-4 w-4 animate-spin" />
+                  Загружаем ещё…
+                </span>
+              {:else}
+                <span class="text-muted-foreground text-xs">Это все фильмы</span>
+              {/if}
             </div>
           {/if}
         </CardContent>
