@@ -1,8 +1,14 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
+  import { page as pageState } from "$app/state";
+  import { pushState } from "$app/navigation";
   import { toast } from "svelte-sonner";
   import {
     AlertCircle,
+    ArrowDown,
+    ArrowUp,
+    ChevronLeft,
+    ChevronRight,
     ExternalLink,
     Film,
     Loader2,
@@ -36,6 +42,41 @@
     customWeights: Record<string, string>;
   };
 
+  type SortKey =
+    | "default"
+    | "score"
+    | "imdb"
+    | "votes"
+    | "rt"
+    | "meta"
+    | "gross"
+    | "awards"
+    | "release"
+    | "title";
+  type SortDir = "asc" | "desc";
+
+  const PAGE_SIZE = 50;
+
+  const SORT_LABELS: Record<SortKey, string> = {
+    default: "По рейтингу сайта",
+    score: "Скор bestfilmsof",
+    imdb: "IMDb",
+    votes: "Голоса IMDb",
+    rt: "Rotten Tomatoes",
+    meta: "Metascore",
+    gross: "Касса",
+    awards: "Награды",
+    release: "Дата выхода",
+    title: "Название"
+  };
+
+  const SORT_KEYS = Object.keys(SORT_LABELS) as SortKey[];
+  const STATUS_FILTERS: BestfilmsofStatusFilter[] = ["all", "unwatched", "will_watch"];
+
+  function defaultSortDir(key: SortKey): SortDir {
+    return key === "title" ? "asc" : "desc";
+  }
+
   let { data } = $props();
 
   const filters = $derived(data.filters);
@@ -60,6 +101,10 @@
   let lastGenre = $state("all");
   let lastQuery = $state<ListQuery | null>(null);
   let statusFilter = $state<BestfilmsofStatusFilter>("all");
+  let sortKey = $state<SortKey>("default");
+  let sortDir = $state<SortDir>("desc");
+  let pageNum = $state(1);
+  let appliedPath = "";
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -67,6 +112,68 @@
   const currentSyncedAt = $derived(result?.synced_at ?? summary?.synced_at ?? null);
   const syncError = $derived(result?.error ?? summary?.error ?? "");
   const isCustom = $derived(preset === "custom");
+
+  function sortValue(movie: BestfilmsofMovie, key: SortKey): number | string | null {
+    switch (key) {
+      case "score":
+        return movie.score;
+      case "imdb":
+        return movie.imdb_rating;
+      case "votes":
+        return movie.imdb_votes;
+      case "rt":
+        return movie.tomato_meter;
+      case "meta":
+        return movie.metascore;
+      case "gross":
+        return movie.gross;
+      case "awards":
+        return movie.award_points;
+      case "release":
+        return movie.release_date;
+      case "title":
+        return movieTitle(movie).toLocaleLowerCase("ru");
+      default:
+        return movie.position;
+    }
+  }
+
+  const sortedMovies = $derived.by(() => {
+    const movies = result?.movies ?? [];
+    if (sortKey === "default") return movies;
+
+    const direction = sortDir === "asc" ? 1 : -1;
+    return [...movies].sort((left, right) => {
+      const leftValue = sortValue(left, sortKey);
+      const rightValue = sortValue(right, sortKey);
+      if (leftValue == null && rightValue == null) {
+        return left.position - right.position;
+      }
+      if (leftValue == null) return 1;
+      if (rightValue == null) return -1;
+      if (typeof leftValue === "string" || typeof rightValue === "string") {
+        return (
+          String(leftValue).localeCompare(String(rightValue), "ru") * direction
+        );
+      }
+      if (leftValue === rightValue) return left.position - right.position;
+      return (leftValue - rightValue) * direction;
+    });
+  });
+
+  const pageCount = $derived(
+    Math.max(1, Math.ceil((result?.movies.length ?? 0) / PAGE_SIZE))
+  );
+  const currentPage = $derived(Math.min(pageNum, pageCount));
+  const pagedMovies = $derived(
+    sortedMovies.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  );
+  const rangeStart = $derived(
+    (result?.movies.length ?? 0) === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  );
+  const rangeEnd = $derived(
+    Math.min(currentPage * PAGE_SIZE, result?.movies.length ?? 0)
+  );
 
   function clearPoll() {
     if (pollTimer) {
@@ -76,6 +183,138 @@
   }
 
   onDestroy(clearPoll);
+
+  function currentPath(): string {
+    return `${pageState.url.pathname}${pageState.url.search}`;
+  }
+
+  function isValidPreset(value: string): boolean {
+    return (
+      value === "custom" || !!filters?.presets.some((item) => item.name === value)
+    );
+  }
+
+  function buildPath(): string {
+    const params = new URLSearchParams();
+    if (year !== "none") params.set("year", year);
+    if (genre !== "all") params.set("genre", genre);
+    if (preset !== "default") params.set("preset", preset);
+    if (preset === "custom") {
+      for (const key of ["imdb", "critics", "awards", "boxoffice"]) {
+        params.set(`w_${key}`, customWeights[key] || "0");
+      }
+    }
+
+    if (year !== "none") {
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (sortKey !== "default") {
+        params.set("sort", sortKey);
+        if (sortDir !== defaultSortDir(sortKey)) params.set("dir", sortDir);
+      }
+      if (pageNum > 1) params.set("page", String(pageNum));
+    }
+
+    const query = params.toString();
+    return `/best-movies${query ? `?${query}` : ""}`;
+  }
+
+  function commitUrl() {
+    const path = buildPath();
+    if (path === currentPath()) return;
+    // Ставим метку до pushState, чтобы effect не сделал повторный запрос.
+    appliedPath = path;
+    pushState(path, {});
+  }
+
+  function applyUrl(url: URL) {
+    const params = url.searchParams;
+
+    const rawYear = params.get("year");
+    const validYear =
+      !!rawYear &&
+      /^\d+$/.test(rawYear) &&
+      (filters ? filters.years.includes(Number(rawYear)) : true);
+    year = validYear ? rawYear : "none";
+
+    const rawGenre = params.get("genre");
+    const validGenre =
+      !!rawGenre &&
+      (filters ? filters.genres.some((item) => item.slug === rawGenre) : true);
+    genre = validGenre ? rawGenre : "all";
+
+    const rawPreset = params.get("preset") ?? "default";
+    preset = isValidPreset(rawPreset) ? rawPreset : "default";
+    customWeights = {
+      imdb: params.get("w_imdb") ?? "25",
+      critics: params.get("w_critics") ?? "25",
+      awards: params.get("w_awards") ?? "25",
+      boxoffice: params.get("w_boxoffice") ?? "25"
+    };
+
+    const rawStatus = params.get("status") ?? "all";
+    statusFilter = STATUS_FILTERS.includes(rawStatus as BestfilmsofStatusFilter)
+      ? (rawStatus as BestfilmsofStatusFilter)
+      : "all";
+
+    const rawSort = params.get("sort") ?? "default";
+    sortKey = SORT_KEYS.includes(rawSort as SortKey)
+      ? (rawSort as SortKey)
+      : "default";
+
+    const rawDir = params.get("dir");
+    sortDir =
+      rawDir === "asc" || rawDir === "desc"
+        ? rawDir
+        : defaultSortDir(sortKey);
+
+    const parsedPage = Number.parseInt(params.get("page") ?? "1", 10);
+    pageNum = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  }
+
+  async function loadFromState() {
+    clearPoll();
+    error = "";
+
+    const hasYear = year !== "none";
+    const hasGenre = genre !== "all";
+    if (!hasYear && !hasGenre) {
+      result = null;
+      summary = null;
+      lastMode = null;
+      lastUrl = null;
+      lastQuery = null;
+      return;
+    }
+
+    lastMode = hasYear ? "list" : "summary";
+    lastYear = year;
+    lastGenre = genre;
+
+    if (hasYear) {
+      summary = null;
+      lastQuery = { year, genre, preset, customWeights: { ...customWeights } };
+      lastUrl = buildListUrl(lastQuery, statusFilter);
+    } else {
+      result = null;
+      lastQuery = null;
+      lastUrl = `/api/bestfilmsof/genres/${encodeURIComponent(genre)}`;
+    }
+
+    const state = await fetchData(lastUrl, lastMode);
+    if (state === "syncing" || state === "queued") {
+      schedulePoll();
+    }
+  }
+
+  $effect(() => {
+    const path = currentPath();
+    if (path === appliedPath) return;
+    appliedPath = path;
+    untrack(() => {
+      applyUrl(pageState.url);
+      void loadFromState();
+    });
+  });
 
   function buildListUrl(query: ListQuery, status: BestfilmsofStatusFilter): string {
     const params = new URLSearchParams({
@@ -104,6 +343,14 @@
       }
       if (mode === "list") {
         result = payload as BestfilmsofMovieList;
+        const maxPage = Math.max(
+          1,
+          Math.ceil(result.movies.length / PAGE_SIZE)
+        );
+        if (pageNum > maxPage) {
+          pageNum = maxPage;
+          commitUrl();
+        }
       } else {
         summary = payload as BestfilmsofGenreSummary;
       }
@@ -130,7 +377,6 @@
   }
 
   async function show() {
-    clearPoll();
     error = "";
     const hasYear = year !== "none";
     const hasGenre = genre !== "all";
@@ -140,33 +386,54 @@
       return;
     }
 
-    lastMode = hasYear ? "list" : "summary";
-    lastYear = year;
-    lastGenre = genre;
-    lastQuery = { year, genre, preset, customWeights: { ...customWeights } };
-    lastUrl = hasYear
-      ? buildListUrl(lastQuery, statusFilter)
-      : `/api/bestfilmsof/genres/${encodeURIComponent(genre)}`;
-
-    result = null;
-    summary = null;
-
-    const state = await fetchData(lastUrl, lastMode);
-    if (state === "syncing" || state === "queued") {
-      schedulePoll();
-    }
+    pageNum = 1;
+    commitUrl();
+    await loadFromState();
   }
 
-  async function reloadListWithStatus(status: BestfilmsofStatusFilter) {
-    statusFilter = status;
-    if (lastMode !== "list" || !lastQuery) return;
+  function restoreLastQueryState() {
+    if (!lastQuery) return;
+    year = lastQuery.year;
+    genre = lastQuery.genre;
+    preset = lastQuery.preset;
+    customWeights = { ...lastQuery.customWeights };
+  }
 
-    clearPoll();
-    lastUrl = buildListUrl(lastQuery, status);
-    const state = await fetchData(lastUrl, "list");
-    if (state === "syncing" || state === "queued") {
-      schedulePoll();
-    }
+  async function changeStatusFilter(status: BestfilmsofStatusFilter) {
+    if (status === statusFilter) return;
+    restoreLastQueryState();
+    statusFilter = status;
+    pageNum = 1;
+    if (lastMode !== "list" || !lastQuery) return;
+    commitUrl();
+    await loadFromState();
+  }
+
+  function changeSort(next: SortKey) {
+    restoreLastQueryState();
+    sortKey = next;
+    sortDir = defaultSortDir(next);
+    pageNum = 1;
+    commitUrl();
+  }
+
+  function toggleSortDir() {
+    if (sortKey === "default") return;
+    restoreLastQueryState();
+    sortDir = sortDir === "asc" ? "desc" : "asc";
+    pageNum = 1;
+    commitUrl();
+  }
+
+  function changePage(next: number) {
+    restoreLastQueryState();
+    const target = Math.min(Math.max(1, next), pageCount);
+    if (target === currentPage) return;
+    pageNum = target;
+    commitUrl();
+    document
+      .getElementById("best-movies-table")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function refresh() {
@@ -410,7 +677,7 @@
                 size="sm"
                 variant={statusFilter === "all" ? "secondary" : "outline"}
                 aria-pressed={statusFilter === "all"}
-                onclick={() => reloadListWithStatus("all")}
+                onclick={() => changeStatusFilter("all")}
                 disabled={loading}
               >
                 Все фильмы
@@ -420,7 +687,7 @@
                 size="sm"
                 variant={statusFilter === "unwatched" ? "secondary" : "outline"}
                 aria-pressed={statusFilter === "unwatched"}
-                onclick={() => reloadListWithStatus("unwatched")}
+                onclick={() => changeStatusFilter("unwatched")}
                 disabled={loading}
               >
                 Непросмотренные
@@ -431,16 +698,53 @@
                 variant={statusFilter === "will_watch" ? "secondary" : "outline"}
                 aria-pressed={statusFilter === "will_watch"}
                 title="Непросмотренные фильмы со статусом «Буду смотреть»"
-                onclick={() => reloadListWithStatus("will_watch")}
+                onclick={() => changeStatusFilter("will_watch")}
                 disabled={loading}
               >
                 Буду смотреть
                 <span class="text-muted-foreground ml-1 text-xs">{result.counts.will_watch}</span>
               </Button>
             </ButtonGroup.Root>
-            <span class="text-muted-foreground text-xs">
-              Показано: {result.total} из {result.counts.all}
-            </span>
+
+            <div class="flex items-center gap-2">
+              <span class="text-muted-foreground text-xs">Сортировка</span>
+              <Select.Root
+                type="single"
+                value={sortKey}
+                onValueChange={(value) => {
+                  if (value) changeSort(value as SortKey);
+                }}
+              >
+                <Select.Trigger class="w-48">
+                  {SORT_LABELS[sortKey]}
+                </Select.Trigger>
+                <Select.Content>
+                  {#each SORT_KEYS as key (key)}
+                    <Select.Item value={key}>{SORT_LABELS[key]}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+              <Button
+                variant="outline"
+                size="icon"
+                onclick={toggleSortDir}
+                disabled={sortKey === "default"}
+                title={sortDir === "asc" ? "По возрастанию" : "По убыванию"}
+              >
+                {#if sortDir === "asc"}
+                  <ArrowUp class="h-4 w-4" />
+                {:else}
+                  <ArrowDown class="h-4 w-4" />
+                {/if}
+              </Button>
+            </div>
+          </div>
+
+          <div class="text-muted-foreground mb-2 text-xs">
+            Показано: {rangeStart}–{rangeEnd} из {result.total}
+            {#if statusFilter !== "all"}
+              (всего в списке {result.counts.all})
+            {/if}
           </div>
 
           {#if (result.state === "syncing" || result.state === "queued") && result.total === 0}
@@ -467,11 +771,11 @@
               {/if}
             </p>
           {:else}
-            <div class="overflow-x-auto rounded-lg border">
+            <div id="best-movies-table" class="overflow-x-auto rounded-lg border">
               <Table.Root>
                 <Table.Header>
                   <Table.Row>
-                    <Table.Head class="w-12">#</Table.Head>
+                    <Table.Head class="w-12" title="Позиция в рейтинге bestfilmsof"># сайта</Table.Head>
                     <Table.Head class="w-16">Постер</Table.Head>
                     <Table.Head>Фильм</Table.Head>
                     <Table.Head class="w-20 text-right">Скор</Table.Head>
@@ -482,7 +786,7 @@
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {#each result.movies as movie (movie.imdb_id)}
+                  {#each pagedMovies as movie (movie.imdb_id)}
                     {@const poster = posterUrl(movie.poster_path)}
                     <Table.Row>
                       <Table.Cell class="text-muted-foreground font-mono text-xs">{movie.position}</Table.Cell>
@@ -559,6 +863,33 @@
                 </Table.Body>
               </Table.Root>
             </div>
+            {#if pageCount > 1}
+              <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <span class="text-muted-foreground text-xs">
+                  Страница {currentPage} из {pageCount}
+                </span>
+                <div class="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onclick={() => changePage(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                  >
+                    <ChevronLeft class="mr-1 h-4 w-4" />
+                    Назад
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onclick={() => changePage(currentPage + 1)}
+                    disabled={currentPage >= pageCount}
+                  >
+                    Вперёд
+                    <ChevronRight class="ml-1 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            {/if}
           {/if}
         </CardContent>
       </Card>
