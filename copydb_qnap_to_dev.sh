@@ -48,6 +48,9 @@ usage() {
 .env.production (QNAP/prod): POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
   (можно переопределить переменными окружения QNAP_POSTGRES_*)
 
+После восстановления пароль dev-аккаунта агента сбрасывается на значения
+из .env.agent (AGENT_USERNAME, AGENT_PASSWORD), если этот файл существует.
+
 Константы в скрипте (можно переопределить переменными окружения):
   QNAP_SSH_HOST=${QNAP_SSH_HOST}
   QNAP_USER=${QNAP_USER}
@@ -323,4 +326,30 @@ echo "==> Готово. База '${POSTGRES_DB}' восстановлена и�
 if [[ "${DELETE_DUMP}" -eq 1 ]]; then
     rm -f "${DUMP_PATH}"
     echo "==> Локальный дамп удален (--delete-dump)."
+fi
+
+# ------------------------------------ #
+#    ПАРОЛЬ DEV-АККАУНТА (.env.agent)  #
+# ------------------------------------ #
+# В восстановленном прод-дампе пароль dev-аккаунта агента неизвестен,
+# поэтому после синхронизации возвращаем ему пароль из локального .env.agent
+# (файл в git не попадает). Если файла нет — просто предупреждаем.
+AGENT_ENV_FILE="${AGENT_ENV_FILE:-${SCRIPT_DIR}/.env.agent}"
+
+echo "==> Восстановление пароля dev-аккаунта из ${AGENT_ENV_FILE}..."
+if [[ ! -f "${AGENT_ENV_FILE}" ]]; then
+    echo "ВНИМАНИЕ: ${AGENT_ENV_FILE} не найден — пароль не изменен." >&2
+else
+    AGENT_USERNAME="$(load_env_key AGENT_USERNAME "${AGENT_ENV_FILE}" || true)"
+    AGENT_PASSWORD="$(load_env_key AGENT_PASSWORD "${AGENT_ENV_FILE}" || true)"
+
+    if [[ -z "${AGENT_USERNAME}" || -z "${AGENT_PASSWORD}" ]]; then
+        echo "ВНИМАНИЕ: в ${AGENT_ENV_FILE} не заданы AGENT_USERNAME/AGENT_PASSWORD — пароль не изменен." >&2
+    elif ! command -v uv >/dev/null 2>&1; then
+        echo "ВНИМАНИЕ: uv не найден в PATH — пароль не изменен." >&2
+    elif (cd "${SCRIPT_DIR}" && uv run python manage.py set_user_password "${AGENT_USERNAME}" "${AGENT_PASSWORD}"); then
+        echo "==> Пароль dev-аккаунта '${AGENT_USERNAME}' обновлен."
+    else
+        echo "ВНИМАНИЕ: не удалось изменить пароль '${AGENT_USERNAME}' (возможно, такого пользователя нет в восстановленной базе)." >&2
+    fi
 fi
