@@ -646,6 +646,15 @@
       {#if currentSyncedAt}
         <span class="text-muted-foreground text-xs">Обновлено: {formatSynced(currentSyncedAt)}</span>
       {/if}
+      <Button
+        variant="outline"
+        size="sm"
+        onclick={refresh}
+        disabled={!lastUrl || currentState === "syncing"}
+      >
+        <RefreshCw class="mr-2 h-4 w-4" />
+        Обновить данные
+      </Button>
     </div>
   </div>
 
@@ -779,13 +788,6 @@
           </div>
         {/if}
 
-        <div class="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onclick={refresh} disabled={!lastUrl || currentState === "syncing"}>
-            <RefreshCw class="mr-2 h-4 w-4" />
-            Обновить данные
-          </Button>
-        </div>
-
         {#if error}
           <p class="text-destructive text-sm font-medium">{error}</p>
         {/if}
@@ -810,30 +812,13 @@
       </Card>
     {:else if result}
       <Card>
-        <CardHeader class="pb-3">
-          <div class="flex flex-col justify-between gap-2 md:flex-row md:items-center">
-            <div>
-              <CardTitle class="text-lg">
-                {result.year} / {result.genre || "все жанры"}
-                <span class="text-muted-foreground ml-2 text-sm font-normal">{result.total} фильмов</span>
-              </CardTitle>
-              <CardDescription>
-                {#if result.weights}
-                  Локальный пересчёт:
-                  {Object.entries(result.weights)
-                    .filter(([, value]) => value > 0)
-                    .map(([key, value]) => `${WEIGHT_LABELS[key] ?? key} ${value}`)
-                    .join(" · ")}
-                {:else}
-                  Сортировка сайта по умолчанию
-                {/if}
-              </CardDescription>
-            </div>
-            {#if result.is_stale}
+        {#if result.is_stale}
+          <CardHeader class="pb-3">
+            <div class="flex justify-end">
               <Badge variant="outline">Кеш устарел — обновится в фоне</Badge>
-            {/if}
-          </div>
-        </CardHeader>
+            </div>
+          </CardHeader>
+        {/if}
         <CardContent>
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <ButtonGroup.Root>
@@ -915,18 +900,6 @@
                 {/if}
               </Button>
             </div>
-          </div>
-
-          <div class="text-muted-foreground mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span>
-              Показано: {visibleCount} из {result.total}
-              {#if statusFilter !== "all"}
-                (всего в списке {result.counts.all})
-              {/if}
-            </span>
-            {#if hasMore}
-              <span>Прокрутите таблицу, чтобы подгрузить ещё</span>
-            {/if}
           </div>
 
           {#if (result.state === "syncing" || result.state === "queued") && result.total === 0}
