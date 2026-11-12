@@ -81,6 +81,9 @@ export type BestfilmsofGenreYear = {
   top_release_date: string | null;
   in_collection: boolean;
   collection_slug: string | null;
+  watch_status: "watched" | "will_watch" | "wont_watch" | null;
+  in_favorites: boolean;
+  rating: number | null;
 };
 
 export type BestfilmsofGenreSummary = {

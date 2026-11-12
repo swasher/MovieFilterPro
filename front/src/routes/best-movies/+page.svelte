@@ -1387,12 +1387,8 @@
                   {#each group.years as item (item.year)}
                     {@const poster = posterUrl(item.top_poster_path)}
                     {@const title = item.top_title_ru || item.top_title}
-                    {@const href =
-                      item.in_collection && item.collection_slug
-                        ? `/movies/${item.collection_slug}`
-                        : null}
                     <div class="flex items-center gap-3 rounded-lg border bg-card p-2.5 transition hover:bg-muted/40">
-                      <div class="bg-muted h-24 w-16 shrink-0 overflow-hidden rounded-md">
+                      <div class="bg-muted relative h-24 w-16 shrink-0 overflow-hidden rounded-md">
                         {#if poster}
                           <VaultImage
                             src={poster}
@@ -1402,21 +1398,26 @@
                             loading="lazy"
                           />
                         {/if}
+                        <MovieStatusBadges
+                          watch_status={item.watch_status}
+                          rating={item.rating}
+                          is_favorite={item.in_favorites}
+                        />
                       </div>
 
                       <div class="flex min-w-0 flex-1 flex-col">
-                        <div class="text-muted-foreground text-xs">{item.year}</div>
-                        {#if href}
-                          <a
-                            href={href}
-                            class="line-clamp-2 text-sm font-medium underline-offset-4 hover:underline"
-                            title={title}
-                          >
-                            {title}
-                          </a>
-                        {:else}
-                          <div class="line-clamp-2 text-sm font-medium" title={title}>{title}</div>
-                        {/if}
+                        <div class="flex items-center gap-2">
+                          <span class="text-muted-foreground text-xs">{item.year}</span>
+                          {#if item.in_collection && item.collection_slug}
+                            <a href={`/movies/${item.collection_slug}`} title="Открыть в Vault">
+                              <Badge variant="secondary" class="gap-1 px-1.5 py-0 text-[10px]">
+                                <ExternalLink class="h-2.5 w-2.5" />
+                                Vault
+                              </Badge>
+                            </a>
+                          {/if}
+                        </div>
+                        <div class="line-clamp-2 text-sm font-medium" title={title}>{title}</div>
                         <button
                           type="button"
                           class="text-muted-foreground hover:text-foreground mt-1 self-start text-xs underline-offset-4 hover:underline"

@@ -114,6 +114,9 @@ class GenreYearOut(Schema):
     top_release_date: str | None = None
     in_collection: bool = False
     collection_slug: str | None = None
+    watch_status: str | None = None
+    in_favorites: bool = False
+    rating: int | None = None
 
 
 class GenreSummaryOut(Schema):
@@ -319,13 +322,23 @@ def refresh_movies(
 
 @api.get("/genres/{genre}", response=GenreSummaryOut)
 def get_genre_summary(request, genre: str):
-    _require_api_user(request)
+    user = _require_api_user(request)
     norm = _validate_genre(genre)
     if not norm:
         raise HttpError(400, "genre is required")
 
     row = _ensure_sync(None, norm)
     data = read_service.get_genre_summary(norm)
+
+    # Статусы пользователя по топ-фильмам — как в обычном списке фильмов.
+    top_ids = [item["top_tmdb_id"] for item in data["years"]]
+    status_map = status_service.get_status_map(user, top_ids)
+    for item in data["years"]:
+        state = status_map.get(item["top_tmdb_id"]) or {}
+        item["watch_status"] = state.get("watch_status")
+        item["in_favorites"] = bool(state.get("in_favorites"))
+        item["rating"] = state.get("rating")
+
     return GenreSummaryOut(
         **data,
         state=_state(row),

@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from bestfilmsof.models import BestfilmsEntry, BestfilmsSync
+from bestfilmsof.models import BestfilmsEntry, BestfilmsGenreYear, BestfilmsSync
 from vault.models import Movie, UserMovie
 
 
@@ -89,6 +89,44 @@ class BestfilmsofApiTests(TestCase):
             {"imdb": 20, "critics": 60, "awards": 20, "boxoffice": 0},
         )
         self.assertEqual(len(payload["movies"]), 2)
+
+    def test_genre_summary_includes_user_status(self):
+        self.client.force_login(self.user)
+        BestfilmsGenreYear.objects.create(
+            year=2010,
+            genre="drama",
+            count=5,
+            top_imdb_id="tt1",
+            top_tmdb_id=101,
+            top_title="Top film",
+            top_score=88.0,
+        )
+        BestfilmsSync.objects.create(
+            key="summary:drama",
+            genre="drama",
+            status=BestfilmsSync.Status.IDLE,
+            synced_at=timezone.now(),
+            finished_at=timezone.now(),
+        )
+        movie = Movie.objects.create(
+            title="Top film",
+            tmdb_id=101,
+            tmdb_media_type=Movie.TMDBMediaType.MOVIE,
+        )
+        UserMovie.objects.create(
+            user=self.user,
+            movie=movie,
+            watch_status=UserMovie.WatchStatus.WATCHED,
+            is_favorite=True,
+            rating=9,
+        )
+
+        response = self.client.get("/api/bestfilmsof/genres/drama")
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["years"][0]
+        self.assertEqual(item["watch_status"], "watched")
+        self.assertTrue(item["in_favorites"])
+        self.assertEqual(item["rating"], 9)
 
     def test_unknown_genre_is_rejected(self):
         self.client.force_login(self.user)
