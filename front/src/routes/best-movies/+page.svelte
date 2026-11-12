@@ -11,8 +11,9 @@
     Film,
     LayoutGrid,
     Loader2,
+    PanelRightClose,
+    PanelRightOpen,
     RefreshCw,
-    SlidersHorizontal,
     TextAlignJustify
   } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge";
@@ -761,18 +762,6 @@
         <span class="text-muted-foreground text-xs">Обновлено: {formatSynced(currentSyncedAt)}</span>
       {/if}
       <Button
-        variant={weightsVisible ? "secondary" : "outline"}
-        size="sm"
-        onclick={toggleWeights}
-        disabled={!filters}
-        aria-expanded={weightsVisible}
-        aria-controls="best-movies-weights"
-        title={weightsVisible ? "Скрыть формулу рейтинга" : "Показать формулу рейтинга"}
-      >
-        <SlidersHorizontal class="mr-2 h-4 w-4" />
-        Веса
-      </Button>
-      <Button
         variant="outline"
         size="sm"
         onclick={refresh}
@@ -796,8 +785,10 @@
     </Card>
   {:else if filters}
     <div
-      class={`grid gap-4 lg:items-stretch ${
-        weightsVisible ? "lg:grid-cols-[minmax(0,1fr)_20rem]" : "lg:grid-cols-1"
+      class={`grid gap-4 lg:items-stretch lg:gap-3 lg:transition-[grid-template-columns] lg:duration-300 lg:ease-out ${
+        weightsVisible
+          ? "lg:grid-cols-[minmax(0,1fr)_auto_20rem]"
+          : "lg:grid-cols-[minmax(0,1fr)_auto_0rem]"
       }`}
     >
       <Card>
@@ -892,8 +883,33 @@
         </CardContent>
       </Card>
 
-      <Card id="best-movies-weights" class={weightsVisible ? "" : "hidden"}>
-        <CardContent class="flex flex-1 flex-col gap-4">
+      <div class="flex items-center justify-center">
+        <Button
+          variant="outline"
+          size="icon"
+          class="h-8 w-8 rounded-full"
+          onclick={toggleWeights}
+          aria-expanded={weightsVisible}
+          aria-controls="best-movies-weights"
+          aria-label={weightsVisible ? "Скрыть формулу рейтинга" : "Показать формулу рейтинга"}
+          title={weightsVisible ? "Скрыть формулу рейтинга" : "Показать формулу рейтинга"}
+        >
+          {#if weightsVisible}
+            <PanelRightClose class="h-4 w-4" />
+          {:else}
+            <PanelRightOpen class="h-4 w-4" />
+          {/if}
+        </Button>
+      </div>
+
+      <Card
+        id="best-movies-weights"
+        class={`min-w-0 overflow-hidden transition-opacity duration-300 ${
+          weightsVisible ? "opacity-100" : "pointer-events-none opacity-0 max-lg:hidden"
+        }`}
+        inert={!weightsVisible}
+      >
+        <CardContent class="flex w-full flex-1 flex-col gap-4 lg:w-80">
           <div class="flex items-center gap-1.5">
             <div class="text-sm font-semibold">Формула рейтинга</div>
             <Tooltip.Provider>
