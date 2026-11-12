@@ -918,7 +918,7 @@
                   <span class="text-sm font-medium">{WEIGHT_LABELS[key] ?? key}</span>
                   <div class="flex items-center gap-2">
                     <span class="text-muted-foreground w-8 text-right text-xs tabular-nums">
-                      {customWeights[key] ?? 0}%
+                      {customWeights[key] ? `${customWeights[key]}%` : "off"}
                     </span>
                     <Switch
                       size="sm"
