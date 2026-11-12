@@ -1075,18 +1075,6 @@
           </CardHeader>
         {/if}
         <CardContent>
-          {#if (result.state === "syncing" || result.state === "queued") && result.movies.length > 0}
-            <div
-              class="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
-            >
-              <Loader2 class="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-              <span>
-                Идёт загрузка списка с bestfilmsof: данные ещё не финальные,
-                порядок и состав могут измениться.
-              </span>
-            </div>
-          {/if}
-
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <ButtonGroup.Root>
               <Button
