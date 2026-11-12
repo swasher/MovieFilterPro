@@ -309,10 +309,18 @@ def _wait_for_torrent(client: qbittorrentapi.Client, info_hash: str):
     return None
 
 
-def _resolve_source_url(metadata_comment: str, preferences: UserPreferences, torrent_id: int) -> str:
+def _resolve_source_url(
+    metadata_comment: str,
+    preferences: UserPreferences,
+    torrent_id: int | None = None,
+) -> str:
     comment = (metadata_comment or '').strip()
     if comment.startswith(('http://', 'https://')):
         return comment
+
+    # Для вручную загруженного .torrent kinozal_id нет — ссылку не выдумываем.
+    if torrent_id is None:
+        return ''
 
     domain = (preferences.kinozal_domain or '').strip()
     if not domain:
@@ -348,13 +356,46 @@ def _save_archive(
         return '', f'Не удалось сохранить .torrent: {exc}'
 
 
-def add_torrent_from_kinozal(
+def _add_event_payload(
+    *,
+    movie: Movie | None = None,
+    kinozal_torrent_id: int | None = None,
+    extra: dict | None = None,
+) -> dict:
+    payload: dict = {}
+    if kinozal_torrent_id is not None:
+        payload['torrent_id'] = kinozal_torrent_id
+    if movie is not None:
+        payload['movie_id'] = movie.id
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _assert_movie_link_available(info_hash: str, movie: Movie | None) -> None:
+    """Не даём перепривязать раздачу, которая уже принадлежит другому фильму."""
+    if movie is None:
+        return
+
+    existing = Torrent.objects.filter(info_hash=info_hash).only('movie_id').first()
+    if existing is not None and existing.movie_id is not None and existing.movie_id != movie.id:
+        raise QbtError(
+            'qbt_torrent_already_linked',
+            'Раздача уже привязана к другому фильму Vault.',
+            status_code=409,
+        )
+
+
+def _add_torrent(
     *,
     torrent_bytes: bytes,
-    torrent_id: int,
+    movie: Movie | None = None,
     source_url: str | None = None,
     tag: str | None = None,
+    kinozal_torrent_id: int | None = None,
+    source: str = 'kinozal',
 ) -> TorrentAddResult:
+    """Общий пайплайн: qBittorrent -> архив .torrent -> запись Torrent."""
     preferences = _preferences()
     if not _configured_url(preferences):
         raise QbtError(
@@ -368,6 +409,8 @@ def add_torrent_from_kinozal(
         metadata = parse_torrent_metadata(torrent_bytes)
     except TorrentMetadataError as exc:
         raise QbtError('qbt_invalid_torrent', str(exc), status_code=400) from exc
+
+    _assert_movie_link_available(metadata.info_hash, movie)
 
     client = build_client(preferences=preferences)
 
@@ -384,7 +427,12 @@ def add_torrent_from_kinozal(
             'torrent_add_failed',
             f'Не удалось добавить раздачу в qBittorrent: {exc}',
             level=TorrentEvent.Level.ERROR,
-            payload={'torrent_id': torrent_id, 'error_type': type(exc).__name__},
+            movie=movie,
+            payload=_add_event_payload(
+                movie=movie,
+                kinozal_torrent_id=kinozal_torrent_id,
+                extra={'error_type': type(exc).__name__},
+            ),
         )
         raise qbt_error_from_exception(exc, action='добавление раздачи') from exc
 
@@ -407,7 +455,12 @@ def add_torrent_from_kinozal(
             'torrent_add_not_confirmed',
             'qBittorrent принял запрос, но раздача не появилась в списке.',
             level=TorrentEvent.Level.ERROR,
-            payload={'torrent_id': torrent_id, 'info_hash': info_hash},
+            movie=movie,
+            payload=_add_event_payload(
+                movie=movie,
+                kinozal_torrent_id=kinozal_torrent_id,
+                extra={'info_hash': info_hash},
+            ),
         )
         raise QbtError(
             'qbt_add_not_confirmed',
@@ -420,13 +473,16 @@ def add_torrent_from_kinozal(
     if qbt_hash:
         info_hash = qbt_hash
 
+    # qBittorrent мог вернуть другой hash (v2/hybrid) — проверяем привязку ещё раз.
+    _assert_movie_link_available(info_hash, movie)
+
     name = _safe_str(getattr(info, 'name', '')) or metadata.name or info_hash
     save_path = _safe_str(getattr(info, 'save_path', ''))
     content_path = _safe_str(getattr(info, 'content_path', ''))
     resolved_source_url = (source_url or '').strip() or _resolve_source_url(
         metadata.comment,
         preferences,
-        torrent_id,
+        kinozal_torrent_id,
     )
 
     defaults = {
@@ -437,6 +493,8 @@ def add_torrent_from_kinozal(
     }
     if resolved_source_url:
         defaults['source_url'] = resolved_source_url
+    if movie is not None:
+        defaults['movie'] = movie
 
     torrent, created = Torrent.objects.update_or_create(
         info_hash=info_hash,
@@ -467,20 +525,30 @@ def add_torrent_from_kinozal(
                 warning,
                 level=TorrentEvent.Level.WARNING,
                 torrent=torrent,
-                payload={'info_hash': info_hash, 'torrent_id': torrent_id},
+                movie=movie,
+                payload=_add_event_payload(
+                    movie=movie,
+                    kinozal_torrent_id=kinozal_torrent_id,
+                    extra={'info_hash': info_hash},
+                ),
             )
         torrent.save(update_fields=['torrent_file', 'last_error', 'updated_at'])
 
     _log_event(
-        'torrent_added',
+        'torrent_uploaded' if source == 'manual' else 'torrent_added',
         f'Раздача добавлена в qBittorrent: {name}',
         torrent=torrent,
-        payload={
-            'torrent_id': torrent_id,
-            'info_hash': info_hash,
-            'archive_saved': archive_saved,
-            'warning': warning,
-        },
+        movie=movie,
+        payload=_add_event_payload(
+            movie=movie,
+            kinozal_torrent_id=kinozal_torrent_id,
+            extra={
+                'info_hash': info_hash,
+                'archive_saved': archive_saved,
+                'warning': warning,
+                'source': source,
+            },
+        ),
     )
 
     return TorrentAddResult(
@@ -488,6 +556,38 @@ def add_torrent_from_kinozal(
         created=created,
         archive_saved=archive_saved,
         warning=warning,
+    )
+
+
+def add_torrent_from_kinozal(
+    *,
+    torrent_bytes: bytes,
+    torrent_id: int,
+    source_url: str | None = None,
+    tag: str | None = None,
+) -> TorrentAddResult:
+    """Раздача скачана с Kinozal: привязка к Vault выполняется отдельным импортом."""
+    return _add_torrent(
+        torrent_bytes=torrent_bytes,
+        source_url=source_url,
+        tag=tag,
+        kinozal_torrent_id=torrent_id,
+        source='kinozal',
+    )
+
+
+def add_torrent_from_file(
+    *,
+    torrent_bytes: bytes,
+    movie: Movie,
+    tag: str | None = None,
+) -> TorrentAddResult:
+    """Вручную загруженный .torrent сразу привязывается к фильму Vault."""
+    return _add_torrent(
+        torrent_bytes=torrent_bytes,
+        movie=movie,
+        tag=tag,
+        source='manual',
     )
 
 
@@ -679,10 +779,8 @@ def attach_torrent_to_movie(info_hash: str, movie: Movie) -> tuple[Torrent, str 
     try:
         properties = client.torrents_properties(torrent_hash=qbt_hash)
         comment = _safe_str(getattr(properties, 'comment', ''))
-        comment_lower = comment.lower()
-        if comment.startswith(('http://', 'https://')) and (
-            'kinozal' in comment_lower or 'details.php' in comment_lower
-        ):
+        # Любая http(s)-ссылка из comment — страница раздачи на трекере.
+        if comment.startswith(('http://', 'https://')):
             source_url = comment
     except Exception:  # noqa: BLE001 - comment не обязателен
         logger.debug('Не удалось получить comment раздачи %s', qbt_hash, exc_info=True)

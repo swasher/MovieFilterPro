@@ -3,14 +3,17 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from qbittorrent.models import Torrent
+from qbittorrent.services.errors import QbtError
 from qbittorrent.services.torrent_service import (
     MovieTorrentsDeleteResult,
     QbtProgressRow,
     QbtTorrentRow,
     QbtStatus,
+    TorrentAddResult,
     TorrentDeleteResult,
 )
 from vault.models import Movie
@@ -203,6 +206,81 @@ class QbittorrentApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    @patch('qbittorrent.api.torrent_service.add_torrent_from_file')
+    def test_upload_torrent_adds_and_links_movie(self, add_mock):
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        add_mock.return_value = TorrentAddResult(
+            torrent=SimpleNamespace(info_hash='a' * 40, name='Test Movie'),
+            created=True,
+            archive_saved=True,
+        )
+        upload = SimpleUploadedFile('movie.torrent', b'd4:info0:e')
+
+        response = self.client.post(
+            f'/api/qbittorrent/movies/{movie.id}/torrents/upload',
+            data={'file': upload},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['info_hash'], 'a' * 40)
+        self.assertEqual(payload['name'], 'Test Movie')
+        self.assertEqual(payload['movie']['slug'], movie.slug)
+
+        add_mock.assert_called_once()
+        kwargs = add_mock.call_args.kwargs
+        self.assertEqual(kwargs['movie'], movie)
+        self.assertEqual(kwargs['tag'], f'mfp:{movie.id}')
+        self.assertEqual(kwargs['torrent_bytes'], b'd4:info0:e')
+
+    def test_upload_torrent_movie_not_found(self):
+        response = self.client.post(
+            '/api/qbittorrent/movies/999999/torrents/upload',
+            data={'file': SimpleUploadedFile('movie.torrent', b'd4:info0:e')},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_upload_torrent_rejects_empty_file(self):
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+
+        response = self.client.post(
+            f'/api/qbittorrent/movies/{movie.id}/torrents/upload',
+            data={'file': SimpleUploadedFile('movie.torrent', b'')},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['detail']['code'], 'qbt_torrent_empty')
+
+    @patch('qbittorrent.api.MAX_TORRENT_UPLOAD_BYTES', 4)
+    def test_upload_torrent_rejects_too_large_file(self):
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+
+        response = self.client.post(
+            f'/api/qbittorrent/movies/{movie.id}/torrents/upload',
+            data={'file': SimpleUploadedFile('movie.torrent', b'1234567890')},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['detail']['code'], 'qbt_torrent_too_large')
+
+    @patch('qbittorrent.api.torrent_service.add_torrent_from_file')
+    def test_upload_torrent_returns_qbt_error(self, add_mock):
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        add_mock.side_effect = QbtError(
+            'qbt_torrent_already_linked',
+            'Раздача уже привязана к другому фильму Vault.',
+            status_code=409,
+        )
+
+        response = self.client.post(
+            f'/api/qbittorrent/movies/{movie.id}/torrents/upload',
+            data={'file': SimpleUploadedFile('movie.torrent', b'd4:info0:e')},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['detail']['code'], 'qbt_torrent_already_linked')
 
     def test_requires_authentication(self):
         self.client.logout()

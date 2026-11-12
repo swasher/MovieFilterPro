@@ -35,6 +35,16 @@ def _info_hash(name=b'Test Movie') -> str:
     return hashlib.sha1(bencodepy.encode(info)).hexdigest()
 
 
+def _torrent_bytes_without_comment(name=b'Test Movie') -> bytes:
+    info = {
+        b'name': name,
+        b'length': 1,
+        b'piece length': 1,
+        b'pieces': b'0' * 20,
+    }
+    return bencodepy.encode({b'info': info})
+
+
 class FakeTorrentInfo:
     def __init__(self, info_hash: str):
         self.hash = info_hash
@@ -236,6 +246,95 @@ class TorrentServiceTests(TestCase):
 
         self.assertTrue(result.created)
         self.assertTrue(Torrent.objects.filter(info_hash=info_hash).exists())
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_add_torrent_from_file_links_movie(self, build_client_mock):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        client = FakeClient(
+            info_hash=info_hash,
+            add_response={'added_torrent_ids': [info_hash], 'success_count': 1},
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+        build_client_mock.return_value = client
+
+        result = torrent_service.add_torrent_from_file(
+            torrent_bytes=_torrent_bytes(),
+            movie=movie,
+            tag=f'mfp:{movie.id}',
+        )
+
+        self.assertTrue(result.created)
+        self.assertTrue(result.archive_saved)
+        self.assertEqual(result.torrent.movie, movie)
+        self.assertEqual(result.torrent.source_url, 'https://kinozal.tv/details.php?id=1')
+        self.assertEqual(client.add_kwargs['tags'], f'mfp:{movie.id}')
+        self.assertTrue(
+            TorrentEvent.objects.filter(
+                event_type='torrent_uploaded',
+                movie=movie,
+            ).exists()
+        )
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_add_torrent_from_file_without_comment_has_no_source_url(self, build_client_mock):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        client = FakeClient(
+            info_hash=info_hash,
+            add_response={'added_torrent_ids': [info_hash], 'success_count': 1},
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+        build_client_mock.return_value = client
+
+        result = torrent_service.add_torrent_from_file(
+            torrent_bytes=_torrent_bytes_without_comment(),
+            movie=movie,
+        )
+
+        self.assertEqual(result.torrent.source_url, '')
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_add_torrent_from_file_rejects_torrent_of_other_movie(self, build_client_mock):
+        info_hash = _info_hash()
+        other_movie = Movie.objects.create(title='Other Movie', year=2023)
+        Torrent.objects.create(movie=other_movie, info_hash=info_hash, name='Test Movie')
+        target_movie = Movie.objects.create(title='Target Movie', year=2024)
+        build_client_mock.return_value = FakeClient(
+            info_hash=info_hash,
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+
+        with self.assertRaises(QbtError) as context:
+            torrent_service.add_torrent_from_file(
+                torrent_bytes=_torrent_bytes(),
+                movie=target_movie,
+            )
+
+        self.assertEqual(context.exception.code, 'qbt_torrent_already_linked')
+        build_client_mock.assert_not_called()
+        self.assertEqual(Torrent.objects.get(info_hash=info_hash).movie, other_movie)
+
+    @patch('qbittorrent.services.torrent_service.build_client')
+    def test_add_torrent_from_file_keeps_existing_link_to_same_movie(self, build_client_mock):
+        info_hash = _info_hash()
+        movie = Movie.objects.create(title='Test Movie', year=2024)
+        Torrent.objects.create(movie=movie, info_hash=info_hash, name='Old name')
+        build_client_mock.return_value = FakeClient(
+            info_hash=info_hash,
+            add_error=qbittorrentapi.Conflict409Error(),
+            info_items=[FakeTorrentInfo(info_hash)],
+        )
+
+        result = torrent_service.add_torrent_from_file(
+            torrent_bytes=_torrent_bytes(),
+            movie=movie,
+        )
+
+        self.assertFalse(result.created)
+        torrent = Torrent.objects.get(info_hash=info_hash)
+        self.assertEqual(torrent.movie, movie)
+        self.assertEqual(torrent.name, 'Test Movie')
 
     @patch('qbittorrent.services.torrent_service.build_client')
     def test_list_torrents_merges_vault_movie(self, build_client_mock):

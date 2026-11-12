@@ -24,7 +24,7 @@
     Layers,
     Link,
     Link2,
-    Link2Off,
+    LoaderCircle,
     Pencil,
     Plus,
     RefreshCw,
@@ -258,6 +258,10 @@
   let torrentPendingDelete = $state<MovieTorrent | null>(null);
   let isDeletingTorrentRecord = $state(false);
 
+  let torrentFileInput = $state<HTMLInputElement | null>(null);
+  let isTorrentDragActive = $state(false);
+  let isUploadingTorrent = $state(false);
+
   const filteredQbtTorrents = $derived.by(() => {
     const query = torrentSearch.trim().toLowerCase();
     if (!query) return qbtTorrents;
@@ -339,6 +343,94 @@
       toast.error(error instanceof Error ? error.message : "Не удалось привязать раздачу.");
     } finally {
       isLinkingTorrent = false;
+    }
+  };
+
+  const isTorrentFile = (file: File) =>
+    file.name.toLowerCase().endsWith(".torrent") || file.type === "application/x-bittorrent";
+
+  const openTorrentFilePicker = () => {
+    if (isUploadingTorrent) return;
+    torrentFileInput?.click();
+  };
+
+  const handleTorrentFileChange = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file) void uploadTorrentFile(file);
+  };
+
+  const handleTorrentDragOver = (event: DragEvent) => {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    isTorrentDragActive = true;
+  };
+
+  const handleTorrentDragLeave = () => {
+    isTorrentDragActive = false;
+  };
+
+  const handleTorrentDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isTorrentDragActive = false;
+
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    if (!isTorrentFile(file)) {
+      toast.error("Выбери .torrent файл.");
+      return;
+    }
+
+    void uploadTorrentFile(file);
+  };
+
+  const uploadTorrentFile = async (file: File) => {
+    if (!isTorrentFile(file)) {
+      toast.error("Выбери .torrent файл.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Файл больше 10 МБ.");
+      return;
+    }
+
+    isUploadingTorrent = true;
+    try {
+      const form = new FormData();
+      form.append("file", file);
+
+      const response = await fetch(`/api/qbittorrent/movies/${movie.id}/torrents/upload`, {
+        method: "POST",
+        body: form
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        warning?: string | null;
+      };
+
+      if (!response.ok) {
+        if (await handleUnauthorized(response.status, payload.message)) {
+          return;
+        }
+        const error = parseQbtApiError(payload, `HTTP ${response.status}`);
+        toast.error(
+          error.hint ? `${error.message ?? ""} ${error.hint}`.trim() : error.message ?? "Не удалось загрузить торрент."
+        );
+        return;
+      }
+
+      toast.success(payload.message ?? "Торрент добавлен в qBittorrent.");
+      if (payload.warning) {
+        toast.warning(payload.warning);
+      }
+      await invalidateAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось загрузить торрент.");
+    } finally {
+      isUploadingTorrent = false;
     }
   };
 
@@ -1359,58 +1451,101 @@
           </div>
         </div>
 
-        {#if userState.in_will_watch}
-        <div class="vd-section">
+        <div class="space-y-2 pt-2">
           <p class="vd-section-title">qBittorrent</p>
-          {#if movie.torrents.length}
-            <div class="vd-list-column">
-              {#each movie.torrents as torrent (torrent.id)}
-                <div class="space-y-1 rounded-lg border border-border/60 px-2.5 py-2 text-xs">
-                  <div class="flex min-w-0 items-start gap-1.5">
-                    <Link2 class="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
-                    <span class="min-w-0 flex-1 truncate font-medium" title={torrent.name}>{torrent.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-6 shrink-0 text-muted-foreground hover:text-destructive"
-                      title="Удалить раздачу и файлы"
-                      aria-label="Удалить раздачу и файлы"
-                      onclick={() => openTorrentDeleteDialog(torrent)}
-                    >
-                      <Trash2 class="size-3.5" />
-                    </Button>
-                  </div>
-                  {#if torrent.source_url}
-                    <a
-                      href={torrent.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      class="inline-flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <ExternalLink class="size-3" />
-                      Kinozal
-                    </a>
-                  {/if}
-                  {#if torrent.content_path || torrent.save_path}
-                    {@const torrentPath = torrent.content_path || torrent.save_path || ""}
-                    <div class="truncate font-mono text-[10px] text-muted-foreground" title={torrentPath}>
-                      {torrentPath}
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="space-y-2">
-              <p class="text-xs text-muted-foreground">Раздача не привязана.</p>
-              <Button variant="outline" size="sm" class="w-full" onclick={openTorrentLinkDialog}>
-                <Link2Off class="size-3.5" />
+          <div
+            class="vd-qbt-panel"
+            role="group"
+            aria-label="qBittorrent"
+            ondragover={(event) => event.preventDefault()}
+            ondrop={(event) => event.preventDefault()}
+          >
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 min-w-0 px-2 text-[11px]"
+                onclick={openTorrentFilePicker}
+                disabled={isUploadingTorrent}
+              >
+                {#if isUploadingTorrent}
+                  <LoaderCircle class="size-3 animate-spin" />
+                  Загрузка…
+                {:else}
+                  Загрузить торрент
+                {/if}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 min-w-0 px-2 text-[11px]"
+                onclick={openTorrentLinkDialog}
+              >
                 Привязать раздачу
               </Button>
             </div>
-          {/if}
+            <input
+              bind:this={torrentFileInput}
+              type="file"
+              accept=".torrent,application/x-bittorrent"
+              class="hidden"
+              onchange={handleTorrentFileChange}
+            />
+            <button
+              type="button"
+              class="flex min-h-12 w-full items-center justify-center rounded-lg border border-dashed transition-colors disabled:opacity-50 {isTorrentDragActive
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border/70 text-muted-foreground hover:border-primary/60 hover:text-foreground/80'}"
+              title="Перетащи .torrent сюда или нажми, чтобы выбрать файл"
+              onclick={openTorrentFilePicker}
+              disabled={isUploadingTorrent}
+              ondragover={handleTorrentDragOver}
+              ondragleave={handleTorrentDragLeave}
+              ondrop={handleTorrentDrop}
+            >
+              <span class="text-[11px] font-semibold tracking-[0.08em]">d r o p&nbsp;&nbsp;&nbsp;z o n e</span>
+            </button>
+            {#if movie.torrents.length}
+              <div class="vd-list-column">
+                {#each movie.torrents as torrent (torrent.id)}
+                  <div class="space-y-1 rounded-lg border border-border/60 px-2.5 py-2 text-xs">
+                    <div class="flex min-w-0 items-start gap-1.5">
+                      <Link2 class="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
+                      <span class="min-w-0 flex-1 truncate font-medium" title={torrent.name}>{torrent.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="size-6 shrink-0 text-muted-foreground hover:text-destructive"
+                        title="Удалить раздачу и файлы"
+                        aria-label="Удалить раздачу и файлы"
+                        onclick={() => openTorrentDeleteDialog(torrent)}
+                      >
+                        <Trash2 class="size-3.5" />
+                      </Button>
+                    </div>
+                    {#if torrent.source_url}
+                      <a
+                        href={torrent.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        class="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <ExternalLink class="size-3" />
+                        Раздача
+                      </a>
+                    {/if}
+                    {#if torrent.content_path || torrent.save_path}
+                      {@const torrentPath = torrent.content_path || torrent.save_path || ""}
+                      <div class="truncate font-mono text-[10px] text-muted-foreground" title={torrentPath}>
+                        {torrentPath}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
-        {/if}
       </div>
     </div>
 

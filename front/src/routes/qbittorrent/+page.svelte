@@ -223,7 +223,7 @@
                       class="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
                       <ExternalLink class="size-3" />
-                      Kinozal
+                      Раздача
                     </a>
                   {/if}
                   {#if item.category || item.tags.length > 0}

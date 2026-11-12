@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 
-from ninja import NinjaAPI, Schema
+from ninja import File, NinjaAPI, Schema
 from ninja.errors import HttpError
+from ninja.files import UploadedFile
 
 from vault.models import Movie
 
@@ -12,6 +13,8 @@ from .services import torrent_service
 from .services.errors import QbtError
 
 api = NinjaAPI(title='qBittorrent API', version='1.0', urls_namespace='qbittorrent-api')
+
+MAX_TORRENT_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 class QbtStatusOut(Schema):
@@ -112,6 +115,15 @@ class QbtMovieTorrentsDeleteOut(Schema):
     deleted: list[QbtTorrentDeleteOut] = []
     deleted_count: int = 0
     errors: list[str] = []
+
+
+class QbtMovieTorrentUploadOut(Schema):
+    message: str
+    info_hash: str
+    name: str
+    archive_saved: bool = False
+    warning: str | None = None
+    movie: QbtLinkedMovieOut
 
 
 def _require_api_user(request):
@@ -372,4 +384,61 @@ def link_torrent(request, info_hash: str, payload: QbtLinkIn):
             slug=movie.slug,
         ),
         warning=warning,
+    )
+
+
+def _error_detail(code: str, message: str) -> str:
+    return json.dumps({'code': code, 'message': message}, ensure_ascii=False)
+
+
+@api.post('/movies/{movie_id}/torrents/upload', response=QbtMovieTorrentUploadOut)
+def upload_movie_torrent(request, movie_id: int, file: File[UploadedFile]):
+    user = _require_api_user(request)
+
+    movie = Movie.objects.filter(pk=movie_id).first()
+    if movie is None:
+        raise HttpError(404, 'Movie not found')
+
+    declared_size = getattr(file, 'size', None)
+    if declared_size is not None and declared_size > MAX_TORRENT_UPLOAD_BYTES:
+        raise HttpError(
+            400,
+            _error_detail('qbt_torrent_too_large', 'Файл больше 10 МБ.'),
+        )
+
+    torrent_bytes = file.read()
+    if not torrent_bytes:
+        raise HttpError(400, _error_detail('qbt_torrent_empty', 'Файл пустой.'))
+    if len(torrent_bytes) > MAX_TORRENT_UPLOAD_BYTES:
+        raise HttpError(
+            400,
+            _error_detail('qbt_torrent_too_large', 'Файл больше 10 МБ.'),
+        )
+
+    try:
+        add_result = torrent_service.add_torrent_from_file(
+            torrent_bytes=torrent_bytes,
+            movie=movie,
+            tag=f'mfp:{movie.id}',
+        )
+    except QbtError as exc:
+        _raise_qbt_error(exc)
+
+    torrent = add_result.torrent
+    if add_result.created:
+        message = f'Торрент добавлен в qBittorrent и привязан к фильму «{movie.title}».'
+    else:
+        message = f'Раздача уже была в базе. Привязка к фильму «{movie.title}» подтверждена.'
+
+    return QbtMovieTorrentUploadOut(
+        message=message,
+        info_hash=torrent.info_hash,
+        name=torrent.name,
+        archive_saved=add_result.archive_saved,
+        warning=add_result.warning,
+        movie=QbtLinkedMovieOut(
+            id=movie.id,
+            title=movie.title,
+            slug=movie.slug,
+        ),
     )
