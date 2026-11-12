@@ -881,16 +881,24 @@
                 </Tooltip.Content>
               </Tooltip.Root>
             </Tooltip.Provider>
+            <button
+              type="button"
+              class="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-4 hover:underline disabled:pointer-events-none disabled:opacity-40"
+              onclick={resetWeights}
+              disabled={preset === "default"}
+            >
+              reset
+            </button>
           </div>
 
-          <div class="flex flex-wrap gap-1">
+          <div class="-mx-1.5 flex flex-wrap gap-1">
             {#each filters.presets as item (item.name)}
               {@const active = preset === item.name}
               <Label
                 role="button"
                 tabindex={0}
                 aria-pressed={active}
-                class={`cursor-pointer rounded-md px-2 py-0.5 text-xs transition-colors ${
+                class={`cursor-pointer rounded-md px-1.5 py-0.5 text-xs transition-colors ${
                   active
                     ? "bg-secondary text-secondary-foreground"
                     : "text-muted-foreground hover:bg-muted"
@@ -933,14 +941,6 @@
               </div>
             {/each}
           </div>
-
-          <button
-            type="button"
-            class="text-muted-foreground hover:text-foreground mt-auto self-start text-sm underline-offset-4 hover:underline"
-            onclick={resetWeights}
-          >
-            Вернуть Defaults
-          </button>
         </CardContent>
       </Card>
     </div>
