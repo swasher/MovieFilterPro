@@ -21,7 +21,6 @@
   import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
   import * as Select from "$lib/components/ui/select";
-  import { Separator } from "$lib/components/ui/separator";
   import * as Table from "$lib/components/ui/table";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
@@ -1088,8 +1087,6 @@
                   <Loader2 class="h-4 w-4 animate-spin" />
                   Загружаем ещё…
                 </span>
-              {:else}
-                <span class="text-muted-foreground text-xs">Это все фильмы</span>
               {/if}
             </div>
           {/if}
@@ -1191,9 +1188,4 @@
       </Card>
     {/if}
   {/if}
-
-  <Separator />
-  <p class="text-muted-foreground text-xs">
-    Источник рейтингов: bestfilmsof.com. Постеры, названия и описания — TMDB / коллекция Vault.
-  </p>
 </div>
