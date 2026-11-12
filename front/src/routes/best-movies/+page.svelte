@@ -6,6 +6,7 @@
     AlertCircle,
     ArrowDown,
     ArrowUp,
+    CircleHelp,
     ExternalLink,
     Film,
     LayoutGrid,
@@ -24,6 +25,7 @@
   import { Switch } from "$lib/components/ui/switch";
   import * as Table from "$lib/components/ui/table";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
   import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
   import {
@@ -78,11 +80,11 @@
 
   // Короткие подписи пресетов для чипов в блоке весов.
   const PRESET_CHIP_LABELS: Record<string, string> = {
-    default: "Веса сайта",
-    critics: "Критики",
-    crowd: "Зрители",
+    default: "Defaults",
+    critics: "Выбор критиков",
+    crowd: "Выбор зрителей",
     awards: "Награды",
-    "no-boxoffice": "Без кассы"
+    "no-boxoffice": "Без учета кассы"
   };
   // Во сколько включается компонент, если у него ещё не было ненулевого веса.
   const DEFAULT_WEIGHT = 25;
@@ -841,11 +843,27 @@
 
       <Card>
         <CardContent class="flex flex-1 flex-col gap-4">
-          <div class="space-y-1">
-            <div class="text-sm font-semibold">Веса оценки</div>
-            <p class="text-muted-foreground text-xs">
-              Фильмы сравниваются внутри своего года. Настройки сохраняются в ссылке.
-            </p>
+          <div class="flex items-center gap-1.5">
+            <div class="text-sm font-semibold">Формула рейтинга</div>
+            <Tooltip.Provider>
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  {#snippet child({ props })}
+                    <button
+                      {...props}
+                      type="button"
+                      class="text-muted-foreground hover:text-foreground inline-flex"
+                      aria-label="Как считаются веса"
+                    >
+                      <CircleHelp class="size-4" />
+                    </button>
+                  {/snippet}
+                </Tooltip.Trigger>
+                <Tooltip.Content side="bottom" align="start" class="max-w-64">
+                  Фильмы сравниваются внутри своего года. Настройки сохраняются в ссылке.
+                </Tooltip.Content>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           </div>
 
           <div class="flex flex-wrap gap-1">
