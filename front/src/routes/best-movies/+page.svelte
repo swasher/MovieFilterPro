@@ -12,6 +12,7 @@
     LayoutGrid,
     Loader2,
     RefreshCw,
+    SlidersHorizontal,
     TextAlignJustify
   } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge";
@@ -90,6 +91,7 @@
   // Во сколько включается компонент, если у него ещё не было ненулевого веса.
   const DEFAULT_WEIGHT = 25;
   const WEIGHT_FALLBACK_KEYS = ["imdb", "critics", "awards", "boxoffice"];
+  const WEIGHTS_VISIBLE_KEY = "best-movies:weights-visible";
 
   function defaultSortDir(key: SortKey): SortDir {
     return key === "title" ? "asc" : "desc";
@@ -103,6 +105,8 @@
   let genre = $state("all");
   let yearMenuOpen = $state(false);
   let preset = $state("default");
+  // Панель «Формула рейтинга» можно скрыть; выбор запоминаем между заходами.
+  let weightsVisible = $state(true);
   // Сумма весов всегда 100: стартовые значения совпадают с пресетом Defaults,
   // а applyUrl/выбор пресета сразу подставят актуальные.
   let customWeights = $state<Record<string, number>>({
@@ -447,6 +451,11 @@
   }
 
   onMount(() => {
+    try {
+      weightsVisible = localStorage.getItem(WEIGHTS_VISIBLE_KEY) !== "0";
+    } catch {
+      // localStorage недоступен — оставляем панель открытой.
+    }
     syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
@@ -556,6 +565,15 @@
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     void changePresetWeight(name);
+  }
+
+  function toggleWeights() {
+    weightsVisible = !weightsVisible;
+    try {
+      localStorage.setItem(WEIGHTS_VISIBLE_KEY, weightsVisible ? "1" : "0");
+    } catch {
+      // localStorage недоступен — просто переключаем панель.
+    }
   }
 
   async function resetWeights() {
@@ -743,6 +761,18 @@
         <span class="text-muted-foreground text-xs">Обновлено: {formatSynced(currentSyncedAt)}</span>
       {/if}
       <Button
+        variant={weightsVisible ? "secondary" : "outline"}
+        size="sm"
+        onclick={toggleWeights}
+        disabled={!filters}
+        aria-expanded={weightsVisible}
+        aria-controls="best-movies-weights"
+        title={weightsVisible ? "Скрыть формулу рейтинга" : "Показать формулу рейтинга"}
+      >
+        <SlidersHorizontal class="mr-2 h-4 w-4" />
+        Веса
+      </Button>
+      <Button
         variant="outline"
         size="sm"
         onclick={refresh}
@@ -765,7 +795,11 @@
       </CardHeader>
     </Card>
   {:else if filters}
-    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-stretch">
+    <div
+      class={`grid gap-4 lg:items-stretch ${
+        weightsVisible ? "lg:grid-cols-[minmax(0,1fr)_20rem]" : "lg:grid-cols-1"
+      }`}
+    >
       <Card>
         <CardContent class="space-y-4">
           <div class="space-y-2">
@@ -858,7 +892,7 @@
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="best-movies-weights" class={weightsVisible ? "" : "hidden"}>
         <CardContent class="flex flex-1 flex-col gap-4">
           <div class="flex items-center gap-1.5">
             <div class="text-sm font-semibold">Формула рейтинга</div>
