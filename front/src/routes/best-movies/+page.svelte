@@ -11,7 +11,6 @@
     LayoutGrid,
     Loader2,
     RefreshCw,
-    Star,
     TextAlignJustify
   } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge";
@@ -113,6 +112,8 @@
   let isListView = $state(false);
   let sentinelRef = $state<HTMLDivElement | null>(null);
   let loadingGuard = false;
+  // Защита от гонок: применяем только ответ на последний запрос.
+  let fetchSeq = 0;
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -123,6 +124,10 @@
 
   const quickYears = $derived(
     (filters?.years ?? []).slice(0, YEAR_QUICK_LIMIT)
+  );
+  // Значение года по умолчанию: при входе на страницу всегда показываем последний год.
+  const latestYear = $derived(
+    filters?.years?.length ? String(filters.years[0]) : "none"
   );
   const moreYears = $derived((filters?.years ?? []).slice(YEAR_QUICK_LIMIT));
   // Старые годы разбиваем по десятилетиям: так проще ориентироваться в длинном списке.
@@ -224,7 +229,9 @@
 
   function buildPath(): string {
     const params = new URLSearchParams();
-    if (year !== "none") params.set("year", year);
+    // Год пишем всегда: отсутствие параметра означает «вход на страницу»
+    // и подставляет последний год, а year=none — режим сводки по жанру.
+    params.set("year", year);
     if (genre !== "all") params.set("genre", genre);
     if (preset !== "default") params.set("preset", preset);
     if (preset === "custom") {
@@ -253,7 +260,10 @@
     // Shallow pushState здесь использовать нельзя — он не обновляет page.url и
     // ломает load при возврате назад (SvelteKit issue #13569/#11465).
     void goto(path, { noScroll: true, keepFocus: true }).catch((err) => {
-      error = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      // Быстрые клики по фильтрам отменяют предыдущую навигацию — это не ошибка.
+      if (message === "navigation aborted" || message === "navigation cancelled") return;
+      error = message;
     });
   }
 
@@ -314,7 +324,8 @@
       !!rawYear &&
       /^\d+$/.test(rawYear) &&
       (filters ? filters.years.includes(Number(rawYear)) : true);
-    year = validYear ? rawYear : "none";
+    // Нет параметра или он битый — показываем последний год (дефолт при входе).
+    year = rawYear === "none" ? "none" : validYear && rawYear ? rawYear : latestYear;
 
     const rawGenre = params.get("genre");
     const validGenre =
@@ -398,11 +409,17 @@
   function syncFromLocation() {
     if (window.location.pathname !== "/best-movies") return;
     const changed = applyUrl(new URL(window.location.href));
-    if (!changed && (result || summary || loading)) return;
-    void loadFromState();
+    if (changed) {
+      void loadFromState();
+      return;
+    }
+    // Первый заход: в URL параметров ещё нет, показываем дефолт
+    // (последний год + все жанры).
+    if (!lastUrl && !loading) void loadFromState();
   }
 
   onMount(() => {
+    syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
   });
@@ -429,6 +446,7 @@
   }
 
   async function fetchData(url: string, mode: Mode, silent = false): Promise<string> {
+    const seq = ++fetchSeq;
     if (!silent) loading = true;
     try {
       const response = await fetch(url);
@@ -436,6 +454,8 @@
       if (!response.ok) {
         throw new Error(payload.detail ?? `Ошибка API: ${response.status}`);
       }
+      // Пока шёл запрос, пользователь мог выбрать другой год/жанр — этот ответ уже не нужен.
+      if (seq !== fetchSeq) return "stale";
       if (mode === "list") {
         result = payload as BestfilmsofMovieList;
         const maxPage = Math.max(
@@ -452,10 +472,12 @@
       error = "";
       return payload.state as string;
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+      if (seq === fetchSeq) {
+        error = err instanceof Error ? err.message : String(err);
+      }
       return "error";
     } finally {
-      if (!silent) loading = false;
+      if (!silent && seq === fetchSeq) loading = false;
     }
   }
 
@@ -471,20 +493,34 @@
     }, 2500);
   }
 
-  async function show() {
-    error = "";
-    const hasYear = year !== "none";
-    const hasGenre = genre !== "all";
-
-    if (!hasYear && !hasGenre) {
-      error = "Выберите год и/или жанр.";
-      return;
-    }
-
+  async function applyFilters() {
     pageNum = 1;
     commitUrl();
     await loadFromState();
     scrollTableTop();
+  }
+
+  async function changeYear(value: string | undefined) {
+    const next = value || "none";
+    if (next === year) return;
+    year = next;
+    await applyFilters();
+  }
+
+  async function changeGenre(value: string | undefined) {
+    const next = value || "all";
+    if (next === genre) return;
+    genre = next;
+    // В сводке по жанру год не выбран: если жанр сброшен, возвращаемся
+    // к дефолтному виду «последний год + все жанры».
+    if (next === "all" && year === "none") year = latestYear;
+    await applyFilters();
+  }
+
+  async function changePreset(value: string | undefined) {
+    if (!value || value === preset) return;
+    preset = value;
+    await applyFilters();
   }
 
   function restoreLastQueryState() {
@@ -551,10 +587,11 @@
     }
   }
 
-  function openYear(value: number) {
-    year = String(value);
-    if (genre === "all") return;
-    void show();
+  async function openYear(value: number) {
+    const next = String(value);
+    if (next === year) return;
+    year = next;
+    await applyFilters();
   }
 
   function formatSynced(value: string | null): string {
@@ -585,6 +622,12 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
+      {#if loading}
+        <Badge variant="outline" class="gap-1">
+          <Loader2 class="h-3 w-3 animate-spin" />
+          Загрузка
+        </Badge>
+      {/if}
       {#if currentState === "syncing"}
         <Badge variant="outline" class="gap-1">
           <Loader2 class="h-3 w-3 animate-spin" />
@@ -628,7 +671,7 @@
               variant="outline"
               spacing={2}
               value={year === "none" ? "" : year}
-              onValueChange={(value) => (year = value || "none")}
+              onValueChange={changeYear}
               class="flex-wrap"
             >
               <ToggleGroup.Item value="">—</ToggleGroup.Item>
@@ -668,8 +711,8 @@
                           value={year}
                           class="flex-wrap"
                           onValueChange={(value) => {
-                            year = value || "none";
                             yearMenuOpen = false;
+                            void changeYear(value);
                           }}
                         >
                           {#each group.years as value (value)}
@@ -693,7 +736,7 @@
             variant="outline"
             spacing={2}
             value={genre === "all" ? "" : genre}
-            onValueChange={(value) => (genre = value || "all")}
+            onValueChange={changeGenre}
             class="flex-wrap"
           >
             <ToggleGroup.Item value="">все жанры</ToggleGroup.Item>
@@ -705,7 +748,7 @@
 
         <div class="w-full max-w-64 space-y-2">
           <Label for="best-movies-preset">Веса</Label>
-          <Select.Root type="single" bind:value={preset}>
+          <Select.Root type="single" value={preset} onValueChange={changePreset}>
             <Select.Trigger id="best-movies-preset" class="w-full">
               {PRESET_LABELS[preset] ?? preset}
             </Select.Trigger>
@@ -729,6 +772,7 @@
                   min="0"
                   max="100"
                   bind:value={customWeights[key]}
+                  onchange={() => void applyFilters()}
                 />
               </div>
             {/each}
@@ -736,14 +780,6 @@
         {/if}
 
         <div class="flex flex-wrap items-center gap-2">
-          <Button onclick={show} disabled={loading}>
-            {#if loading}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {:else}
-              <Star class="mr-2 h-4 w-4" />
-            {/if}
-            Показать
-          </Button>
           <Button variant="outline" onclick={refresh} disabled={!lastUrl || currentState === "syncing"}>
             <RefreshCw class="mr-2 h-4 w-4" />
             Обновить данные
@@ -1172,6 +1208,12 @@
               </Table.Root>
             </div>
           {/if}
+        </CardContent>
+      </Card>
+    {:else if year === "none" && genre === "all"}
+      <Card>
+        <CardContent class="text-muted-foreground py-10 text-sm">
+          Год не выбран. Выберите год или жанр — для жанра без года покажем сводку по годам.
         </CardContent>
       </Card>
     {/if}
