@@ -168,6 +168,8 @@ push-no-cache: build-and-push
 huey:
 	uv run python -m huey.bin.huey_consumer movie_filter_pro.huey.HUEY -k thread -w 2 -v -S
 
+daphne:
+	watchfiles --filter python "daphne -b 127.0.0.1 -p 8000 movie_filter_pro.asgi:application"
 
 front:
 	cd front && pnpm run dev
