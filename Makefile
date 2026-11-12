@@ -53,9 +53,6 @@ flush:
 	python manage.py flush --no-input
 
 
-login:
-	docker login
-
 build:
 	doppler run -- docker compose up -d  --build
 
@@ -82,6 +79,19 @@ down: ## стоп контейнера
 
 remove: ## удалить контейнер
 	docker rm -f postgres-mfp
+
+# Локальный registry на QNAP (контейнер registry:2 на порту 5000).
+# С dev-машины образ пушится по DNS-имени qnap:5000, а на самом QNAP тот же
+# registry доступен как 127.0.0.1:5000 (127.0.0.0/8 уже в insecure registries
+# у docker-демона Container Station).
+REGISTRY_PUSH ?= qnap:5000
+REGISTRY_QNAP ?= 127.0.0.1:5000
+IMAGE_REPO ?= swasher/movie-filter-pro-v2
+IMAGE_TAG ?= amd64
+IMAGE_PUSH := $(REGISTRY_PUSH)/$(IMAGE_REPO):$(IMAGE_TAG)
+IMAGE_QNAP := $(REGISTRY_QNAP)/$(IMAGE_REPO):$(IMAGE_TAG)
+# Имя без registry: именно его прописывает mfp2_create_main_container.sh на QNAP.
+IMAGE_LEGACY := $(IMAGE_REPO):$(IMAGE_TAG)
 
 build-and-push:
 	# build and upload
@@ -113,17 +123,19 @@ build-and-push:
 	# последней, поэтому раньше упавшая сборка молча продолжалась: скрипт
 	# «заливал» образ, дергал QNAP (pull старого образа) и рапортовал успех.
 	# Явные проверки ниже гарантируют, что при ошибке деплой не поедет.
-	if ! docker build $(CACHE_OPTION) -t swasher/movie-filter-pro-v2:amd64 .; then
+	if ! docker build $(CACHE_OPTION) -t $(IMAGE_PUSH) .; then
 		echo "ERROR: сборка образа провалилась — деплой на QNAP отменён."
 		exit 1
 	fi
-	if ! docker push swasher/movie-filter-pro-v2:amd64; then
-		echo "ERROR: push образа в Docker Hub провалился — деплой на QNAP отменён."
+	if ! docker push $(IMAGE_PUSH); then
+		echo "ERROR: push образа в локальный registry $(REGISTRY_PUSH) провалился — деплой на QNAP отменён."
 		exit 1
 	fi
-	@echo "--- Образ успешно залит в Docker Hub! ---"
+	@echo "--- Образ успешно залит в локальный registry $(REGISTRY_PUSH)! ---"
 	@echo "Обновляю контейнер на QNAP по SSH (pull + пересоздание)..."
-	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull swasher/movie-filter-pro-v2:amd64 && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh && docker image prune -f'
+	# docker tag нужен потому, что mfp2_create_main_container.sh запускает
+	# контейнер по имени без registry (swasher/movie-filter-pro-v2:amd64).
+	ssh -o BatchMode=yes qnap 'cd /share/PERMANENT/movie-filter-pro-v2 && export PATH=/share/CACHEDEV1_DATA/.qpkg/container-station/bin:$$PATH && docker pull $(IMAGE_QNAP) && docker tag $(IMAGE_QNAP) $(IMAGE_LEGACY) && docker rm -f movie-filter-pro-v2 && ./mfp2_create_main_container.sh && docker image prune -f'
 	@echo "updated to v.$$(cat VERSION)"
 
 # Деплой с кэшем (обычный релиз)
@@ -156,6 +168,8 @@ push-no-cache: build-and-push
 huey:
 	uv run python -m huey.bin.huey_consumer movie_filter_pro.huey.HUEY -k thread -w 2 -v -S
 
+daphne:
+	watchfiles --filter python "daphne -b 127.0.0.1 -p 8000 movie_filter_pro.asgi:application"
 
 front:
 	cd front && pnpm run dev
