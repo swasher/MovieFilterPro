@@ -17,16 +17,16 @@
   import { Button } from "$lib/components/ui/button";
   import * as ButtonGroup from "$lib/components/ui/button-group";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
-  import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
   import * as Select from "$lib/components/ui/select";
+  import { Slider } from "$lib/components/ui/slider";
+  import { Switch } from "$lib/components/ui/switch";
   import * as Table from "$lib/components/ui/table";
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
   import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
   import {
-    PRESET_LABELS,
     WEIGHT_LABELS,
     type BestfilmsofGenreSummary,
     type BestfilmsofMovie,
@@ -40,7 +40,7 @@
     year: string;
     genre: string;
     preset: string;
-    customWeights: Record<string, string>;
+    customWeights: Record<string, number>;
   };
 
   type SortKey =
@@ -76,6 +76,18 @@
   const SORT_KEYS = Object.keys(SORT_LABELS) as SortKey[];
   const STATUS_FILTERS: BestfilmsofStatusFilter[] = ["all", "unwatched", "will_watch"];
 
+  // Короткие подписи пресетов для чипов в блоке весов.
+  const PRESET_CHIP_LABELS: Record<string, string> = {
+    default: "Веса сайта",
+    critics: "Критики",
+    crowd: "Зрители",
+    awards: "Награды",
+    "no-boxoffice": "Без кассы"
+  };
+  // Во сколько включается компонент, если у него ещё не было ненулевого веса.
+  const DEFAULT_WEIGHT = 25;
+  const WEIGHT_FALLBACK_KEYS = ["imdb", "critics", "awards", "boxoffice"];
+
   function defaultSortDir(key: SortKey): SortDir {
     return key === "title" ? "asc" : "desc";
   }
@@ -88,11 +100,18 @@
   let genre = $state("all");
   let yearMenuOpen = $state(false);
   let preset = $state("default");
-  let customWeights = $state<Record<string, string>>({
-    imdb: "25",
-    critics: "25",
-    awards: "25",
-    boxoffice: "25"
+  let customWeights = $state<Record<string, number>>({
+    imdb: 0,
+    critics: 0,
+    awards: 0,
+    boxoffice: 0
+  });
+  // Последние ненулевые веса — чтобы switch возвращал компонент, а не включал с нуля.
+  let lastWeights = $state<Record<string, number>>({
+    imdb: DEFAULT_WEIGHT,
+    critics: DEFAULT_WEIGHT,
+    awards: DEFAULT_WEIGHT,
+    boxoffice: DEFAULT_WEIGHT
   });
 
   let result = $state<BestfilmsofMovieList | null>(null);
@@ -119,7 +138,8 @@
   const currentState = $derived(result?.state ?? summary?.state ?? "idle");
   const currentSyncedAt = $derived(result?.synced_at ?? summary?.synced_at ?? null);
   const syncError = $derived(result?.error ?? summary?.error ?? "");
-  const isCustom = $derived(preset === "custom");
+
+  const weightKeys = $derived(filters?.weight_keys ?? WEIGHT_FALLBACK_KEYS);
 
   const quickYears = $derived(
     (filters?.years ?? []).slice(0, YEAR_QUICK_LIMIT)
@@ -235,7 +255,7 @@
     if (preset !== "default") params.set("preset", preset);
     if (preset === "custom") {
       for (const key of ["imdb", "critics", "awards", "boxoffice"]) {
-        params.set(`w_${key}`, customWeights[key] || "0");
+        params.set(`w_${key}`, String(customWeights[key] ?? 0));
       }
     }
 
@@ -334,12 +354,15 @@
 
     const rawPreset = params.get("preset") ?? "default";
     preset = isValidPreset(rawPreset) ? rawPreset : "default";
-    customWeights = {
-      imdb: params.get("w_imdb") ?? "25",
-      critics: params.get("w_critics") ?? "25",
-      awards: params.get("w_awards") ?? "25",
-      boxoffice: params.get("w_boxoffice") ?? "25"
-    };
+    if (preset === "custom") {
+      customWeights = Object.fromEntries(
+        weightKeys.map((key) => [key, parseWeight(params.get(`w_${key}`))])
+      );
+    } else {
+      // Для именованных пресетов (и дефолта) слайдеры показывают именно их веса.
+      customWeights = weightsForPreset(preset);
+    }
+    rememberWeights();
 
     const rawStatus = params.get("status") ?? "all";
     statusFilter = STATUS_FILTERS.includes(rawStatus as BestfilmsofStatusFilter)
@@ -438,7 +461,7 @@
     });
     if (query.preset === "custom") {
       for (const key of ["imdb", "critics", "awards", "boxoffice"]) {
-        params.set(`w_${key}`, query.customWeights[key] || "0");
+        params.set(`w_${key}`, String(query.customWeights[key] ?? 0));
       }
     }
     return `/api/bestfilmsof/movies?${params.toString()}`;
@@ -516,9 +539,60 @@
     await applyFilters();
   }
 
-  async function changePreset(value: string | undefined) {
-    if (!value || value === preset) return;
-    preset = value;
+  async function changePresetWeight(value: string | undefined) {
+    // Снятие выбора с активного чипа = «свои веса» с текущими значениями слайдеров.
+    const next = value || "custom";
+    if (next === preset) return;
+    preset = next;
+    if (next !== "custom") applyPresetWeights(next);
+    await applyFilters();
+  }
+
+  async function resetWeights() {
+    if (preset === "default") return;
+    preset = "default";
+    applyPresetWeights("default");
+    await applyFilters();
+  }
+
+  function parseWeight(value: string | null): number {
+    const parsed = Number.parseInt(value ?? "", 10);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.min(100, parsed));
+  }
+
+  function weightsForPreset(name: string): Record<string, number> {
+    const presetWeights = filters?.presets.find((item) => item.name === name)?.weights;
+    return Object.fromEntries(
+      weightKeys.map((key) => [key, presetWeights?.[key] ?? 0])
+    );
+  }
+
+  function applyPresetWeights(name: string) {
+    customWeights = weightsForPreset(name);
+    rememberWeights();
+  }
+
+  function rememberWeights() {
+    for (const key of weightKeys) {
+      const value = customWeights[key] ?? 0;
+      if (value > 0) lastWeights[key] = value;
+    }
+  }
+
+  function onWeightChange(key: string, value: number) {
+    const next = Math.max(0, Math.min(100, Math.round(value)));
+    customWeights = { ...customWeights, [key]: next };
+    if (next > 0) lastWeights[key] = next;
+    // Любая ручная правка слайдера означает свои веса.
+    if (preset !== "custom") preset = "custom";
+  }
+
+  async function toggleWeight(key: string, enabled: boolean) {
+    const next = enabled ? lastWeights[key] || DEFAULT_WEIGHT : 0;
+    if ((customWeights[key] ?? 0) === next && preset === "custom") return;
+    customWeights = { ...customWeights, [key]: next };
+    if (preset !== "custom") preset = "custom";
     await applyFilters();
   }
 
@@ -669,127 +743,160 @@
     </Card>
   {:else if filters}
     <Card>
-      <CardContent class="space-y-4">
-        <div class="space-y-2">
-          <Label>Год</Label>
-          <div class="flex flex-wrap items-start gap-2">
+      <CardContent class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <Label>Год</Label>
+            <div class="flex flex-wrap items-start gap-2">
+              <ToggleGroup.Root
+                type="single"
+                size="sm"
+                variant="outline"
+                spacing={2}
+                value={year === "none" ? "" : year}
+                onValueChange={changeYear}
+                class="flex-wrap"
+              >
+                <ToggleGroup.Item value="">—</ToggleGroup.Item>
+                {#each quickYears as value (value)}
+                  <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
+                {/each}
+              </ToggleGroup.Root>
+
+              {#if moreYears.length > 0}
+                <Popover.Root bind:open={yearMenuOpen}>
+                  <Popover.Trigger>
+                    {#snippet child({ props })}
+                      <Button
+                        {...props}
+                        size="sm"
+                        variant={hiddenYear ? "secondary" : "outline"}
+                        class="h-8 px-2.5"
+                        aria-label="Ещё годы"
+                        title="Ещё годы"
+                      >
+                        {hiddenYear ?? "…"}
+                      </Button>
+                    {/snippet}
+                  </Popover.Trigger>
+                  <Popover.Content class="w-72" align="start">
+                    <div class="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {#each moreYearGroups as group (group.key)}
+                        <div class="space-y-1">
+                          <div class="text-muted-foreground bg-popover sticky top-0 text-xs">
+                            {group.label}
+                          </div>
+                          <ToggleGroup.Root
+                            type="single"
+                            size="sm"
+                            variant="outline"
+                            spacing={2}
+                            value={year}
+                            class="flex-wrap"
+                            onValueChange={(value) => {
+                              yearMenuOpen = false;
+                              void changeYear(value);
+                            }}
+                          >
+                            {#each group.years as value (value)}
+                              <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
+                            {/each}
+                          </ToggleGroup.Root>
+                        </div>
+                      {/each}
+                    </div>
+                  </Popover.Content>
+                </Popover.Root>
+              {/if}
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Жанр</Label>
             <ToggleGroup.Root
               type="single"
               size="sm"
               variant="outline"
               spacing={2}
-              value={year === "none" ? "" : year}
-              onValueChange={changeYear}
+              value={genre === "all" ? "" : genre}
+              onValueChange={changeGenre}
               class="flex-wrap"
             >
-              <ToggleGroup.Item value="">—</ToggleGroup.Item>
-              {#each quickYears as value (value)}
-                <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
+              <ToggleGroup.Item value="">все жанры</ToggleGroup.Item>
+              {#each filters.genres as item (item.slug)}
+                <ToggleGroup.Item value={item.slug}>{item.label}</ToggleGroup.Item>
               {/each}
             </ToggleGroup.Root>
-
-            {#if moreYears.length > 0}
-              <Popover.Root bind:open={yearMenuOpen}>
-                <Popover.Trigger>
-                  {#snippet child({ props })}
-                    <Button
-                      {...props}
-                      size="sm"
-                      variant={hiddenYear ? "secondary" : "outline"}
-                      class="h-8 px-2.5"
-                      aria-label="Ещё годы"
-                      title="Ещё годы"
-                    >
-                      {hiddenYear ?? "…"}
-                    </Button>
-                  {/snippet}
-                </Popover.Trigger>
-                <Popover.Content class="w-72" align="start">
-                  <div class="max-h-64 space-y-2 overflow-y-auto pr-1">
-                    {#each moreYearGroups as group (group.key)}
-                      <div class="space-y-1">
-                        <div class="text-muted-foreground bg-popover sticky top-0 text-xs">
-                          {group.label}
-                        </div>
-                        <ToggleGroup.Root
-                          type="single"
-                          size="sm"
-                          variant="outline"
-                          spacing={2}
-                          value={year}
-                          class="flex-wrap"
-                          onValueChange={(value) => {
-                            yearMenuOpen = false;
-                            void changeYear(value);
-                          }}
-                        >
-                          {#each group.years as value (value)}
-                            <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
-                          {/each}
-                        </ToggleGroup.Root>
-                      </div>
-                    {/each}
-                  </div>
-                </Popover.Content>
-              </Popover.Root>
-            {/if}
           </div>
+
+          {#if error}
+            <p class="text-destructive text-sm font-medium">{error}</p>
+          {/if}
         </div>
 
-        <div class="space-y-2">
-          <Label>Жанр</Label>
+        <div class="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4">
+          <div class="space-y-1">
+            <div class="text-sm font-semibold">Веса оценки</div>
+            <p class="text-muted-foreground text-xs">
+              Фильмы сравниваются внутри своего года. Настройки сохраняются в ссылке.
+            </p>
+          </div>
+
           <ToggleGroup.Root
             type="single"
             size="sm"
             variant="outline"
             spacing={2}
-            value={genre === "all" ? "" : genre}
-            onValueChange={changeGenre}
+            value={preset === "custom" ? "" : preset}
+            onValueChange={changePresetWeight}
             class="flex-wrap"
           >
-            <ToggleGroup.Item value="">все жанры</ToggleGroup.Item>
-            {#each filters.genres as item (item.slug)}
-              <ToggleGroup.Item value={item.slug}>{item.label}</ToggleGroup.Item>
+            {#each filters.presets as item (item.name)}
+              <ToggleGroup.Item value={item.name}>
+                {PRESET_CHIP_LABELS[item.name] ?? item.name}
+              </ToggleGroup.Item>
             {/each}
           </ToggleGroup.Root>
-        </div>
 
-        <div class="w-full max-w-64 space-y-2">
-          <Label for="best-movies-preset">Веса</Label>
-          <Select.Root type="single" value={preset} onValueChange={changePreset}>
-            <Select.Trigger id="best-movies-preset" class="w-full">
-              {PRESET_LABELS[preset] ?? preset}
-            </Select.Trigger>
-            <Select.Content>
-              {#each filters.presets as item (item.name)}
-                <Select.Item value={item.name}>{PRESET_LABELS[item.name] ?? item.name}</Select.Item>
-              {/each}
-              <Select.Item value="custom">{PRESET_LABELS.custom}</Select.Item>
-            </Select.Content>
-          </Select.Root>
-        </div>
-
-        {#if isCustom}
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="space-y-3">
             {#each filters.weight_keys as key (key)}
-              <div class="space-y-2">
-                <Label for={`best-movies-weight-${key}`}>{WEIGHT_LABELS[key] ?? key}</Label>
-                <Input
-                  id={`best-movies-weight-${key}`}
-                  type="number"
-                  min="0"
-                  max="100"
-                  bind:value={customWeights[key]}
-                  onchange={() => void applyFilters()}
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-sm font-medium">{WEIGHT_LABELS[key] ?? key}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-muted-foreground w-8 text-right text-xs tabular-nums">
+                      {customWeights[key] ?? 0}%
+                    </span>
+                    <Switch
+                      size="sm"
+                      checked={(customWeights[key] ?? 0) > 0}
+                      onCheckedChange={(checked) => toggleWeight(key, checked)}
+                      aria-label={`Учитывать: ${WEIGHT_LABELS[key] ?? key}`}
+                    />
+                  </div>
+                </div>
+                <Slider
+                  type="single"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={customWeights[key] ?? 0}
+                  onValueChange={(value) => onWeightChange(key, value)}
+                  onValueCommit={() => void applyFilters()}
+                  aria-label={WEIGHT_LABELS[key] ?? key}
                 />
               </div>
             {/each}
           </div>
-        {/if}
 
-        {#if error}
-          <p class="text-destructive text-sm font-medium">{error}</p>
-        {/if}
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-foreground mt-auto self-start text-sm underline-offset-4 hover:underline"
+            onclick={resetWeights}
+          >
+            Вернуть веса сайта
+          </button>
+        </div>
       </CardContent>
     </Card>
 
