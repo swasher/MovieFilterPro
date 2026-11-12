@@ -20,9 +20,11 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import * as Popover from "$lib/components/ui/popover";
   import * as Select from "$lib/components/ui/select";
   import { Separator } from "$lib/components/ui/separator";
   import * as Table from "$lib/components/ui/table";
+  import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
   import MovieStatusBadges from "$lib/components/vault/MovieStatusBadges.svelte";
   import {
@@ -57,6 +59,8 @@
   type SortDir = "asc" | "desc";
 
   const PAGE_SIZE = 50;
+  // Сколько последних лет показывать сразу в toggle group; остальные — под «…».
+  const YEAR_QUICK_LIMIT = 16;
 
   const SORT_LABELS: Record<SortKey, string> = {
     default: "По рейтингу сайта",
@@ -84,6 +88,7 @@
 
   let year = $state("none");
   let genre = $state("all");
+  let yearMenuOpen = $state(false);
   let preset = $state("default");
   let customWeights = $state<Record<string, string>>({
     imdb: "25",
@@ -115,6 +120,30 @@
   const currentSyncedAt = $derived(result?.synced_at ?? summary?.synced_at ?? null);
   const syncError = $derived(result?.error ?? summary?.error ?? "");
   const isCustom = $derived(preset === "custom");
+
+  const quickYears = $derived(
+    (filters?.years ?? []).slice(0, YEAR_QUICK_LIMIT)
+  );
+  const moreYears = $derived((filters?.years ?? []).slice(YEAR_QUICK_LIMIT));
+  // Старые годы разбиваем по десятилетиям: так проще ориентироваться в длинном списке.
+  const moreYearGroups = $derived.by(() => {
+    const groups: { key: string; label: string; years: number[] }[] = [];
+    for (const value of moreYears) {
+      const decade = Math.floor(value / 10) * 10;
+      const key = String(decade);
+      let group = groups.at(-1);
+      if (!group || group.key !== key) {
+        group = { key, label: `${decade}-е`, years: [] };
+        groups.push(group);
+      }
+      group.years.push(value);
+    }
+    return groups;
+  });
+  // Выбранный «старый» год показываем на самой кнопке «…», чтобы выбор не терялся.
+  const hiddenYear = $derived(
+    year !== "none" && !quickYears.includes(Number(year)) ? year : null
+  );
 
   function sortValue(movie: BestfilmsofMovie, key: SortKey): number | string | null {
     switch (key) {
@@ -590,53 +619,103 @@
   {:else if filters}
     <Card>
       <CardContent class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-3">
-          <div class="space-y-2">
-            <Label for="best-movies-year">Год</Label>
-            <Select.Root type="single" bind:value={year}>
-              <Select.Trigger id="best-movies-year" class="w-full">
-                {year === "none" ? "—" : year}
-              </Select.Trigger>
-              <Select.Content>
-                <Select.Item value="none">—</Select.Item>
-                {#each filters.years as value (value)}
-                  <Select.Item value={String(value)}>{value}</Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
-          </div>
+        <div class="space-y-2">
+          <Label>Год</Label>
+          <div class="flex flex-wrap items-start gap-2">
+            <ToggleGroup.Root
+              type="single"
+              size="sm"
+              variant="outline"
+              spacing={2}
+              value={year === "none" ? "" : year}
+              onValueChange={(value) => (year = value || "none")}
+              class="flex-wrap"
+            >
+              <ToggleGroup.Item value="">—</ToggleGroup.Item>
+              {#each quickYears as value (value)}
+                <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
+              {/each}
+            </ToggleGroup.Root>
 
-          <div class="space-y-2">
-            <Label for="best-movies-genre">Жанр</Label>
-            <Select.Root type="single" bind:value={genre}>
-              <Select.Trigger id="best-movies-genre" class="w-full">
-                {genre === "all"
-                  ? "все жанры"
-                  : (filters.genres.find((item) => item.slug === genre)?.label ?? genre)}
-              </Select.Trigger>
-              <Select.Content>
-                <Select.Item value="all">все жанры</Select.Item>
-                {#each filters.genres as item (item.slug)}
-                  <Select.Item value={item.slug}>{item.label}</Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
+            {#if moreYears.length > 0}
+              <Popover.Root bind:open={yearMenuOpen}>
+                <Popover.Trigger>
+                  {#snippet child({ props })}
+                    <Button
+                      {...props}
+                      size="sm"
+                      variant={hiddenYear ? "secondary" : "outline"}
+                      class="h-8 px-2.5"
+                      aria-label="Ещё годы"
+                      title="Ещё годы"
+                    >
+                      {hiddenYear ?? "…"}
+                    </Button>
+                  {/snippet}
+                </Popover.Trigger>
+                <Popover.Content class="w-72" align="start">
+                  <div class="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {#each moreYearGroups as group (group.key)}
+                      <div class="space-y-1">
+                        <div class="text-muted-foreground bg-popover sticky top-0 text-xs">
+                          {group.label}
+                        </div>
+                        <ToggleGroup.Root
+                          type="single"
+                          size="sm"
+                          variant="outline"
+                          spacing={2}
+                          value={year}
+                          class="flex-wrap"
+                          onValueChange={(value) => {
+                            year = value || "none";
+                            yearMenuOpen = false;
+                          }}
+                        >
+                          {#each group.years as value (value)}
+                            <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
+                          {/each}
+                        </ToggleGroup.Root>
+                      </div>
+                    {/each}
+                  </div>
+                </Popover.Content>
+              </Popover.Root>
+            {/if}
           </div>
+        </div>
 
-          <div class="space-y-2">
-            <Label for="best-movies-preset">Веса</Label>
-            <Select.Root type="single" bind:value={preset}>
-              <Select.Trigger id="best-movies-preset" class="w-full">
-                {PRESET_LABELS[preset] ?? preset}
-              </Select.Trigger>
-              <Select.Content>
-                {#each filters.presets as item (item.name)}
-                  <Select.Item value={item.name}>{PRESET_LABELS[item.name] ?? item.name}</Select.Item>
-                {/each}
-                <Select.Item value="custom">{PRESET_LABELS.custom}</Select.Item>
-              </Select.Content>
-            </Select.Root>
-          </div>
+        <div class="space-y-2">
+          <Label>Жанр</Label>
+          <ToggleGroup.Root
+            type="single"
+            size="sm"
+            variant="outline"
+            spacing={2}
+            value={genre === "all" ? "" : genre}
+            onValueChange={(value) => (genre = value || "all")}
+            class="flex-wrap"
+          >
+            <ToggleGroup.Item value="">все жанры</ToggleGroup.Item>
+            {#each filters.genres as item (item.slug)}
+              <ToggleGroup.Item value={item.slug}>{item.label}</ToggleGroup.Item>
+            {/each}
+          </ToggleGroup.Root>
+        </div>
+
+        <div class="w-full max-w-64 space-y-2">
+          <Label for="best-movies-preset">Веса</Label>
+          <Select.Root type="single" bind:value={preset}>
+            <Select.Trigger id="best-movies-preset" class="w-full">
+              {PRESET_LABELS[preset] ?? preset}
+            </Select.Trigger>
+            <Select.Content>
+              {#each filters.presets as item (item.name)}
+                <Select.Item value={item.name}>{PRESET_LABELS[item.name] ?? item.name}</Select.Item>
+              {/each}
+              <Select.Item value="custom">{PRESET_LABELS.custom}</Select.Item>
+            </Select.Content>
+          </Select.Root>
         </div>
 
         {#if isCustom}
