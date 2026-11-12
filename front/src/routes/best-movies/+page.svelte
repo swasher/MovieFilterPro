@@ -742,9 +742,9 @@
       </CardHeader>
     </Card>
   {:else if filters}
-    <Card>
-      <CardContent class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div class="space-y-4">
+    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-stretch">
+      <Card>
+        <CardContent class="space-y-4">
           <div class="space-y-2">
             <Label>Год</Label>
             <div class="flex flex-wrap items-start gap-2">
@@ -832,9 +832,11 @@
           {#if error}
             <p class="text-destructive text-sm font-medium">{error}</p>
           {/if}
-        </div>
+        </CardContent>
+      </Card>
 
-        <div class="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4">
+      <Card>
+        <CardContent class="flex flex-1 flex-col gap-4">
           <div class="space-y-1">
             <div class="text-sm font-semibold">Веса оценки</div>
             <p class="text-muted-foreground text-xs">
@@ -896,9 +898,9 @@
           >
             Вернуть веса сайта
           </button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
 
     {#if syncError}
       <Card class="border-destructive/50 bg-destructive/5">
