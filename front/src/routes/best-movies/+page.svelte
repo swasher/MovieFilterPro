@@ -539,13 +539,17 @@
     await applyFilters();
   }
 
-  async function changePresetWeight(value: string | undefined) {
-    // Снятие выбора с активного чипа = «свои веса» с текущими значениями слайдеров.
-    const next = value || "custom";
-    if (next === preset) return;
-    preset = next;
-    if (next !== "custom") applyPresetWeights(next);
+  async function changePresetWeight(name: string) {
+    if (name === preset) return;
+    preset = name;
+    applyPresetWeights(name);
     await applyFilters();
+  }
+
+  function onPresetKeydown(event: KeyboardEvent, name: string) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    void changePresetWeight(name);
   }
 
   async function resetWeights() {
@@ -844,21 +848,50 @@
             </p>
           </div>
 
-          <ToggleGroup.Root
-            type="single"
-            size="sm"
-            variant="outline"
-            spacing={2}
-            value={preset === "custom" ? "" : preset}
-            onValueChange={changePresetWeight}
-            class="flex-wrap"
-          >
-            {#each filters.presets as item (item.name)}
-              <ToggleGroup.Item value={item.name}>
-                {PRESET_CHIP_LABELS[item.name] ?? item.name}
-              </ToggleGroup.Item>
-            {/each}
-          </ToggleGroup.Root>
+          <div class="space-y-2">
+            <div class="space-y-1">
+              <div class="text-muted-foreground text-[10px] tracking-wide uppercase">с рамкой</div>
+              <div class="flex flex-wrap gap-1.5">
+                {#each filters.presets as item (item.name)}
+                  {@const active = preset === item.name}
+                  <Badge
+                    variant={active ? "default" : "outline"}
+                    class="cursor-pointer select-none"
+                    role="button"
+                    tabindex={0}
+                    aria-pressed={active}
+                    onclick={() => void changePresetWeight(item.name)}
+                    onkeydown={(event) => onPresetKeydown(event, item.name)}
+                  >
+                    {PRESET_CHIP_LABELS[item.name] ?? item.name}
+                  </Badge>
+                {/each}
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-muted-foreground text-[10px] tracking-wide uppercase">без рамки</div>
+              <div class="flex flex-wrap gap-1">
+                {#each filters.presets as item (item.name)}
+                  {@const active = preset === item.name}
+                  <Label
+                    role="button"
+                    tabindex={0}
+                    aria-pressed={active}
+                    class={`cursor-pointer rounded-full px-2 py-0.5 text-xs transition-colors ${
+                      active
+                        ? "bg-secondary text-secondary-foreground font-medium"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                    onclick={() => void changePresetWeight(item.name)}
+                    onkeydown={(event) => onPresetKeydown(event, item.name)}
+                  >
+                    {PRESET_CHIP_LABELS[item.name] ?? item.name}
+                  </Label>
+                {/each}
+              </div>
+            </div>
+          </div>
 
           <div class="space-y-3">
             {#each filters.weight_keys as key (key)}
