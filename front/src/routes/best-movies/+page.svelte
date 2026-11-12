@@ -66,7 +66,7 @@
   const YEAR_QUICK_LIMIT = 16;
 
   const SORT_LABELS: Record<SortKey, string> = {
-    default: "По рейтингу сайта",
+    default: "По формуле",
     score: "Скор bestfilmsof",
     imdb: "IMDb",
     votes: "Голоса IMDb",
@@ -107,7 +107,7 @@
   let yearMenuOpen = $state(false);
   let preset = $state("default");
   // Панель «Формула рейтинга» можно скрыть; выбор запоминаем между заходами.
-  let weightsVisible = $state(true);
+  let weightsVisible = $state(readWeightsVisible());
   // Сумма весов всегда 100: стартовые значения совпадают с пресетом Defaults,
   // а applyUrl/выбор пресета сразу подставят актуальные.
   let customWeights = $state<Record<string, number>>({
@@ -391,6 +391,12 @@
         ? rawDir
         : defaultSortDir(sortKey);
 
+    // Панель формулы открыта → сортировка всегда по формуле, что бы ни было в URL.
+    if (weightsVisible) {
+      sortKey = "default";
+      sortDir = defaultSortDir("default");
+    }
+
     const parsedPage = Number.parseInt(params.get("page") ?? "1", 10);
     pageNum = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
@@ -452,11 +458,6 @@
   }
 
   onMount(() => {
-    try {
-      weightsVisible = localStorage.getItem(WEIGHTS_VISIBLE_KEY) !== "0";
-    } catch {
-      // localStorage недоступен — оставляем панель открытой.
-    }
     syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
@@ -570,10 +571,25 @@
 
   function toggleWeights() {
     weightsVisible = !weightsVisible;
+    // Пока панель открыта, сортировка возможна только по формуле рейтинга.
+    if (weightsVisible && sortKey !== "default") {
+      sortKey = "default";
+      sortDir = defaultSortDir("default");
+      pageNum = 1;
+      commitUrl();
+    }
     try {
       localStorage.setItem(WEIGHTS_VISIBLE_KEY, weightsVisible ? "1" : "0");
     } catch {
       // localStorage недоступен — просто переключаем панель.
+    }
+  }
+
+  function readWeightsVisible(): boolean {
+    try {
+      return localStorage.getItem(WEIGHTS_VISIBLE_KEY) !== "0";
+    } catch {
+      return true;
     }
   }
 
@@ -1061,11 +1077,17 @@
               <Select.Root
                 type="single"
                 value={sortKey}
+                disabled={weightsVisible}
                 onValueChange={(value) => {
                   if (value) changeSort(value as SortKey);
                 }}
               >
-                <Select.Trigger class="w-48">
+                <Select.Trigger
+                  class="w-48"
+                  title={weightsVisible
+                    ? "Пока панель «Формула рейтинга» открыта, сортировка — только по формуле"
+                    : undefined}
+                >
                   {SORT_LABELS[sortKey]}
                 </Select.Trigger>
                 <Select.Content>
