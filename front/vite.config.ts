@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => {
 
 	return {
 		plugins: [tailwindcss(), sveltekit()],
-		allowedHosts: ['.ngrok-free.app', '.ngrok.app'],
 		server: {
+			allowedHosts: ['.ngrok-free.app', '.ngrok.app'],
 			proxy: {
 				'/api': {
 					target: backendUrl,
