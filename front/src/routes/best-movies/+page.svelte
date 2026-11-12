@@ -35,6 +35,7 @@
     type BestfilmsofMovieList,
     type BestfilmsofStatusFilter
   } from "$lib/bestfilmsof";
+  import { normalizeWeights, redistributeWeights } from "$lib/weights";
 
   type Mode = "list" | "summary";
 
@@ -102,11 +103,13 @@
   let genre = $state("all");
   let yearMenuOpen = $state(false);
   let preset = $state("default");
+  // Сумма весов всегда 100: стартовые значения совпадают с пресетом Defaults,
+  // а applyUrl/выбор пресета сразу подставят актуальные.
   let customWeights = $state<Record<string, number>>({
-    imdb: 0,
-    critics: 0,
-    awards: 0,
-    boxoffice: 0
+    imdb: 30,
+    critics: 30,
+    awards: 20,
+    boxoffice: 20
   });
   // Последние ненулевые веса — чтобы switch возвращал компонент, а не включал с нуля.
   let lastWeights = $state<Record<string, number>>({
@@ -357,12 +360,13 @@
     const rawPreset = params.get("preset") ?? "default";
     preset = isValidPreset(rawPreset) ? rawPreset : "default";
     if (preset === "custom") {
-      customWeights = Object.fromEntries(
+      const parsed = Object.fromEntries(
         weightKeys.map((key) => [key, parseWeight(params.get(`w_${key}`))])
       );
+      customWeights = normalizeWeights(parsed, weightKeys, weightsForPreset("default"));
     } else {
-      // Для именованных пресетов (и дефолта) слайдеры показывают именно их веса.
-      customWeights = weightsForPreset(preset);
+      // Для именованных пресетов слайдеры показывают именно их веса (сумма 100).
+      customWeights = normalizedPresetWeights(preset);
     }
     rememberWeights();
 
@@ -575,8 +579,16 @@
   }
 
   function applyPresetWeights(name: string) {
-    customWeights = weightsForPreset(name);
+    customWeights = normalizedPresetWeights(name);
     rememberWeights();
+  }
+
+  function normalizedPresetWeights(name: string): Record<string, number> {
+    return normalizeWeights(
+      weightsForPreset(name),
+      weightKeys,
+      weightsForPreset("default")
+    );
   }
 
   function rememberWeights() {
@@ -587,17 +599,22 @@
   }
 
   function onWeightChange(key: string, value: number) {
-    const next = Math.max(0, Math.min(100, Math.round(value)));
-    customWeights = { ...customWeights, [key]: next };
-    if (next > 0) lastWeights[key] = next;
+    const next = redistributeWeights(customWeights, key, value);
+    const changed = weightKeys.some(
+      (item) => (next[item] ?? 0) !== (customWeights[item] ?? 0)
+    );
+    if (!changed) return;
+    customWeights = next;
+    const own = next[key] ?? 0;
+    if (own > 0) lastWeights[key] = own;
     // Любая ручная правка слайдера означает свои веса.
     if (preset !== "custom") preset = "custom";
   }
 
   async function toggleWeight(key: string, enabled: boolean) {
-    const next = enabled ? lastWeights[key] || DEFAULT_WEIGHT : 0;
-    if ((customWeights[key] ?? 0) === next && preset === "custom") return;
-    customWeights = { ...customWeights, [key]: next };
+    const target = enabled ? lastWeights[key] || DEFAULT_WEIGHT : 0;
+    if ((customWeights[key] ?? 0) === target && preset === "custom") return;
+    onWeightChange(key, target);
     if (preset !== "custom") preset = "custom";
     await applyFilters();
   }
@@ -907,7 +924,7 @@
                   type="single"
                   min={0}
                   max={100}
-                  step={5}
+                  step={1}
                   value={customWeights[key] ?? 0}
                   onValueChange={(value) => onWeightChange(key, value)}
                   onValueCommit={() => void applyFilters()}
@@ -922,7 +939,7 @@
             class="text-muted-foreground hover:text-foreground mt-auto self-start text-sm underline-offset-4 hover:underline"
             onclick={resetWeights}
           >
-            Вернуть веса сайта
+            Вернуть Defaults
           </button>
         </CardContent>
       </Card>

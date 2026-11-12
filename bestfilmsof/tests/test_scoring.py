@@ -2,7 +2,15 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
+from bestfilmsof.constants import WEIGHT_PRESETS
 from bestfilmsof.scoring import clamp_weight, parse_weights, rescore
+
+
+class WeightPresetsTests(SimpleTestCase):
+    def test_presets_sum_to_100(self):
+        for name, weights in WEIGHT_PRESETS.items():
+            self.assertIsNotNone(weights, name)
+            self.assertEqual(sum(weights.values()), 100, name)
 
 
 class RescoreTests(SimpleTestCase):
