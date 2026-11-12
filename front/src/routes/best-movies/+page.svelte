@@ -848,49 +848,24 @@
             </p>
           </div>
 
-          <div class="space-y-2">
-            <div class="space-y-1">
-              <div class="text-muted-foreground text-[10px] tracking-wide uppercase">с рамкой</div>
-              <div class="flex flex-wrap gap-1.5">
-                {#each filters.presets as item (item.name)}
-                  {@const active = preset === item.name}
-                  <Badge
-                    variant={active ? "default" : "outline"}
-                    class="cursor-pointer select-none"
-                    role="button"
-                    tabindex={0}
-                    aria-pressed={active}
-                    onclick={() => void changePresetWeight(item.name)}
-                    onkeydown={(event) => onPresetKeydown(event, item.name)}
-                  >
-                    {PRESET_CHIP_LABELS[item.name] ?? item.name}
-                  </Badge>
-                {/each}
-              </div>
-            </div>
-
-            <div class="space-y-1">
-              <div class="text-muted-foreground text-[10px] tracking-wide uppercase">без рамки</div>
-              <div class="flex flex-wrap gap-1">
-                {#each filters.presets as item (item.name)}
-                  {@const active = preset === item.name}
-                  <Label
-                    role="button"
-                    tabindex={0}
-                    aria-pressed={active}
-                    class={`cursor-pointer rounded-full px-2 py-0.5 text-xs transition-colors ${
-                      active
-                        ? "bg-secondary text-secondary-foreground font-medium"
-                        : "text-muted-foreground hover:bg-muted"
-                    }`}
-                    onclick={() => void changePresetWeight(item.name)}
-                    onkeydown={(event) => onPresetKeydown(event, item.name)}
-                  >
-                    {PRESET_CHIP_LABELS[item.name] ?? item.name}
-                  </Label>
-                {/each}
-              </div>
-            </div>
+          <div class="flex flex-wrap gap-1">
+            {#each filters.presets as item (item.name)}
+              {@const active = preset === item.name}
+              <Label
+                role="button"
+                tabindex={0}
+                aria-pressed={active}
+                class={`cursor-pointer rounded-md px-2 py-0.5 text-xs transition-colors ${
+                  active
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+                onclick={() => void changePresetWeight(item.name)}
+                onkeydown={(event) => onPresetKeydown(event, item.name)}
+              >
+                {PRESET_CHIP_LABELS[item.name] ?? item.name}
+              </Label>
+            {/each}
           </div>
 
           <div class="space-y-3">
