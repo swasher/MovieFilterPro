@@ -33,6 +33,7 @@
   import {
     WEIGHT_LABELS,
     type BestfilmsofGenreSummary,
+    type BestfilmsofGenreYear,
     type BestfilmsofMovie,
     type BestfilmsofMovieList,
     type BestfilmsofStatusFilter
@@ -93,6 +94,10 @@
   const DEFAULT_WEIGHT = 25;
   const WEIGHT_FALLBACK_KEYS = ["imdb", "critics", "awards", "boxoffice"];
   const WEIGHTS_VISIBLE_KEY = "best-movies:weights-visible";
+  // Кольцо скора в сводке по годам.
+  const SCORE_RING_RADIUS = 20;
+  const SCORE_RING_LENGTH = 2 * Math.PI * SCORE_RING_RADIUS;
+  const SCORE_HIGH_THRESHOLD = 80;
 
   function defaultSortDir(key: SortKey): SortDir {
     return key === "title" ? "asc" : "desc";
@@ -178,6 +183,21 @@
   const hiddenYear = $derived(
     year !== "none" && !quickYears.includes(Number(year)) ? year : null
   );
+
+  // Сводка по жанру: годы, сгруппированные по десятилетиям (сверху новые).
+  const summaryDecades = $derived.by(() => {
+    const groups: { decade: number; years: BestfilmsofGenreYear[] }[] = [];
+    for (const item of summary?.years ?? []) {
+      const decade = Math.floor(item.year / 10) * 10;
+      let group = groups.at(-1);
+      if (!group || group.decade !== decade) {
+        group = { decade, years: [] };
+        groups.push(group);
+      }
+      group.years.push(item);
+    }
+    return groups;
+  });
 
   function sortValue(movie: BestfilmsofMovie, key: SortKey): number | string | null {
     switch (key) {
@@ -738,6 +758,24 @@
     return movie.title_ru || movie.title;
   }
 
+  function plural(count: number, forms: [string, string, string]): string {
+    const abs = Math.abs(count) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return forms[2];
+    if (last === 1) return forms[0];
+    if (last >= 2 && last <= 4) return forms[1];
+    return forms[2];
+  }
+
+  function scoreIsHigh(score: number | null): boolean {
+    return (score ?? 0) >= SCORE_HIGH_THRESHOLD;
+  }
+
+  function scoreRingOffset(score: number | null): number {
+    const value = Math.max(0, Math.min(100, score ?? 0));
+    return SCORE_RING_LENGTH * (1 - value / 100);
+  }
+
   function posterUrl(path: string | null, size: "w185" | "w342" = "w185"): string | null {
     return path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
   }
@@ -821,7 +859,7 @@
                 onValueChange={changeYear}
                 class="flex-wrap"
               >
-                <ToggleGroup.Item value="">—</ToggleGroup.Item>
+                <ToggleGroup.Item value="">All years</ToggleGroup.Item>
                 {#each quickYears as value (value)}
                   <ToggleGroup.Item value={String(value)}>{value}</ToggleGroup.Item>
                 {/each}
@@ -1318,21 +1356,13 @@
       </Card>
     {:else if summary}
       <Card>
-        <CardHeader class="pb-3">
-          <div class="flex flex-col justify-between gap-2 md:flex-row md:items-center">
-            <div>
-              <CardTitle class="text-lg">
-                Жанр: {filters.genres.find((item) => item.slug === summary?.genre)?.label ?? summary.genre}
-                <span class="text-muted-foreground ml-2 text-sm font-normal">{summary.total} лет</span>
-              </CardTitle>
-              <CardDescription>Топ-фильм и количество фильмов по годам</CardDescription>
-            </div>
-            {#if summary.is_stale}
+        <CardContent class="space-y-6">
+          {#if summary.is_stale}
+            <div class="flex justify-end">
               <Badge variant="outline">Кеш устарел — обновится в фоне</Badge>
-            {/if}
-          </div>
-        </CardHeader>
-        <CardContent>
+            </div>
+          {/if}
+
           {#if (summary.state === "syncing" || summary.state === "queued") && summary.total === 0}
             <div class="text-muted-foreground flex items-center gap-3 py-10 text-sm">
               <Loader2 class="h-5 w-5 animate-spin" />
@@ -1348,59 +1378,94 @@
           {:else if summary.years.length === 0}
             <p class="text-muted-foreground py-8 text-sm">Нет данных для этого жанра.</p>
           {:else}
-            <div class="overflow-x-auto rounded-lg border">
-              <Table.Root>
-                <Table.Header>
-                  <Table.Row>
-                    <Table.Head class="w-20">Год</Table.Head>
-                    <Table.Head class="w-20 text-right">Фильмов</Table.Head>
-                    <Table.Head class="w-16">Постер</Table.Head>
-                    <Table.Head>Топ-фильм</Table.Head>
-                    <Table.Head class="w-20 text-right">Скор</Table.Head>
-                    <Table.Head class="w-20" />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {#each summary.years as item (item.year)}
+            {#each summaryDecades as group (group.decade)}
+              <section class="space-y-3">
+                <h3 class="text-muted-foreground text-lg font-semibold tracking-tight">
+                  {group.decade}-е
+                </h3>
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {#each group.years as item (item.year)}
                     {@const poster = posterUrl(item.top_poster_path)}
-                    <Table.Row>
-                      <Table.Cell>
-                        <button class="font-medium underline-offset-4 hover:underline" onclick={() => openYear(item.year)}>
-                          {item.year}
-                        </button>
-                      </Table.Cell>
-                      <Table.Cell class="text-right">{item.count}</Table.Cell>
-                      <Table.Cell>
+                    {@const title = item.top_title_ru || item.top_title}
+                    {@const href =
+                      item.in_collection && item.collection_slug
+                        ? `/movies/${item.collection_slug}`
+                        : null}
+                    <div class="flex items-center gap-3 rounded-lg border bg-card p-2.5 transition hover:bg-muted/40">
+                      <div class="bg-muted h-24 w-16 shrink-0 overflow-hidden rounded-md">
                         {#if poster}
-                          <img src={poster} alt="" loading="lazy" class="h-16 w-11 rounded object-cover" />
+                          <VaultImage
+                            src={poster}
+                            alt={title}
+                            class="h-full w-full object-cover"
+                            slotClass="h-full w-full"
+                            loading="lazy"
+                          />
                         {/if}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div class="font-medium">{item.top_title_ru || item.top_title}</div>
-                        {#if item.top_overview_ru}
-                          <p class="text-muted-foreground mt-1 line-clamp-2 max-w-xl text-xs">
-                            {item.top_overview_ru}
-                          </p>
-                        {/if}
-                      </Table.Cell>
-                      <Table.Cell class="text-right font-semibold">
-                        {item.top_score == null ? "—" : item.top_score.toFixed(2)}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {#if item.in_collection && item.collection_slug}
-                          <a href={`/movies/${item.collection_slug}`}>
-                            <Badge variant="secondary" class="gap-1">
-                              <ExternalLink class="h-3 w-3" />
-                              Vault
-                            </Badge>
+                      </div>
+
+                      <div class="flex min-w-0 flex-1 flex-col">
+                        <div class="text-muted-foreground text-xs">{item.year}</div>
+                        {#if href}
+                          <a
+                            href={href}
+                            class="line-clamp-2 text-sm font-medium underline-offset-4 hover:underline"
+                            title={title}
+                          >
+                            {title}
                           </a>
+                        {:else}
+                          <div class="line-clamp-2 text-sm font-medium" title={title}>{title}</div>
                         {/if}
-                      </Table.Cell>
-                    </Table.Row>
+                        <button
+                          type="button"
+                          class="text-muted-foreground hover:text-foreground mt-1 self-start text-xs underline-offset-4 hover:underline"
+                          onclick={() => void openYear(item.year)}
+                        >
+                          {item.count}
+                          {plural(item.count, ["фильм", "фильма", "фильмов"])} →
+                        </button>
+                      </div>
+
+                      <div class="relative shrink-0">
+                        <svg viewBox="0 0 48 48" class="size-12 -rotate-90">
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r={SCORE_RING_RADIUS}
+                            fill="none"
+                            stroke-width="3"
+                            class="stroke-muted"
+                          />
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r={SCORE_RING_RADIUS}
+                            fill="none"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            class={scoreIsHigh(item.top_score)
+                              ? "stroke-amber-500"
+                              : "stroke-muted-foreground/50"}
+                            stroke-dasharray={SCORE_RING_LENGTH}
+                            stroke-dashoffset={scoreRingOffset(item.top_score)}
+                          />
+                        </svg>
+                        <span
+                          class={`absolute inset-0 flex items-center justify-center text-xs font-semibold ${
+                            scoreIsHigh(item.top_score)
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.top_score == null ? "—" : Math.round(item.top_score)}
+                        </span>
+                      </div>
+                    </div>
                   {/each}
-                </Table.Body>
-              </Table.Root>
-            </div>
+                </div>
+              </section>
+            {/each}
           {/if}
         </CardContent>
       </Card>
