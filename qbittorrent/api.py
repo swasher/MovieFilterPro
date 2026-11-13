@@ -420,6 +420,7 @@ def upload_movie_torrent(request, movie_id: int, file: File[UploadedFile]):
             torrent_bytes=torrent_bytes,
             movie=movie,
             tag=f'mfp:{movie.id}',
+            original_filename=getattr(file, 'name', None),
         )
     except QbtError as exc:
         _raise_qbt_error(exc)
