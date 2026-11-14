@@ -1475,11 +1475,11 @@ def movie_fetch_tmdb_confirm(request, slug: str, payload: TMDBCandidateConfirmIn
 
 
 @api.get("/tmdb/search", response=TMDBSearchOut)
-def tmdb_search(request, q: str, limit: int = 10):
+def tmdb_search(request, q: str, limit: int = 10, year: int | None = None):
     _require_api_user(request)
 
     try:
-        results = TMDBMovieImportService.search_movies(q, limit=limit)
+        results = TMDBMovieImportService.search_movies(q, limit=limit, year=year)
     except Exception as exc:
         raise HttpError(400, str(exc))
 

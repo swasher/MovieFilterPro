@@ -19,11 +19,28 @@ class _FakeTMDBClient:
         self._tv_results = tv_results or []
         self._movie_details = movie_details or {}
         self._tv_details = tv_details or {}
+        self.search_calls: list[dict] = []
 
-    def movie_search(self, query, include_adult=True):
+    def movie_search(self, query, include_adult=True, primary_release_year=None):
+        self.search_calls.append(
+            {
+                "media_type": "movie",
+                "query": query,
+                "year": primary_release_year,
+                "include_adult": include_adult,
+            }
+        )
         return _FakeSearchResponse(self._movie_results)
 
-    def tv_search(self, query, include_adult=True):
+    def tv_search(self, query, include_adult=True, first_air_date_year=None):
+        self.search_calls.append(
+            {
+                "media_type": "tv",
+                "query": query,
+                "year": first_air_date_year,
+                "include_adult": include_adult,
+            }
+        )
         return _FakeSearchResponse(self._tv_results)
 
     def movie(self, movie_id):
@@ -95,6 +112,26 @@ class TMDBMovieImportServiceSearchTests(SimpleTestCase):
         self.assertEqual(results[0].tmdb_id, 101)
         self.assertEqual(results[1].media_type, "tv")
         self.assertEqual(results[1].tmdb_id, 202)
+
+    @patch("vault.services.tmdb_movie_import_service.get_tmdb_client")
+    def test_search_passes_year_to_both_media_types(self, get_tmdb_client_mock):
+        fake_tmdb = _FakeTMDBClient()
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        TMDBMovieImportService.search_movies("Фея", limit=10, year=2011)
+
+        year_calls = {(call["media_type"], call["year"]) for call in fake_tmdb.search_calls}
+        self.assertEqual(year_calls, {("movie", 2011), ("tv", 2011)})
+        self.assertTrue(all(call["query"] == "Фея" for call in fake_tmdb.search_calls))
+
+    @patch("vault.services.tmdb_movie_import_service.get_tmdb_client")
+    def test_search_without_year_does_not_filter(self, get_tmdb_client_mock):
+        fake_tmdb = _FakeTMDBClient()
+        get_tmdb_client_mock.return_value = fake_tmdb
+
+        TMDBMovieImportService.search_movies("Дюна", limit=10)
+
+        self.assertTrue(all(call["year"] is None for call in fake_tmdb.search_calls))
 
 
 class TMDBMovieImportServiceTests(TestCase):

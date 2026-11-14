@@ -35,7 +35,12 @@ class TMDBMovieImportService:
     # ------------------------------------ #
 
     @classmethod
-    def search_movies(cls, query: str, limit: int = SEARCH_RESULTS_LIMIT) -> tuple[TMDBCandidate, ...]:
+    def search_movies(
+        cls,
+        query: str,
+        limit: int = SEARCH_RESULTS_LIMIT,
+        year: int | None = None,
+    ) -> tuple[TMDBCandidate, ...]:
         normalized_query = (query or "").strip()
         if len(normalized_query) < 2:
             return tuple()
@@ -45,7 +50,12 @@ class TMDBMovieImportService:
         candidates: dict[tuple[str, int], TMDBCandidate] = {}
 
         for media_type in ("movie", "tv"):
-            items = cls._search_once(tmdb=tmdb, media_type=media_type, query=normalized_query)
+            items = cls._search_once(
+                tmdb=tmdb,
+                media_type=media_type,
+                query=normalized_query,
+                year=year,
+            )
             for item in items[: max(bounded_limit, cls.SEARCH_RESULTS_PER_MEDIA)]:
                 candidate = cls._to_candidate(item=item, media_type=media_type)
                 if candidate is None:
@@ -190,12 +200,28 @@ class TMDBMovieImportService:
     # ------------------------------------ #
 
     @classmethod
-    def _search_once(cls, tmdb, media_type: MediaType, query: str):
+    def _search_once(cls, tmdb, media_type: MediaType, query: str, year: int | None = None):
+        # Год передаётся отдельным параметром TMDB (а не текстом в query):
+        # primary_release_year / first_air_date_year — точное совпадение года.
         try:
             if media_type == "movie":
-                response = tmdb.movie_search(query=query, include_adult=True)
+                if year:
+                    response = tmdb.movie_search(
+                        query=query,
+                        primary_release_year=year,
+                        include_adult=True,
+                    )
+                else:
+                    response = tmdb.movie_search(query=query, include_adult=True)
             else:
-                response = tmdb.tv_search(query=query, include_adult=True)
+                if year:
+                    response = tmdb.tv_search(
+                        query=query,
+                        first_air_date_year=year,
+                        include_adult=True,
+                    )
+                else:
+                    response = tmdb.tv_search(query=query, include_adult=True)
         except NotFound:
             return []
         except Exception:

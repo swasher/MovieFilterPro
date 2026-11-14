@@ -9,6 +9,7 @@ import { Button } from "$lib/components/ui/button";
 import { Label } from "$lib/components/ui/label";
 import { Switch } from "$lib/components/ui/switch";
 import * as Dialog from "$lib/components/ui/dialog";
+import * as Select from "$lib/components/ui/select";
 import * as ToggleGroup from "$lib/components/ui/toggle-group";
 import { SortSelect } from "$lib/components/ui/sort-select";
 import MovieCard from "$lib/components/vault/MovieCard.svelte";
@@ -108,6 +109,16 @@ type TmdbSearchResult = {
   let tmdbSearchError = $state("");
   let tmdbSearchResults = $state<TmdbSearchResult[]>([]);
   let selectedTmdbKey = $state<string | null>(null);
+  // Год — явный фильтр TMDB (primary_release_year / first_air_date_year), а не часть строки поиска.
+  let tmdbSearchYear = $state<string>("all");
+
+  const TMDB_YEAR_ANY = "all";
+  const TMDB_YEAR_MAX = new Date().getFullYear() + 1;
+  const TMDB_YEAR_MIN = 1900;
+  const TMDB_SEARCH_YEARS: number[] = Array.from(
+    { length: TMDB_YEAR_MAX - TMDB_YEAR_MIN + 1 },
+    (_, index) => TMDB_YEAR_MAX - index
+  );
 
   let filterOpen = $state(false);
   let selectedGenres = $state<string[]>([]);
@@ -203,6 +214,7 @@ type TmdbSearchResult = {
     tmdbSearchAbortController?.abort();
     tmdbSearchAbortController = null;
     tmdbSearchQuery = "";
+    tmdbSearchYear = TMDB_YEAR_ANY;
     isSearchingTmdb = false;
     isImportingTmdb = false;
     tmdbSearchPerformed = false;
@@ -498,6 +510,9 @@ type TmdbSearchResult = {
         q: query,
         limit: "10"
       });
+      if (tmdbSearchYear !== TMDB_YEAR_ANY) {
+        params.set("year", tmdbSearchYear);
+      }
       const response = await fetch(`/api/vault/tmdb/search?${params.toString()}`, {
         signal: controller.signal
       });
@@ -554,6 +569,22 @@ type TmdbSearchResult = {
     tmdbSearchDebounceHandle = setTimeout(() => {
       void searchTmdbMovies(trimmedTmdbSearchQuery);
     }, 350);
+  };
+
+  const onTmdbSearchYearChange = (value: string | undefined) => {
+    tmdbSearchYear = value ?? TMDB_YEAR_ANY;
+
+    if (tmdbSearchDebounceHandle) {
+      clearTimeout(tmdbSearchDebounceHandle);
+      tmdbSearchDebounceHandle = null;
+    }
+
+    // Смена года — это явное действие пользователя, дебаунс не нужен.
+    if (trimmedTmdbSearchQuery.length < 2) {
+      return;
+    }
+
+    void searchTmdbMovies(trimmedTmdbSearchQuery);
   };
 
   const importSelectedTmdbMovie = async () => {
@@ -967,15 +998,38 @@ type TmdbSearchResult = {
     </Dialog.Header>
 
     <div class="flex min-h-0 flex-1 flex-col space-y-4">
-      <Input
-        bind:ref={tmdbSearchInputRef}
-        bind:value={tmdbSearchQuery}
-        type="search"
-        placeholder="Название фильма или сериала..."
-        class="h-11"
-        autofocus
-        oninput={onTmdbSearchInput}
-      />
+      <div class="flex items-center gap-2">
+        <Input
+          bind:ref={tmdbSearchInputRef}
+          bind:value={tmdbSearchQuery}
+          type="search"
+          placeholder="Название фильма или сериала..."
+          class="h-11 flex-1"
+          autofocus
+          oninput={onTmdbSearchInput}
+        />
+
+        <span class="text-muted-foreground shrink-0 text-sm">Год</span>
+        <Select.Root
+          type="single"
+          value={tmdbSearchYear}
+          onValueChange={onTmdbSearchYearChange}
+        >
+          <Select.Trigger class="h-11 w-32" title="Год выхода (точное совпадение)">
+            {#if tmdbSearchYear === TMDB_YEAR_ANY}
+              Любой
+            {:else}
+              {tmdbSearchYear}
+            {/if}
+          </Select.Trigger>
+          <Select.Content class="max-h-72">
+            <Select.Item value={TMDB_YEAR_ANY}>Любой год</Select.Item>
+            {#each TMDB_SEARCH_YEARS as year (year)}
+              <Select.Item value={String(year)}>{year}</Select.Item>
+            {/each}
+          </Select.Content>
+        </Select.Root>
+      </div>
 
       <div class="min-h-0 flex-1 overflow-hidden rounded-xl border">
         {#if trimmedTmdbSearchQuery.length < 2}
@@ -1051,8 +1105,12 @@ type TmdbSearchResult = {
             </table>
           </div>
         {:else if tmdbSearchPerformed}
-          <div class="text-muted-foreground flex h-full items-center justify-center text-sm">
-            Ничего не найдено.
+          <div class="text-muted-foreground flex h-full items-center justify-center px-4 text-center text-sm">
+            {#if tmdbSearchYear === TMDB_YEAR_ANY}
+              Ничего не найдено.
+            {:else}
+              Ничего не найдено за {tmdbSearchYear} год. Попробуй другой год или «Любой».
+            {/if}
           </div>
         {/if}
       </div>
