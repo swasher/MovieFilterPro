@@ -173,8 +173,8 @@ class TorrentServiceTests(TestCase):
         torrent = Torrent.objects.get(info_hash=info_hash)
         self.assertEqual(torrent.name, 'Test Movie')
         self.assertEqual(torrent.source_url, 'https://kinozal.tv/details.php?id=1001')
-        self.assertEqual(torrent.torrent_file, f'{info_hash}.torrent')
-        self.assertTrue((Path(self.temp_dir.name) / f'{info_hash}.torrent').exists())
+        self.assertEqual(torrent.torrent_file, 'Test Movie.torrent')
+        self.assertTrue((Path(self.temp_dir.name) / 'Test Movie.torrent').exists())
         self.assertEqual(client.add_kwargs['tags'], 'mfp')
         self.assertTrue(client.add_kwargs['is_sequential_download'])
         self.assertEqual(client.add_kwargs['torrent_files'], _torrent_bytes())
@@ -415,8 +415,8 @@ class TorrentServiceTests(TestCase):
         self.assertEqual(torrent.movie, movie)
         self.assertEqual(torrent.info_hash, info_hash)
         self.assertEqual(torrent.source_url, 'https://kinozal.tv/details.php?id=1001')
-        self.assertEqual(torrent.torrent_file, f'{info_hash}.torrent')
-        self.assertTrue((Path(self.temp_dir.name) / f'{info_hash}.torrent').exists())
+        self.assertEqual(torrent.torrent_file, 'Test Movie (2024).torrent')
+        self.assertTrue((Path(self.temp_dir.name) / 'Test Movie (2024).torrent').exists())
 
     @patch('qbittorrent.services.torrent_service.build_client')
     def test_attach_torrent_rejects_other_movie(self, build_client_mock):

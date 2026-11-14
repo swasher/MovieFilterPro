@@ -152,6 +152,7 @@
 
   const currentState = $derived(result?.state ?? summary?.state ?? "idle");
   const currentSyncedAt = $derived(result?.synced_at ?? summary?.synced_at ?? null);
+  const cacheStale = $derived(result?.is_stale ?? summary?.is_stale ?? false);
   const syncError = $derived(result?.error ?? summary?.error ?? "");
 
   const weightKeys = $derived(filters?.weight_keys ?? WEIGHT_FALLBACK_KEYS);
@@ -812,6 +813,11 @@
       {:else if currentState === "error"}
         <Badge variant="destructive">Ошибка синка</Badge>
       {/if}
+      {#if cacheStale}
+        <Badge variant="outline" title="Данные кеша устарели — обновление уже идёт в фоне">
+          Кеш устарел
+        </Badge>
+      {/if}
       {#if currentSyncedAt}
         <span class="text-muted-foreground text-xs">Обновлено: {formatSynced(currentSyncedAt)}</span>
       {/if}
@@ -1067,13 +1073,6 @@
       </Card>
     {:else if result}
       <Card>
-        {#if result.is_stale}
-          <CardHeader class="pb-3">
-            <div class="flex justify-end">
-              <Badge variant="outline">Кеш устарел — обновится в фоне</Badge>
-            </div>
-          </CardHeader>
-        {/if}
         <CardContent>
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <ButtonGroup.Root>
@@ -1357,12 +1356,6 @@
     {:else if summary}
       <Card>
         <CardContent class="space-y-6">
-          {#if summary.is_stale}
-            <div class="flex justify-end">
-              <Badge variant="outline">Кеш устарел — обновится в фоне</Badge>
-            </div>
-          {/if}
-
           {#if (summary.state === "syncing" || summary.state === "queued") && summary.total === 0}
             <div class="text-muted-foreground flex items-center gap-3 py-10 text-sm">
               <Loader2 class="h-5 w-5 animate-spin" />

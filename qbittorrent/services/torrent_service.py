@@ -333,6 +333,8 @@ def _save_archive(
     preferences: UserPreferences,
     info_hash: str,
     torrent_bytes: bytes,
+    *,
+    archive_name: str | None = None,
 ) -> tuple[str, str | None]:
     configured_folder = (preferences.torrents_backup_folder or '').strip()
     if not configured_folder:
@@ -344,13 +346,23 @@ def _save_archive(
         return '', f'Некорректная папка backup: {exc}'
 
     try:
-        return write_torrent_archive(folder, info_hash, torrent_bytes), None
+        return write_torrent_archive(
+            folder,
+            info_hash,
+            torrent_bytes,
+            archive_name=archive_name,
+        ), None
     except Exception as exc:  # noqa: BLE001
         logger.warning('Не удалось сохранить .torrent напрямую: %s', exc, exc_info=True)
 
     try:
         exported = client.torrents_export(torrent_hash=info_hash)
-        return write_torrent_archive(folder, info_hash, exported), None
+        return write_torrent_archive(
+            folder,
+            info_hash,
+            exported,
+            archive_name=archive_name,
+        ), None
     except Exception as exc:  # noqa: BLE001
         logger.warning('Не удалось получить .torrent через torrents_export: %s', exc, exc_info=True)
         return '', f'Не удалось сохранить .torrent: {exc}'
@@ -394,6 +406,10 @@ def _add_torrent(
     tag: str | None = None,
     kinozal_torrent_id: int | None = None,
     source: str = 'kinozal',
+    original_filename: str | None = None,
+    original_name: str | None = None,
+    archive_name: str | None = None,
+    torrent_filename: str | None = None,
 ) -> TorrentAddResult:
     """Общий пайплайн: qBittorrent -> архив .torrent -> запись Torrent."""
     preferences = _preferences()
@@ -409,6 +425,24 @@ def _add_torrent(
         metadata = parse_torrent_metadata(torrent_bytes)
     except TorrentMetadataError as exc:
         raise QbtError('qbt_invalid_torrent', str(exc), status_code=400) from exc
+
+    resolved_original_filename = original_filename or original_name or torrent_filename
+    if archive_name is None:
+        if movie is not None:
+            archive_name = (
+                f'{movie.title} ({movie.year})'
+                if getattr(movie, 'year', None)
+                else getattr(movie, 'title', None)
+            )
+        elif resolved_original_filename:
+            try:
+                from pathlib import Path as _Path
+
+                archive_name = _Path(resolved_original_filename).stem
+            except Exception:  # noqa: BLE001
+                archive_name = resolved_original_filename
+        else:
+            archive_name = metadata.name
 
     _assert_movie_link_available(metadata.info_hash, movie)
 
@@ -513,7 +547,9 @@ def _add_torrent(
 
     warning = None
     if not archive_saved:
-        archive_path, warning = _save_archive(client, preferences, info_hash, torrent_bytes)
+        archive_path, warning = _save_archive(
+            client, preferences, info_hash, torrent_bytes, archive_name=archive_name
+        )
         if archive_path:
             torrent.torrent_file = archive_path
             torrent.last_error = ''
@@ -565,6 +601,10 @@ def add_torrent_from_kinozal(
     torrent_id: int,
     source_url: str | None = None,
     tag: str | None = None,
+    original_filename: str | None = None,
+    original_name: str | None = None,
+    archive_name: str | None = None,
+    torrent_filename: str | None = None,
 ) -> TorrentAddResult:
     """Раздача скачана с Kinozal: привязка к Vault выполняется отдельным импортом."""
     return _add_torrent(
@@ -573,6 +613,10 @@ def add_torrent_from_kinozal(
         tag=tag,
         kinozal_torrent_id=torrent_id,
         source='kinozal',
+        original_filename=original_filename,
+        original_name=original_name,
+        archive_name=archive_name,
+        torrent_filename=torrent_filename,
     )
 
 
@@ -581,6 +625,10 @@ def add_torrent_from_file(
     torrent_bytes: bytes,
     movie: Movie,
     tag: str | None = None,
+    original_filename: str | None = None,
+    original_name: str | None = None,
+    archive_name: str | None = None,
+    torrent_filename: str | None = None,
 ) -> TorrentAddResult:
     """Вручную загруженный .torrent сразу привязывается к фильму Vault."""
     return _add_torrent(
@@ -588,6 +636,10 @@ def add_torrent_from_file(
         movie=movie,
         tag=tag,
         source='manual',
+        original_filename=original_filename,
+        original_name=original_name,
+        archive_name=archive_name,
+        torrent_filename=torrent_filename,
     )
 
 
@@ -813,6 +865,7 @@ def attach_torrent_to_movie(info_hash: str, movie: Movie) -> tuple[Torrent, str 
                     resolve_backup_folder(configured_folder),
                     qbt_hash,
                     exported,
+                    movie=movie,
                 )
                 archive_saved = True
             except Exception as exc:  # noqa: BLE001

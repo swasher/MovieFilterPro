@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from django.db import transaction
@@ -31,6 +32,35 @@ RUNNING_TIMEOUT = timedelta(minutes=30)
 ERROR_RETRY_COOLDOWN = timedelta(minutes=1)
 # Защита от бесконечного обхода при неадекватном totalPages.
 MAX_PAGES = 100
+# Сколько страниц списка тянем параллельно (каждая — в своём HTTP-клиенте).
+PAGE_FETCH_WORKERS = 4
+
+
+def _fetch_pages(year: int, genre: str, pages: list[int]) -> list[tuple[int, dict]]:
+    """Параллельно скачивает страницы списка, сохраняя порядок."""
+
+    def fetch(page: int) -> tuple[int, dict]:
+        with BestfilmsofClient() as client:
+            return page, client.fetch_page(year, genre, page=page, limit=PAGE_LIMIT)
+
+    workers = min(PAGE_FETCH_WORKERS, len(pages))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(fetch, pages))
+
+
+def _parse_entries(movies: list[dict]) -> tuple[dict[str, dict], dict[int, dict]]:
+    """Сырые фильмы bestfilmsof -> строки БД + метаданные TMDB для кеша."""
+    fresh: dict[str, dict] = {}
+    metadata: dict[int, dict] = {}
+    for position, raw in enumerate(movies, start=1):
+        data = parse_entry(raw, position)
+        if data is None:
+            continue
+        fresh[raw["imdb_id"]] = data
+        meta = metadata_from_raw(raw)
+        if meta is not None:
+            metadata[meta["tmdb_id"]] = meta
+    return fresh, metadata
 
 
 def sync_key(year: int | None, genre: str | None) -> str:
@@ -194,6 +224,53 @@ class SyncService:
         return {"status": "ok", "key": key, "stats": stats}
 
     @classmethod
+    def _store_entries(
+        cls,
+        year: int,
+        genre: str,
+        fresh: dict[str, dict],
+        *,
+        delete_stale: bool,
+    ) -> dict:
+        """Upsert строк списка. delete_stale=False — частичная запись первой страницы."""
+        stats = {"created": 0, "updated": 0, "deleted": 0}
+        with transaction.atomic():
+            stored = {
+                entry.imdb_id: entry
+                for entry in BestfilmsEntry.objects.filter(year=year, genre=genre)
+            }
+            to_create = []
+            to_update = []
+            for imdb_id, data in fresh.items():
+                obj = stored.get(imdb_id)
+                if obj is None:
+                    to_create.append(
+                        BestfilmsEntry(year=year, genre=genre, imdb_id=imdb_id, **data)
+                    )
+                elif any(getattr(obj, field) != data[field] for field in ENTRY_FIELDS):
+                    for field in ENTRY_FIELDS:
+                        setattr(obj, field, data[field])
+                    to_update.append(obj)
+            stale_ids = (
+                [entry.pk for imdb_id, entry in stored.items() if imdb_id not in fresh]
+                if delete_stale
+                else []
+            )
+            if to_create:
+                BestfilmsEntry.objects.bulk_create(to_create)
+            if to_update:
+                BestfilmsEntry.objects.bulk_update(to_update, ENTRY_FIELDS)
+            if stale_ids:
+                BestfilmsEntry.objects.filter(pk__in=stale_ids).delete()
+
+            stats.update(
+                created=len(to_create),
+                updated=len(to_update),
+                deleted=len(stale_ids),
+            )
+        return stats
+
+    @classmethod
     def _sync_list(cls, year: int, genre: str) -> dict:
         stats = {
             "mode": "list",
@@ -214,58 +291,33 @@ class SyncService:
             total_pages = max(1, int(pagination.get("totalPages") or 1))
             total_pages = min(total_pages, MAX_PAGES)
             movies = list(first.get("movies") or [])
-            for page in range(2, total_pages + 1):
-                payload = client.fetch_page(year, genre, page=page, limit=PAGE_LIMIT)
+
+        # Первую страницу сохраняем сразу: фронт покажет фильмы, пока
+        # догружаются остальные страницы (порядок до конца синка не финальный).
+        partial_fresh, partial_metadata = _parse_entries(movies)
+        partial_stats = cls._store_entries(year, genre, partial_fresh, delete_stale=False)
+        stats["cache_created"] += _create_missing_cache(partial_metadata)
+
+        extra_pages = list(range(2, total_pages + 1))
+        if extra_pages:
+            for _page, payload in _fetch_pages(year, genre, extra_pages):
                 movies.extend(payload.get("movies") or [])
+
         stats["bestfilm_requests"] = total_pages
         stats["timings"] = {"bestfilm_s": round(time.perf_counter() - t0, 2)}
 
-        fresh: dict[str, dict] = {}
-        metadata: dict[int, dict] = {}
-        for position, raw in enumerate(movies, start=1):
-            data = parse_entry(raw, position)
-            if data is None:
-                continue
-            fresh[raw["imdb_id"]] = data
-            meta = metadata_from_raw(raw)
-            if meta is not None:
-                metadata[meta["tmdb_id"]] = meta
+        fresh, metadata = _parse_entries(movies)
         stats["entries_total"] = len(fresh)
 
-        with transaction.atomic():
-            t0 = time.perf_counter()
-            stored = {
-                entry.imdb_id: entry
-                for entry in BestfilmsEntry.objects.filter(year=year, genre=genre)
-            }
-            to_create = []
-            to_update = []
-            for imdb_id, data in fresh.items():
-                obj = stored.get(imdb_id)
-                if obj is None:
-                    to_create.append(
-                        BestfilmsEntry(year=year, genre=genre, imdb_id=imdb_id, **data)
-                    )
-                elif any(getattr(obj, field) != data[field] for field in ENTRY_FIELDS):
-                    for field in ENTRY_FIELDS:
-                        setattr(obj, field, data[field])
-                    to_update.append(obj)
-            stale_ids = [
-                entry.pk for imdb_id, entry in stored.items() if imdb_id not in fresh
-            ]
-            if to_create:
-                BestfilmsEntry.objects.bulk_create(to_create)
-            if to_update:
-                BestfilmsEntry.objects.bulk_update(to_update, ENTRY_FIELDS)
-            if stale_ids:
-                BestfilmsEntry.objects.filter(pk__in=stale_ids).delete()
+        t0 = time.perf_counter()
+        store_stats = cls._store_entries(year, genre, fresh, delete_stale=True)
+        # Учитываем и частичную запись, и финальную сверку.
+        stats["entries_created"] = partial_stats["created"] + store_stats["created"]
+        stats["entries_updated"] = partial_stats["updated"] + store_stats["updated"]
+        stats["entries_deleted"] = store_stats["deleted"]
+        stats["timings"]["entries_s"] = round(time.perf_counter() - t0, 2)
 
-            stats["entries_created"] = len(to_create)
-            stats["entries_updated"] = len(to_update)
-            stats["entries_deleted"] = len(stale_ids)
-            stats["timings"]["entries_s"] = round(time.perf_counter() - t0, 2)
-
-        stats["cache_created"] = _create_missing_cache(metadata)
+        stats["cache_created"] += _create_missing_cache(metadata)
         _enqueue_russian_backfill(year, genre)
         return stats
 

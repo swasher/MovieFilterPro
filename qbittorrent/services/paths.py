@@ -7,6 +7,8 @@ from uuid import uuid4
 
 INFO_HASH_RE = re.compile(r'^[a-f0-9]{40,64}$')
 
+_INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
 
 def resolve_configured_path(configured: str) -> Path:
     raw_path = (configured or '').strip()
@@ -37,17 +39,142 @@ def ensure_backup_folder(folder: Path) -> Path:
     return folder
 
 
-def archive_relpath(info_hash: str) -> str:
+def _sanitize_archive_base(name: str | None, info_hash: str) -> str:
+    """Приводит произвольное имя к безопасному базовому имени файла .torrent."""
+    raw = (name or '').strip()
+    if raw.lower().endswith('.torrent'):
+        raw = raw[:-len('.torrent')].rstrip()
+
+    if not raw:
+        raw = info_hash
+
+    cleaned = _INVALID_FILENAME_CHARS_RE.sub('_', raw)
+    cleaned = cleaned.strip(' .')
+    if not cleaned:
+        cleaned = info_hash
+
+    # Ограничиваем длину, чтобы не упереться в лимиты файловой системы.
+    if len(cleaned) > 180:
+        cleaned = cleaned[:180].rstrip(' .')
+        if not cleaned:
+            cleaned = info_hash
+
+    return cleaned
+
+
+def _movie_archive_name(movie: object | None) -> str | None:
+    if movie is None:
+        return None
+    title = getattr(movie, 'title', None)
+    if not title:
+        return None
+    year = getattr(movie, 'year', None)
+    if year:
+        return f'{title} ({year})'
+    return str(title)
+
+
+def archive_name_for(
+    info_hash: str,
+    *,
+    archive_name: str | None = None,
+    name: str | None = None,
+    filename: str | None = None,
+    original_name: str | None = None,
+    original_filename: str | None = None,
+    movie: object | None = None,
+) -> str:
+    """Вычисляет итоговое базовое имя (без расширения) для архива .torrent.
+
+    Приоритет: явно переданное имя → фильм → оригинальное имя файла → infohash.
+    """
+    resolved_movie_name = _movie_archive_name(movie)
+    base = (
+        archive_name
+        or name
+        or filename
+        or original_name
+        or original_filename
+        or resolved_movie_name
+    )
+    return _sanitize_archive_base(base, info_hash)
+
+
+def archive_relpath(
+    info_hash: str,
+    archive_name: str | None = None,
+    *,
+    name: str | None = None,
+    filename: str | None = None,
+    original_name: str | None = None,
+    original_filename: str | None = None,
+    movie: object | None = None,
+) -> str:
     normalized = (info_hash or '').strip().lower()
     if not INFO_HASH_RE.fullmatch(normalized):
-        raise ValueError('Некорректный infohash для имени torrent-файла.')
-    return f'{normalized}.torrent'
+        # Если infohash некорректен, используем его как есть только для fallback-имени.
+        normalized = (info_hash or '').strip() or 'torrent'
+
+    base = archive_name_for(
+        normalized,
+        archive_name=archive_name,
+        name=name,
+        filename=filename,
+        original_name=original_name,
+        original_filename=original_filename,
+        movie=movie,
+    )
+    # Если явное имя не передано и нет фильма/оригинального имени — сохраняем
+    # историческое поведение: файл называется по infohash.
+    if (
+        archive_name is None
+        and name is None
+        and filename is None
+        and original_name is None
+        and original_filename is None
+        and movie is None
+    ):
+        base = normalized
+
+    return f'{base}.torrent'
 
 
-def write_torrent_archive(folder: Path, info_hash: str, data: bytes) -> str:
+def write_torrent_archive(
+    folder: Path,
+    info_hash: str,
+    data: bytes,
+    archive_name: str | None = None,
+    *,
+    name: str | None = None,
+    filename: str | None = None,
+    original_name: str | None = None,
+    original_filename: str | None = None,
+    movie: object | None = None,
+) -> str:
     ensure_backup_folder(folder)
-    relative_path = archive_relpath(info_hash)
+    relative_path = archive_relpath(
+        info_hash,
+        archive_name=archive_name,
+        name=name,
+        filename=filename,
+        original_name=original_name,
+        original_filename=original_filename,
+        movie=movie,
+    )
+
     target = folder / relative_path
+    # Избегаем перезаписи чужого архива при совпадении имён: добавляем короткий hash.
+    if target.exists() and relative_path.lower() != f'{info_hash.lower()}.torrent':
+        stem = Path(relative_path).stem
+        suffix = Path(relative_path).suffix or '.torrent'
+        candidate = f'{stem} ({str(info_hash)[:8]}){suffix}'
+        if not (folder / candidate).exists():
+            relative_path = candidate
+            target = folder / relative_path
+        else:
+            relative_path = f'{str(info_hash).lower()}.torrent'
+            target = folder / relative_path
+
     temp_path = folder / f'.{uuid4().hex}.tmp'
 
     try:
