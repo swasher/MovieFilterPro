@@ -422,3 +422,112 @@ class TMDBMovieSyncServiceTests(TestCase):
         self.assertEqual(label(("test",)), "")
         self.assertEqual(label(()), "")
         self.assertEqual(TMDBMovieSyncService._match_source_label(None), "")
+
+
+class TVCastOrderingTests(TestCase):
+    """TMDB order у сериалов бесполезен: порядок каста считаем по числу серий."""
+
+    @staticmethod
+    def _credit(person_id, name, order, popularity, character):
+        return SimpleNamespace(
+            person_id=person_id,
+            name=name,
+            original_name=name,
+            profile_path=None,
+            gender=2,
+            character=character,
+            order=order,
+            popularity=popularity,
+        )
+
+    @staticmethod
+    def _aggregate(person_id, episode_count):
+        return SimpleNamespace(person_id=person_id, episode_count=episode_count)
+
+    @staticmethod
+    def _movie(movie_type=Movie.MovieType.MINISERIES, media_type="tv"):
+        return Movie.objects.create(
+            title="Убийство на краю света",
+            original_title="A Murder at the End of the World",
+            year=2023,
+            movie_type=movie_type,
+            tmdb_media_type=media_type,
+        )
+
+    def _sync_persons(self, movie, cast, aggregate_cast):
+        details = SimpleNamespace(
+            cast=cast,
+            crew=[],
+            created_by=[],
+            aggregate_cast=aggregate_cast,
+        )
+        fake_tmdb = _FakeTMDBClient(movie_details={}, person_details={})
+        TMDBMovieSyncService._sync_movie_persons(movie=movie, details=details, tmdb=fake_tmdb)
+        return list(
+            movie.movie_persons.filter(role="actor").order_by("order", "id")
+        )
+
+    def test_series_lead_with_bad_tmdb_order_goes_first(self):
+        """Главный актёр приходит из TMDB с order=12 и не должен быть последним."""
+        movie = self._movie()
+        rows = self._sync_persons(
+            movie,
+            cast=[
+                self._credit(1, "Эмма Коррин", 0, 1.9, "Darby Hart"),
+                self._credit(2, "Брит Марлинг", 1, 1.3, "Lee Andersen"),
+                self._credit(3, "Клайв Оуэн", 12, 4.3, "Andy Ronson"),
+            ],
+            aggregate_cast=[
+                self._aggregate(1, 7),
+                self._aggregate(2, 7),
+                self._aggregate(3, 7),
+            ],
+        )
+
+        self.assertEqual(
+            [row.person.name for row in rows],
+            ["Клайв Оуэн", "Эмма Коррин", "Брит Марлинг"],
+        )
+        self.assertEqual([row.order for row in rows], [0, 1, 2])
+
+    def test_series_actor_with_more_episodes_ranks_above_popular_guest(self):
+        movie = self._movie()
+        rows = self._sync_persons(
+            movie,
+            cast=[
+                self._credit(1, "Звездный гость", 0, 9.0, "Guest"),
+                self._credit(2, "Главный актёр", 5, 1.0, "Lead"),
+            ],
+            aggregate_cast=[
+                self._aggregate(1, 1),
+                self._aggregate(2, 7),
+            ],
+        )
+
+        self.assertEqual([row.person.name for row in rows], ["Главный актёр", "Звездный гость"])
+
+    def test_series_without_aggregate_credits_falls_back_to_popularity(self):
+        movie = self._movie()
+        rows = self._sync_persons(
+            movie,
+            cast=[
+                self._credit(1, "Первый по TMDB", 0, 1.0, "A"),
+                self._credit(2, "Популярный", 5, 5.0, "B"),
+            ],
+            aggregate_cast=[],
+        )
+
+        self.assertEqual([row.person.name for row in rows], ["Популярный", "Первый по TMDB"])
+
+    def test_movies_still_use_tmdb_order(self):
+        movie = self._movie(movie_type=Movie.MovieType.MOVIE, media_type="movie")
+        rows = self._sync_persons(
+            movie,
+            cast=[
+                self._credit(1, "Первый по TMDB", 0, 1.0, "A"),
+                self._credit(2, "Популярный", 1, 5.0, "B"),
+            ],
+            aggregate_cast=[self._aggregate(2, 1)],
+        )
+
+        self.assertEqual([row.person.name for row in rows], ["Первый по TMDB", "Популярный"])

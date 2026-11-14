@@ -666,6 +666,14 @@ class TMDBMovieSyncService:
             pass
         seen_relations: set[tuple[int, str, str]] = set()
 
+        # Для сериалов TMDB не даёт осмысленного billing order: в /tv/{id}/credits
+        # это поле заполняется произвольно (главный актёр легко уходит в конец списка,
+        # order=12 или 164 — норма). Поэтому для tv порядок считаем сами
+        # (см. ниже), а order из TMDB используем только для фильмов.
+        tv_episode_counts = cls._tv_episode_counts(details) if is_tv else {}
+        # (person, character_name, popularity, tmdb order, normalized tmdb person id)
+        actor_entries: list[tuple[Person, str, float | None, int, str | None]] = []
+
         for credit in cast_items:
             person = cls._upsert_person_from_credit(
                 tmdb=tmdb,
@@ -687,12 +695,36 @@ class TMDBMovieSyncService:
             popularity = cls._safe_float(getattr(credit, "popularity", None))
             if popularity is None:
                 popularity = getattr(person, "popularity", None)
+            actor_entries.append(
+                (
+                    person,
+                    character_name,
+                    popularity,
+                    order,
+                    cls._normalize_tmdb_person_id(getattr(credit, "person_id", None)),
+                )
+            )
+
+        if is_tv:
+            # Больше серий — выше в списке; при равенстве серий — по популярности.
+            actor_entries.sort(
+                key=lambda entry: (
+                    -tv_episode_counts.get(entry[4], 0),
+                    -(entry[2] or 0.0),
+                    entry[3],
+                    entry[0].id,
+                )
+            )
+
+        for index, (person, character_name, popularity, credit_order, _tmdb_id) in enumerate(
+            actor_entries
+        ):
             MoviePerson.objects.create(
                 movie=movie,
                 person=person,
                 role="actor",
                 character_name=character_name,
-                order=order,
+                order=index if is_tv else credit_order,
                 popularity=popularity,
             )
 
@@ -769,6 +801,24 @@ class TMDBMovieSyncService:
             movie.movie_persons.values_list("person_id", "role", "character_name")
         )
         return before_keys != after_keys
+
+    @classmethod
+    def _tv_episode_counts(cls, details) -> dict[str, int]:
+        """person.tmdb_id -> число серий, из /tv/{id}/aggregate_credits.
+
+        У сериалов это единственный надёжный признак «главности» актёра.
+        Если TMDB не отдал aggregate-кредиты, словарь остаётся пустым,
+        и порядок каста считается только по популярности.
+        """
+        counts: dict[str, int] = {}
+        for credit in getattr(details, "aggregate_cast", None) or []:
+            tmdb_id = cls._normalize_tmdb_person_id(getattr(credit, "person_id", None))
+            if not tmdb_id:
+                continue
+            episode_count = cls._safe_int(getattr(credit, "episode_count", None)) or 0
+            if episode_count > counts.get(tmdb_id, 0):
+                counts[tmdb_id] = episode_count
+        return counts
 
     @classmethod
     def _build_previous_person_index(
