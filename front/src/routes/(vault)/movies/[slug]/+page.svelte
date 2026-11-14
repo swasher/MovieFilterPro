@@ -468,14 +468,12 @@
     return true;
   };
 
-  const runTmdbSync = async (forceRematch: boolean) => {
+  const refreshTmdbData = async () => {
     isSyncing = true;
 
     try {
       const response = await fetch(`/api/vault/movies/${movie.slug}/fetch-tmdb`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force_rematch: forceRematch })
+        method: "POST"
       });
 
       const payload = (await response.json()) as {
@@ -1979,13 +1977,17 @@
 
       <div class="vd-service-row">
         <div class="vd-service-actions">
-          <Button onclick={() => runTmdbSync(false)} disabled={isSyncing}>
-            {isSyncing ? "Syncing..." : "Sync using tmdb_id"}
-          </Button>
-          <Button variant="outline" onclick={() => runTmdbSync(true)} disabled={isSyncing}>
-            <RefreshCw class="size-4" />
-            Sync and re-match tmdb_id
-          </Button>
+          <span
+            class="inline-flex"
+            title={movie.tmdb_id
+              ? "Заново загрузить описание, постер, состав и рейтинги из TMDB. TMDB ID не меняется."
+              : "Сначала привяжи фильм к TMDB через Link TMDB."}
+          >
+            <Button onclick={refreshTmdbData} disabled={isSyncing || !movie.tmdb_id}>
+              <RefreshCw class={`size-4 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Refreshing..." : "Refresh tmdb data"}
+            </Button>
+          </span>
           <Button variant="outline" onclick={() => { linkDialogOpen = true; }} disabled={isSyncing || isLinking}>
             <Link class="size-4" />
             Link TMDB

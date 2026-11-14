@@ -275,10 +275,6 @@ class ConnectionEventsOut(Schema):
     items: list[ConnectionEventOut]
 
 
-class TMDBSyncIn(Schema):
-    force_rematch: bool = False
-
-
 class TMDBSyncOut(Schema):
     status: str
     message: str
@@ -1422,16 +1418,17 @@ def season_toggle_status(request, season_id: int, payload: SetSeasonStatusIn):
 
 
 @api.post("/movies/{slug}/fetch-tmdb", response=TMDBSyncOut)
-def movie_fetch_tmdb(request, slug: str, payload: TMDBSyncIn):
+def movie_fetch_tmdb(request, slug: str):
     movie = Movie.objects.filter(slug=slug).first()
     if movie is None:
         raise HttpError(404, "Movie not found")
 
+    # Refresh по уже сохранённой привязке. Принудительный re-match отсюда убран:
+    # он доступен только через Link TMDB (fetch-tmdb-confirm с выбранным кандидатом).
+    # Если tmdb_id ещё нет, sync_movie выполнит обычный подбор — этот путь
+    # остаётся для legacy-очереди TMDB Sync Queue.
     try:
-        result = TMDBMovieSyncService.sync_movie(
-            movie=movie,
-            force_rematch=payload.force_rematch,
-        )
+        result = TMDBMovieSyncService.sync_movie(movie=movie)
     except Exception as exc:
         raise HttpError(400, TMDBMovieSyncService.describe_exception(exc))
 

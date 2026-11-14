@@ -411,9 +411,7 @@
     syncingIds = { ...syncingIds, [item.id]: true };
     try {
       const response = await fetch(`/api/vault/movies/${item.movie_slug}/fetch-tmdb`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force_rematch: false })
+        method: "POST"
       });
       const payload = (await response.json()) as {
         status?: "ok" | "error" | "needs_confirmation" | "needs_user_choice";
