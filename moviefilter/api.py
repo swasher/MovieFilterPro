@@ -150,6 +150,10 @@ class KinozalTorrentDownloadOut(Schema):
     archive_path: str | None = None
     operation_id: str | None = None
     warning: str | None = None
+    movie_id: int | None = None
+    removed_from_feed: bool = False
+    previous_priority_key: str | None = None
+    current_priority_key: str | None = None
 
 
 def _require_api_user(request):
@@ -685,6 +689,9 @@ def download_torrent(request, torrent_id: int):
     if add_result.warning:
         message = f"{message}. {add_result.warning}"
     operation_id = None
+    removed_from_feed = False
+    previous_priority_key = None
+    current_priority_key = None
 
     if movie_id:
         queue_result = KinozalDownloadImportService.enqueue_successful_download(
@@ -694,8 +701,26 @@ def download_torrent(request, torrent_id: int):
             torrent_file=torrent.torrent_file,
             qbt_torrent_id=torrent.id,
         )
-        message = queue_result.message
         operation_id = str(queue_result.operation_id)
+
+        if queue_result.status == "queued":
+            # Скачивание уже означает «буду смотреть»: строку убираем из ленты сразу,
+            # чтобы не требовался отдельный клик после закрытия окна раздач.
+            feed_update = _update_movie_priority(
+                movie_id,
+                SKIP,
+                message_prefix="Скачано",
+                remove_cache=True,
+            )
+            removed_from_feed = True
+            previous_priority_key = feed_update.previous_priority_key
+            current_priority_key = feed_update.current_priority_key
+            message = "Скачано. Фильм убран из ленты, импорт в Vault («Буду смотреть») запущен"
+        else:
+            message = f"{queue_result.message}. Фильм оставлен в ленте"
+
+        if add_result.warning:
+            message = f"{message}. {add_result.warning}"
 
     return KinozalTorrentDownloadOut(
         torrent_id=torrent_id,
@@ -705,6 +730,10 @@ def download_torrent(request, torrent_id: int):
         archive_path=torrent.torrent_file or None,
         operation_id=operation_id,
         warning=add_result.warning,
+        movie_id=movie_id,
+        removed_from_feed=removed_from_feed,
+        previous_priority_key=previous_priority_key,
+        current_priority_key=current_priority_key,
     )
 
 

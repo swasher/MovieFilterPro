@@ -42,6 +42,7 @@
     ArrowDownToLine,
     ArrowDownUp,
     BookmarkPlus,
+    Check,
     CircleDashed,
     Clapperboard,
     Clock3,
@@ -80,7 +81,10 @@
   let downloadOptionsLoading = $state(false);
   let downloadOptionsError = $state<KinozalApiErrorDetail | null>(null);
   let downloadingTorrentId = $state<number | null>(null);
+  let downloadedTorrentId = $state<number | null>(null);
+  let downloadClosing = $state(false);
   let loadingDownloadMovieId = $state<number | null>(null);
+  let downloadCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let stateVersion = 0;
   let debounceHandle: ReturnType<typeof setTimeout> | null = null;
   let snapshotKey = "";
@@ -487,6 +491,24 @@
     }
   };
 
+  /**
+   * Убрать строку из текущего вида ленты после подтверждённого бэкендом действия.
+   * В фильтрах ALL/SKIP строка остаётся видимой — только меняет приоритет.
+   */
+  const dropMovieFromView = (movie: KinozalMovie, targetPriorityKey: string) => {
+    const shouldRemoveFromCurrentView = activePriority !== "ALL" && activePriority !== targetPriorityKey;
+    applyPriorityTransition(movie.priority_key, targetPriorityKey);
+
+    if (!shouldRemoveFromCurrentView) {
+      patchMoviePriority(movie.id, targetPriorityKey);
+      return;
+    }
+
+    movies = movies.filter((item) => item.id !== movie.id);
+    filteredTotalCount = Math.max(0, filteredTotalCount - 1);
+    maybeTopUpAfterRemoval();
+  };
+
   const performMovieAction = async (
     movie: KinozalMovie,
     action: KinozalMovieAction,
@@ -544,6 +566,12 @@
     downloadOptionsError = null;
     downloadOptionsLoading = true;
     loadingDownloadMovieId = movie.id;
+    downloadedTorrentId = null;
+    downloadClosing = false;
+    if (downloadCloseTimer) {
+      clearTimeout(downloadCloseTimer);
+      downloadCloseTimer = null;
+    }
 
     try {
       const response = await fetch(`/api/kinozal/movies/${movie.id}/download-options`);
@@ -562,6 +590,26 @@
       loadingDownloadMovieId = null;
       downloadOptionsLoading = false;
     }
+  };
+
+  /**
+   * После успешного скачивания строка уже убрана из ленты — окно раздач
+   * показывает «Скачано» и закрывается само, чтобы не требовался лишний клик.
+   */
+  const scheduleDownloadDialogClose = () => {
+    downloadClosing = true;
+    const movieId = selectedMovie?.id ?? null;
+    if (downloadCloseTimer) {
+      clearTimeout(downloadCloseTimer);
+    }
+    downloadCloseTimer = setTimeout(() => {
+      downloadCloseTimer = null;
+      downloadClosing = false;
+      downloadedTorrentId = null;
+      if (downloadDialogOpen && (selectedMovie?.id ?? null) === movieId) {
+        downloadDialogOpen = false;
+      }
+    }, 700);
   };
 
   const downloadTorrent = async (torrentId: number) => {
@@ -584,7 +632,21 @@
       }
 
       const successPayload = payload as KinozalTorrentDownloadResponse;
+
+      // Backend убирает строку из ленты только когда и торрент добавлен, и импорт в Vault поставлен в очередь.
+      if (successPayload.removed_from_feed && selectedMovie) {
+        dropMovieFromView(selectedMovie, successPayload.current_priority_key ?? "SKIP");
+      }
+
+      const partialFailure = Boolean(successPayload.movie_id) && !successPayload.removed_from_feed;
+      if (partialFailure) {
+        toast.warning(successPayload.message);
+        return;
+      }
+
+      downloadedTorrentId = torrentId;
       toast.success(successPayload.message);
+      scheduleDownloadDialogClose();
     } catch (error) {
       const normalizedError = normalizeClientError(error, "Скачать torrent-файл не удалось.");
       downloadOptionsError = normalizedError;
@@ -1125,6 +1187,7 @@
                       variant="outline"
                       size="sm"
                       class="kz-action-button bg-chart-3 text-white hover:opacity-90 dark:text-white"
+                      title="Скачать, добавить в Vault («Буду смотреть») и убрать из ленты"
                       onclick={() => openDownloadDialog(movie)}
                       disabled={loadingDownloadMovieId === movie.id}
                     >
@@ -1170,7 +1233,7 @@
                       variant="outline"
                       size="sm"
                       class="kz-action-button kz-action-button--will-watch"
-                      title="Убрать из ленты и добавить в Vault со статусом «Буду смотреть»"
+                      title="Скачано из другого источника: убрать из ленты и добавить в Vault со статусом «Буду смотреть»"
                       onclick={() => performMovieAction(movie, "vault-will-watch", "SKIP")}
                       disabled={isActionPending(movie.id, "vault-will-watch")}
                     >
@@ -1247,6 +1310,9 @@
         {:else}
           Kinozal options
         {/if}
+        <span class="mt-1 block text-xs text-muted-foreground">
+          После скачивания фильм уйдёт из ленты, а импорт в Vault со статусом «Буду смотреть» запустится автоматически.
+        </span>
       </Dialog.Description>
     </Dialog.Header>
 
@@ -1293,7 +1359,7 @@
             <col class="w-[64px]" />
             <col class="w-[64px]" />
             <col class="w-[92px]" />
-            <col class="w-[98px]" />
+            <col class="w-[110px]" />
           </colgroup>
           <thead class="bg-muted/50">
             <tr class="text-left">
@@ -1339,10 +1405,13 @@
                       size="sm"
                       class="h-7 px-2.5 text-xs"
                       onclick={() => downloadTorrent(option.id)}
-                      disabled={downloadingTorrentId === option.id}
+                      disabled={downloadingTorrentId === option.id || downloadClosing}
                     >
                       {#if downloadingTorrentId === option.id}
                         <CircleDashed class="size-3.5 animate-spin" />
+                      {:else if downloadedTorrentId === option.id}
+                        <Check class="size-3.5" />
+                        Скачано
                       {:else}
                         Download
                       {/if}

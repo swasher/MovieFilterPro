@@ -214,6 +214,7 @@ class KinozalApiTests(TestCase):
         self.assertEqual(self.movie_low.priority, WAIT_TRANS)
         remove_cached_image_mock.assert_called_once_with(self.movie_low.pk)
 
+    @patch("moviefilter.api.remove_cached_image")
     @patch("moviefilter.api.torrent_service.validate_ready")
     @patch("moviefilter.api.torrent_service.add_torrent_from_kinozal")
     @patch("moviefilter.api.fetch_torrent_file")
@@ -222,6 +223,7 @@ class KinozalApiTests(TestCase):
         fetch_torrent_file_mock,
         add_torrent_mock,
         validate_ready_mock,
+        remove_cached_image_mock,
     ):
         from moviefilter.services.torrent_download_service import TorrentFile
         from qbittorrent.services.torrent_service import TorrentAddResult
@@ -250,6 +252,11 @@ class KinozalApiTests(TestCase):
         self.assertEqual(payload["info_hash"], "a" * 40)
         self.assertEqual(payload["archive_path"], f"{'a' * 40}.torrent")
         self.assertIn("Torrent добавлен в qBittorrent", payload["message"])
+        self.assertIsNone(payload["movie_id"])
+        self.assertFalse(payload["removed_from_feed"])
+        self.movie_high.refresh_from_db()
+        self.assertEqual(self.movie_high.priority, HIGH)
+        remove_cached_image_mock.assert_not_called()
         fetch_torrent_file_mock.assert_called_once()
         add_torrent_mock.assert_called_once()
         _, kwargs = add_torrent_mock.call_args
@@ -276,6 +283,7 @@ class KinozalApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["detail"]["code"], "invalid_torrent_response")
 
+    @patch("moviefilter.api.remove_cached_image")
     @patch("moviefilter.api.KinozalDownloadImportService.enqueue_successful_download")
     @patch("moviefilter.api.torrent_service.add_torrent_from_kinozal")
     @patch("moviefilter.api.fetch_torrent_file")
@@ -286,6 +294,7 @@ class KinozalApiTests(TestCase):
         fetch_torrent_file_mock,
         add_torrent_mock,
         enqueue_service_mock,
+        remove_cached_image_mock,
     ):
         from moviefilter.services.torrent_download_service import TorrentFile
         from qbittorrent.services.torrent_service import TorrentAddResult
@@ -305,6 +314,7 @@ class KinozalApiTests(TestCase):
             torrent=torrent,
             created=True,
             archive_saved=True,
+            warning="Папка backup не настроена",
         )
         enqueue_service_mock.return_value = SimpleNamespace(
             status="queued",
@@ -326,6 +336,107 @@ class KinozalApiTests(TestCase):
         self.assertEqual(kwargs["user"], self.user)
         self.assertEqual(kwargs["torrent_file"], f"{'a' * 40}.torrent")
         self.assertEqual(kwargs["qbt_torrent_id"], 42)
+
+        payload = response.json()
+        self.assertEqual(payload["movie_id"], self.movie_high.pk)
+        self.assertTrue(payload["removed_from_feed"])
+        self.assertEqual(payload["previous_priority_key"], "HIGH")
+        self.assertEqual(payload["current_priority_key"], "SKIP")
+        self.assertIn("Скачано", payload["message"])
+        self.assertIn("Папка backup не настроена", payload["message"])
+
+        self.movie_high.refresh_from_db()
+        self.assertEqual(self.movie_high.priority, SKIP)
+        remove_cached_image_mock.assert_called_once_with(self.movie_high.pk)
+
+    @patch("moviefilter.api.remove_cached_image")
+    @patch("moviefilter.api.KinozalDownloadImportService.enqueue_successful_download")
+    @patch("moviefilter.api.torrent_service.add_torrent_from_kinozal")
+    @patch("moviefilter.api.fetch_torrent_file")
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    def test_download_torrent_keeps_movie_in_feed_when_import_queue_fails(
+        self,
+        validate_ready_mock,
+        fetch_torrent_file_mock,
+        add_torrent_mock,
+        enqueue_service_mock,
+        remove_cached_image_mock,
+    ):
+        from moviefilter.services.torrent_download_service import TorrentFile
+        from qbittorrent.services.torrent_service import TorrentAddResult
+
+        fetch_torrent_file_mock.return_value = TorrentFile(
+            torrent_id=1001,
+            filename="[kinozal.tv]id1001.torrent",
+            content=b"d4:info0:e",
+        )
+        torrent = SimpleNamespace(
+            id=42,
+            info_hash="a" * 40,
+            torrent_file=f"{'a' * 40}.torrent",
+            movie_id=None,
+        )
+        add_torrent_mock.return_value = TorrentAddResult(
+            torrent=torrent,
+            created=True,
+            archive_saved=True,
+        )
+        enqueue_service_mock.return_value = SimpleNamespace(
+            status="error",
+            message="Torrent добавлен в qBittorrent, но импорт в Vault не удалось поставить в очередь",
+            operation_id=uuid4(),
+        )
+
+        response = self.client.post(
+            "/api/kinozal/torrents/1001/download",
+            data=json.dumps({"movie_id": self.movie_high.pk}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["removed_from_feed"])
+        self.assertIn("Фильм оставлен в ленте", payload["message"])
+
+        self.movie_high.refresh_from_db()
+        self.assertEqual(self.movie_high.priority, HIGH)
+        remove_cached_image_mock.assert_not_called()
+
+    @patch("moviefilter.api.remove_cached_image")
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    @patch("moviefilter.api.torrent_service.add_torrent_from_kinozal")
+    @patch("moviefilter.api.fetch_torrent_file")
+    def test_download_torrent_does_not_touch_feed_when_qbt_add_fails(
+        self,
+        fetch_torrent_file_mock,
+        add_torrent_mock,
+        validate_ready_mock,
+        remove_cached_image_mock,
+    ):
+        from moviefilter.services.torrent_download_service import TorrentFile
+        from qbittorrent.services.errors import QbtError
+
+        fetch_torrent_file_mock.return_value = TorrentFile(
+            torrent_id=1001,
+            filename="[kinozal.tv]id1001.torrent",
+            content=b"d4:info0:e",
+        )
+        add_torrent_mock.side_effect = QbtError(
+            "qbt_unavailable",
+            "qBittorrent недоступен",
+            status_code=503,
+        )
+
+        response = self.client.post(
+            "/api/kinozal/torrents/1001/download",
+            data=json.dumps({"movie_id": self.movie_high.pk}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.movie_high.refresh_from_db()
+        self.assertEqual(self.movie_high.priority, HIGH)
+        remove_cached_image_mock.assert_not_called()
 
     def test_requires_authentication(self):
         self.client.logout()

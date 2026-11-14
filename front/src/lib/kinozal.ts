@@ -110,6 +110,10 @@ export type KinozalTorrentDownloadResponse = {
   archive_path: string | null;
   operation_id?: string | null;
   warning?: string | null;
+  movie_id?: number | null;
+  removed_from_feed?: boolean;
+  previous_priority_key?: string | null;
+  current_priority_key?: string | null;
 };
 
 export type KinozalApiErrorDetail = {
