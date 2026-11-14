@@ -423,6 +423,10 @@
     @apply flex flex-col gap-2;
   }
 
+  .vd-qbt-section {
+    @apply mt-6 space-y-2 border-t border-border/50 pt-6;
+  }
+
   .vd-qbt-panel {
     @apply space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3;
   }

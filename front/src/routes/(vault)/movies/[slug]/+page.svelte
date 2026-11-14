@@ -1451,7 +1451,7 @@
           </div>
         </div>
 
-        <div class="space-y-2 pt-2">
+        <div class="vd-qbt-section">
           <p class="vd-section-title">qBittorrent</p>
           <div
             class="vd-qbt-panel"
