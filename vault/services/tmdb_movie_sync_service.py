@@ -668,9 +668,10 @@ class TMDBMovieSyncService:
 
         # Для сериалов TMDB не даёт осмысленного billing order: в /tv/{id}/credits
         # это поле заполняется произвольно (главный актёр легко уходит в конец списка,
-        # order=12 или 164 — норма). Поэтому для tv порядок считаем сами
-        # (см. ниже), а order из TMDB используем только для фильмов.
+        # order=12 или 164 — норма). Поэтому для tv порядок берём из титров сезонов
+        # (_tv_billing_ranks), а order из TMDB используем только для фильмов.
         tv_episode_counts = cls._tv_episode_counts(details) if is_tv else {}
+        tv_billing_ranks = cls._tv_billing_ranks(movie, details, tmdb) if is_tv else {}
         # (person, character_name, popularity, tmdb order, normalized tmdb person id)
         actor_entries: list[tuple[Person, str, float | None, int, str | None]] = []
 
@@ -706,9 +707,10 @@ class TMDBMovieSyncService:
             )
 
         if is_tv:
-            # Больше серий — выше в списке; при равенстве серий — по популярности.
+            # Позиция в титрах (из сезонов), затем число серий, затем популярность.
             actor_entries.sort(
                 key=lambda entry: (
+                    tv_billing_ranks.get(entry[4], 10_000),
                     -tv_episode_counts.get(entry[4], 0),
                     -(entry[2] or 0.0),
                     entry[3],
@@ -819,6 +821,46 @@ class TMDBMovieSyncService:
             if episode_count > counts.get(tmdb_id, 0):
                 counts[tmdb_id] = episode_count
         return counts
+
+    @classmethod
+    def _tv_billing_ranks(cls, movie: Movie, details, tmdb) -> dict[str, int]:
+        """person.tmdb_id -> позиция в титрах (минимальный order по сезонам).
+
+        У сериалов order из aggregate/series-кредитов TMDB заполняет произвольно,
+        а в титрах сезона (`/tv/{id}/season/{n}/credits`) лежит настоящий
+        billing order. Берём минимум по всем сезонам: актёр, который в каком-то
+        сезоне шёл первым, так и остаётся наверху.
+        """
+        ranks: dict[str, int] = {}
+        if not movie.tmdb_id:
+            return ranks
+
+        for season in getattr(details, "seasons", None) or []:
+            season_number = cls._safe_int(getattr(season, "season_number", None))
+            if not season_number or season_number <= 0:
+                continue
+            try:
+                from vault.services.tmdb_rate_limiter import TmdbRateLimiter
+
+                TmdbRateLimiter.wait()
+                payload = tmdb._api.tv_seasons_get_credits(
+                    movie.tmdb_id,
+                    season_number,
+                    language=getattr(tmdb, "language", None),
+                )
+            except Exception:
+                continue
+
+            for item in (payload or {}).get("cast") or []:
+                tmdb_id = cls._normalize_tmdb_person_id(item.get("id"))
+                if not tmdb_id:
+                    continue
+                order = cls._safe_int(item.get("order"))
+                if order is None:
+                    continue
+                if order < ranks.get(tmdb_id, 10_000):
+                    ranks[tmdb_id] = order
+        return ranks
 
     @classmethod
     def _build_previous_person_index(

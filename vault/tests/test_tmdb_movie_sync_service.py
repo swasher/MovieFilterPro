@@ -425,7 +425,7 @@ class TMDBMovieSyncServiceTests(TestCase):
 
 
 class TVCastOrderingTests(TestCase):
-    """TMDB order у сериалов бесполезен: порядок каста считаем по числу серий."""
+    """Порядок каста сериала: титры сезонов, затем серии, затем популярность."""
 
     @staticmethod
     def _credit(person_id, name, order, popularity, character):
@@ -445,30 +445,95 @@ class TVCastOrderingTests(TestCase):
         return SimpleNamespace(person_id=person_id, episode_count=episode_count)
 
     @staticmethod
-    def _movie(movie_type=Movie.MovieType.MINISERIES, media_type="tv"):
+    def _movie(movie_type=Movie.MovieType.MINISERIES, media_type="tv", tmdb_id=None):
         return Movie.objects.create(
             title="Убийство на краю света",
             original_title="A Murder at the End of the World",
             year=2023,
             movie_type=movie_type,
             tmdb_media_type=media_type,
+            tmdb_id=tmdb_id,
         )
 
-    def _sync_persons(self, movie, cast, aggregate_cast):
+    def _sync_persons(
+        self, movie, cast, aggregate_cast, seasons=None, season_credits=None
+    ):
         details = SimpleNamespace(
             cast=cast,
             crew=[],
             created_by=[],
             aggregate_cast=aggregate_cast,
+            seasons=seasons or [],
         )
         fake_tmdb = _FakeTMDBClient(movie_details={}, person_details={})
+        if season_credits is not None:
+            fake_tmdb._api = SimpleNamespace(
+                people_get_details=fake_tmdb._people_get_details,
+                tv_seasons_get_credits=lambda tv_id, season_number, language=None: {
+                    "cast": season_credits[season_number]
+                },
+            )
         TMDBMovieSyncService._sync_movie_persons(movie=movie, details=details, tmdb=fake_tmdb)
         return list(
             movie.movie_persons.filter(role="actor").order_by("order", "id")
         )
 
-    def test_series_lead_with_bad_tmdb_order_goes_first(self):
-        """Главный актёр приходит из TMDB с order=12 и не должен быть последним."""
+    def test_series_uses_season_billing_order(self):
+        """Титры сезона важнее и popularity, и кривого order из /tv/{id}/credits."""
+        movie = self._movie(tmdb_id=134095)
+        rows = self._sync_persons(
+            movie,
+            cast=[
+                self._credit(1, "Эмма Коррин", 0, 1.7, "Darby Hart"),
+                self._credit(2, "Брит Марлинг", 1, 1.3, "Lee Andersen"),
+                self._credit(3, "Клайв Оуэн", 12, 3.9, "Andy Ronson"),
+            ],
+            aggregate_cast=[
+                self._aggregate(1, 7),
+                self._aggregate(2, 7),
+                self._aggregate(3, 7),
+            ],
+            seasons=[SimpleNamespace(season_number=1)],
+            season_credits={
+                1: [
+                    {"id": 1, "order": 0},
+                    {"id": 2, "order": 1},
+                    {"id": 3, "order": 12},
+                ]
+            },
+        )
+
+        self.assertEqual(
+            [row.person.name for row in rows],
+            ["Эмма Коррин", "Брит Марлинг", "Клайв Оуэн"],
+        )
+        self.assertEqual([row.order for row in rows], [0, 1, 2])
+
+    def test_series_billing_takes_best_position_across_seasons(self):
+        movie = self._movie(tmdb_id=134095)
+        rows = self._sync_persons(
+            movie,
+            cast=[
+                self._credit(1, "Первый в пилоте", 0, 1.0, "A"),
+                self._credit(2, "Первый во втором сезоне", 1, 1.0, "B"),
+            ],
+            aggregate_cast=[],
+            seasons=[
+                SimpleNamespace(season_number=1),
+                SimpleNamespace(season_number=2),
+            ],
+            season_credits={
+                1: [{"id": 1, "order": 0}, {"id": 2, "order": 5}],
+                2: [{"id": 2, "order": 0}, {"id": 1, "order": 5}],
+            },
+        )
+
+        self.assertEqual(
+            [row.person.name for row in rows],
+            ["Первый в пилоте", "Первый во втором сезоне"],
+        )
+
+    def test_series_without_season_billing_orders_by_episodes_then_popularity(self):
         movie = self._movie()
         rows = self._sync_persons(
             movie,

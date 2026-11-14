@@ -827,6 +827,30 @@ def _collection_part_sort_key(part: dict):
     return (1, year_key, order_key)
 
 
+def _is_series_movie(movie: Movie) -> bool:
+    return movie.tmdb_media_type == "tv" or movie.movie_type in (
+        Movie.MovieType.SERIES,
+        Movie.MovieType.MINISERIES,
+    )
+
+
+def _hoist_marked_actors(rows, favorite_person_ids: set[int], star_person_ids: set[int]):
+    """Любимые и «звёздные» актёры — выше в касте сериала.
+
+    Для сериалов TMDB не даёт надёжного billing order (главного актёра может
+    поставить последним), поэтому личные метки пользователя важнее. Сортировка
+    стабильная: среди актёров без меток сохраняется порядок из титров.
+    """
+    def mark_rank(item):
+        if item.person_id in favorite_person_ids:
+            return 0
+        if item.person_id in star_person_ids:
+            return 1
+        return 2
+
+    return sorted(rows, key=mark_rank)
+
+
 def _build_collection_out(movie: Movie, user=None) -> CollectionBriefOut | None:
     """Собирает CollectionBriefOut из movie.collection + parts_data. in_vault вычисляется на лету."""
     coll: Collection | None = getattr(movie, "collection", None)
@@ -1186,6 +1210,10 @@ def movie_detail(request, slug: str):
         for item in Torrent.objects.filter(movie=movie).order_by("-created_at", "-id")
     ]
 
+    actor_rows = list(movie.get_actors().select_related("person"))
+    if _is_series_movie(movie):
+        actor_rows = _hoist_marked_actors(actor_rows, favorite_person_ids, star_person_ids)
+
     return MovieDetailOut(
         id=movie.id,
         title=movie.title,
@@ -1317,7 +1345,7 @@ def movie_detail(request, slug: str):
                 birth_date=_date_to_iso(item.person.birth_date),
                 death_date=_date_to_iso(item.person.death_date),
             )
-            for item in movie.get_actors().select_related("person")
+            for item in actor_rows
         ],
         seasons=[
             _build_season_out(season, user=user)
