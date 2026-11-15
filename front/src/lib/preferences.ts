@@ -2,6 +2,7 @@ export type PreferencesData = {
   last_scan: string | null;
   last_scan_kinozal_id: number | null;
   scan_interval_minutes: number | null;
+  scan_schedule_locked: boolean;
   last_scheduled_run_at: string | null;
   last_scheduled_status: string | null;
   countries: string;
@@ -104,6 +105,7 @@ export const emptyPreferences = (): PreferencesData => ({
   last_scan: null,
   last_scan_kinozal_id: null,
   scan_interval_minutes: null,
+  scan_schedule_locked: false,
   last_scheduled_run_at: null,
   last_scheduled_status: null,
   countries: "",

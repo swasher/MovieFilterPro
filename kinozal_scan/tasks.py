@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import close_old_connections
 from django.utils import timezone
 from huey import crontab
@@ -52,6 +53,9 @@ def _should_run(prefs: UserPreferences, now) -> bool:
 
     Интервал считается от завершения предыдущего запуска (last_scheduled_run_at).
     """
+    # Dev-компьютер: автосканирование принудительно выключено из settings.
+    if settings.KINOZAL_AUTOSCAN_DISABLED:
+        return False
     interval = prefs.scan_interval_minutes
     if not interval:
         return False

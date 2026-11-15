@@ -3,6 +3,7 @@ from datetime import date
 import re
 
 import requests
+from django.conf import settings
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
@@ -27,6 +28,7 @@ class PreferencesOut(Schema):
     last_scan_kinozal_id: int | None = None
     scan_from_page: int | None = None
     scan_interval_minutes: int | None = None
+    scan_schedule_locked: bool = False
     last_scheduled_run_at: str | None = None
     last_scheduled_status: str | None = None
     countries: str
@@ -211,7 +213,10 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         last_scan=preferences.last_scan.isoformat() if preferences.last_scan else None,
         last_scan_kinozal_id=preferences.last_scan_kinozal_id,
         scan_from_page=preferences.scan_from_page,
-        scan_interval_minutes=preferences.scan_interval_minutes,
+        # На dev-компьютере автосканирование принудительно выключено из settings,
+        # поэтому в UI показываем его выключенным.
+        scan_interval_minutes=None if settings.KINOZAL_AUTOSCAN_DISABLED else preferences.scan_interval_minutes,
+        scan_schedule_locked=settings.KINOZAL_AUTOSCAN_DISABLED,
         last_scheduled_run_at=preferences.last_scheduled_run_at.isoformat() if preferences.last_scheduled_run_at else None,
         last_scheduled_status=preferences.last_scheduled_status or None,
         countries=preferences.countries or "",

@@ -25,6 +25,12 @@ ENABLE_SAAS_COMPILER = False
 
 KINOZAL_SCAN_PRINT = False  # Выводить ли логи сканирования kinozal в консоль.
 
+# Автосканирование Kinozal по расписанию (UserPreferences.scan_interval_minutes).
+# На dev-компьютере (DEBUG=True) принудительно выключено, чтобы случайно
+# включённая настройка не запускала скан в фоне. На проде DEBUG=False.
+# При необходимости переопределяется из .env: KINOZAL_AUTOSCAN_DISABLED=True/False
+KINOZAL_AUTOSCAN_DISABLED = config('KINOZAL_AUTOSCAN_DISABLED', default=DEBUG, cast=bool)
+
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 INFINITE_PAGINATION_BY = 4

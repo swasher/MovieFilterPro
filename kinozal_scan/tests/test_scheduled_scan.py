@@ -2,13 +2,14 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from moviefilter.models import UserPreferences
 from kinozal_scan.tasks import DBCancelEvent, _run_scheduled_scan, _should_run
 
 
+@override_settings(KINOZAL_AUTOSCAN_DISABLED=False)
 class ScheduledScanGatingTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="scheduled-user", password="secret")
@@ -38,6 +39,12 @@ class ScheduledScanGatingTests(TestCase):
         self.preferences.scan_interval_minutes = 60
         self.preferences.last_scheduled_run_at = None
         self.assertTrue(_should_run(self.preferences, timezone.now()))
+
+    @override_settings(KINOZAL_AUTOSCAN_DISABLED=True)
+    def test_should_run_false_when_disabled_in_settings(self):
+        self.preferences.scan_interval_minutes = 60
+        self.preferences.last_scheduled_run_at = None
+        self.assertFalse(_should_run(self.preferences, timezone.now()))
 
 
 class DBCancelEventTests(TestCase):

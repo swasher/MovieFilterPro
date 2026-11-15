@@ -339,6 +339,8 @@
   );
   const savedBackupFolderPath = $derived(preferences?.resolved_torrents_backup_folder ?? "");
   const backupFolderExists = $derived(preferences?.backup_folder_exists ?? false);
+  // Автосканирование принудительно выключено из settings (dev-компьютер).
+  const scanScheduleLocked = $derived(preferences?.scan_schedule_locked ?? false);
   const checkpointUrl = $derived.by(() => {
     const checkpointId = preferences?.last_scan_kinozal_id;
     const domain = preferences?.kinozal_domain;
@@ -668,10 +670,16 @@
               <div class="space-y-1">
                 <Label for="scan-schedule-enabled" class="text-sm font-medium">Автосканирование по расписанию</Label>
                 <div class="text-xs text-muted-foreground">Вкл — скан запускается автоматически с заданным интервалом. Выкл — только вручную.</div>
+                {#if scanScheduleLocked}
+                  <div class="text-xs text-amber-600 dark:text-amber-400">
+                    На этом компьютере автосканирование принудительно отключено в settings (KINOZAL_AUTOSCAN_DISABLED).
+                  </div>
+                {/if}
               </div>
               <Switch
                 id="scan-schedule-enabled"
                 bind:checked={form.scan_schedule_enabled}
+                disabled={scanScheduleLocked}
                 onCheckedChange={(v) => { form.scan_schedule_enabled = v; markDirty(); return v; }}
               />
             </div>
