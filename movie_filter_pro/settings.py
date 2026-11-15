@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'qbittorrent',
     'kinozal_scan',
     'web_logger',
+    'ai_predict',
 ]
 if ENABLE_BROWSER_RELOAD:
     INSTALLED_APPS.append('django_browser_reload')

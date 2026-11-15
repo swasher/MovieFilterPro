@@ -29,6 +29,7 @@
     Plus,
     RefreshCw,
     Shield,
+    Sparkles,
     Star,
     Trash,
     Trash2,
@@ -42,6 +43,7 @@
   import PersonCard from "$lib/components/vault/PersonCard.svelte";
   import CollectionPartCard from "$lib/components/vault/CollectionPartCard.svelte";
   import VaultImage from "$lib/components/vault/VaultImage.svelte";
+  import AiPredictDialog from "$lib/components/ai-predict/AiPredictDialog.svelte";
   import { parseQbtApiError, type MovieTorrent, type QbtTorrent, type QbtTorrentDeleteResponse, type QbtTorrentsResponse } from "$lib/qbittorrent";
 
   const languageDisplayNames =
@@ -257,6 +259,7 @@
   let torrentDeleteDialogOpen = $state(false);
   let torrentPendingDelete = $state<MovieTorrent | null>(null);
   let isDeletingTorrentRecord = $state(false);
+  let aiPredictOpen = $state(false);
 
   let torrentFileInput = $state<HTMLInputElement | null>(null);
   let isTorrentDragActive = $state(false);
@@ -1349,6 +1352,16 @@
           </div>
         {/if}
 
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full justify-start"
+          onclick={() => (aiPredictOpen = true)}
+        >
+          <Sparkles class="size-4" />
+          AI predict
+        </Button>
+
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
@@ -2234,6 +2247,8 @@
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
+
+<AiPredictDialog bind:open={aiPredictOpen} movieId={movie.id} movieTitle={movie.title} />
 
 <Dialog.Root bind:open={watchedDialogOpen}>
   <Dialog.Content class="max-h-[80vh] overflow-y-auto sm:max-w-md">
