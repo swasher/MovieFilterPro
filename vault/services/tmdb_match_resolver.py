@@ -14,7 +14,7 @@ logger = logging.getLogger("vault.tmdb_sync")
 
 if TYPE_CHECKING:
     from vault.services.tmdb_ai_matching_service import AICandidateChoice, AIPlotComparison
-    from vault.services.tmdb_groq_matching_service import GroqChoice
+    from vault.services.tmdb_fast_ai_matching_service import FastAIChoice
     from vault.services.tmdb_movie_matching_service import TMDBCandidate, TMDBMatchingResult
 
 
@@ -29,9 +29,9 @@ class TMDBMatchResolver:
     Порядок стадий (дешевые первые, дорогие последние):
       1. eligibility (только needs_confirmation / needs_user_choice),
       2. pre-AI правила (_apply_pre_ai_rules: дословное совпадение описаний),
-      3. стадия актёрских составов (_stage_cast_overlap: пересечение каста через локальный AI),
-      4. GROQ-стадия (семантическое попарное сравнение сюжетов через облако),
-      5. локальный AI-выбор лучшего из всей кучи,
+      3. стадия актёрских составов (_stage_cast_overlap: пересечение каста через AI),
+      4. быстрая AI-стадия (семантическое попарное сравнение сюжетов через активный AI),
+      5. AI-выбор лучшего из всей кучи,
       6. проверка уверенности выбора,
       7. независимая попарная проверка победителя по сюжетам,
       8. повышение до auto_match.
@@ -70,9 +70,9 @@ class TMDBMatchResolver:
         if cast_early is not None:
             return cast_early
 
-        groq_early = cls._stage_groq_if_confident(movie, fuzzy_result, auto_match_min_score)
-        if groq_early is not None:
-            return groq_early
+        fast_ai_early = cls._stage_fast_ai_if_confident(movie, fuzzy_result, auto_match_min_score)
+        if fast_ai_early is not None:
+            return fast_ai_early
 
         choice = cls._stage_choose(movie, fuzzy_result.candidates)
         if not cls._stage_is_choice_confident(choice, fuzzy_result.candidates):
@@ -272,33 +272,33 @@ class TMDBMatchResolver:
         )
 
     @classmethod
-    def _stage_groq_if_confident(
+    def _stage_fast_ai_if_confident(
         cls,
         movie: Movie,
         fuzzy_result: TMDBMatchingResult,
         auto_match_min_score: int,
     ) -> TMDBMatchingResult | None:
-        """GROQ-стадия: семантическое сравнение сюжетов, когда дословного нет.
+        """Быстрая AI-стадия: семантическое сравнение сюжетов, когда дословного нет.
 
         Возвращает готовый auto_match при одном явном победителе,
-        иначе None — конвейер идет дальше к локальному AI.
+        иначе None — конвейер идет дальше к AI-выбору.
         """
-        from vault.services.tmdb_groq_matching_service import GroqChoice, TMDBGROQMatchingService
+        from vault.services.tmdb_fast_ai_matching_service import FastAIChoice, TMDBFastAIMatchingService
 
-        choice: GroqChoice | None = TMDBGROQMatchingService.choose_confident(
+        choice: FastAIChoice | None = TMDBFastAIMatchingService.choose_confident(
             movie,
             fuzzy_result.candidates,
         )
-        if not TMDBGROQMatchingService.is_auto_match(choice):
+        if not TMDBFastAIMatchingService.is_auto_match(choice):
             return None
         assert choice is not None and choice.selected_candidate is not None
-        return cls._promote_groq_match(fuzzy_result, choice, auto_match_min_score)
+        return cls._promote_fast_ai_match(fuzzy_result, choice, auto_match_min_score)
 
     @classmethod
-    def _promote_groq_match(
+    def _promote_fast_ai_match(
         cls,
         fuzzy_result: TMDBMatchingResult,
-        choice: GroqChoice,
+        choice: FastAIChoice,
         auto_match_min_score: int,
     ) -> TMDBMatchingResult:
         from vault.services.tmdb_movie_matching_service import TMDBMatchingResult
@@ -308,7 +308,7 @@ class TMDBMatchResolver:
         promoted = replace(
             selected,
             score=max(selected.score, auto_match_min_score),
-            score_reasons=tuple(selected.score_reasons or ()) + ("groq_plot_match",),
+            score_reasons=tuple(selected.score_reasons or ()) + ("fast_ai_plot_match",),
         )
         candidates = tuple(
             promoted
@@ -321,7 +321,7 @@ class TMDBMatchResolver:
             status="auto_match",
             selected_candidate=promoted,
             candidates=candidates,
-            message=f"GROQ подтвердил матч TMDB по описаниям (confidence={choice.confidence:.2f}).{reason}",
+            message=f"AI подтвердил матч TMDB по описаниям (confidence={choice.confidence:.2f}).{reason}",
         )
 
     @classmethod

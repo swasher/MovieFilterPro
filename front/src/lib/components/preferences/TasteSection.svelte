@@ -130,7 +130,7 @@
         <PencilIcon class="h-4 w-4" />
       </Button>
       <Button
-        variant="outline"
+        variant="destructive-outline"
         size="icon"
         onclick={() => (deleteTasteOpen = true)}
         disabled={!selectedTaste}

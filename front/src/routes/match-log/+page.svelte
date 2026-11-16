@@ -46,7 +46,9 @@
     web_search: { label: "Веб-поиск", icon: Globe, tone: "text-indigo-500" },
     ai_web_hints: { label: "AI подсказки", icon: Bot, tone: "text-violet-500" },
     ai_score: { label: "AI сравнение", icon: Bot, tone: "text-violet-500" },
-    groq_call: { label: "GROQ", icon: Zap, tone: "text-amber-500" },
+    ai_pair_call: { label: "AI сравнение сюжетов", icon: Zap, tone: "text-amber-500" },
+    // Старые события матчинга до объединения AI endpoints.
+    groq_call: { label: "AI сравнение сюжетов", icon: Zap, tone: "text-amber-500" },
     ai_choose: { label: "AI выбор", icon: Bot, tone: "text-violet-500" },
     ai_verify: { label: "AI проверка", icon: Bot, tone: "text-violet-500" },
     literal_match: { label: "Дословный матч", icon: CircleCheck, tone: "text-emerald-500" }
@@ -63,8 +65,8 @@
       }
       return { label: "Итог: нужен выбор", icon: Ban, tone: "text-amber-500" };
     }
-    if (event.event === "groq_call" && event.data.ok === false) {
-      return { label: "GROQ", icon: CircleX, tone: "text-rose-500" };
+    if ((event.event === "ai_pair_call" || event.event === "groq_call") && event.data.ok === false) {
+      return { label: "AI сравнение сюжетов", icon: CircleX, tone: "text-rose-500" };
     }
     return EVENT_META[event.event] ?? { label: event.event, icon: Sparkles, tone: "text-muted-foreground" };
   }
@@ -84,6 +86,7 @@
         return `clean_title="${data.clean_title ?? ""}" year=${data.llm_year ?? "—"} (+${data.queries_added ?? 0} запросов)`;
       case "ai_score":
         return `tmdb_id=${data.tmdb_id} same_work=${data.same_work ? "да" : "нет"} confidence=${data.confidence}`;
+      case "ai_pair_call":
       case "groq_call":
         return data.ok
           ? `tmdb_id=${data.tmdb_id} confidence=${data.confidence}`

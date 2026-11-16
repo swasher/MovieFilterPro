@@ -285,12 +285,12 @@ def probe_searxng(url: str, language: str, timeout: float) -> bool:
 
 def run_ai_hints(case: SearchCase, context: str) -> tuple[dict | None, str]:
     from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
-    from vault.services.tmdb_smart_search_service import is_local_ai_available
+    from vault.services.tmdb_smart_search_service import is_ai_available
 
     if not (context or "").strip():
         return None, "пустой контекст — AI нечего разбирать"
-    if not is_local_ai_available():
-        return None, "локальный AI выключен (Preferences: ai_enabled + ai_base_url + ai_model)"
+    if not is_ai_available():
+        return None, "AI выключен или не выбран endpoint (Preferences: AI → Endpoints)"
     t0 = time.perf_counter()
     hints = TMDBAIMatchingService.extract_web_hints(
         title=case.title,

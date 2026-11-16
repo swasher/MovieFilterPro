@@ -1,10 +1,16 @@
 import type { PageLoad } from "./$types";
 import { type PreferencesApiErrorPayload, type PreferencesData } from "$lib/preferences";
+import type { AiEndpoint } from "$lib/aiEndpoints";
 import type { TasteProfile } from "$lib/aiPredict";
 
 type TasteProfilesResult = {
   tastes: TasteProfile[];
   tastesError: string;
+};
+
+type AiEndpointsResult = {
+  endpoints: AiEndpoint[];
+  endpointsError: string;
 };
 
 async function loadTasteProfiles(fetch: typeof window.fetch): Promise<TasteProfilesResult> {
@@ -22,8 +28,24 @@ async function loadTasteProfiles(fetch: typeof window.fetch): Promise<TasteProfi
   }
 }
 
+async function loadAiEndpoints(fetch: typeof window.fetch): Promise<AiEndpointsResult> {
+  try {
+    const response = await fetch("/api/core/ai-endpoints");
+    if (!response.ok) {
+      return { endpoints: [], endpointsError: `API error: ${response.status}` };
+    }
+    return { endpoints: (await response.json()) as AiEndpoint[], endpointsError: "" };
+  } catch (error) {
+    return {
+      endpoints: [],
+      endpointsError: error instanceof Error ? error.message : "Unknown API error"
+    };
+  }
+}
+
 export const load: PageLoad = async ({ fetch }) => {
   const tasteProfiles = await loadTasteProfiles(fetch);
+  const aiEndpoints = await loadAiEndpoints(fetch);
 
   try {
     const response = await fetch("/api/core/preferences");
@@ -43,20 +65,23 @@ export const load: PageLoad = async ({ fetch }) => {
       return {
         preferences: null,
         apiError: detail,
-        ...tasteProfiles
+        ...tasteProfiles,
+        ...aiEndpoints
       };
     }
 
     return {
       preferences: (await response.json()) as PreferencesData,
       apiError: "",
-      ...tasteProfiles
+      ...tasteProfiles,
+      ...aiEndpoints
     };
   } catch (error) {
     return {
       preferences: null,
       apiError: error instanceof Error ? error.message : "Unknown API error",
-      ...tasteProfiles
+      ...tasteProfiles,
+      ...aiEndpoints
     };
   }
 };

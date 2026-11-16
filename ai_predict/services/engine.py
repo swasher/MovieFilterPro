@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ai_predict.models import TasteProfile
-from ai_predict.services.local_ai import chat_json, get_local_ai_config
+from core.services.ai_client import chat_json, get_ai_config
 from ai_predict.services.prompt import build_system_prompt, build_user_prompt
 
 VERDICT_LABELS = {"watch": "брать", "maybe": "может быть", "skip": "не брать"}
@@ -37,7 +37,7 @@ def run_taste_engine(*, card: dict[str, Any], taste_profile: TasteProfile | None
             "Профиль вкусов не выбран или пуст — заполните его в Preferences → Taste."
         )
 
-    config = get_local_ai_config()
+    config = get_ai_config()
     raw, _content = chat_json(
         config=config,
         system_prompt=build_system_prompt(profile_content),

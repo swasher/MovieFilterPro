@@ -1,7 +1,14 @@
 <script lang="ts">
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
+  import { resolveAiEndpoint, type AiEndpoint } from "$lib/aiEndpoints";
   import { getPreferencesStore } from "./store.svelte.js";
+
+  type Props = {
+    endpoints?: AiEndpoint[];
+  };
+
+  let { endpoints = [] }: Props = $props();
 
   const store = getPreferencesStore();
 
@@ -16,19 +23,17 @@
   const configured = (ok: boolean, missing = "Missing"): { value: string; tone: StatusTone } =>
     ok ? { value: "Configured", tone: "ok" } : { value: missing, tone: "warn" };
 
+  const activeAiEndpoint = $derived(resolveAiEndpoint(endpoints));
+
   const statusRows = $derived.by<StatusRow[]>(() => {
     const form = store.form;
-    const localAi = form.ai_enabled
-      ? form.ai_base_url.trim() && form.ai_model.trim()
-        ? { value: "Configured", tone: "ok" as StatusTone }
-        : { value: "Incomplete", tone: "warn" as StatusTone }
-      : { value: "Disabled", tone: "off" as StatusTone };
-    const groq =
-      form.groq_api_key.trim() && form.groq_model.trim()
-        ? { value: "Configured", tone: "ok" as StatusTone }
-        : form.groq_api_key.trim() || form.groq_model.trim()
-          ? { value: "Incomplete", tone: "warn" as StatusTone }
-          : { value: "Missing", tone: "warn" as StatusTone };
+    const ai = !form.ai_enabled
+      ? { value: "Disabled", tone: "off" as StatusTone }
+      : !activeAiEndpoint
+        ? { value: "No endpoint", tone: "warn" as StatusTone }
+        : activeAiEndpoint.base_url.trim() && activeAiEndpoint.model.trim()
+          ? { value: activeAiEndpoint.name, tone: "ok" as StatusTone }
+          : { value: "Incomplete", tone: "warn" as StatusTone };
 
     return [
       {
@@ -50,8 +55,7 @@
         tone: form.searxng_url.trim() || form.tavily_api_key.trim() ? "ok" : "warn"
       },
       { label: "Plex token", ...configured(Boolean(form.plex_token.trim())) },
-      { label: "Local AI", ...localAi },
-      { label: "Groq", ...groq }
+      { label: "AI", ...ai }
     ];
   });
 

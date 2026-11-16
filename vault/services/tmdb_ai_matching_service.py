@@ -6,9 +6,7 @@ import logging
 import re
 from typing import Any, TYPE_CHECKING
 
-import requests
-
-from moviefilter.models import UserPreferences
+from core.services.ai_client import post_chat_completion, try_get_ai_config
 from vault.models import Movie
 
 if TYPE_CHECKING:
@@ -218,7 +216,7 @@ class TMDBAIMatchingService:
         """ШАГ 2 (урок find_tmdb_id.py): LLM извлекает чистые данные из веб-контекста.
 
         Возвращает {"clean_title": str, "year": int|None, "tmdb_queries": [str, ...]}
-        или None, если локальный AI недоступен/ответ не распознан.
+        или None, если AI недоступен/ответ не распознан.
         """
         if not (web_context or "").strip():
             return None
@@ -420,85 +418,38 @@ class TMDBAIMatchingService:
 
     @classmethod
     def _chat_json(cls, *, system_prompt: str, user_prompt: str) -> dict[str, Any] | None:
-        prefs = cls._get_preferences()
-        if prefs is None or not getattr(prefs, "ai_enabled", False):
-            logger.info("TMDB_AI_MATCH_SKIPPED | prompt=%s | reason=ai_disabled", cls.PROMPT_VERSION)
-            return None
-
-        base_url = (getattr(prefs, "ai_base_url", "") or "").strip().rstrip("/")
-        model = (getattr(prefs, "ai_model", "") or "").strip()
-        if not base_url or not model:
+        config = try_get_ai_config()
+        if config is None:
             logger.info(
-                "TMDB_AI_MATCH_SKIPPED | prompt=%s | reason=ai_not_configured | base_url=%s | model=%s",
+                "TMDB_AI_MATCH_SKIPPED | prompt=%s | reason=ai_disabled_or_not_configured",
                 cls.PROMPT_VERSION,
-                bool(base_url),
-                bool(model),
             )
             return None
 
-        url = cls._chat_completions_url(base_url)
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
-        api_key = (getattr(prefs, "ai_api_key", "") or "").strip()
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        payload = {
-            "model": model,
-            "temperature": 0,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=cls.REQUEST_TIMEOUT_SECONDS)
-            response.raise_for_status()
-            raw_payload = response.json()
+            result = post_chat_completion(
+                config,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0,
+                timeout=cls.REQUEST_TIMEOUT_SECONDS,
+            )
         except Exception as exc:
             logger.warning("TMDB_AI_MATCH_FAILED | prompt=%s | %s", cls.PROMPT_VERSION, exc)
             return None
 
-        content = cls._extract_message_content(raw_payload)
-        if not content:
+        if not result.content:
             return None
-        parsed = cls._parse_json_object(content)
+        parsed = cls._parse_json_object(result.content)
         if parsed is None:
-            logger.warning("TMDB_AI_MATCH_BAD_JSON | prompt=%s | content=%s", cls.PROMPT_VERSION, cls._clip(content, 500))
+            logger.warning(
+                "TMDB_AI_MATCH_BAD_JSON | prompt=%s | content=%s",
+                cls.PROMPT_VERSION,
+                cls._clip(result.content, 500),
+            )
         return parsed
-
-    @staticmethod
-    def _get_preferences():
-        try:
-            return UserPreferences.get()
-        except Exception:
-            return None
-
-    @staticmethod
-    def _chat_completions_url(base_url: str) -> str:
-        if base_url.endswith("/v1"):
-            return f"{base_url}/chat/completions"
-        return f"{base_url}/v1/chat/completions"
-
-    @staticmethod
-    def _extract_message_content(payload: object) -> str:
-        if not isinstance(payload, dict):
-            return ""
-        choices = payload.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return ""
-        first = choices[0]
-        if not isinstance(first, dict):
-            return ""
-        message = first.get("message")
-        if isinstance(message, dict):
-            content = message.get("content")
-            return content if isinstance(content, str) else ""
-        text = first.get("text")
-        return text if isinstance(text, str) else ""
 
     @staticmethod
     def _parse_json_object(content: str) -> dict[str, Any] | None:

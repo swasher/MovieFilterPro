@@ -193,7 +193,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     def test_ai_unavailable_without_literal_is_not_found(self, _ai_mock, ru_mock, en_mock):
         ru_mock.return_value, en_mock.return_value = self._clients(
             [_overview_item(1, "Совершенно другой сюжет про космос и далёкие галактики в опасности.")]
@@ -204,7 +204,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     def test_ai_unavailable_with_single_literal_is_auto_match(self, _ai_mock, ru_mock, en_mock):
         movie = _smart_movie()
         ru_mock.return_value, en_mock.return_value = self._clients([_overview_item(1, movie.description)])
@@ -216,7 +216,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=True)
     def test_plot_match_is_auto_match(self, _ai_mock, ru_mock, en_mock, compare_mock):
         compare_mock.return_value = AIPlotComparison(same_work=True, confidence=1.0, reason="Тот же фильм.")
         ru_mock.return_value, en_mock.return_value = self._clients(
@@ -231,7 +231,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=True)
     def test_strict_threshold_rejects_four_on_year_mismatch(self, _ai_mock, ru_mock, en_mock, compare_mock):
         compare_mock.return_value = AIPlotComparison(same_work=True, confidence=0.8, reason="Похоже.")
         ru_mock.return_value, en_mock.return_value = self._clients(
@@ -243,7 +243,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=True)
     def test_confident_different_is_not_a_match(self, _ai_mock, ru_mock, en_mock, compare_mock):
         # Регрессия: confidence — уверенность в вердикте, а не похожесть.
         # same_work=False + confidence=1.0 означает «точно разные», а не скор 1.0.
@@ -260,7 +260,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=True)
     def test_same_work_with_red_flags_is_not_a_match(self, _ai_mock, ru_mock, en_mock, compare_mock):
         compare_mock.return_value = AIPlotComparison(
             same_work=True, confidence=0.95, reason="Сомнительно.", red_flags=("сиквел?",),
@@ -303,7 +303,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.extract_web_hints")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     def test_web_hints_extend_queries(self, _ai_mock, ru_mock, en_mock, hints_mock):
         self.search_web_mock.return_value = "--- Поиск по название ---\nЗаголовок: X\nКонтент: Y\n"
         hints_mock.return_value = {
@@ -323,7 +323,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.extract_web_hints")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     def test_empty_web_context_skips_hints(self, _ai_mock, ru_mock, en_mock, hints_mock):
         self.search_web_mock.return_value = ""
         ru_mock.return_value = _FakeLangClient({})
@@ -345,7 +345,7 @@ class SmartSearchOrchestrationTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=True)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=True)
     def test_score_candidates_passes_dual_overview_and_context_to_ai(
         self, _ai_mock, ru_mock, en_mock, compare_mock
     ):

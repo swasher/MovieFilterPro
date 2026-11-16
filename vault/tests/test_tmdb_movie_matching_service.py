@@ -6,7 +6,7 @@ from django.test import SimpleTestCase
 
 from vault.models import Movie
 from vault.services.tmdb_ai_matching_service import AICandidateChoice, AICastComparison, AIPlotComparison
-from vault.services.tmdb_groq_matching_service import GroqChoice
+from vault.services.tmdb_fast_ai_matching_service import FastAIChoice
 from vault.services.tmdb_movie_matching_service import TMDBMovieMatchingService
 
 
@@ -151,7 +151,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertEqual(by_id[11].overview, "Другая версия про пустынную планету.")
 
     @patch(
-        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        "vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident",
         return_value=None,
     )
     @patch(
@@ -161,7 +161,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ambiguous_case_can_auto_match_with_confident_ai_choice(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, fast_ai_mock
     ):
         movie = Movie(
             title="Дюна",
@@ -225,7 +225,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertTrue(compare_mock.called)
 
     @patch(
-        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        "vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident",
         return_value=None,
     )
     @patch(
@@ -235,7 +235,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ai_choice_can_break_tie_when_deterministic_best_is_strong(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, fast_ai_mock
     ):
         movie = Movie(
             title="Взрывные триггер счастье",
@@ -299,7 +299,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIn("ai_plot_verified", result.selected_candidate.score_reasons)
 
     @patch(
-        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        "vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident",
         return_value=None,
     )
     @patch(
@@ -309,7 +309,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ai_choice_blocked_when_verify_rejects_winner(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, fast_ai_mock
     ):
         movie = Movie(
             title="Дюна",
@@ -366,7 +366,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         self.assertIsNone(result.selected_candidate)
 
     @patch(
-        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        "vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident",
         return_value=None,
     )
     @patch(
@@ -376,7 +376,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_ai_choice_blocked_when_verify_unavailable(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, fast_ai_mock
     ):
         movie = Movie(
             title="Дюна",
@@ -778,7 +778,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         compare_mock.assert_not_called()
 
     @patch(
-        "vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident",
+        "vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident",
         return_value=None,
     )
     @patch(
@@ -788,7 +788,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_two_literal_hits_fall_through_to_ai(
-        self, get_tmdb_client_mock, choose_best_mock, compare_mock, groq_mock
+        self, get_tmdb_client_mock, choose_best_mock, compare_mock, fast_ai_mock
     ):
         plot = (
             "Наследник великого дома оказывается на пустынной планете Арракис, "
@@ -853,10 +853,10 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident")
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_groq_confident_match_skips_local_ai(
-        self, get_tmdb_client_mock, groq_mock, choose_best_mock, compare_mock
+    def test_fast_ai_confident_match_skips_deep_ai(
+        self, get_tmdb_client_mock, fast_ai_mock, choose_best_mock, compare_mock
     ):
         movie = Movie(
             title="Взрывные триггер счастье",
@@ -899,21 +899,21 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
 
         def choose_confident(movie_arg, candidates):
             by_id = {candidate.tmdb_id: candidate for candidate in candidates}
-            return GroqChoice(
+            return FastAIChoice(
                 selected_candidate=by_id[1234422],
                 confidence=0.92,
                 runner_up_confidence=0.30,
                 reason="Совпали Джордж Декер, Багамы и долги.",
             )
 
-        groq_mock.side_effect = choose_confident
+        fast_ai_mock.side_effect = choose_confident
 
         result = TMDBMovieMatchingService.match_movie(movie)
 
         self.assertEqual(result.status, "auto_match")
         self.assertIsNotNone(result.selected_candidate)
         self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
-        self.assertIn("groq_plot_match", result.selected_candidate.score_reasons)
+        self.assertIn("fast_ai_plot_match", result.selected_candidate.score_reasons)
         self.assertNotIn("ai_plot_match", result.selected_candidate.score_reasons)
         choose_best_mock.assert_not_called()
         compare_mock.assert_not_called()
@@ -923,10 +923,10 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
         return_value=AIPlotComparison(same_work=True, confidence=0.9, reason="Сюжеты совпадают."),
     )
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident")
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_unsure_groq_falls_through_to_local_ai(
-        self, get_tmdb_client_mock, groq_mock, choose_best_mock, compare_mock
+    def test_unsure_fast_ai_falls_through_to_deep_ai(
+        self, get_tmdb_client_mock, fast_ai_mock, choose_best_mock, compare_mock
     ):
         movie = Movie(
             title="Взрывные триггер счастье",
@@ -969,7 +969,7 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
 
         def choose_confident(movie_arg, candidates):
             by_id = {candidate.tmdb_id: candidate for candidate in candidates}
-            return GroqChoice(
+            return FastAIChoice(
                 selected_candidate=by_id[1234422],
                 confidence=0.60,
                 runner_up_confidence=0.55,
@@ -986,24 +986,24 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
                 needs_human=False,
             )
 
-        groq_mock.side_effect = choose_confident
+        fast_ai_mock.side_effect = choose_confident
         choose_best_mock.side_effect = choose_best
 
         result = TMDBMovieMatchingService.match_movie(movie)
 
-        # GROQ не уверен — решает локальный AI.
+        # Быстрый AI не уверен — решает глубокий AI-выбор.
         self.assertEqual(result.status, "auto_match")
         self.assertIsNotNone(result.selected_candidate)
         self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
         self.assertIn("ai_plot_match", result.selected_candidate.score_reasons)
-        self.assertNotIn("groq_plot_match", result.selected_candidate.score_reasons)
+        self.assertNotIn("fast_ai_plot_match", result.selected_candidate.score_reasons)
 
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident")
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
-    def test_groq_trope_level_match_without_names_auto_matches(
-        self, get_tmdb_client_mock, groq_mock, choose_best_mock, compare_mock
+    def test_fast_ai_trope_level_match_without_names_auto_matches(
+        self, get_tmdb_client_mock, fast_ai_mock, choose_best_mock, compare_mock
     ):
         movie = Movie(
             title="Взрывные триггер счастье",
@@ -1046,21 +1046,21 @@ class TMDBMovieMatchingServiceTests(SimpleTestCase):
 
         def choose_confident(movie_arg, candidates):
             by_id = {candidate.tmdb_id: candidate for candidate in candidates}
-            return GroqChoice(
+            return FastAIChoice(
                 selected_candidate=by_id[1234422],
                 confidence=0.68,
                 runner_up_confidence=0.30,
                 reason="Имен нет, но совпали значимые тропы: побег от жены, долгов и работы.",
             )
 
-        groq_mock.side_effect = choose_confident
+        fast_ai_mock.side_effect = choose_confident
 
         result = TMDBMovieMatchingService.match_movie(movie)
 
         self.assertEqual(result.status, "auto_match")
         self.assertIsNotNone(result.selected_candidate)
         self.assertEqual(result.selected_candidate.tmdb_id, 1234422)
-        self.assertIn("groq_plot_match", result.selected_candidate.score_reasons)
+        self.assertIn("fast_ai_plot_match", result.selected_candidate.score_reasons)
         choose_best_mock.assert_not_called()
         compare_mock.assert_not_called()
 
@@ -1118,7 +1118,7 @@ class SmartSearchFallbackTests(SimpleTestCase):
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
     @patch("vault.services.web_search_service.WebSearchService.search_web", return_value="")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
@@ -1139,7 +1139,7 @@ class SmartSearchFallbackTests(SimpleTestCase):
         compare_mock.assert_not_called()
 
     @patch("vault.services.web_search_service.WebSearchService.search_web", return_value="")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client_en")
     @patch("vault.services.tmdb_smart_search_service.get_tmdb_client")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
@@ -1205,7 +1205,7 @@ class MainYearFreeFallbackTests(SimpleTestCase):
 
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_plots")
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.choose_best_candidate")
-    @patch("vault.services.tmdb_smart_search_service.is_local_ai_available", return_value=False)
+    @patch("vault.services.tmdb_smart_search_service.is_ai_available", return_value=False)
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_year_filtered_main_flow_recovers_without_smart(
         self, client_mock, _ai_mock, choose_best_mock, compare_mock
@@ -1487,12 +1487,12 @@ class CastOverlapStageTests(SimpleTestCase):
 
         return CastTMDB()
 
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident", return_value=None)
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
     @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_cast_overlap_promotes_unique_winner(
-        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+        self, client_mock, local_names_mock, compare_casts_mock, _fast_ai_mock
     ):
         first, first_cast = self._candidate(
             10,
@@ -1525,12 +1525,12 @@ class CastOverlapStageTests(SimpleTestCase):
         self.assertIn("cast_match", result.selected_candidate.score_reasons)
         self.assertEqual(result.selected_candidate.cast_names, tuple(first_cast))
 
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident", return_value=None)
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
     @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_two_cast_winning_candidates_stay_ambiguous(
-        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+        self, client_mock, local_names_mock, compare_casts_mock, _fast_ai_mock
     ):
         first, first_cast = self._candidate(
             10, 90.0, ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"]
@@ -1548,12 +1548,12 @@ class CastOverlapStageTests(SimpleTestCase):
         self.assertIsNone(result.selected_candidate)
         self.assertFalse(any("cast_match" in c.score_reasons for c in result.candidates))
 
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident", return_value=None)
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
     @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_zero_cast_overlap_does_not_demote(
-        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+        self, client_mock, local_names_mock, compare_casts_mock, _fast_ai_mock
     ):
         first, first_cast = self._candidate(
             10, 90.0, ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"]
@@ -1569,12 +1569,12 @@ class CastOverlapStageTests(SimpleTestCase):
 
         self.assertEqual(result.status, "needs_user_choice")
 
-    @patch("vault.services.tmdb_groq_matching_service.TMDBGROQMatchingService.choose_confident", return_value=None)
+    @patch("vault.services.tmdb_fast_ai_matching_service.TMDBFastAIMatchingService.choose_confident", return_value=None)
     @patch("vault.services.tmdb_ai_matching_service.TMDBAIMatchingService.compare_casts")
     @patch("vault.services.tmdb_match_resolver.TMDBMatchResolver._local_actor_names")
     @patch("vault.services.tmdb_movie_matching_service.get_tmdb_client")
     def test_no_local_actors_skips_cast_stage(
-        self, client_mock, local_names_mock, compare_casts_mock, _groq_mock
+        self, client_mock, local_names_mock, compare_casts_mock, _fast_ai_mock
     ):
         first, first_cast = self._candidate(
             10, 90.0, ["Timothée Chalamet", "Rebecca Ferguson", "Zendaya", "Oscar Isaac", "Jason Momoa"]

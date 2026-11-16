@@ -1,7 +1,6 @@
 <script lang="ts">
   import ActivityIcon from "@lucide/svelte/icons/activity";
   import ClapperboardIcon from "@lucide/svelte/icons/clapperboard";
-  import CloudIcon from "@lucide/svelte/icons/cloud";
   import CpuIcon from "@lucide/svelte/icons/cpu";
   import DatabaseIcon from "@lucide/svelte/icons/database";
   import DownloadIcon from "@lucide/svelte/icons/download";
@@ -38,7 +37,6 @@
     websearch: SearchIcon,
     writeback: RefreshCwIcon,
     "local-ai": CpuIcon,
-    groq: CloudIcon,
     taste: SparklesIcon,
     account: LockIcon,
     diagnostics: ActivityIcon

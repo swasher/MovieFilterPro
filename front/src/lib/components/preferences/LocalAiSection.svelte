@@ -1,72 +1,144 @@
 <script lang="ts">
-  import CheckIcon from "@lucide/svelte/icons/check";
-  import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
-  import { tick } from "svelte";
+  import CopyIcon from "@lucide/svelte/icons/copy";
+  import MinusIcon from "@lucide/svelte/icons/minus";
+  import PencilIcon from "@lucide/svelte/icons/pencil";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import { toast } from "svelte-sonner";
+  import {
+    activateAiEndpoint,
+    listAiEndpoints,
+    resolveAiEndpoint,
+    type AiEndpoint
+  } from "$lib/aiEndpoints";
   import { Button } from "$lib/components/ui/button";
-  import * as Command from "$lib/components/ui/command";
-  import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as Popover from "$lib/components/ui/popover";
+  import * as Select from "$lib/components/ui/select";
   import { Switch } from "$lib/components/ui/switch";
-  import { cn } from "$lib/utils.js";
+  import AiEndpointDialog from "./AiEndpointDialog.svelte";
+  import AiEndpointDeleteDialog from "./AiEndpointDeleteDialog.svelte";
   import { getPreferencesStore } from "./store.svelte.js";
+
+  type Props = {
+    endpoints?: AiEndpoint[];
+    endpointsError?: string;
+  };
+
+  let { endpoints = $bindable([]), endpointsError = "" }: Props = $props();
 
   const store = getPreferencesStore();
 
-  let aiModels = $state<string[]>([]);
-  let aiModelsLoading = $state(false);
-  let aiModelsError = $state("");
-  let aiModelsBaseUrl = $state("");
-  let aiComboboxOpen = $state(false);
-  let aiTriggerRef = $state<HTMLButtonElement>(null!);
+  let dialogOpen = $state(false);
+  let dialogMode = $state<"create" | "edit" | "duplicate">("create");
+  let dialogEndpoint = $state<AiEndpoint | null>(null);
+  let suggestedName = $state("");
+  let deleteOpen = $state(false);
+  let activatingId = $state<number | null>(null);
 
-  const loadAiModels = async () => {
-    aiModelsLoading = true;
-    aiModelsError = "";
+  const sortedEndpoints = $derived(
+    [...endpoints].sort((left, right) => left.name.localeCompare(right.name, "ru"))
+  );
+  const selectedEndpoint = $derived(resolveAiEndpoint(sortedEndpoints));
+
+  const refresh = async () => {
     try {
-      const params = new URLSearchParams();
-      if (store.form.ai_base_url.trim()) params.set("base_url", store.form.ai_base_url.trim());
-      if (store.form.ai_api_key.trim()) params.set("api_key", store.form.ai_api_key.trim());
-      const qs = params.toString() ? `?${params.toString()}` : "";
-      const res = await fetch(`/api/core/ai-models${qs}`);
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.detail ?? `HTTP ${res.status}`);
-      aiModels = payload.models ?? [];
-      aiModelsBaseUrl = payload.base_url ?? "";
-      if (!aiModels.length) {
-        aiModelsError = "Сервер ответил, но список моделей пуст.";
-      } else {
-        toast.success(`Найдено моделей: ${aiModels.length}`);
-      }
-    } catch (e) {
-      aiModels = [];
-      aiModelsError = e instanceof Error ? e.message : String(e);
-      toast.error(aiModelsError);
-    } finally {
-      aiModelsLoading = false;
+      endpoints = await listAiEndpoints();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось загрузить AI endpoints.");
     }
   };
 
-  const pickAiModel = (name: string) => {
-    store.form.ai_model = name;
-    store.markDirty();
+  const selectEndpoint = async (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed === selectedEndpoint?.id) return;
+    activatingId = parsed;
+    try {
+      await activateAiEndpoint(parsed);
+      endpoints = endpoints.map((endpoint) => ({ ...endpoint, is_active: endpoint.id === parsed }));
+      toast.success("Активный AI переключён.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось переключить AI.");
+      // Контролируемый Select мог уйти в новое значение — возвращаем состояние с сервера.
+      await refresh();
+    } finally {
+      activatingId = null;
+    }
   };
 
-  const closeAndFocusAiTrigger = () => {
-    aiComboboxOpen = false;
-    tick().then(() => {
-      aiTriggerRef.focus();
-    });
+  const uniqueName = (base: string, existing: string[]) => {
+    const used = new Set(existing);
+    if (!used.has(base)) return base;
+    let index = 2;
+    while (used.has(`${base} ${index}`)) index += 1;
+    return `${base} ${index}`;
+  };
+
+  const openCreate = () => {
+    dialogMode = "create";
+    dialogEndpoint = null;
+    suggestedName = "";
+    dialogOpen = true;
+  };
+
+  const openEdit = () => {
+    if (!selectedEndpoint) return;
+    dialogMode = "edit";
+    dialogEndpoint = selectedEndpoint;
+    suggestedName = "";
+    dialogOpen = true;
+  };
+
+  const openDuplicate = () => {
+    if (!selectedEndpoint) return;
+    dialogMode = "duplicate";
+    dialogEndpoint = selectedEndpoint;
+    suggestedName = uniqueName(
+      `${selectedEndpoint.name} copy`,
+      endpoints.map((endpoint) => endpoint.name)
+    );
+    dialogOpen = true;
+  };
+
+  const handleSaved = async (saved: AiEndpoint) => {
+    const mode = dialogMode;
+    dialogOpen = false;
+    if (mode === "create" || mode === "duplicate") {
+      // Новый endpoint (включая дубль) сразу становится активным: пользователь
+      // должен видеть перед собой то, что только что создал.
+      try {
+        await activateAiEndpoint(saved.id);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Не удалось выбрать новый AI.");
+      }
+    }
+    await refresh();
+    toast.success(
+      mode === "edit"
+        ? "AI endpoint сохранён."
+        : mode === "duplicate"
+          ? "AI endpoint продублирован."
+          : "AI endpoint добавлен."
+    );
+  };
+
+  const handleDeleted = async () => {
+    deleteOpen = false;
+    await refresh();
+    toast.success("AI endpoint удалён.");
   };
 </script>
 
 <div class="space-y-4">
+  {#if endpointsError}
+    <div class="border-destructive/40 bg-destructive/10 text-destructive rounded-xl border px-4 py-3 text-sm">
+      {endpointsError}
+    </div>
+  {/if}
+
   <div class="border-border/70 flex items-center justify-between rounded-xl border px-4 py-3">
     <div class="space-y-1">
-      <Label for="ai-enabled" class="text-sm font-medium">Local AI enabled</Label>
+      <Label for="ai-enabled" class="text-sm font-medium">AI enabled</Label>
       <div class="text-muted-foreground text-xs">
-        Вкл — будущие фичи смогут обращаться к локальному AI. Выкл — всё без AI.
+        Вкл — AI-фичи (скан, TMDB matching, предсказания) используют активный endpoint. Выкл — всё без AI.
       </div>
     </div>
     <Switch
@@ -81,75 +153,89 @@
   </div>
 
   <div class="space-y-2">
-    <div class="text-sm font-medium">Base URL</div>
-    <Input bind:value={store.form.ai_base_url} placeholder="http://localhost:11434/v1" />
-    <div class="text-muted-foreground text-xs">
-      Без слэша в конце. Lemonade обычно http://localhost:13305/v1, Unsloth — http://localhost:8888/v1.
-    </div>
-  </div>
-
-  <div class="space-y-2">
-    <div class="text-sm font-medium">Model</div>
+    <div class="text-sm font-medium">Endpoint</div>
     <div class="flex gap-2">
-      <Popover.Root bind:open={aiComboboxOpen}>
-        <Popover.Trigger bind:ref={aiTriggerRef}>
-          {#snippet child({ props })}
-            <Button
-              {...props}
-              variant="outline"
-              role="combobox"
-              aria-expanded={aiComboboxOpen}
-              class="flex-1 justify-between"
-            >
-              <span class="truncate">{store.form.ai_model.trim() || "Select model..."}</span>
-              <ChevronsUpDownIcon data-icon="inline-end" class="opacity-50" />
-            </Button>
-          {/snippet}
-        </Popover.Trigger>
-        <Popover.Content class="w-[320px] p-0" align="start">
-          <Command.Root>
-            <Command.Input placeholder="Search model..." />
-            <Command.List>
-              <Command.Empty>
-                {aiModels.length ? "No model found." : "No models loaded. Click Get models."}
-              </Command.Empty>
-              <Command.Group value="ai-models" heading={aiModelsBaseUrl || undefined}>
-                {#each aiModels as modelName (modelName)}
-                  <Command.Item
-                    value={modelName}
-                    onSelect={() => {
-                      pickAiModel(modelName);
-                      closeAndFocusAiTrigger();
-                    }}
-                  >
-                    <CheckIcon
-                      class={cn(store.form.ai_model.trim() !== modelName && "text-transparent")}
-                    />
-                    <span class="truncate">{modelName}</span>
-                  </Command.Item>
-                {/each}
-              </Command.Group>
-            </Command.List>
-          </Command.Root>
-        </Popover.Content>
-      </Popover.Root>
-      <Button variant="outline" onclick={loadAiModels} disabled={aiModelsLoading}>
-        {aiModelsLoading ? "Loading..." : "Get models"}
+      <Select.Root
+        type="single"
+        value={selectedEndpoint ? String(selectedEndpoint.id) : ""}
+        onValueChange={selectEndpoint}
+        disabled={!sortedEndpoints.length || activatingId !== null}
+      >
+        <Select.Trigger class="flex-1" aria-label="AI endpoint">
+          {#if selectedEndpoint}
+            {selectedEndpoint.name}
+          {:else}
+            <span class="text-muted-foreground">
+              {sortedEndpoints.length ? "Выберите endpoint" : "Endpoints пока нет"}
+            </span>
+          {/if}
+        </Select.Trigger>
+        <Select.Content>
+          {#each sortedEndpoints as endpoint (endpoint.id)}
+            <Select.Item value={String(endpoint.id)}>{endpoint.name}</Select.Item>
+          {/each}
+        </Select.Content>
+      </Select.Root>
+      <Button variant="outline" size="icon" onclick={openCreate} title="Добавить endpoint">
+        <PlusIcon class="h-4 w-4" />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        onclick={openDuplicate}
+        disabled={!selectedEndpoint}
+        title="Дублировать endpoint"
+      >
+        <CopyIcon class="h-4 w-4" />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        onclick={openEdit}
+        disabled={!selectedEndpoint}
+        title="Редактировать endpoint"
+      >
+        <PencilIcon class="h-4 w-4" />
+      </Button>
+      <Button
+        variant="destructive-outline"
+        size="icon"
+        onclick={() => (deleteOpen = true)}
+        disabled={!selectedEndpoint}
+        title="Удалить endpoint"
+      >
+        <MinusIcon class="h-4 w-4" />
       </Button>
     </div>
-    {#if aiModelsError}
-      <div class="border-destructive/40 bg-destructive/10 text-destructive rounded-xl border px-4 py-3 text-sm">
-        {aiModelsError}
+
+    {#if selectedEndpoint}
+      <div class="text-muted-foreground space-y-1 text-xs">
+        <div class="truncate">Base URL: {selectedEndpoint.base_url}</div>
+        <div class="truncate">Model: {selectedEndpoint.model}</div>
       </div>
     {/if}
   </div>
 
-  <div class="space-y-2">
-    <div class="text-sm font-medium">API key (optional)</div>
-    <Input
-      bind:value={store.form.ai_api_key}
-      type="password"
-      placeholder="обычно пусто для локальных серверов"
-    />
-  </div>
+  {#if !sortedEndpoints.length}
+    <div class="text-muted-foreground text-sm">
+      Добавьте endpoint кнопкой «+»: локальный сервер (Ollama, LM Studio, Lemonade, Unsloth) или облачный
+      API (Groq и т.п.).
+    </div>
+  {/if}
+
+  <AiEndpointDialog
+    bind:open={dialogOpen}
+    mode={dialogMode}
+    endpoint={dialogEndpoint}
+    suggestedName={suggestedName}
+    onSaved={handleSaved}
+    onCancel={() => (dialogOpen = false)}
+  />
+
+  <AiEndpointDeleteDialog
+    bind:open={deleteOpen}
+    endpoint={selectedEndpoint}
+    ondeleted={handleDeleted}
+    oncancel={() => (deleteOpen = false)}
+  />
 </div>

@@ -309,39 +309,18 @@ class UserPreferences(models.Model):
     )
 
     ai_enabled = models.BooleanField(
-        'Локальный AI включен',
+        'AI включен',
         default=False,
-        help_text='Использовать локальный AI для будущих фич',
+        help_text='Использовать AI (активный AI endpoint) в фичах скана и Vault',
     )
-    ai_base_url = models.CharField(
-        max_length=300,
-        blank=True,
+    ai_endpoint = models.ForeignKey(
+        'core.AiEndpoint',
+        verbose_name='Активный AI endpoint',
         null=True,
-        help_text='Base URL OpenAI-совместимого сервера, например http://localhost:11434/v1',
-    )
-    ai_api_key = models.CharField(
-        max_length=200,
         blank=True,
-        null=True,
-        help_text='API-ключ, если сервер его требует (для локальных обычно не нужен)',
-    )
-    ai_model = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text='Имя модели, например qwen2.5:7b',
-    )
-    groq_api_key = models.CharField(
-        max_length=200,
-        blank=True,
-        null=True,
-        help_text='API-ключ Groq для облачных LLM',
-    )
-    groq_model = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text='Имя Groq-модели, например llama-3.3-70b-versatile',
+        on_delete=models.SET_NULL,
+        related_name='+',
+        help_text='Шаблон подключения, который используют все AI-фичи',
     )
 
     vault_image_cache_enabled = models.BooleanField(

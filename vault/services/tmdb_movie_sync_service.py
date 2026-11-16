@@ -1671,10 +1671,10 @@ class TMDBMovieSyncService:
             return "дословное совпадение описаний"
         if "smart_search_plot_match" in reasons:
             return "умный поиск: совпадение сюжетов"
-        if "groq_plot_match" in reasons:
-            return "совпадение сюжетов через GROQ"
+        if "fast_ai_plot_match" in reasons:
+            return "совпадение сюжетов через AI"
         if "ai_plot_match" in reasons:
-            return "подтверждено локальным AI"
+            return "подтверждено AI"
         if "manual_choice" in reasons:
             return "ручной выбор"
         if "stored_tmdb_id" in reasons:

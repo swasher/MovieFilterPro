@@ -9,6 +9,7 @@ from ninja.errors import HttpError
 
 from moviefilter.models import UserPreferences
 from qbittorrent.services.paths import resolve_backup_folder
+from core.services import ai_endpoints
 
 
 api = NinjaAPI(title="Core API", version="1.0", urls_namespace="core-api")
@@ -60,11 +61,6 @@ class PreferencesOut(Schema):
     tmdb_v4_read_access_token: str | None = None
     tmdb_v4_authenticated_access_token: str | None = None
     ai_enabled: bool = False
-    ai_base_url: str | None = None
-    ai_api_key: str | None = None
-    ai_model: str | None = None
-    groq_api_key: str | None = None
-    groq_model: str | None = None
     vault_image_cache_enabled: bool = True
 
 
@@ -97,17 +93,40 @@ class PreferencesUpdateIn(Schema):
     searxng_url: str | None = None
     tmdb_v4_read_access_token: str | None = None
     ai_enabled: bool = False
-    ai_base_url: str | None = None
-    ai_api_key: str | None = None
-    ai_model: str | None = None
-    groq_api_key: str | None = None
-    groq_model: str | None = None
     vault_image_cache_enabled: bool = True
 
 
 class AiModelsOut(Schema):
     base_url: str
     models: list[str]
+
+
+class AiEndpointOut(Schema):
+    id: int
+    name: str
+    base_url: str
+    model: str
+    api_key: str = ""
+    is_active: bool = False
+    updated_at: str
+
+
+class AiEndpointIn(Schema):
+    name: str = ""
+    base_url: str = ""
+    model: str = ""
+    api_key: str = ""
+
+
+class AiEndpointUpdateIn(Schema):
+    name: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
+class OkOut(Schema):
+    ok: bool
 
 
 def _require_api_user(request):
@@ -248,11 +267,6 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         tmdb_v4_read_access_token=preferences.tmdb_v4_read_access_token or None,
         tmdb_v4_authenticated_access_token=preferences.tmdb_v4_authenticated_access_token or None,
         ai_enabled=preferences.ai_enabled,
-        ai_base_url=preferences.ai_base_url or None,
-        ai_api_key=preferences.ai_api_key or None,
-        ai_model=preferences.ai_model or None,
-        groq_api_key=preferences.groq_api_key or None,
-        groq_model=preferences.groq_model or None,
         vault_image_cache_enabled=preferences.vault_image_cache_enabled,
     )
 
@@ -298,11 +312,6 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.searxng_url = _normalized_optional_string(payload.searxng_url)
     preferences.tmdb_v4_read_access_token = _normalized_optional_string(payload.tmdb_v4_read_access_token)
     preferences.ai_enabled = payload.ai_enabled
-    preferences.ai_base_url = _normalized_optional_string(payload.ai_base_url)
-    preferences.ai_api_key = _normalized_optional_string(payload.ai_api_key)
-    preferences.ai_model = _normalized_optional_string(payload.ai_model)
-    preferences.groq_api_key = _normalized_optional_string(payload.groq_api_key)
-    preferences.groq_model = _normalized_optional_string(payload.groq_model)
     preferences.vault_image_cache_enabled = payload.vault_image_cache_enabled
     preferences.save()
 
@@ -331,7 +340,7 @@ def update_preferences(request, payload: PreferencesUpdateIn):
 
 # ------------------------------------ #
 #          APPLICATION LAYER           #
-#   Local AI models listing (OpenAI    #
+#   AI models listing (OpenAI        #
 #   compatible + Ollama native tags)   #
 # ------------------------------------ #
 
@@ -383,17 +392,24 @@ def _extract_model_ids(payload: object) -> list[str]:
 
 @api.get("/ai-models", response=AiModelsOut)
 def list_ai_models(request, base_url: str | None = None, api_key: str | None = None):
-    """Return model ids available on the local AI server.
+    """Return model ids available on the AI server.
 
     Query params take precedence so the UI can probe an unsaved Base URL
-    without saving preferences first. Falls back to saved preferences.
+    without saving an endpoint first. Falls back to the active AI endpoint.
     """
     _require_api_user(request)
     preferences = UserPreferences.get()
-    resolved_base_url = (base_url or "").strip() or (preferences.ai_base_url or "").strip()
+    active_endpoint = preferences.ai_endpoint
+    resolved_base_url = (base_url or "").strip() or (
+        (active_endpoint.base_url or "").strip() if active_endpoint else ""
+    )
     if not resolved_base_url:
         raise HttpError(400, "AI base URL is not configured")
-    resolved_api_key = (api_key or "").strip() or (preferences.ai_api_key or "").strip() or None
+    resolved_api_key = (
+        (api_key or "").strip()
+        or ((active_endpoint.api_key or "").strip() if active_endpoint else "")
+        or None
+    )
 
     headers = {"Accept": "application/json"}
     if resolved_api_key:
@@ -420,3 +436,94 @@ def list_ai_models(request, base_url: str | None = None, api_key: str | None = N
             return AiModelsOut(base_url=resolved_base_url.rstrip("/"), models=sorted(model_ids))
         last_error = f"{url}: empty model list"
     raise HttpError(502, f"No models found on AI server ({last_error})")
+
+
+# ------------------------------------ #
+#            AI ENDPOINTS              #
+# ------------------------------------ #
+
+
+def _serialize_ai_endpoint(endpoint, active_id: int | None) -> AiEndpointOut:
+    return AiEndpointOut(
+        id=endpoint.id,
+        name=endpoint.name,
+        base_url=endpoint.base_url,
+        model=endpoint.model,
+        api_key=endpoint.api_key or "",
+        is_active=endpoint.id == active_id,
+        updated_at=endpoint.updated_at.isoformat(),
+    )
+
+
+@api.get("/ai-endpoints", response=list[AiEndpointOut])
+def list_ai_endpoints(request):
+    _require_api_user(request)
+    active = ai_endpoints.get_active_endpoint()
+    active_id = active.id if active else None
+    return [
+        _serialize_ai_endpoint(endpoint, active_id)
+        for endpoint in ai_endpoints.list_endpoints()
+    ]
+
+
+@api.post("/ai-endpoints", response=AiEndpointOut)
+def create_ai_endpoint(request, payload: AiEndpointIn):
+    _require_api_user(request)
+    try:
+        endpoint = ai_endpoints.create_endpoint(
+            name=payload.name,
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+    except ai_endpoints.AiEndpointError as exc:
+        raise HttpError(400, str(exc))
+    active = ai_endpoints.get_active_endpoint()
+    return _serialize_ai_endpoint(endpoint, active.id if active else None)
+
+
+@api.patch("/ai-endpoints/{endpoint_id}", response=AiEndpointOut)
+def update_ai_endpoint(request, endpoint_id: int, payload: AiEndpointUpdateIn):
+    _require_api_user(request)
+    endpoint = ai_endpoints.get_endpoint(endpoint_id)
+    if endpoint is None:
+        raise HttpError(404, "AI endpoint не найден.")
+    if (
+        payload.name is None
+        and payload.base_url is None
+        and payload.model is None
+        and payload.api_key is None
+    ):
+        raise HttpError(400, "Нечего обновлять: передайте хотя бы одно поле.")
+    try:
+        updated = ai_endpoints.update_endpoint(
+            endpoint,
+            name=payload.name,
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+    except ai_endpoints.AiEndpointError as exc:
+        raise HttpError(400, str(exc))
+    active = ai_endpoints.get_active_endpoint()
+    return _serialize_ai_endpoint(updated, active.id if active else None)
+
+
+@api.delete("/ai-endpoints/{endpoint_id}", response=OkOut)
+def delete_ai_endpoint(request, endpoint_id: int):
+    _require_api_user(request)
+    endpoint = ai_endpoints.get_endpoint(endpoint_id)
+    if endpoint is None:
+        raise HttpError(404, "AI endpoint не найден.")
+    ai_endpoints.delete_endpoint(endpoint)
+    return OkOut(ok=True)
+
+
+@api.post("/ai-endpoints/{endpoint_id}/activate", response=AiEndpointOut)
+def activate_ai_endpoint(request, endpoint_id: int):
+    _require_api_user(request)
+    endpoint = ai_endpoints.get_endpoint(endpoint_id)
+    if endpoint is None:
+        raise HttpError(404, "AI endpoint не найден.")
+    ai_endpoints.set_active_endpoint(endpoint)
+    return _serialize_ai_endpoint(endpoint, endpoint.id)

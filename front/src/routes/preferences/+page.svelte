@@ -4,7 +4,6 @@
   import MenuIcon from "@lucide/svelte/icons/menu";
   import PasswordChangeForm from "$lib/components/PasswordChangeForm.svelte";
   import DiagnosticsSection from "$lib/components/preferences/DiagnosticsSection.svelte";
-  import GroqSection from "$lib/components/preferences/GroqSection.svelte";
   import ImagesSection from "$lib/components/preferences/ImagesSection.svelte";
   import KinozalSection from "$lib/components/preferences/KinozalSection.svelte";
   import LocalAiSection from "$lib/components/preferences/LocalAiSection.svelte";
@@ -32,6 +31,8 @@
 
   const store = new PreferencesStore(() => data);
   setPreferencesStore(store);
+
+  let aiEndpoints = $state(data.endpoints ?? []);
 
   // Раздел живёт в URL (?section=…), чтобы пережить перезагрузку и работать как deep-link.
   const resolveInitialSection = (): PreferencesSectionId =>
@@ -144,13 +145,11 @@
               {:else if activeSection === "writeback"}
                 <TmdbWritebackSection />
               {:else if activeSection === "local-ai"}
-                <LocalAiSection />
-              {:else if activeSection === "groq"}
-                <GroqSection />
+                <LocalAiSection bind:endpoints={aiEndpoints} endpointsError={data.endpointsError} />
               {:else if activeSection === "taste"}
                 <TasteSection tastes={data.tastes} tastesError={data.tastesError} />
               {:else if activeSection === "diagnostics"}
-                <DiagnosticsSection />
+                <DiagnosticsSection endpoints={aiEndpoints} />
               {/if}
             </CardContent>
           </Card>

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from moviefilter.models import UserPreferences
+from core.services.ai_client import try_get_ai_config
 from tmdb_adapter.client_singleton import get_tmdb_client, get_tmdb_client_en
 from vault.models import Movie
 from vault.services.tmdb_ai_matching_service import TMDBAIMatchingService
@@ -36,7 +36,7 @@ SMART_REASON_PLOT_MATCH = "smart_search_plot_match"
 MSG_NO_QUERIES = "Умный поиск: нет названий для запроса"
 MSG_SHORT_PLOT = "Умный поиск: описание слишком короткое для сверки"
 MSG_NO_CANDIDATES = "Умный поиск: кандидаты TMDB не найдены"
-MSG_AI_UNAVAILABLE = "Умный поиск TMDB: локальный AI недоступен"
+MSG_AI_UNAVAILABLE = "Умный поиск TMDB: AI недоступен"
 MSG_NO_PLOT_MATCH = "Умный поиск: совпадение по сюжетам не найдено"
 MSG_PLOT_MATCH = "Умный поиск TMDB: найдено совпадение по сюжету"
 
@@ -202,17 +202,9 @@ def collect_candidates(
     return list(merged.values())
 
 
-def is_local_ai_available() -> bool:
-    """Локальный AI настроен (флаг + base_url + модель). Только он используется в умном поиске."""
-    try:
-        prefs = UserPreferences.get()
-    except Exception:
-        return False
-    if prefs is None or not getattr(prefs, "ai_enabled", False):
-        return False
-    base_url = (getattr(prefs, "ai_base_url", "") or "").strip()
-    model = (getattr(prefs, "ai_model", "") or "").strip()
-    return bool(base_url and model)
+def is_ai_available() -> bool:
+    """AI настроен (флаг + активный endpoint с base_url и моделью)."""
+    return try_get_ai_config() is not None
 
 
 def _effective_threshold(movie_year: int | None, candidate_year: int | None) -> float:
@@ -378,10 +370,10 @@ def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str]
 
 
 def smart_search(movie: Movie) -> TMDBMatchingResult:
-    """Fallback матчинга: веб-подсказки (SearXNG/Tavily), year-free поиск ru+en, ранг, проверка сюжетов локальным AI.
+    """Fallback матчинга: веб-подсказки (SearXNG/Tavily), year-free поиск ru+en, ранг, проверка сюжетов AI.
 
-    Groq здесь не используется по решению владельца — только локальный AI.
-    Без локального AI возможен лишь дословный матч, иначе not_found.
+    Используется только активный AI endpoint.
+    Без AI возможен лишь дословный матч, иначе not_found.
     Без описания (короче SMART_MIN_PLOT_CHARS) сверять нечего — поиск не запускаем.
     Веб-поиск обязателен: сбой (WebSearchError) останавливает очередь.
     """
@@ -409,7 +401,7 @@ def smart_search(movie: Movie) -> TMDBMatchingResult:
         return _not_found(MSG_NO_CANDIDATES)
 
     ranked = rank_candidates(collected, clean_title, llm_year)
-    allow_ai = is_local_ai_available()
+    allow_ai = is_ai_available()
     scored = score_candidates(movie, ranked, allow_ai=allow_ai)
     winner = pick_winner(scored)
     if winner is None:

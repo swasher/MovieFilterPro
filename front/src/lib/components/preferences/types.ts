@@ -32,11 +32,6 @@ export type PreferencesFormState = {
   searxng_url: string;
   tmdb_v4_read_access_token: string;
   ai_enabled: boolean;
-  ai_base_url: string;
-  ai_api_key: string;
-  ai_model: string;
-  groq_api_key: string;
-  groq_model: string;
   vault_image_cache_enabled: boolean;
 };
 
@@ -51,7 +46,6 @@ export type PreferencesSectionId =
   | "websearch"
   | "writeback"
   | "local-ai"
-  | "groq"
   | "taste"
   | "account"
   | "diagnostics";
@@ -123,16 +117,10 @@ export const PREFERENCES_SECTIONS: PreferencesSection[] = [
   },
   {
     id: "local-ai",
-    title: "Local AI",
+    title: "AI",
     group: "AI",
     description:
-      "OpenAI-совместимый локальный сервер (Ollama / LM Studio / Lemonade / Unsloth) для будущих фич. Пока только храним настройки, ничего их не вызывает."
-  },
-  {
-    id: "groq",
-    title: "Groq",
-    group: "AI",
-    description: "Облачный Groq API для LLM-фич (рекомендации, анализ)."
+      "Endpoints — шаблоны подключений к OpenAI-совместимым серверам: локальным (Ollama / LM Studio / Lemonade / Unsloth) и облачным (Groq и т.п.). Один endpoint выбирается активным."
   },
   {
     id: "taste",
@@ -193,12 +181,7 @@ export const FIELD_SECTIONS: Record<keyof PreferencesUpdatePayload, PreferencesS
   omdb_api_key: "omdb",
   tavily_api_key: "websearch",
   searxng_url: "websearch",
-  ai_enabled: "local-ai",
-  ai_base_url: "local-ai",
-  ai_api_key: "local-ai",
-  ai_model: "local-ai",
-  groq_api_key: "groq",
-  groq_model: "groq"
+  ai_enabled: "local-ai"
 };
 
 const asText = (value: string | number | null | undefined) => (value ?? "").toString();
@@ -245,11 +228,6 @@ export const createFormState = (preferences: PreferencesData): PreferencesFormSt
     searxng_url: preferences.searxng_url ?? "",
     tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? "",
     ai_enabled: preferences.ai_enabled ?? false,
-    ai_base_url: preferences.ai_base_url ?? "",
-    ai_api_key: preferences.ai_api_key ?? "",
-    ai_model: preferences.ai_model ?? "",
-    groq_api_key: preferences.groq_api_key ?? "",
-    groq_model: preferences.groq_model ?? "",
     vault_image_cache_enabled: preferences.vault_image_cache_enabled ?? true
   };
 };
@@ -287,11 +265,6 @@ export const buildPayload = (formState: PreferencesFormState): PreferencesUpdate
   searxng_url: asOptionalText(formState.searxng_url),
   tmdb_v4_read_access_token: asOptionalText(formState.tmdb_v4_read_access_token),
   ai_enabled: formState.ai_enabled,
-  ai_base_url: asOptionalText(formState.ai_base_url),
-  ai_api_key: asOptionalSecret(formState.ai_api_key),
-  ai_model: asOptionalText(formState.ai_model),
-  groq_api_key: asOptionalSecret(formState.groq_api_key),
-  groq_model: asOptionalText(formState.groq_model),
   vault_image_cache_enabled: formState.vault_image_cache_enabled
 });
 

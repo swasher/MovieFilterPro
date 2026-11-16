@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from ai_predict.models import MoviePrediction, TasteProfile
+from core.models import AiEndpoint
 from moviefilter.models import UserPreferences
 from vault.models import Movie
 
@@ -30,8 +31,14 @@ def llm_reply(content: str) -> dict:
 def configure_ai(enabled: bool = True) -> UserPreferences:
     preferences = UserPreferences.get()
     preferences.ai_enabled = enabled
-    preferences.ai_base_url = "http://127.0.0.1:8888/v1"
-    preferences.ai_model = "test-model"
+    endpoint = AiEndpoint.objects.first()
+    if endpoint is None:
+        endpoint = AiEndpoint.objects.create(
+            name="Test",
+            base_url="http://127.0.0.1:8888/v1",
+            model="test-model",
+        )
+    preferences.ai_endpoint = endpoint
     preferences.save()
     return preferences
 
@@ -203,6 +210,9 @@ class PredictionApiTests(AiPredictApiTestCase):
 
         request_payload = post.call_args.kwargs["json"]
         self.assertEqual(request_payload["model"], "test-model")
+        request_headers = post.call_args.kwargs["headers"]
+        self.assertTrue(request_headers["x-opencode-session"].startswith("ses_"))
+        self.assertEqual(request_headers["User-Agent"], "MovieFilterPro/1.0")
         system_prompt = request_payload["messages"][0]["content"]
         user_prompt = request_payload["messages"][1]["content"]
         self.assertIn("Детективы и триллеры.", system_prompt)
@@ -225,6 +235,49 @@ class PredictionApiTests(AiPredictApiTestCase):
         self.assertEqual(payload["score"], 3)
         self.assertEqual(payload["verdict"], "skip")
 
+    def test_predict_reads_json_from_reasoning_content(self):
+        llm_payload = {
+            "choices": [
+                {
+                    "message": {"content": "", "reasoning_content": '{"score": 7}'},
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+        with patch("requests.post", return_value=FakeResponse(llm_payload)):
+            response = self._run_prediction()
+
+        payload = response.json()
+        self.assertEqual(payload["status"], "done")
+        self.assertEqual(payload["score"], 7)
+
+    def test_predict_retries_truncated_answer_with_more_tokens(self):
+        truncated = {
+            "choices": [
+                {
+                    "message": {"content": "Думаю над фильмом..."},
+                    "finish_reason": "length",
+                }
+            ]
+        }
+        complete = {
+            "choices": [
+                {"message": {"content": '{"score": 6}'}, "finish_reason": "stop"}
+            ]
+        }
+        with patch("requests.post", side_effect=[FakeResponse(truncated), FakeResponse(complete)]) as post, \
+                patch("core.services.ai_client.time.sleep"):
+            response = self._run_prediction()
+
+        payload = response.json()
+        self.assertEqual(payload["status"], "done")
+        self.assertEqual(payload["score"], 6)
+        first_payload = post.call_args_list[0].kwargs["json"]
+        second_payload = post.call_args_list[1].kwargs["json"]
+        self.assertGreater(second_payload["max_tokens"], first_payload["max_tokens"])
+        self.assertEqual(first_payload["reasoning_effort"], "low")
+        self.assertEqual(first_payload["response_format"], {"type": "json_object"})
+
     def test_predict_with_disabled_ai_returns_error(self):
         configure_ai(enabled=False)
 
@@ -237,7 +290,7 @@ class PredictionApiTests(AiPredictApiTestCase):
 
     def test_predict_with_invalid_json_returns_error(self):
         with patch("requests.post", return_value=FakeResponse(llm_reply("не json"))), \
-                patch("ai_predict.services.local_ai.time.sleep"):
+                patch("core.services.ai_client.time.sleep"):
             response = self._run_prediction()
 
         payload = response.json()
@@ -299,3 +352,71 @@ class PredictionApiTests(AiPredictApiTestCase):
 
         prediction = MoviePrediction.objects.get()
         self.assertIsNone(prediction.taste_profile_id)
+
+
+class AiEndpointApiTests(AiPredictApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _create(self, name="Local", base_url="http://127.0.0.1:11434/v1", model="qwen2.5:7b"):
+        return self.client.post(
+            "/api/core/ai-endpoints",
+            data={"name": name, "base_url": base_url, "model": model},
+            content_type="application/json",
+        )
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        response = self.client.get("/api/core/ai-endpoints")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_first_endpoint_becomes_active(self):
+        created = self._create().json()
+
+        self.assertTrue(created["is_active"])
+        listing = self.client.get("/api/core/ai-endpoints").json()
+        self.assertEqual(len(listing), 1)
+        self.assertTrue(listing[0]["is_active"])
+        self.assertTrue(UserPreferences.get().ai_endpoint_id)
+
+    def test_activate_switches_active_endpoint(self):
+        first = self._create(name="Local").json()
+        second = self._create(name="Groq", base_url="https://api.groq.com/openai/v1", model="llama").json()
+
+        response = self.client.post(f"/api/core/ai-endpoints/{second['id']}/activate")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_active"])
+        listing = self.client.get("/api/core/ai-endpoints").json()
+        active = [item for item in listing if item["is_active"]]
+        self.assertEqual([item["id"] for item in active], [second["id"]])
+        self.assertNotEqual(first["id"], second["id"])
+
+    def test_update_and_delete_active_falls_back(self):
+        first = self._create(name="Local").json()
+        second = self._create(name="Groq", base_url="https://api.groq.com/openai/v1", model="llama").json()
+        self.client.post(f"/api/core/ai-endpoints/{second['id']}/activate")
+
+        updated = self.client.patch(
+            f"/api/core/ai-endpoints/{second['id']}",
+            data={"model": "llama-3.3-70b-versatile"},
+            content_type="application/json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["model"], "llama-3.3-70b-versatile")
+
+        deleted = self.client.delete(f"/api/core/ai-endpoints/{second['id']}")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(UserPreferences.get().ai_endpoint_id, first["id"])
+
+    def test_rejects_duplicate_name_and_bad_base_url(self):
+        self._create(name="Local")
+
+        duplicate = self._create(name="Local")
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn("уже существует", duplicate.json()["detail"])
+
+        bad_url = self._create(name="Broken", base_url="localhost:11434")
+        self.assertEqual(bad_url.status_code, 400)

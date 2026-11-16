@@ -408,9 +408,9 @@ class TMDBMovieSyncServiceTests(TestCase):
 
         self.assertEqual(label(("plot_literal_match",)), "дословное совпадение описаний")
         self.assertEqual(label(("smart_search_plot_match",)), "умный поиск: совпадение сюжетов")
-        self.assertEqual(label(("groq_plot_match",)), "совпадение сюжетов через GROQ")
+        self.assertEqual(label(("fast_ai_plot_match",)), "совпадение сюжетов через AI")
         self.assertEqual(
-            label(("ai_plot_match", "ai_plot_verified")), "подтверждено локальным AI"
+            label(("ai_plot_match", "ai_plot_verified")), "подтверждено AI"
         )
         self.assertEqual(label(("manual_choice",)), "ручной выбор")
         self.assertEqual(label(("stored_tmdb_id",)), "сохраненная привязка")

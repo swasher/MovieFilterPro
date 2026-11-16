@@ -34,11 +34,6 @@ export type PreferencesData = {
   tmdb_v4_read_access_token: string | null;
   tmdb_v4_authenticated_access_token: string | null;
   ai_enabled: boolean;
-  ai_base_url: string | null;
-  ai_api_key: string | null;
-  ai_model: string | null;
-  groq_api_key: string | null;
-  groq_model: string | null;
   vault_image_cache_enabled: boolean;
 };
 
@@ -70,11 +65,6 @@ export type PreferencesUpdatePayload = {
   searxng_url: string | null;
   tmdb_v4_read_access_token: string | null;
   ai_enabled: boolean;
-  ai_base_url: string | null;
-  ai_api_key: string | null;
-  ai_model: string | null;
-  groq_api_key: string | null;
-  groq_model: string | null;
   vault_image_cache_enabled: boolean;
 };
 
@@ -137,10 +127,5 @@ export const emptyPreferences = (): PreferencesData => ({
   tmdb_v4_read_access_token: null,
   tmdb_v4_authenticated_access_token: null,
   ai_enabled: false,
-  ai_base_url: null,
-  ai_api_key: null,
-  ai_model: null,
-  groq_api_key: null,
-  groq_model: null,
   vault_image_cache_enabled: true
 });
