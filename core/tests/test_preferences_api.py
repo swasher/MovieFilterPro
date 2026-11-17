@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from core.models import UserPreferences
+from core.models import AiEndpoint, UserPreferences
 
 
 class PreferencesApiTests(TestCase):
@@ -220,3 +220,63 @@ class PreferencesApiTests(TestCase):
         response = self.client.get("/api/core/preferences")
 
         self.assertEqual(response.status_code, 401)
+
+    def _make_ai_endpoints(self) -> tuple[AiEndpoint, AiEndpoint]:
+        fast = AiEndpoint.objects.create(name="Fast", base_url="http://fast:8000/v1", model="fast-model")
+        deep = AiEndpoint.objects.create(name="Deep", base_url="http://deep:8000/v1", model="deep-model")
+        return fast, deep
+
+    def test_put_preferences_sets_kinorium_ai_endpoints(self):
+        fast, deep = self._make_ai_endpoints()
+
+        response = self.client.put(
+            "/api/core/preferences",
+            data=self._preferences_payload(
+                kinorium_fast_ai_endpoint_id=fast.id,
+                kinorium_deep_ai_endpoint_id=deep.id,
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.preferences.refresh_from_db()
+        self.assertEqual(self.preferences.kinorium_fast_ai_endpoint_id, fast.id)
+        self.assertEqual(self.preferences.kinorium_deep_ai_endpoint_id, deep.id)
+        payload = response.json()
+        self.assertEqual(payload["kinorium_fast_ai_endpoint_id"], fast.id)
+        self.assertEqual(payload["kinorium_deep_ai_endpoint_id"], deep.id)
+
+    def test_put_preferences_clears_kinorium_ai_endpoints_with_null(self):
+        fast, deep = self._make_ai_endpoints()
+        self.preferences.kinorium_fast_ai_endpoint = fast
+        self.preferences.kinorium_deep_ai_endpoint = deep
+        self.preferences.save()
+
+        response = self.client.put(
+            "/api/core/preferences",
+            data=self._preferences_payload(
+                kinorium_fast_ai_endpoint_id=None,
+                kinorium_deep_ai_endpoint_id=None,
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.preferences.refresh_from_db()
+        self.assertIsNone(self.preferences.kinorium_fast_ai_endpoint_id)
+        self.assertIsNone(self.preferences.kinorium_deep_ai_endpoint_id)
+
+    def test_put_preferences_rejects_unknown_kinorium_ai_endpoint(self):
+        fast, _deep = self._make_ai_endpoints()
+        self.preferences.kinorium_fast_ai_endpoint = fast
+        self.preferences.save()
+
+        response = self.client.put(
+            "/api/core/preferences",
+            data=self._preferences_payload(kinorium_fast_ai_endpoint_id=99999),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.preferences.refresh_from_db()
+        self.assertEqual(self.preferences.kinorium_fast_ai_endpoint_id, fast.id)

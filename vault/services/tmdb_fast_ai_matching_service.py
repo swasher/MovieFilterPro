@@ -6,7 +6,9 @@ import logging
 import re
 from typing import Any, TYPE_CHECKING
 
+from core.models import UserPreferences
 from core.services.ai_client import (
+    LocalAIConfig,
     new_ai_session_id,
     post_chat_completion,
     try_get_ai_config,
@@ -42,12 +44,13 @@ class FastAIChoice:
 
 
 class TMDBFastAIMatchingService:
-    """Быстрая стадия матчинга: попарное семантическое сравнение сюжетов через активный AI.
+    """Быстрая стадия матчинга: попарное семантическое сравнение сюжетов.
 
     Используется когда плоты написаны разными людьми и дословный матч
-    не сработал: по каждому кандидату спрашиваем активный AI endpoint и
-    отдаем победу только одному явному победителю. Провайдер не важен —
-    подходит любой OpenAI-совместимый сервер (локальный или облачный).
+    не сработал: по каждому кандидату спрашиваем AI и отдаем победу только
+    одному явному победителю. Endpoint выбирается в Preferences → Kinorium
+    sync («AI для быстрых решений»), иначе используется выбранный AI endpoint.
+    Провайдер не важен — подходит любой OpenAI-совместимый сервер.
     """
 
     # ------------------------------------ #
@@ -91,10 +94,12 @@ class TMDBFastAIMatchingService:
         movie: Movie,
         candidates: tuple[TMDBCandidate, ...],
     ) -> FastAIChoice | None:
-        """Попарно сравнивает сюжет источника с каждым кандидатом через активный AI.
+        """Попарно сравнивает сюжет источника с каждым кандидатом через AI для быстрых решений.
 
-        Возвращает None если AI не настроен, некому сравнивать или все
-        запросы упали — тогда конвейер идет дальше к глубокому AI-выбору.
+        Endpoint берётся из Preferences → Kinorium sync (kinorium_fast_ai_endpoint),
+        иначе — выбранный AI endpoint. Возвращает None если AI не настроен,
+        некому сравнивать или все запросы упали — тогда конвейер идет дальше
+        к глубокому AI-выбору.
         """
         source_plot = movie.description or ""
         if not cls._has_meaningful_plot(source_plot):
@@ -112,7 +117,8 @@ class TMDBFastAIMatchingService:
                 getattr(movie, "id", None),
             )
             return None
-        if not cls._is_configured():
+        config = try_get_ai_config(endpoint_id=cls._endpoint_id())
+        if config is None:
             logger.info(
                 "TMDB_FAST_AI_SKIPPED | prompt=%s | reason=ai_not_configured | movie_id=%s",
                 cls.PROMPT_VERSION,
@@ -125,7 +131,12 @@ class TMDBFastAIMatchingService:
         # и переиспользует prompt cache.
         session_id = new_ai_session_id()
         for candidate in viable:
-            score = cls.compare_pair(source_plot, candidate.overview or "", session_id=session_id)
+            score = cls.compare_pair(
+                source_plot,
+                candidate.overview or "",
+                session_id=session_id,
+                config=config,
+            )
             send_match_log(
                 "ai_pair_call",
                 movie_id=getattr(movie, "id", None),
@@ -188,8 +199,9 @@ class TMDBFastAIMatchingService:
         plot_b: str,
         *,
         session_id: str | None = None,
+        config: LocalAIConfig | None = None,
     ) -> FastAIPlotScore | None:
-        """Одно попарное сравнение двух сюжетов через активный AI."""
+        """Одно попарное сравнение двух сюжетов через AI для быстрых решений."""
         if not cls._has_meaningful_plot(plot_a) or not cls._has_meaningful_plot(plot_b):
             return None
         response = cls._chat_json(
@@ -198,6 +210,7 @@ class TMDBFastAIMatchingService:
                 f"Описание 2:\n{cls._clip(plot_b, 1800)}"
             ),
             session_id=session_id,
+            config=config,
         )
         if response is None:
             return None
@@ -213,8 +226,19 @@ class TMDBFastAIMatchingService:
     # ------------------------------------ #
 
     @classmethod
-    def _chat_json(cls, *, user_prompt: str, session_id: str | None = None) -> dict[str, Any] | None:
-        config = try_get_ai_config()
+    def _endpoint_id(cls) -> int | None:
+        """Endpoint быстрой стадии: kinorium_fast_ai_endpoint, иначе выбранный."""
+        return UserPreferences.get().kinorium_fast_ai_endpoint_id
+
+    @classmethod
+    def _chat_json(
+        cls,
+        *,
+        user_prompt: str,
+        session_id: str | None = None,
+        config: LocalAIConfig | None = None,
+    ) -> dict[str, Any] | None:
+        config = config if config is not None else try_get_ai_config(endpoint_id=cls._endpoint_id())
         if config is None:
             return None
 
@@ -247,7 +271,7 @@ class TMDBFastAIMatchingService:
 
     @classmethod
     def _is_configured(cls) -> bool:
-        return try_get_ai_config() is not None
+        return try_get_ai_config(endpoint_id=cls._endpoint_id()) is not None
 
     @classmethod
     def _has_meaningful_plot(cls, value: str) -> bool:

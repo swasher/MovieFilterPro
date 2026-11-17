@@ -122,7 +122,7 @@
 
 ### core
 - `UserPreferences`: singleton через `pk=1`, брать только через `UserPreferences.get()`.
-- `AiEndpoint`: шаблоны подключения к OpenAI-совместимым AI-серверам; выбранный основной хранится в `UserPreferences.ai_endpoint`.
+- `AiEndpoint`: шаблоны подключения к OpenAI-совместимым AI-серверам; выбранный основной хранится в `UserPreferences.ai_endpoint`. Для стадий TMDB-матчинга Kinorium sync endpoint можно переопределить: `kinorium_fast_ai_endpoint` (быстрая) и `kinorium_deep_ai_endpoint` (глубокая), пусто — выбранный `ai_endpoint`.
 
 ### moviefilter
 - `MovieRSS`: входящий поток с Kinozal и приоритетами (`HIGH/LOW/DEFER/SKIP/WAIT_TRANS/TRANS_FOUND` из `settings.py`).

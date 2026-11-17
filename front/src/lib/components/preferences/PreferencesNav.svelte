@@ -1,5 +1,6 @@
 <script lang="ts">
   import ActivityIcon from "@lucide/svelte/icons/activity";
+  import BotIcon from "@lucide/svelte/icons/bot";
   import ClapperboardIcon from "@lucide/svelte/icons/clapperboard";
   import CpuIcon from "@lucide/svelte/icons/cpu";
   import DatabaseIcon from "@lucide/svelte/icons/database";
@@ -37,6 +38,7 @@
     websearch: SearchIcon,
     writeback: RefreshCwIcon,
     "local-ai": CpuIcon,
+    "kinorium-sync": BotIcon,
     taste: SparklesIcon,
     account: LockIcon,
     diagnostics: ActivityIcon

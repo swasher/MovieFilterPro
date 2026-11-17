@@ -7,7 +7,7 @@ from django.conf import settings
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from core.models import UserPreferences
+from core.models import AiEndpoint, UserPreferences
 from qbittorrent.services.paths import resolve_backup_folder
 from core.services import ai_endpoints
 
@@ -61,6 +61,8 @@ class PreferencesOut(Schema):
     tmdb_v4_read_access_token: str | None = None
     tmdb_v4_authenticated_access_token: str | None = None
     ai_enabled: bool = False
+    kinorium_fast_ai_endpoint_id: int | None = None
+    kinorium_deep_ai_endpoint_id: int | None = None
     vault_image_cache_enabled: bool = True
 
 
@@ -93,6 +95,8 @@ class PreferencesUpdateIn(Schema):
     searxng_url: str | None = None
     tmdb_v4_read_access_token: str | None = None
     ai_enabled: bool = False
+    kinorium_fast_ai_endpoint_id: int | None = None
+    kinorium_deep_ai_endpoint_id: int | None = None
     vault_image_cache_enabled: bool = True
 
 
@@ -214,6 +218,16 @@ def _validated_mirror_list(value: object) -> list[str]:
     return result
 
 
+def _resolve_ai_endpoint(endpoint_id: int | None, label: str):
+    """Endpoint по id из Preferences-формы. None — не выбран. Несуществующий id — 400."""
+    if endpoint_id is None:
+        return None
+    endpoint = AiEndpoint.objects.filter(pk=endpoint_id).first()
+    if endpoint is None:
+        raise HttpError(400, f"{label}: AI endpoint не найден.")
+    return endpoint
+
+
 def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
     configured_backup_folder = _normalized_optional_string(preferences.torrents_backup_folder)
     resolved_backup_folder = None
@@ -267,6 +281,8 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         tmdb_v4_read_access_token=preferences.tmdb_v4_read_access_token or None,
         tmdb_v4_authenticated_access_token=preferences.tmdb_v4_authenticated_access_token or None,
         ai_enabled=preferences.ai_enabled,
+        kinorium_fast_ai_endpoint_id=preferences.kinorium_fast_ai_endpoint_id,
+        kinorium_deep_ai_endpoint_id=preferences.kinorium_deep_ai_endpoint_id,
         vault_image_cache_enabled=preferences.vault_image_cache_enabled,
     )
 
@@ -312,6 +328,12 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
     preferences.searxng_url = _normalized_optional_string(payload.searxng_url)
     preferences.tmdb_v4_read_access_token = _normalized_optional_string(payload.tmdb_v4_read_access_token)
     preferences.ai_enabled = payload.ai_enabled
+    preferences.kinorium_fast_ai_endpoint = _resolve_ai_endpoint(
+        payload.kinorium_fast_ai_endpoint_id, "AI для быстрых решений"
+    )
+    preferences.kinorium_deep_ai_endpoint = _resolve_ai_endpoint(
+        payload.kinorium_deep_ai_endpoint_id, "AI для глубоких решений"
+    )
     preferences.vault_image_cache_enabled = payload.vault_image_cache_enabled
     preferences.save()
 

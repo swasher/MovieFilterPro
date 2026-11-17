@@ -32,6 +32,8 @@ export type PreferencesFormState = {
   searxng_url: string;
   tmdb_v4_read_access_token: string;
   ai_enabled: boolean;
+  kinorium_fast_ai_endpoint_id: string;
+  kinorium_deep_ai_endpoint_id: string;
   vault_image_cache_enabled: boolean;
 };
 
@@ -46,6 +48,7 @@ export type PreferencesSectionId =
   | "websearch"
   | "writeback"
   | "local-ai"
+  | "kinorium-sync"
   | "taste"
   | "account"
   | "diagnostics";
@@ -123,6 +126,13 @@ export const PREFERENCES_SECTIONS: PreferencesSection[] = [
       "Endpoints — шаблоны подключений к OpenAI-совместимым серверам: локальным (Ollama / LM Studio / Lemonade / Unsloth) и облачным (Groq и т.п.). Один endpoint выбирается активным."
   },
   {
+    id: "kinorium-sync",
+    title: "Kinorium sync",
+    group: "AI",
+    description:
+      "Какой AI-сервер используют быстрая и глубокая стадии TMDB-матчинга. Пусто — используется выбранный endpoint из раздела AI."
+  },
+  {
     id: "taste",
     title: "Taste",
     group: "AI",
@@ -181,7 +191,9 @@ export const FIELD_SECTIONS: Record<keyof PreferencesUpdatePayload, PreferencesS
   omdb_api_key: "omdb",
   tavily_api_key: "websearch",
   searxng_url: "websearch",
-  ai_enabled: "local-ai"
+  ai_enabled: "local-ai",
+  kinorium_fast_ai_endpoint_id: "kinorium-sync",
+  kinorium_deep_ai_endpoint_id: "kinorium-sync"
 };
 
 const asText = (value: string | number | null | undefined) => (value ?? "").toString();
@@ -190,6 +202,10 @@ const asOptionalText = (value: string) => {
   return normalized ? normalized : null;
 };
 const asOptionalSecret = (value: string) => (value ? value : null);
+const asOptionalInt = (value: string) => {
+  const normalized = Number.parseInt(value, 10);
+  return Number.isFinite(normalized) ? normalized : null;
+};
 const asNumber = (value: string, fallback: number) => {
   const normalized = Number.parseFloat(value);
   return Number.isFinite(normalized) ? normalized : fallback;
@@ -228,6 +244,8 @@ export const createFormState = (preferences: PreferencesData): PreferencesFormSt
     searxng_url: preferences.searxng_url ?? "",
     tmdb_v4_read_access_token: preferences.tmdb_v4_read_access_token ?? "",
     ai_enabled: preferences.ai_enabled ?? false,
+    kinorium_fast_ai_endpoint_id: asText(preferences.kinorium_fast_ai_endpoint_id),
+    kinorium_deep_ai_endpoint_id: asText(preferences.kinorium_deep_ai_endpoint_id),
     vault_image_cache_enabled: preferences.vault_image_cache_enabled ?? true
   };
 };
@@ -265,6 +283,8 @@ export const buildPayload = (formState: PreferencesFormState): PreferencesUpdate
   searxng_url: asOptionalText(formState.searxng_url),
   tmdb_v4_read_access_token: asOptionalText(formState.tmdb_v4_read_access_token),
   ai_enabled: formState.ai_enabled,
+  kinorium_fast_ai_endpoint_id: asOptionalInt(formState.kinorium_fast_ai_endpoint_id),
+  kinorium_deep_ai_endpoint_id: asOptionalInt(formState.kinorium_deep_ai_endpoint_id),
   vault_image_cache_enabled: formState.vault_image_cache_enabled
 });
 

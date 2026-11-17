@@ -228,6 +228,24 @@ class UserPreferences(models.Model):
         related_name='+',
         help_text='Основной шаблон подключения для AI-фич',
     )
+    kinorium_fast_ai_endpoint = models.ForeignKey(
+        'core.AiEndpoint',
+        verbose_name='AI для быстрых решений',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        help_text='Попарное сравнение сюжетов с кандидатами TMDB (быстрая стадия Kinorium sync). Пусто — используется выбранный AI endpoint.',
+    )
+    kinorium_deep_ai_endpoint = models.ForeignKey(
+        'core.AiEndpoint',
+        verbose_name='AI для глубоких решений',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        help_text='Выбор лучшего кандидата и проверка сюжетов (глубокая стадия Kinorium sync). Пусто — используется выбранный AI endpoint.',
+    )
 
     vault_image_cache_enabled = models.BooleanField(
         'Дисковый кеш изображений Vault',

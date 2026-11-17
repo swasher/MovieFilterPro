@@ -6,6 +6,7 @@
   import DiagnosticsSection from "$lib/components/preferences/DiagnosticsSection.svelte";
   import ImagesSection from "$lib/components/preferences/ImagesSection.svelte";
   import KinozalSection from "$lib/components/preferences/KinozalSection.svelte";
+  import KinoriumSyncSection from "$lib/components/preferences/KinoriumSyncSection.svelte";
   import LocalAiSection from "$lib/components/preferences/LocalAiSection.svelte";
   import OmdbSection from "$lib/components/preferences/OmdbSection.svelte";
   import PlexSection from "$lib/components/preferences/PlexSection.svelte";
@@ -146,6 +147,8 @@
                 <TmdbWritebackSection />
               {:else if activeSection === "local-ai"}
                 <LocalAiSection bind:endpoints={aiEndpoints} endpointsError={data.endpointsError} />
+              {:else if activeSection === "kinorium-sync"}
+                <KinoriumSyncSection endpoints={aiEndpoints} />
               {:else if activeSection === "taste"}
                 <TasteSection tastes={data.tastes} tastesError={data.tastesError} />
               {:else if activeSection === "diagnostics"}

@@ -6,6 +6,7 @@ import logging
 import re
 from typing import Any, TYPE_CHECKING
 
+from core.models import UserPreferences
 from core.services.ai_client import post_chat_completion, try_get_ai_config
 from vault.models import Movie
 
@@ -417,8 +418,13 @@ class TMDBAIMatchingService:
         )
 
     @classmethod
+    def _endpoint_id(cls) -> int | None:
+        """Endpoint глубокой стадии: kinorium_deep_ai_endpoint, иначе выбранный."""
+        return UserPreferences.get().kinorium_deep_ai_endpoint_id
+
+    @classmethod
     def _chat_json(cls, *, system_prompt: str, user_prompt: str) -> dict[str, Any] | None:
-        config = try_get_ai_config()
+        config = try_get_ai_config(endpoint_id=cls._endpoint_id())
         if config is None:
             logger.info(
                 "TMDB_AI_MATCH_SKIPPED | prompt=%s | reason=ai_disabled_or_not_configured",

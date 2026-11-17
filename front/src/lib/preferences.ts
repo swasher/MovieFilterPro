@@ -34,6 +34,8 @@ export type PreferencesData = {
   tmdb_v4_read_access_token: string | null;
   tmdb_v4_authenticated_access_token: string | null;
   ai_enabled: boolean;
+  kinorium_fast_ai_endpoint_id: number | null;
+  kinorium_deep_ai_endpoint_id: number | null;
   vault_image_cache_enabled: boolean;
 };
 
@@ -65,6 +67,8 @@ export type PreferencesUpdatePayload = {
   searxng_url: string | null;
   tmdb_v4_read_access_token: string | null;
   ai_enabled: boolean;
+  kinorium_fast_ai_endpoint_id: number | null;
+  kinorium_deep_ai_endpoint_id: number | null;
   vault_image_cache_enabled: boolean;
 };
 
@@ -127,5 +131,7 @@ export const emptyPreferences = (): PreferencesData => ({
   tmdb_v4_read_access_token: null,
   tmdb_v4_authenticated_access_token: null,
   ai_enabled: false,
+  kinorium_fast_ai_endpoint_id: null,
+  kinorium_deep_ai_endpoint_id: null,
   vault_image_cache_enabled: true
 });

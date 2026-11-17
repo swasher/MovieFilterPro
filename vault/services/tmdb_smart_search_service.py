@@ -24,7 +24,7 @@ logger = logging.getLogger("vault.tmdb_sync")
 #          APPLICATION LAYER           #
 # ------------------------------------ #
 
-# Пороги уверенности сюжета: базовый берут score 4 и 5 локального AI,
+# Пороги уверенности сюжета: базовый берут score 4 и 5 AI,
 # строгий (год расходится) — только score 5 («сюжет ТОЧНО ТОТ»).
 SMART_BASE_THRESHOLD = 0.6
 SMART_STRICT_THRESHOLD = 0.9
@@ -203,8 +203,14 @@ def collect_candidates(
 
 
 def is_ai_available() -> bool:
-    """AI настроен (флаг + активный endpoint с base_url и моделью)."""
-    return try_get_ai_config() is not None
+    """AI настроен для глубокой стадии Kinorium sync (kinorium_deep_ai_endpoint или выбранный endpoint)."""
+    from core.models import UserPreferences
+
+    try:
+        endpoint_id = UserPreferences.get().kinorium_deep_ai_endpoint_id
+    except Exception:
+        return False
+    return try_get_ai_config(endpoint_id=endpoint_id) is not None
 
 
 def _effective_threshold(movie_year: int | None, candidate_year: int | None) -> float:
@@ -219,7 +225,7 @@ def score_candidates(
     *,
     allow_ai: bool,
 ) -> list[dict]:
-    """Скоринг топа: дословное равенство — 1.0 без LLM, остальное — локальный AI.
+    """Скоринг топа: дословное равенство — 1.0 без LLM, остальное — AI.
 
     Возвращает записи {candidate, score, eff, tb, yb, order, reason}.
     Кандидаты, которых сравнить не удалось, пропускаются (ошибка ≠ «разные»).
@@ -250,7 +256,7 @@ def score_candidates(
         else:
             overview_for_ai = overview
 
-        # ВАЖНО: confidence у локального AI — это уверенность в вердикте,
+        # ВАЖНО: confidence у AI — это уверенность в вердикте,
         # а не похожесть сюжетов. same_work=False + confidence=1.0 означает
         # «точно РАЗНЫЕ фильмы». Проверяем вердикт, а не число.
         comparison = TMDBAIMatchingService.compare_plots(
@@ -372,7 +378,7 @@ def enrich_queries_from_web(movie: Movie, queries: list[str]) -> tuple[list[str]
 def smart_search(movie: Movie) -> TMDBMatchingResult:
     """Fallback матчинга: веб-подсказки (SearXNG/Tavily), year-free поиск ru+en, ранг, проверка сюжетов AI.
 
-    Используется только активный AI endpoint.
+    Используется только AI для глубоких решений (Kinorium sync), либо выбранный AI endpoint.
     Без AI возможен лишь дословный матч, иначе not_found.
     Без описания (короче SMART_MIN_PLOT_CHARS) сверять нечего — поиск не запускаем.
     Веб-поиск обязателен: сбой (WebSearchError) останавливает очередь.
@@ -432,6 +438,6 @@ def smart_search(movie: Movie) -> TMDBMatchingResult:
 # ------------------------------------ #
 #            DOMAIN LAYER              #
 # ------------------------------------ #
-# Доменной логики пока нет: сравнение сюжетов через локальный AI
+# Доменной логики пока нет: сравнение сюжетов через AI
 # (TMDBAIMatchingService.compare_plots) и оркестрация появятся
 # следующими шагами поверх этих хелперов.
