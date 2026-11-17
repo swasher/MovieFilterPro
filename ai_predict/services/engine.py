@@ -16,6 +16,13 @@ VERDICT_LABELS = {"watch": "брать", "maybe": "может быть", "skip":
 
 MAX_LIST_ITEMS = 3
 
+# Задача — короткий JSON, а не рассуждение: просим reasoning-модели
+# (Qwen3, DeepSeek и т.п.) думать минимально, а Qwen-семейство — вообще
+# не тратить токены на thinking. Поля провайдер-специфичны, поэтому живут
+# здесь, а не в транспорте core.services.ai_client.
+REASONING_EFFORT_LOW = "low"
+QWEN_NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}}
+
 
 class EngineError(Exception):
     """Движок не смог получить результат. Текст показывается пользователю."""
@@ -42,6 +49,8 @@ def run_taste_engine(*, card: dict[str, Any], taste_profile: TasteProfile | None
         config=config,
         system_prompt=build_system_prompt(profile_content),
         user_prompt=build_user_prompt(card),
+        reasoning_effort=REASONING_EFFORT_LOW,
+        extra_payload=QWEN_NO_THINKING,
     )
 
     verdict = normalize_verdict(raw)

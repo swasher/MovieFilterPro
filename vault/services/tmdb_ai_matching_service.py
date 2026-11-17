@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import logging
-import re
 from typing import Any, TYPE_CHECKING
 
 from core.models import UserPreferences
-from core.services.ai_client import post_chat_completion, try_get_ai_config
+from core.services.ai_client import chat_json_or_none, clip_text, try_get_ai_config
 from vault.models import Movie
 
 if TYPE_CHECKING:
@@ -116,8 +115,8 @@ class TMDBAIMatchingService:
                 "Сравни два описания и реши, один и тот же это фильм/сериал или нет.\n\n"
                 "Верни JSON строго такого вида:\n"
                 '{"same_work": true, "confidence": 0.0, "reason": "...", "red_flags": []}\n\n'
-                f"Описание A:\n{cls._clip(plot1, 1800)}\n\n"
-                f"Описание B:\n{cls._clip(plot2, 1800)}"
+                f"Описание A:\n{clip_text(plot1, 1800)}\n\n"
+                f"Описание B:\n{clip_text(plot2, 1800)}"
             ),
         )
         if response is None:
@@ -233,9 +232,9 @@ class TMDBAIMatchingService:
                 "Исходные данные:\n"
                 f"Title: {title}\n"
                 f"Original Title: {original_title}\n"
-                f"Plot: {cls._clip(plot, 1800)}\n\n"
+                f"Plot: {clip_text(plot, 1800)}\n\n"
                 "Результаты веб-поиска:\n"
-                f"{cls._clip(web_context, 6000)}\n\n"
+                f"{clip_text(web_context, 6000)}\n\n"
                 "Задача: На основе веб-поиска определи точное официальное оригинальное название "
                 "фильма и год выхода. Сформируй 2-3 точных запроса для базы данных TMDb "
                 "(только названия, без года и лишних слов).\n\n"
@@ -381,7 +380,7 @@ class TMDBAIMatchingService:
             "year": movie.year,
             "movie_type": movie.movie_type,
             "duration_minutes": movie.duration,
-            "description": cls._clip(movie.description or "", 1800),
+            "description": clip_text(movie.description or "", 1800),
         }
         candidate_payload = [
             {
@@ -392,7 +391,7 @@ class TMDBAIMatchingService:
                 "year": candidate.year,
                 "score": candidate.score,
                 "score_reasons": list(candidate.score_reasons or ()),
-                "overview": cls._clip(candidate.overview or "", 1400),
+                "overview": clip_text(candidate.overview or "", 1400),
             }
             for candidate in candidates
         ]
@@ -432,48 +431,16 @@ class TMDBAIMatchingService:
             )
             return None
 
-        try:
-            result = post_chat_completion(
-                config,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0,
-                timeout=cls.REQUEST_TIMEOUT_SECONDS,
-            )
-        except Exception as exc:
-            logger.warning("TMDB_AI_MATCH_FAILED | prompt=%s | %s", cls.PROMPT_VERSION, exc)
-            return None
-
-        if not result.content:
-            return None
-        parsed = cls._parse_json_object(result.content)
-        if parsed is None:
-            logger.warning(
-                "TMDB_AI_MATCH_BAD_JSON | prompt=%s | content=%s",
-                cls.PROMPT_VERSION,
-                cls._clip(result.content, 500),
-            )
-        return parsed
-
-    @staticmethod
-    def _parse_json_object(content: str) -> dict[str, Any] | None:
-        text = content.strip()
-        if text.startswith("```"):
-            text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-            text = re.sub(r"\s*```$", "", text)
-        try:
-            parsed = json.loads(text)
-        except ValueError:
-            match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-            if not match:
-                return None
-            try:
-                parsed = json.loads(match.group(0))
-            except ValueError:
-                return None
-        return parsed if isinstance(parsed, dict) else None
+        return chat_json_or_none(
+            config=config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0,
+            timeout=cls.REQUEST_TIMEOUT_SECONDS,
+            log_tag="TMDB_AI_MATCH",
+            log_prompt=cls.PROMPT_VERSION,
+            log=logger,
+        )
 
     @classmethod
     def _has_meaningful_plot(cls, value: str) -> bool:
@@ -507,10 +474,3 @@ class TMDBAIMatchingService:
         if not isinstance(value, list):
             return ()
         return tuple(cls._safe_text(item, 200) for item in value if cls._safe_text(item, 200))
-
-    @staticmethod
-    def _clip(value: str, max_chars: int) -> str:
-        text = (value or "").strip()
-        if len(text) <= max_chars:
-            return text
-        return f"{text[:max_chars].rstrip()}..."

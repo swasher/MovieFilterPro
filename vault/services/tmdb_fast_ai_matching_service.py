@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import logging
-import re
 from typing import Any, TYPE_CHECKING
 
 from core.models import UserPreferences
 from core.services.ai_client import (
     LocalAIConfig,
+    chat_json_or_none,
+    clip_text,
     new_ai_session_id,
-    post_chat_completion,
     try_get_ai_config,
 )
 from vault.models import Movie
@@ -206,8 +205,8 @@ class TMDBFastAIMatchingService:
             return None
         response = cls._chat_json(
             user_prompt=(
-                f"Описание 1:\n{cls._clip(plot_a, 1800)}\n\n"
-                f"Описание 2:\n{cls._clip(plot_b, 1800)}"
+                f"Описание 1:\n{clip_text(plot_a, 1800)}\n\n"
+                f"Описание 2:\n{clip_text(plot_b, 1800)}"
             ),
             session_id=session_id,
             config=config,
@@ -242,32 +241,18 @@ class TMDBFastAIMatchingService:
         if config is None:
             return None
 
-        try:
-            result = post_chat_completion(
-                config,
-                messages=[
-                    {"role": "system", "content": cls.SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0,
-                json_mode=True,
-                session_id=session_id,
-                timeout=cls.REQUEST_TIMEOUT_SECONDS,
-            )
-        except Exception as exc:
-            logger.warning("TMDB_FAST_AI_FAILED | prompt=%s | %s", cls.PROMPT_VERSION, exc)
-            return None
-
-        if not result.content:
-            return None
-        parsed = cls._parse_json_object(result.content)
-        if parsed is None:
-            logger.warning(
-                "TMDB_FAST_AI_BAD_JSON | prompt=%s | content=%s",
-                cls.PROMPT_VERSION,
-                cls._clip(result.content, 500),
-            )
-        return parsed
+        return chat_json_or_none(
+            config=config,
+            system_prompt=cls.SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            temperature=0,
+            json_mode=True,
+            session_id=session_id,
+            timeout=cls.REQUEST_TIMEOUT_SECONDS,
+            log_tag="TMDB_FAST_AI",
+            log_prompt=cls.PROMPT_VERSION,
+            log=logger,
+        )
 
     @classmethod
     def _is_configured(cls) -> bool:
@@ -276,24 +261,6 @@ class TMDBFastAIMatchingService:
     @classmethod
     def _has_meaningful_plot(cls, value: str) -> bool:
         return len((value or "").strip()) >= cls.MIN_PLOT_CHARS
-
-    @staticmethod
-    def _parse_json_object(content: str) -> dict[str, Any] | None:
-        text = content.strip()
-        if text.startswith("```"):
-            text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-            text = re.sub(r"\s*```$", "", text)
-        try:
-            parsed = json.loads(text)
-        except ValueError:
-            match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-            if not match:
-                return None
-            try:
-                parsed = json.loads(match.group(0))
-            except ValueError:
-                return None
-        return parsed if isinstance(parsed, dict) else None
 
     @staticmethod
     def _clamp_confidence(value: object) -> float:
@@ -308,10 +275,3 @@ class TMDBFastAIMatchingService:
         if value is None:
             return ""
         return str(value).strip()[:max_chars]
-
-    @staticmethod
-    def _clip(value: str, max_chars: int) -> str:
-        text = (value or "").strip()
-        if len(text) <= max_chars:
-            return text
-        return f"{text[:max_chars].rstrip()}..."

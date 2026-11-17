@@ -1,7 +1,7 @@
 """
 Клиент AI: OpenAI-совместимый `/chat/completions`.
 
-Шаблоны подключений живут в `core.AiEndpoint`, активный выбран в
+Шаблоны подключений живут в `core.AiEndpoint`, основной выбран в
 `UserPreferences.ai_endpoint`. Никакой привязки к конкретному серверу:
 Ollama, LM Studio, Lemonade, Unsloth, Groq и т.п.
 """
@@ -9,6 +9,7 @@ Ollama, LM Studio, Lemonade, Unsloth, Groq и т.п.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 import uuid
@@ -19,6 +20,8 @@ import requests
 
 from core.models import AiEndpoint, UserPreferences
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_TIMEOUT_SECONDS = 600
 DEFAULT_ATTEMPTS = 2
 DEFAULT_TEMPERATURE = 0.2
@@ -26,8 +29,6 @@ DEFAULT_TEMPERATURE = 0.2
 # тратят сотни токенов на размышления до него.
 DEFAULT_MAX_TOKENS = 2048
 MAX_TOKENS_CEILING = 8192
-# Просим минимальный reasoning: задача — короткий JSON, а не рассуждение.
-DEFAULT_REASONING_EFFORT = "low"
 # На эти статусы имеет смысл повторить запрос без необязательных полей.
 RETRYABLE_STATUS_CODES = frozenset({400, 422})
 
@@ -172,15 +173,18 @@ def post_chat_completion(
     max_tokens: int | None = None,
     json_mode: bool = False,
     reasoning_effort: str | None = None,
+    extra_payload: dict[str, Any] | None = None,
     session_id: str | None = None,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> ChatCompletionResult:
     """
     Единственная точка HTTP-запроса к OpenAI-совместимому AI.
 
-    Провайдер-специфичных ветвлений нет: собираем полный payload и на 400/422
-    снимаем необязательные слои по одному. Сервер получает максимум того, что
-    умеет, а новый провайдер не требует правок в этом модуле.
+    Транспорт не добавляет провайдер-специфичных полей сам: всё необязательное
+    (`reasoning_effort`, `extra_payload`, `response_format` при json_mode)
+    приходит от вызывающего. На 400/422 необязательные слои снимаются по
+    одному — сервер получает максимум того, что умеет, а новый провайдер не
+    требует правок в этом модуле.
     """
     url = chat_completions_url(config.base_url)
     headers = build_ai_headers(config, session_id=session_id)
@@ -194,10 +198,11 @@ def post_chat_completion(
     if max_tokens is not None:
         base["max_tokens"] = max_tokens
 
-    # Порядок = порядок отказа: сначала нестандартные «thinking»-поля, затем JSON-режим.
-    optional: list[tuple[str, Any]] = [
-        ("chat_template_kwargs", {"enable_thinking": False}),
-    ]
+    # Порядок = порядок отказа: сначала «экзотика» из extra_payload, затем
+    # reasoning_effort, и только потом JSON-режим — его снимаем последним.
+    optional: list[tuple[str, Any]] = []
+    for key, value in (extra_payload or {}).items():
+        optional.append((key, value))
     if reasoning_effort:
         optional.append(("reasoning_effort", reasoning_effort))
     if json_mode:
@@ -235,11 +240,15 @@ def chat_json(
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     attempts: int = DEFAULT_ATTEMPTS,
     session_id: str | None = None,
+    reasoning_effort: str | None = None,
+    extra_payload: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str]:
     """
     Отправляет промпт и возвращает (разобранный JSON, сырой текст ответа).
 
     Бросает LocalAIError, если модель так и не вернула валидный JSON.
+    Провайдер-специфичные поля (`reasoning_effort`, `extra_payload`) передаёт
+    вызывающий — транспорт ничего не добавляет сам.
     """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -256,7 +265,8 @@ def chat_json(
                 temperature=temperature,
                 max_tokens=current_max_tokens,
                 json_mode=True,
-                reasoning_effort=DEFAULT_REASONING_EFFORT,
+                reasoning_effort=reasoning_effort,
+                extra_payload=extra_payload,
                 session_id=session_id,
                 timeout=timeout,
             )
@@ -270,7 +280,7 @@ def chat_json(
         if parsed is not None:
             return parsed, result.content
 
-        last_error = f"не JSON: {_clip(result.content, 200) or 'пусто'}"
+        last_error = f"не JSON: {clip_text(result.content, 200) or 'пусто'}"
         if result.finish_reason:
             last_error += f" | finish_reason={result.finish_reason}"
         if attempt < attempts:
@@ -282,13 +292,67 @@ def chat_json(
     raise LocalAIError(f"Модель не дала корректный JSON ({last_error}).")
 
 
+def chat_json_or_none(
+    *,
+    config: LocalAIConfig,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int | None = None,
+    json_mode: bool = False,
+    reasoning_effort: str | None = None,
+    extra_payload: dict[str, Any] | None = None,
+    session_id: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    log_tag: str = "AI",
+    log_prompt: str = "",
+    log: logging.Logger | None = None,
+) -> dict[str, Any] | None:
+    """
+    Тихий вариант `chat_json` для фоновых конвейеров: один запрос без повторов.
+
+    При любой ошибке возвращает None и пишет warning в `log` (по умолчанию —
+    логгер этого модуля), не поднимая исключений.
+    """
+    log = log or logger
+    try:
+        result = post_chat_completion(
+            config,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=json_mode,
+            reasoning_effort=reasoning_effort,
+            extra_payload=extra_payload,
+            session_id=session_id,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        log.warning("%s_FAILED | prompt=%s | %s", log_tag, log_prompt, exc)
+        return None
+
+    if not result.content.strip():
+        return None
+    parsed = parse_json_object(result.content)
+    if parsed is None:
+        log.warning(
+            "%s_BAD_JSON | prompt=%s | content=%s",
+            log_tag,
+            log_prompt,
+            clip_text(result.content, 500),
+        )
+    return parsed
+
 
 def _raise_for_status_with_body(response) -> None:
     """HTTPError с телом ответа: без него 400 от провайдера невозможно диагностировать."""
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:
-        body = _clip(getattr(response, "text", "") or "", 400)
+        body = clip_text(getattr(response, "text", "") or "", 400)
         if body:
             raise requests.HTTPError(f"{exc} — {body}", response=response) from exc
         raise
@@ -324,6 +388,7 @@ def _finish_reason(payload: dict[str, Any]) -> str:
     return ""
 
 
-def _clip(text: str, limit: int) -> str:
+def clip_text(text: str, limit: int) -> str:
+    """Схлопывает пробелы и обрезает текст до limit символов (для логов)."""
     normalized = " ".join((text or "").split())
     return normalized[:limit]

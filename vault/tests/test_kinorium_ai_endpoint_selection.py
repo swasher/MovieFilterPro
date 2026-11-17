@@ -54,7 +54,7 @@ class KinoriumAiEndpointSelectionTests(TestCase):
         self.preferences.save()
 
         with patch(
-            "vault.services.tmdb_fast_ai_matching_service.post_chat_completion",
+            "core.services.ai_client.post_chat_completion",
             return_value=FakeCompletionResult('{"confidence": 0.9, "reason": "Совпали имена."}'),
         ) as post:
             result = TMDBFastAIMatchingService.compare_pair(PLOT_A, PLOT_B)
@@ -64,7 +64,7 @@ class KinoriumAiEndpointSelectionTests(TestCase):
 
     def test_fast_stage_falls_back_to_selected_endpoint(self):
         with patch(
-            "vault.services.tmdb_fast_ai_matching_service.post_chat_completion",
+            "core.services.ai_client.post_chat_completion",
             return_value=FakeCompletionResult('{"confidence": 0.9, "reason": "Совпали имена."}'),
         ) as post:
             result = TMDBFastAIMatchingService.compare_pair(PLOT_A, PLOT_B)
@@ -77,7 +77,7 @@ class KinoriumAiEndpointSelectionTests(TestCase):
         self.preferences.save()
 
         with patch(
-            "vault.services.tmdb_ai_matching_service.post_chat_completion",
+            "core.services.ai_client.post_chat_completion",
             return_value=FakeCompletionResult(
                 '{"same_work": true, "confidence": 0.9, "reason": "Тот же фильм.", "red_flags": []}'
             ),
@@ -89,7 +89,7 @@ class KinoriumAiEndpointSelectionTests(TestCase):
 
     def test_deep_stage_falls_back_to_selected_endpoint(self):
         with patch(
-            "vault.services.tmdb_ai_matching_service.post_chat_completion",
+            "core.services.ai_client.post_chat_completion",
             return_value=FakeCompletionResult(
                 '{"same_work": true, "confidence": 0.9, "reason": "Тот же фильм.", "red_flags": []}'
             ),
