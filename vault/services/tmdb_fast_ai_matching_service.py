@@ -23,7 +23,15 @@ logger = logging.getLogger("vault.tmdb_sync")
 
 
 @dataclass(slots=True, frozen=True)
-class FastAIPlotScore:
+class PairVerdict:
+    """Вердикт одного попарного сравнения сюжетов через AI."""
+    confidence: float
+    reason: str = ""
+
+
+@dataclass(slots=True, frozen=True)
+class ScoredCandidate:
+    """Кандидат TMDB с AI-оценкой сходства сюжетов (внутренний тип стадии)."""
     tmdb_id: int
     media_type: str
     confidence: float
@@ -125,7 +133,7 @@ class TMDBFastAIMatchingService:
             )
             return None
 
-        scored: list[FastAIPlotScore] = []
+        scored: list[ScoredCandidate] = []
         # Один session id на весь прогон: Go роутит запросы диалога стабильно
         # и переиспользует prompt cache.
         session_id = new_ai_session_id()
@@ -146,7 +154,7 @@ class TMDBFastAIMatchingService:
             if score is None:
                 continue
             scored.append(
-                FastAIPlotScore(
+                ScoredCandidate(
                     tmdb_id=candidate.tmdb_id,
                     media_type=candidate.media_type,
                     confidence=score.confidence,
@@ -199,7 +207,7 @@ class TMDBFastAIMatchingService:
         *,
         session_id: str | None = None,
         config: LocalAIConfig | None = None,
-    ) -> FastAIPlotScore | None:
+    ) -> PairVerdict | None:
         """Одно попарное сравнение двух сюжетов через AI для быстрых решений."""
         if not cls._has_meaningful_plot(plot_a) or not cls._has_meaningful_plot(plot_b):
             return None
@@ -213,9 +221,7 @@ class TMDBFastAIMatchingService:
         )
         if response is None:
             return None
-        return FastAIPlotScore(
-            tmdb_id=0,
-            media_type="",
+        return PairVerdict(
             confidence=cls._clamp_confidence(response.get("confidence")),
             reason=cls._safe_text(response.get("reason"), 500),
         )
