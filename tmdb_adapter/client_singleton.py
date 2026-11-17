@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any, Optional
 from tmdbapis import TMDbAPIs
 from threading import Lock
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 _tmdb_instance: Optional[TMDbAPIs] = None
 _tmdb_config: Optional[dict] = None

@@ -40,5 +40,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Чистим устаревшие content types (например, от моделей, перенесённых между
+# приложениями), иначе они остаются в БД навсегда.
+echo "Removing stale content types..."
+python /app/manage.py remove_stale_contenttypes --noinput
+
 echo "Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

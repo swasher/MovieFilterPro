@@ -20,7 +20,8 @@ from django.shortcuts import get_object_or_404
 from datetime import date
 import dataclasses
 from django.contrib.auth.models import User
-from moviefilter.models import MovieRSS, UserPreferences
+from moviefilter.models import MovieRSS
+from core.models import UserPreferences
 from kinozal_scan.parse import parse_page, movie_audit
 from moviefilter.kinozal import LinkConstructor
 

@@ -120,8 +120,11 @@
 
 ## Ключевые модели, которые нужно помнить
 
-### moviefilter
+### core
 - `UserPreferences`: singleton через `pk=1`, брать только через `UserPreferences.get()`.
+- `AiEndpoint`: шаблоны подключения к OpenAI-совместимым AI-серверам; выбранный основной хранится в `UserPreferences.ai_endpoint`.
+
+### moviefilter
 - `MovieRSS`: входящий поток с Kinozal и приоритетами (`HIGH/LOW/DEFER/SKIP/WAIT_TRANS/TRANS_FOUND` из `settings.py`).
 - `Kinorium`: локальный кэш CSV Kinorium для матчей в сканере.
 

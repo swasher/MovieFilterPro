@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from kinozal_scan.tasks import DBCancelEvent, _run_scheduled_scan, _should_run
 
 

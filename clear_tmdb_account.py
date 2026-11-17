@@ -2,7 +2,7 @@
 Очистка аккаунта TMDB: списки (V4), оценки, watchlist, favorites (V3).
 
 Улучшенная версия:
-- Токен берется из Django: moviefilter.models.UserPreferences (singleton pk=1)
+- Токен берется из Django: core.models.UserPreferences (singleton pk=1)
   приоритет: tmdb_v4_authenticated_access_token (write token) -> fallback tmdb_v4_read_access_token
 - ACCOUNT_ID резолвится автоматически через API, хардкодить не нужно.
 - Подтверждение и --dry-run / --yes / фильтры по типам.
@@ -47,7 +47,7 @@ except Exception as exc:
     sys.exit(1)
 
 import requests
-from moviefilter.models import UserPreferences  # noqa: E402
+from core.models import UserPreferences  # noqa: E402
 
 BASE_URL_V4 = "https://api.themoviedb.org/4"
 BASE_URL_V3 = "https://api.themoviedb.org/3"

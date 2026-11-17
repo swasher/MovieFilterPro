@@ -16,7 +16,7 @@ from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_
 from moviefilter.classes import KinozalMovie
 from moviefilter.kinozal import KinozalClient, normalize_kinozal_domain, CloudflareBlockedError
 from moviefilter.models import Country, MovieRSS, Kinorium
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 from .util import is_float
 from .exceptions import DetailsFetchError, ScanCancelled, KinozalRateLimitError

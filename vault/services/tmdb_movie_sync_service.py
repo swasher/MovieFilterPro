@@ -1599,7 +1599,7 @@ class TMDBMovieSyncService:
         Делает один лайтвейт-запрос с ``language=en-US`` только для этого поля.
         """
         try:
-            from moviefilter.models import UserPreferences
+            from core.models import UserPreferences
             import requests as _req
 
             api_key = UserPreferences.get().tmdb_api_key

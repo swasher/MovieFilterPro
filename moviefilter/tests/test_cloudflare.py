@@ -24,7 +24,7 @@ from moviefilter.kinozal.cloudflare import (
     cookie_domain,
     detect_challenge,
 )
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 CHALLENGE_HTML = b"<html><head><title>Just a moment...</title></head><body>cf-turnstile-response</body></html>"
 

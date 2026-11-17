@@ -8,7 +8,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from vault.models import Movie, TMDBSyncQueueItem
 from vault.services.tmdb_movie_sync_service import TMDBSyncResult, TMDBMovieSyncService
 
@@ -363,7 +363,7 @@ class TMDBSyncQueueService:
             cls.stop(reason=f"Критическая ошибка авторизации: {item.result_message[:300]}")
             # стоп обеих очередей: writeback тоже
             try:
-                from moviefilter.models import UserPreferences as _UP
+                from core.models import UserPreferences as _UP
 
                 # writeback критичный уже в ERROR без ретрая, но на всякий — лог
                 logger.critical("BULK_STOP | writeback also stopped due to critical auth")

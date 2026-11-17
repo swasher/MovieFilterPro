@@ -18,7 +18,8 @@ from moviefilter.image_caching import (
 )
 from moviefilter.image_caching import remove_cached_image
 from moviefilter.kinozal import KinozalClient, LinkConstructor, normalize_kinozal_domain
-from moviefilter.models import MovieRSS, UserPreferences
+from moviefilter.models import MovieRSS
+from core.models import UserPreferences
 from moviefilter.services.torrent_download_service import (
     TorrentDownloadError,
     fetch_torrent_file,

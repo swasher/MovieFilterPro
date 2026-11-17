@@ -2548,7 +2548,7 @@ def movie_tmdb_writeback(request, slug: str):
 @api.get("/tmdb-writeback/status", response=WritebackStatusOut)
 def tmdb_writeback_status(request):
     _require_api_user(request)
-    from moviefilter.models import UserPreferences
+    from core.models import UserPreferences
 
     prefs = UserPreferences.get()
     user = _resolve_api_user(request)
@@ -2653,7 +2653,7 @@ def _build_writeback_queue_out(item) -> WritebackQueueItemOut:
 @api.patch("/tmdb-writeback/settings", response=WritebackSettingsOut)
 def tmdb_writeback_settings(request, payload: WritebackSettingsIn):
     _require_api_user(request)
-    from moviefilter.models import UserPreferences
+    from core.models import UserPreferences
 
     prefs = UserPreferences.get()
     if payload.writeback_enabled is not None:
@@ -2838,7 +2838,7 @@ def _preview_token(token: str | None, keep: int = 8) -> str | None:
 @api.get("/tmdb-auth/status", response=TmdbAuthStatusOut)
 def tmdb_auth_status(request):
     _require_api_user(request)
-    from moviefilter.models import UserPreferences
+    from core.models import UserPreferences
 
     prefs = UserPreferences.get()
     return TmdbAuthStatusOut(
@@ -2854,7 +2854,7 @@ def tmdb_auth_status(request):
 @api.post("/tmdb-auth/start", response=TmdbAuthStartOut)
 def tmdb_auth_start(request):
     _require_api_user(request)
-    from moviefilter.models import UserPreferences
+    from core.models import UserPreferences
     import requests as req_lib
 
     prefs = UserPreferences.get()
@@ -2884,7 +2884,7 @@ class TmdbAuthApproveIn(Schema):
 @api.post("/tmdb-auth/approve", response=TmdbAuthApproveOut)
 def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
     _require_api_user(request)
-    from moviefilter.models import UserPreferences
+    from core.models import UserPreferences
     import requests as req_lib
 
     prefs = UserPreferences.get()
@@ -2928,7 +2928,7 @@ def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
 
     # инициализация/восстановление списков на TMDB (чистый Huey, без блокировки ответа)
     try:
-        from moviefilter.models import UserPreferences as UP2
+        from core.models import UserPreferences as UP2
 
         p2 = UP2.get()
         if p2.tmdb_writeback_enabled and p2.tmdb_v4_authenticated_access_token:
@@ -2944,7 +2944,7 @@ def tmdb_auth_approve(request, payload: TmdbAuthApproveIn):
 @api.post("/tmdb-auth/logout", response=dict)
 def tmdb_auth_logout(request):
     _require_api_user(request)
-    from moviefilter.models import UserPreferences
+    from core.models import UserPreferences
 
     prefs = UserPreferences.get()
     if prefs.tmdb_v4_authenticated_access_token:

@@ -6,7 +6,8 @@ from django.test import TestCase
 
 from movie_filter_pro.settings import HIGH
 from moviefilter.classes import KinozalMovie
-from moviefilter.models import MovieRSS, UserPreferences
+from moviefilter.models import MovieRSS
+from core.models import UserPreferences
 from kinozal_scan.parse import movie_audit
 
 

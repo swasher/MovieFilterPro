@@ -40,7 +40,7 @@ class WebSearchService:
     def get_tavily_api_key(cls) -> str:
         """Tavily ключ: только UserPreferences.tavily_api_key."""
         try:
-            from moviefilter.models import UserPreferences
+            from core.models import UserPreferences
 
             return (UserPreferences.get().tavily_api_key or "").strip()
         except Exception:
@@ -51,7 +51,7 @@ class WebSearchService:
     def get_searxng_url(cls) -> str:
         """SearXNG URL: только UserPreferences.searxng_url."""
         try:
-            from moviefilter.models import UserPreferences
+            from core.models import UserPreferences
 
             return (UserPreferences.get().searxng_url or "").strip()
         except Exception:

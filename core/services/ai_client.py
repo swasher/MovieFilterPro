@@ -17,8 +17,7 @@ from typing import Any
 
 import requests
 
-from core.models import AiEndpoint
-from moviefilter.models import UserPreferences
+from core.models import AiEndpoint, UserPreferences
 
 DEFAULT_TIMEOUT_SECONDS = 600
 DEFAULT_ATTEMPTS = 2

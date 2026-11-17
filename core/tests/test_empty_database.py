@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 
 class EmptyDatabaseTests(TestCase):

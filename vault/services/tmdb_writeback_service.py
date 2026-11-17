@@ -157,7 +157,7 @@ class TmdbWritebackService:
             # Стоп обеих очередей на критичной 401 — сразу (ТЗ 6d)
             if is_auth:
                 try:
-                    from moviefilter.models import UserPreferences as _UP
+                    from core.models import UserPreferences as _UP
 
                     _UP.objects.filter(pk=1).update(tmdb_sync_enabled=False)
                     logger.critical("BULK_STOP | writeback critical 401 movie=%s — sync stopped", movie_id)
@@ -270,7 +270,7 @@ class TmdbWritebackService:
     @classmethod
     def _prefs_snapshot(cls):
         """Один SELECT на UserPreferences за операцию (singleton pk=1)."""
-        from moviefilter.models import UserPreferences
+        from core.models import UserPreferences
 
         return UserPreferences.get()
 
@@ -671,7 +671,7 @@ class TmdbWritebackService:
 
         Slow-path (только когда id пуст): ищем по имени среди account lists,
         если нет — создаём. Бросает исключение если TMDB API недоступен."""
-        from moviefilter.models import UserPreferences
+        from core.models import UserPreferences
         from tmdb_adapter.client_singleton import get_tmdb_client
 
         tmdb = get_tmdb_client()
@@ -797,7 +797,7 @@ class TmdbWritebackService:
             msg = str(exc)
             # Список был удалён на TMDB — сбросить кэш, пересоздать и повторить один раз.
             if "404" in msg or "not found" in msg.lower():
-                from moviefilter.models import UserPreferences
+                from core.models import UserPreferences
 
                 UserPreferences.objects.filter(pk=1).update(tmdb_skip_list_id=None)
                 try:
@@ -835,7 +835,7 @@ class TmdbWritebackService:
 
         Slow-path (только когда id пуст): ищем по имени среди account lists,
         если нет — создаём. Бросает исключение если TMDB API недоступен."""
-        from moviefilter.models import UserPreferences
+        from core.models import UserPreferences
         from tmdb_adapter.client_singleton import get_tmdb_client
 
         tmdb = get_tmdb_client()
@@ -957,7 +957,7 @@ class TmdbWritebackService:
             msg = str(exc)
             # Список был удалён на TMDB — сбросить кэш, пересоздать и повторить один раз.
             if "404" in msg or "not found" in msg.lower():
-                from moviefilter.models import UserPreferences
+                from core.models import UserPreferences
 
                 UserPreferences.objects.filter(pk=1).update(tmdb_watched_list_id=None)
                 try:

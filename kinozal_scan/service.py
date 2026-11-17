@@ -7,7 +7,8 @@ from .runtime import executor, tasks, cancel_events
 from .parse import kinozal_scan
 from .exceptions import DetailsFetchError, ScanCancelled, KinozalRateLimitError
 from moviefilter.kinozal import CloudflareBlockedError
-from moviefilter.models import ScanRun, UserPreferences
+from moviefilter.models import ScanRun
+from core.models import UserPreferences
 from web_logger import alog, LogType, asend_notification, scan_log_context
 
 

@@ -7,7 +7,7 @@ from django.conf import settings
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from qbittorrent.services.paths import resolve_backup_folder
 from core.services import ai_endpoints
 
@@ -156,7 +156,7 @@ def _normalize_scan_interval(value: int | None) -> int | None:
 _MIRROR_DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
 
 # Ограничения на список зеркал. Длина домена совпадает с
-# moviefilter.models.UserPreferences.kinozal_domain (varchar(50)).
+# core.models.UserPreferences.kinozal_domain (varchar(50)).
 MIRROR_DOMAIN_MAX_LENGTH = 50
 MAX_KINOZAL_MIRRORS = 20
 

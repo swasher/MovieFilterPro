@@ -22,7 +22,8 @@ from huey import crontab
 from core.users import users_exist
 from movie_filter_pro.huey import HUEY
 from moviefilter.kinozal import CloudflareBlockedError
-from moviefilter.models import ScanRun, UserPreferences
+from moviefilter.models import ScanRun
+from core.models import UserPreferences
 from kinozal_scan.exceptions import (
     DetailsFetchError,
     KinozalRateLimitError,

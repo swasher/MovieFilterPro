@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from requests import RequestException
 
 from moviefilter.kinozal import KinozalClient
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 
 @dataclass(slots=True, frozen=True)

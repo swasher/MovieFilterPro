@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from vault.services.tavily_service import TavilySearchError, TavilyService
 
 

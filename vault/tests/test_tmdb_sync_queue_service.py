@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from vault.models import Movie, TMDBSyncQueueItem
 from vault.services.tmdb_movie_matching_service import TMDBCandidate
 from vault.services.tmdb_movie_sync_service import TMDBSyncResult, TMDBMovieSyncService

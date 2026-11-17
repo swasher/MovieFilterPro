@@ -4,7 +4,7 @@ import requests
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from vault.services.web_search_service import WebSearchError, WebSearchService
 
 

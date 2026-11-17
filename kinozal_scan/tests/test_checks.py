@@ -3,7 +3,7 @@ from django.test import TestCase
 
 from movie_filter_pro.settings import HIGH, LOW
 from moviefilter.classes import KinozalMovie
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from kinozal_scan.checks import check_users_filters
 
 

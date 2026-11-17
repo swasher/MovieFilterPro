@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 
 class PreferencesApiTests(TestCase):

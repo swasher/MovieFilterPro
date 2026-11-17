@@ -11,7 +11,8 @@ from django.test import TestCase
 
 from movie_filter_pro.settings import DEFER, HIGH, LOW, SKIP, WAIT_TRANS
 from moviefilter.image_caching import CACHE_STATUS_MISSING, CACHE_STATUS_PENDING, CACHE_STATUS_READY
-from moviefilter.models import MovieRSS, UserPreferences
+from moviefilter.models import MovieRSS
+from core.models import UserPreferences
 from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher, normalize_actor_name
 from vault.models import FavoritePerson, Person, StarPerson
 

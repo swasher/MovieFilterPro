@@ -2,7 +2,8 @@ from django.contrib.auth.models import User
 
 from movie_filter_pro.settings import HIGH, LOW, DEFER, SKIP, WAIT_TRANS, TRANS_FOUND
 
-from moviefilter.models import MovieRSS, Kinorium, UserPreferences
+from moviefilter.models import MovieRSS, Kinorium
+from core.models import UserPreferences
 from moviefilter.classes import KinozalMovie
 from .util import not_match_rating
 from web_logger import log

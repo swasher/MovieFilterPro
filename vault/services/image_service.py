@@ -192,7 +192,7 @@ class ImageService:
             return _image_cache_enabled_value
 
         try:
-            from moviefilter.models import UserPreferences
+            from core.models import UserPreferences
 
             value = (
                 UserPreferences.objects.filter(pk=1)

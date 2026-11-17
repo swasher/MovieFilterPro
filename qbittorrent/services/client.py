@@ -5,7 +5,7 @@ from urllib.parse import urlsplit, urlunsplit
 import qbittorrentapi
 import requests
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 from .errors import QbtError
 

@@ -8,7 +8,7 @@ import qbittorrentapi
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from qbittorrent.models import Torrent, TorrentEvent
 from qbittorrent.services import torrent_service
 from qbittorrent.services.errors import QbtError

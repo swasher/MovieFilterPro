@@ -3,7 +3,8 @@ from ninja import Router
 from django.db.models import Count
 from django.http import HttpResponse
 from asgiref.sync import async_to_sync
-from moviefilter.models import ScanRun, UserPreferences
+from moviefilter.models import ScanRun
+from core.models import UserPreferences
 from .service import start_scan_task
 from .runtime import tasks, cancel_events
 

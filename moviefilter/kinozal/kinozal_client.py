@@ -3,7 +3,7 @@ from urllib.parse import urlencode, quote_plus
 
 from requests import Response
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from web_logger import log, LogType
 
 from .cloudflare import CLOUDFLARE_UA, cloudflare_bypass, detect_challenge

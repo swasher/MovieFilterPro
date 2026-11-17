@@ -3,7 +3,7 @@ from pathlib import Path
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from vault.models import Collection, Movie, Person
 from vault.services.image_service import ImageService
 

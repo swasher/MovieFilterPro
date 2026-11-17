@@ -8,8 +8,7 @@ OpenAI-совместимые серверы хранятся одинаково
 
 from __future__ import annotations
 
-from core.models import AiEndpoint
-from moviefilter.models import UserPreferences
+from core.models import AiEndpoint, UserPreferences
 
 MAX_NAME_LENGTH = 100
 MAX_BASE_URL_LENGTH = 300

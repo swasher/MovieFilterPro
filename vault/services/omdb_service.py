@@ -36,7 +36,7 @@ class OMDBService:
     def get_api_key(cls) -> str:
         """OMDB ключ: только UserPreferences.omdb_api_key."""
         try:
-            from moviefilter.models import UserPreferences
+            from core.models import UserPreferences
 
             return (UserPreferences.get().omdb_api_key or "").strip()
         except Exception:

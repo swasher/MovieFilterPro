@@ -6,8 +6,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from ai_predict.models import MoviePrediction, TasteProfile
-from core.models import AiEndpoint
-from moviefilter.models import UserPreferences
+from core.models import AiEndpoint, UserPreferences
 from vault.models import Movie
 
 

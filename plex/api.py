@@ -2,7 +2,7 @@ from pathlib import PurePath
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 from plexapi.server import PlexServer
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 
 api = NinjaAPI(title="Plex API", version="1.0", urls_namespace="plex-api")
 

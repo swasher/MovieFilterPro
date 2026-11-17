@@ -7,7 +7,7 @@ from typing import Any
 
 import qbittorrentapi
 
-from moviefilter.models import UserPreferences
+from core.models import UserPreferences
 from vault.models import Movie
 
 from ..models import Torrent, TorrentEvent
