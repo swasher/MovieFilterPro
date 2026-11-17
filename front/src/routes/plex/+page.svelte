@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "$lib/components/ui/card";
@@ -14,7 +14,9 @@
     Settings,
     AlertCircle,
     Info,
-    RefreshCw
+    RefreshCw,
+    Check,
+    Link2
   } from "@lucide/svelte";
   import { toast } from "svelte-sonner";
 
@@ -25,6 +27,21 @@
     file_path: string | null;
     year: number | null;
     guids: string[];
+    vault_movie_id: number | null;
+    vault_movie_title: string | null;
+    vault_movie_slug: string | null;
+    match_method: string | null;
+  }
+
+  interface PlexLinkStatus {
+    configured: boolean;
+    is_syncing: boolean;
+    last_synced_at: string | null;
+    last_attempt_at: string | null;
+    items_total: number;
+    matched_total: number;
+    unmatched_total: number;
+    last_error: string | null;
   }
 
   let sections = $state<string[]>([]);
@@ -35,10 +52,83 @@
   let searchQuery = $state("");
   let errorMessage = $state<string | null>(null);
 
+  let linkStatus = $state<PlexLinkStatus | null>(null);
+  let isStartingSync = $state(false);
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let pollAttempts = 0;
+
+  const POLL_INTERVAL_MS = 2000;
+  const POLL_MAX_ATTEMPTS = 30;
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  async function loadLinkStatus() {
+    try {
+      const res = await fetch("/api/plex/link/status");
+      if (!res.ok) return;
+      linkStatus = await res.json();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function schedulePoll(baselineSyncedAt: string | null) {
+    stopPolling();
+    pollTimer = setTimeout(async () => {
+      pollAttempts += 1;
+      await loadLinkStatus();
+      const stillRunning = linkStatus?.is_syncing === true;
+      const finished = (linkStatus?.last_synced_at ?? null) !== baselineSyncedAt;
+      if ((stillRunning || !finished) && pollAttempts < POLL_MAX_ATTEMPTS) {
+        schedulePoll(baselineSyncedAt);
+      } else if (selectedSection) {
+        await loadMovies();
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  async function startSync() {
+    if (isStartingSync || linkStatus?.is_syncing) return;
+    isStartingSync = true;
+    const baseline = linkStatus?.last_synced_at ?? null;
+    try {
+      const res = await fetch("/api/plex/link/sync", { method: "POST" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.detail || `Ошибка ${res.status}`);
+      }
+      if (payload.already_running) {
+        toast.info("Синхронизация уже идёт");
+      } else {
+        toast.success("Синхронизация запущена");
+      }
+      await loadLinkStatus();
+      pollAttempts = 0;
+      schedulePoll(baseline);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Не удалось запустить синхронизацию");
+    } finally {
+      isStartingSync = false;
+    }
+  }
+
+  function formatDateTime(value: string | null): string {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+  }
+
   // Load Plex libraries (sections)
   async function loadSections() {
     isLoadingSections = true;
-    let errorMessage: string = '';
+    errorMessage = null;
     selectedSection = null;
     movies = [];
     try {
@@ -53,8 +143,9 @@
       }
     } catch (err: any) {
       console.error(err);
-      errorMessage = err.message || "Не удалось загрузить библиотеки Plex. Проверьте настройки подключения.";
-      toast.error(errorMessage);
+      const message = err.message || "Не удалось загрузить библиотеки Plex. Проверьте настройки подключения.";
+      errorMessage = message;
+      toast.error(message);
     } finally {
       isLoadingSections = false;
     }
@@ -63,11 +154,16 @@
   // Select section and load movies
   async function selectSection(section: string) {
     selectedSection = section;
+    searchQuery = "";
+    await loadMovies();
+  }
+
+  async function loadMovies() {
+    if (!selectedSection) return;
     isLoadingMovies = true;
     movies = [];
-    searchQuery = "";
     try {
-      const res = await fetch(`/api/plex/sections/${encodeURIComponent(section)}/movies`);
+      const res = await fetch(`/api/plex/sections/${encodeURIComponent(selectedSection)}/movies`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || `Ошибка ${res.status}`);
@@ -75,10 +171,22 @@
       movies = await res.json();
     } catch (err: any) {
       console.error(err);
-      toast.error(`Не удалось загрузить фильмы библиотеки "${section}": ${err.message}`);
+      toast.error(`Не удалось загрузить фильмы библиотеки "${selectedSection}": ${err.message}`);
     } finally {
       isLoadingMovies = false;
     }
+
+    // Список мог инициировать фоновую синхронизацию — подхватим её статус.
+    await loadLinkStatus();
+    if (linkStatus?.is_syncing) {
+      pollAttempts = 0;
+      schedulePoll(linkStatus.last_synced_at ?? null);
+    }
+  }
+
+  async function refreshAll() {
+    await loadLinkStatus();
+    await loadSections();
   }
 
   // Deriving filtered movies reactively in Svelte 5
@@ -118,8 +226,16 @@
   }
 
   onMount(() => {
-    loadSections();
+    void loadSections();
+    void loadLinkStatus().then(() => {
+      if (linkStatus?.is_syncing) {
+        pollAttempts = 0;
+        schedulePoll(linkStatus.last_synced_at ?? null);
+      }
+    });
   });
+
+  onDestroy(stopPolling);
 </script>
 
 <div class="container mx-auto p-6 space-y-6">
@@ -134,7 +250,7 @@
     </div>
     
     <div class="flex items-center gap-2">
-      <Button variant="outline" size="sm" onclick={loadSections} disabled={isLoadingSections || isLoadingMovies}>
+      <Button variant="outline" size="sm" onclick={refreshAll} disabled={isLoadingSections || isLoadingMovies}>
         <RefreshCw class="w-4 h-4 mr-2 {isLoadingSections ? 'animate-spin' : ''}" />
         Обновить
       </Button>
@@ -144,6 +260,63 @@
       </Button>
     </div>
   </div>
+
+  <!-- Vault link status -->
+  <Card class="bg-card/50 backdrop-blur-sm border-border">
+    <CardHeader class="pb-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <CardTitle class="text-lg font-semibold flex items-center gap-2">
+          <Link2 class="w-5 h-5 text-primary" />
+          Связь с Vault
+        </CardTitle>
+        <CardDescription>
+          {#if !linkStatus}
+            Загрузка статуса…
+          {:else if !linkStatus.configured}
+            Plex не настроен — укажите адрес и токен в Preferences.
+          {:else if linkStatus.is_syncing}
+            Идёт синхронизация библиотеки…
+          {:else}
+            Обновлено: {formatDateTime(linkStatus.last_synced_at)}
+          {/if}
+        </CardDescription>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        {#if linkStatus?.configured}
+          <Badge variant="outline">В Plex: {linkStatus.items_total}</Badge>
+          <Badge variant="outline" class="text-emerald-600 dark:text-emerald-400">
+            Связано: {linkStatus.matched_total}
+          </Badge>
+          <Badge variant="outline" class="text-muted-foreground">
+            Без связи: {linkStatus.unmatched_total}
+          </Badge>
+        {/if}
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={startSync}
+          disabled={!linkStatus?.configured || isStartingSync || linkStatus?.is_syncing}
+        >
+          {#if linkStatus?.is_syncing || isStartingSync}
+            <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+            Синхронизация…
+          {:else}
+            <RefreshCw class="w-4 h-4 mr-2" />
+            Синхронизировать
+          {/if}
+        </Button>
+      </div>
+    </CardHeader>
+    {#if linkStatus?.last_error}
+      <CardContent class="pt-0">
+        <p class="flex items-start gap-2 text-xs text-destructive">
+          <AlertCircle class="w-4 h-4 shrink-0" />
+          <span class="break-all">{linkStatus.last_error}</span>
+        </p>
+      </CardContent>
+    {/if}
+  </Card>
 
   {#if errorMessage}
     <Card class="border-destructive/50 bg-destructive/5">
@@ -261,6 +434,7 @@
                     <th class="h-12 px-4 text-left align-middle font-semibold text-muted-foreground min-w-[200px]">Оригинальное название</th>
                     <th class="h-12 px-4 text-left align-middle font-semibold text-muted-foreground min-w-[250px]">Файл</th>
                     <th class="h-12 px-4 text-left align-middle font-semibold text-muted-foreground w-24">Год</th>
+                    <th class="h-12 px-4 text-left align-middle font-semibold text-muted-foreground min-w-[160px]">Vault</th>
                     <th class="h-12 px-4 text-left align-middle font-semibold text-muted-foreground w-64">IDs</th>
                   </tr>
                 </thead>
@@ -296,6 +470,26 @@
                           </span>
                         {:else}
                           <span class="text-muted-foreground">—</span>
+                        {/if}
+                      </td>
+                      <td class="px-4 py-3 align-middle">
+                        {#if movie.vault_movie_slug && movie.vault_movie_title}
+                          <a
+                            href={`/movies/${movie.vault_movie_slug}`}
+                            data-sveltekit-preload-data="hover"
+                            class="inline-flex max-w-[180px] items-center gap-1.5 text-emerald-600 hover:underline dark:text-emerald-400"
+                            title={movie.vault_movie_title}
+                          >
+                            <Check class="w-3.5 h-3.5 shrink-0" />
+                            <span class="truncate">{movie.vault_movie_title}</span>
+                            {#if movie.match_method}
+                              <Badge variant="outline" class="shrink-0 px-1 py-0 font-mono text-[9px]">
+                                {movie.match_method}
+                              </Badge>
+                            {/if}
+                          </a>
+                        {:else}
+                          <span class="text-xs text-muted-foreground">—</span>
                         {/if}
                       </td>
                       <td class="px-4 py-3 align-middle">

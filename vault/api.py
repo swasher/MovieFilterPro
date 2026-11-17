@@ -23,6 +23,8 @@ logger = logging.getLogger("vault.tmdb_writeback")
 logger_qbt = logging.getLogger("vault.qbittorrent")
 logger_tmdb_images = logging.getLogger("vault.tmdb.images")
 
+from plex.models import PlexLibraryItem
+from plex.services.plex_link_sync_service import PlexLinkSyncService
 from qbittorrent.models import Torrent
 from qbittorrent.services import torrent_service as qbt_torrent_service
 from vault.models import (
@@ -78,6 +80,7 @@ class MovieOut(Schema):
     rating: int | None = None
     torrent_linked: bool = False
     torrent_info_hash: str | None = None
+    in_plex: bool = False
 
 
 class HomeMovieGroupOut(Schema):
@@ -107,6 +110,16 @@ class MovieTorrentOut(Schema):
     save_path: str | None = None
     content_path: str | None = None
     created_at: str | None = None
+
+
+class PlexMovieBriefOut(Schema):
+    rating_key: str
+    section: str
+    media_type: str
+    file_path: str | None = None
+    file_name: str | None = None
+    match_method: str = ''
+    last_seen_at: str | None = None
 
 
 class MovieDetailOut(Schema):
@@ -161,6 +174,8 @@ class MovieDetailOut(Schema):
     torrents: list[MovieTorrentOut] = []
     collection: "CollectionBriefOut | None" = None
     writeback: WritebackPerMovieOut | None = None
+    in_plex: bool = False
+    plex: PlexMovieBriefOut | None = None
 
 
 class CollectionPartOut(Schema):
@@ -710,6 +725,7 @@ def _build_movie_out(
     state: dict | None = None,
     *,
     torrent_info_hash: str | None = None,
+    in_plex: bool = False,
 ) -> MovieOut:
     if state is None and user is not None:
         state = MovieStatusService.get_movie_states_bulk(user, [movie]).get(movie.id)
@@ -732,6 +748,19 @@ def _build_movie_out(
         in_favorites=is_favorite,
         torrent_linked=torrent_info_hash is not None,
         torrent_info_hash=torrent_info_hash,
+        in_plex=in_plex,
+    )
+
+
+def _plex_link_ids(movies) -> set[int]:
+    """ID фильмов Vault, которые сейчас присутствуют в Plex (по кэшу PlexLibraryItem)."""
+    movie_ids = [movie.id for movie in movies]
+    if not movie_ids:
+        return set()
+    return set(
+        PlexLibraryItem.objects
+        .filter(vault_movie_id__in=movie_ids)
+        .values_list('vault_movie_id', flat=True)
     )
 
 
@@ -753,6 +782,7 @@ def _torrent_link_info(movies) -> dict[int, str]:
 def _build_home_group(group_id: str, title: str, see_all_href: str, movies, user) -> HomeMovieGroupOut:
     states = MovieStatusService.get_movie_states_bulk(user, movies)
     torrent_links = _torrent_link_info(movies)
+    plex_ids = _plex_link_ids(movies)
     return HomeMovieGroupOut(
         id=group_id,
         title=title,
@@ -763,6 +793,7 @@ def _build_home_group(group_id: str, title: str, see_all_href: str, movies, user
                 user=user,
                 state=states.get(movie.id),
                 torrent_info_hash=torrent_links.get(movie.id),
+                in_plex=movie.id in plex_ids,
             )
             for movie in movies
         ],
@@ -960,6 +991,7 @@ def list_movies(
     is_favorite: bool | None = None,
     watch_status: str | None = None,
     has_torrent: bool | None = None,
+    has_plex: bool | None = None,
 ):
     user = _resolve_api_user(request)
     qs = Movie.objects.all()
@@ -1009,6 +1041,10 @@ def list_movies(
         qs = qs.filter(Exists(Torrent.objects.filter(movie=OuterRef('pk'))))
     elif has_torrent is False:
         qs = qs.filter(~Exists(Torrent.objects.filter(movie=OuterRef('pk'))))
+    if has_plex is True:
+        qs = qs.filter(Exists(PlexLibraryItem.objects.filter(vault_movie=OuterRef('pk'))))
+    elif has_plex is False:
+        qs = qs.filter(~Exists(PlexLibraryItem.objects.filter(vault_movie=OuterRef('pk'))))
 
     allowed_orders = {
         "-year": ("-year", "title", "id"),
@@ -1071,12 +1107,16 @@ def list_movies(
     movies = [movie for movie in qs]
     states = MovieStatusService.get_movie_states_bulk(user, movies)
     torrent_links = _torrent_link_info(movies)
+    # Кэш связи с Plex обновляем в фоне; текущие данные отдаём из того, что есть.
+    PlexLinkSyncService.ensure_fresh_async()
+    plex_ids = _plex_link_ids(movies)
     return [
         _build_movie_out(
             movie,
             user=user,
             state=states.get(movie.id),
             torrent_info_hash=torrent_links.get(movie.id),
+            in_plex=movie.id in plex_ids,
         )
         for movie in movies
     ]
@@ -1205,6 +1245,25 @@ def movie_detail(request, slug: str):
         )
         for item in Torrent.objects.filter(movie=movie).order_by("-created_at", "-id")
     ]
+
+    PlexLinkSyncService.ensure_fresh_async()
+    plex_link = (
+        PlexLibraryItem.objects
+        .filter(vault_movie=movie)
+        .order_by("section", "rating_key")
+        .first()
+    )
+    plex_out = None
+    if plex_link is not None:
+        plex_out = PlexMovieBriefOut(
+            rating_key=plex_link.rating_key,
+            section=plex_link.section,
+            media_type=plex_link.media_type,
+            file_path=plex_link.file_path or None,
+            file_name=plex_link.file_name or None,
+            match_method=plex_link.match_method or "",
+            last_seen_at=_datetime_to_iso(plex_link.last_seen_at),
+        )
 
     actor_rows = list(movie.get_actors().select_related("person"))
     if _is_series_movie(movie):
@@ -1350,6 +1409,8 @@ def movie_detail(request, slug: str):
         torrents=torrents,
         collection=_build_collection_out(movie, user=user),
         writeback=_build_writeback_out(movie),
+        in_plex=plex_out is not None,
+        plex=plex_out,
     )
 
 
@@ -1601,7 +1662,10 @@ def tmdb_import(request, payload: TMDBImportIn):
         status=result.status,
         message=result.message,
         created=result.status == "created",
-        movie=_build_movie_out(result.movie),
+        movie=_build_movie_out(
+            result.movie,
+            in_plex=result.movie.id in _plex_link_ids([result.movie]),
+        ),
     )
 
 

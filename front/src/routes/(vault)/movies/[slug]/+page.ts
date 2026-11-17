@@ -173,6 +173,16 @@ type ApiMovieDetail = {
     next_retry_at: string | null;
     reason: string | null;
   } | null;
+  in_plex: boolean;
+  plex: {
+    rating_key: string;
+    section: string;
+    media_type: string;
+    file_path: string | null;
+    file_name: string | null;
+    match_method: string;
+    last_seen_at: string | null;
+  } | null;
 };
 
 export const load: PageLoad = async ({ fetch, params }) => {

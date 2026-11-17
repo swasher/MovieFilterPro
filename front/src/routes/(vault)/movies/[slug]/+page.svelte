@@ -26,6 +26,7 @@
     Link2,
     LoaderCircle,
     Pencil,
+    Play,
     Plus,
     RefreshCw,
     Shield,
@@ -1557,6 +1558,29 @@
             {/if}
           </div>
         </div>
+        <div class="vd-section mt-6 border-t border-border/50 pt-6">
+          <p class="vd-section-title">Plex</p>
+          <div class="vd-list-column">
+            {#if movie.plex}
+              <div class="vd-list-chip">
+                <span class="flex min-w-0 flex-1 items-center gap-1.5">
+                  <Play class="size-3.5 shrink-0 fill-current text-amber-500" />
+                  <span
+                    class="truncate font-medium"
+                    title={movie.plex.file_path || movie.plex.file_name || ""}
+                  >
+                    {movie.plex.file_name || "В библиотеке"}
+                  </span>
+                </span>
+              </div>
+              {#if movie.plex.section}
+                <span class="truncate text-[11px] text-muted-foreground">Секция: {movie.plex.section}</span>
+              {/if}
+            {:else}
+              <div class="vd-list-chip text-muted-foreground">Нет в Plex</div>
+            {/if}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1628,6 +1652,15 @@
                   >
                     TVDB
                   </a>
+                {/if}
+                {#if movie.plex}
+                  <span
+                    class="vd-service-badge vd-service-badge--plex"
+                    title={`В Plex${movie.plex.section ? ` · ${movie.plex.section}` : ''}${movie.plex.file_name ? ` · ${movie.plex.file_name}` : ''}`}
+                  >
+                    <Play class="size-3.5 fill-current" />
+                    Plex
+                  </span>
                 {/if}
                 {#if movie.homepage}
                   <a

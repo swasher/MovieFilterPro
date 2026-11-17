@@ -36,3 +36,4 @@ HUEY = SqliteHuey(filename=str(huey_db_path))
 import vault.tasks  # noqa: E402,F401
 import kinozal_scan.tasks  # noqa: E402,F401
 import bestfilmsof.tasks  # noqa: E402,F401
+import plex.tasks  # noqa: E402,F401

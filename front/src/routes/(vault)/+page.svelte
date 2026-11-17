@@ -38,6 +38,7 @@ type MovieCard = {
   rating: number | null;
   torrent_linked: boolean;
   torrent_info_hash: string | null;
+  in_plex: boolean;
 };
 
 type Genre = {
@@ -128,6 +129,7 @@ type TmdbSearchResult = {
   let selectedWatchStatus = $state("");
   let isFavorite = $state(false);
   let onlyUnlinked = $state(false);
+  let plexFilter = $state("");
 
   let progressByHash = $state<Record<string, QbtProgressItem>>({});
   let progressRequestInFlight = false;
@@ -199,6 +201,7 @@ type TmdbSearchResult = {
     selectedWatchStatus = data.activeWatchStatus ?? "";
     isFavorite = data.activeIsFavorite ?? false;
     onlyUnlinked = data.activeHasTorrent === "false";
+    plexFilter = data.activeHasPlex ?? "";
     exactSearch = data.activeSearchPlot === false;
   });
 
@@ -458,6 +461,7 @@ type TmdbSearchResult = {
     if (selectedWatchStatus) params.set("watch_status", selectedWatchStatus); else params.delete("watch_status");
     if (isFavorite) params.set("is_favorite", "true"); else params.delete("is_favorite");
     if (onlyUnlinked) params.set("has_torrent", "false"); else params.delete("has_torrent");
+    if (plexFilter) params.set("has_plex", plexFilter); else params.delete("has_plex");
 
     params.delete("page");
 
@@ -476,6 +480,7 @@ type TmdbSearchResult = {
     selectedWatchStatus = "";
     isFavorite = false;
     onlyUnlinked = false;
+    plexFilter = "";
     await applyFilters();
   };
 
@@ -720,7 +725,7 @@ type TmdbSearchResult = {
         </div>
       </div>
 
-      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || onlyUnlinked || data.activeQuery}
+      {#if selectedGenres.length > 0 || yearFrom || yearTo || selectedMovieType || selectedWatchStatus || isFavorite || onlyUnlinked || plexFilter || data.activeQuery}
         <div class="flex flex-wrap items-center gap-3 text-sm">
           {#if selectedGenres.length > 0}
             <p class="text-muted-foreground">
@@ -761,6 +766,13 @@ type TmdbSearchResult = {
             <p class="text-muted-foreground">
               Без раздачи
               <button class="underline hover:text-foreground" onclick={() => { onlyUnlinked = false; applyFilters(); }}>×</button>
+            </p>
+          {/if}
+          {#if plexFilter}
+            <span class="text-border">|</span>
+            <p class="text-muted-foreground">
+              Plex: {plexFilter === "true" ? "есть" : "нет"}
+              <button class="underline hover:text-foreground" onclick={() => { plexFilter = ""; applyFilters(); }}>×</button>
             </p>
           {/if}
           {#if data.activeQuery}
@@ -908,6 +920,15 @@ type TmdbSearchResult = {
                     {/if}
                   </td>
                   <td class="px-3 py-2 align-middle flex items-center gap-1.5">
+                    {#if movie.in_plex}
+                      <Badge
+                        variant="secondary"
+                        class="bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300"
+                        title="Есть в Plex"
+                      >
+                        PLEX
+                      </Badge>
+                    {/if}
                     {#if movie.in_favorites}
                       <Badge variant="secondary" class="px-1.5 py-0.5 text-[10px]" title="Любимое">
                         <Heart class="h-3 w-3 text-red-500" />
@@ -1202,6 +1223,15 @@ type TmdbSearchResult = {
         <ToggleGroup.Root type="single" value={selectedWatchStatus} onValueChange={(v) => selectedWatchStatus = v ?? ""}>
           <ToggleGroup.Item value="watched">Просмотрено</ToggleGroup.Item>
           <ToggleGroup.Item value="not_watched">Не просмотрено</ToggleGroup.Item>
+          <ToggleGroup.Item value="">Не важно</ToggleGroup.Item>
+        </ToggleGroup.Root>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm font-medium">Наличие в Plex</p>
+        <ToggleGroup.Root type="single" value={plexFilter} onValueChange={(v) => plexFilter = v ?? ""}>
+          <ToggleGroup.Item value="true">Есть в Plex</ToggleGroup.Item>
+          <ToggleGroup.Item value="false">Нет в Plex</ToggleGroup.Item>
           <ToggleGroup.Item value="">Не важно</ToggleGroup.Item>
         </ToggleGroup.Root>
       </div>

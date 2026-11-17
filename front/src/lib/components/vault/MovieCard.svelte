@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Badge } from "$lib/components/ui/badge";
-  import { Link2, Link2Off } from "@lucide/svelte";
+  import { Link2, Link2Off, Play } from "@lucide/svelte";
   import { QBT_DOWNLOADING_STATES } from "$lib/qbittorrent";
   import MovieStatusBadges from "./MovieStatusBadges.svelte";
   import VaultImage from "./VaultImage.svelte";
@@ -18,6 +18,7 @@
     in_favorites: boolean;
     torrent_linked: boolean;
     torrent_info_hash: string | null;
+    in_plex: boolean;
   };
 
   let {
@@ -70,24 +71,35 @@
       year={movie.year}
     />
 
-    {#if showTorrentStatus}
+    {#if showTorrentStatus || movie.in_plex}
       <div class="absolute top-1.5 left-1.5 z-10 flex flex-col items-start gap-1">
-        <span
-          class={`flex size-5 items-center justify-center rounded-full text-white shadow-md ${
-            movie.torrent_linked ? "bg-emerald-500" : "bg-zinc-600/85"
-          }`}
-          title={torrentTitle}
-          aria-label={torrentTitle}
-        >
-          {#if movie.torrent_linked}
-            <Link2 class="size-3" />
-          {:else}
-            <Link2Off class="size-3" />
+        {#if showTorrentStatus}
+          <span
+            class={`flex size-5 items-center justify-center rounded-full text-white shadow-md ${
+              movie.torrent_linked ? "bg-emerald-500" : "bg-zinc-600/85"
+            }`}
+            title={torrentTitle}
+            aria-label={torrentTitle}
+          >
+            {#if movie.torrent_linked}
+              <Link2 class="size-3" />
+            {:else}
+              <Link2Off class="size-3" />
+            {/if}
+          </span>
+          {#if isDownloading && progressPercent !== null}
+            <span class="rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white shadow-md">
+              {progressPercent}%
+            </span>
           {/if}
-        </span>
-        {#if isDownloading && progressPercent !== null}
-          <span class="rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white shadow-md">
-            {progressPercent}%
+        {/if}
+        {#if movie.in_plex}
+          <span
+            class="flex size-5 items-center justify-center rounded-full bg-[#e5a00d] text-white shadow-md"
+            title="Есть в Plex"
+            aria-label="Есть в Plex"
+          >
+            <Play class="size-3 fill-current" />
           </span>
         {/if}
       </div>

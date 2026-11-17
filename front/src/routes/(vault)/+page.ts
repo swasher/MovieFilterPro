@@ -16,6 +16,7 @@ type ApiMovie = {
   rating: number | null;
   torrent_linked: boolean;
   torrent_info_hash: string | null;
+  in_plex: boolean;
 };
 
 type ApiGenre = {
@@ -38,6 +39,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
   const watchStatus = url.searchParams.get("watch_status") ?? "";
   const isFavorite = url.searchParams.get("is_favorite") === "true";
   const hasTorrent = (url.searchParams.get("has_torrent") ?? "").trim();
+  const hasPlex = (url.searchParams.get("has_plex") ?? "").trim();
   const status = (url.searchParams.get("status") ?? "").trim();
   const list = (url.searchParams.get("list") ?? "").trim();
   const q = (url.searchParams.get("q") ?? "").trim();
@@ -59,6 +61,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
     activeWatchStatus: watchStatus,
     activeIsFavorite: isFavorite,
     activeHasTorrent: hasTorrent,
+    activeHasPlex: hasPlex,
     activeStatus: status,
     activeList: list,
     activeQuery: q,
@@ -105,6 +108,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
     if (watchStatus) params.set("watch_status", watchStatus);
     if (isFavorite) params.set("is_favorite", "true");
     if (hasTorrent) params.set("has_torrent", hasTorrent);
+    if (hasPlex) params.set("has_plex", hasPlex);
     if (status) params.set("status", status);
     if (list) params.set("list", list);
     if (q) params.set("q", q);
@@ -136,6 +140,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeWatchStatus: watchStatus,
       activeIsFavorite: isFavorite,
       activeHasTorrent: hasTorrent,
+    activeHasPlex: hasPlex,
       activeStatus: status,
       activeList: list,
       activeQuery: q,
@@ -157,6 +162,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
       activeWatchStatus: watchStatus,
       activeIsFavorite: isFavorite,
       activeHasTorrent: hasTorrent,
+    activeHasPlex: hasPlex,
       activeStatus: status,
       activeList: list,
       activeQuery: q,
