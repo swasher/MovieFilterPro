@@ -2,14 +2,13 @@ from datetime import date
 
 import re
 
-import requests
 from django.conf import settings
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
 
 from core.models import AiEndpoint, UserPreferences
 from qbittorrent.services.paths import resolve_backup_folder
-from core.services import ai_endpoints
+from core.services import ai_endpoints, ai_models
 
 
 api = NinjaAPI(title="Core API", version="1.0", urls_namespace="core-api")
@@ -362,102 +361,39 @@ def update_preferences(request, payload: PreferencesUpdateIn):
 
 # ------------------------------------ #
 #          APPLICATION LAYER           #
-#   AI models listing (OpenAI        #
+#   AI models listing (OpenAI          #
 #   compatible + Ollama native tags)   #
 # ------------------------------------ #
 
-def _candidate_ai_models_urls(base_url: str) -> list[str]:
-    base = base_url.strip().rstrip("/")
-    candidates = [f"{base}/models"]
-    if base.endswith("/v1"):
-        root = base[: -len("/v1")]
-        candidates.append(f"{root}/api/tags")
-    else:
-        candidates.append(f"{base}/v1/models")
-        candidates.append(f"{base}/api/tags")
-    # de-duplicate preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for url in candidates:
-        if url not in seen:
-            seen.add(url)
-            unique.append(url)
-    return unique
-
-
-def _extract_model_ids(payload: object) -> list[str]:
-    """Parse both OpenAI (`data[].id`) and Ollama (`models[].name`) formats."""
-    if not isinstance(payload, dict):
-        return []
-    ids: list[str] = []
-    data = payload.get("data")
-    if isinstance(data, list):
-        for item in data:
-            if isinstance(item, dict) and item.get("id"):
-                ids.append(str(item["id"]))
-    models = payload.get("models")
-    if isinstance(models, list):
-        for item in models:
-            if isinstance(item, dict):
-                name = item.get("name") or item.get("id")
-                if name:
-                    ids.append(str(name))
-    # de-duplicate preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for model_id in ids:
-        if model_id not in seen:
-            seen.add(model_id)
-            unique.append(model_id)
-    return unique
-
 
 @api.get("/ai-models", response=AiModelsOut)
-def list_ai_models(request, base_url: str | None = None, api_key: str | None = None):
+def list_ai_models(
+    request,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    endpoint_id: int | None = None,
+):
     """Return model ids available on the AI server.
 
-    Query params take precedence so the UI can probe an unsaved Base URL
-    without saving an endpoint first. Falls back to the active AI endpoint.
+    Явный base_url имеет приоритет (UI может прозондировать несохранённый
+    URL) и никогда не комбинируется с ключом другого endpoint: в этом случае
+    ключ берётся только из явного api_key. Без base_url используется endpoint
+    по endpoint_id или выбранный endpoint.
     """
     _require_api_user(request)
-    preferences = UserPreferences.get()
-    active_endpoint = preferences.ai_endpoint
-    resolved_base_url = (base_url or "").strip() or (
-        (active_endpoint.base_url or "").strip() if active_endpoint else ""
-    )
-    if not resolved_base_url:
-        raise HttpError(400, "AI base URL is not configured")
-    resolved_api_key = (
-        (api_key or "").strip()
-        or ((active_endpoint.api_key or "").strip() if active_endpoint else "")
-        or None
-    )
-
-    headers = {"Accept": "application/json"}
-    if resolved_api_key:
-        headers["Authorization"] = f"Bearer {resolved_api_key}"
-
-    last_error = "unknown error"
-    for url in _candidate_ai_models_urls(resolved_base_url):
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-        except requests.RequestException as exc:
-            last_error = f"{url}: {exc}"
-            continue
-        if response.status_code == 404:
-            last_error = f"{url}: HTTP 404"
-            continue
-        if not response.ok:
-            raise HttpError(response.status_code, f"AI server error at {url}: HTTP {response.status_code}")
-        try:
-            payload = response.json()
-        except ValueError:
-            raise HttpError(502, f"AI server at {url} returned non-JSON response")
-        model_ids = _extract_model_ids(payload)
-        if model_ids:
-            return AiModelsOut(base_url=resolved_base_url.rstrip("/"), models=sorted(model_ids))
-        last_error = f"{url}: empty model list"
-    raise HttpError(502, f"No models found on AI server ({last_error})")
+    try:
+        resolved_base_url, resolved_api_key = ai_endpoints.resolve_models_source(
+            base_url=base_url,
+            api_key=api_key,
+            endpoint_id=endpoint_id,
+        )
+    except ai_endpoints.AiEndpointError as exc:
+        raise HttpError(400, str(exc))
+    try:
+        models = ai_models.fetch_model_ids(resolved_base_url, resolved_api_key)
+    except ai_models.AiModelsError as exc:
+        raise HttpError(502, str(exc))
+    return AiModelsOut(base_url=resolved_base_url.rstrip("/"), models=models)
 
 
 # ------------------------------------ #

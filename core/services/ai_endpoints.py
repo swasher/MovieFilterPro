@@ -74,6 +74,34 @@ def get_active_endpoint() -> AiEndpoint | None:
     return preferences.ai_endpoint
 
 
+def resolve_models_source(
+    *,
+    base_url: str | None,
+    api_key: str | None,
+    endpoint_id: int | None,
+) -> tuple[str, str]:
+    """
+    Пара (base_url, api_key) для запроса списка моделей.
+
+    Явный base_url никогда не комбинируется с ключом другого endpoint:
+    если base_url передан, ключ берётся только из явного api_key (пустой —
+    значит без ключа). Иначе используется endpoint по endpoint_id или
+    выбранный endpoint со своим сохранённым ключом.
+    """
+    if base_url is not None and base_url.strip():
+        return base_url.strip(), (api_key or "").strip()
+
+    if endpoint_id is not None:
+        endpoint = get_endpoint(endpoint_id)
+        if endpoint is None:
+            raise AiEndpointError("AI endpoint не найден.")
+    else:
+        endpoint = get_active_endpoint()
+        if endpoint is None:
+            raise AiEndpointError("AI endpoint не выбран.")
+    return endpoint.base_url.strip(), (endpoint.api_key or "").strip()
+
+
 def set_active_endpoint(endpoint: AiEndpoint | None) -> AiEndpoint | None:
     preferences = UserPreferences.get()
     preferences.ai_endpoint = endpoint

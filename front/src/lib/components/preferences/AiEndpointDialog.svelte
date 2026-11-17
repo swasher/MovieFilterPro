@@ -109,8 +109,20 @@
     aiModelsError = "";
     try {
       const params = new URLSearchParams();
-      params.set("base_url", requestedBaseUrl);
-      if (requestedApiKey) params.set("api_key", requestedApiKey);
+      // Ключ сохранённого endpoint-а на фронт не должен уходить к чужому Base URL:
+      // пока base_url и ключ не менялись — просим модели по endpoint_id, сервер
+      // подставит сохранённый ключ сам. Иначе шлём явную пару base_url + ключ
+      // (пустой ключ остаётся пустым — backend не подмешивает ключ другого endpoint).
+      const baseUrlChanged =
+        endpoint === null || requestedBaseUrl !== (endpoint.base_url ?? "").trim();
+      const apiKeyChanged =
+        endpoint === null || requestedApiKey !== (endpoint.api_key ?? "").trim();
+      if (endpoint && mode !== "create" && !baseUrlChanged && !apiKeyChanged) {
+        params.set("endpoint_id", String(endpoint.id));
+      } else {
+        params.set("base_url", requestedBaseUrl);
+        if (requestedApiKey) params.set("api_key", requestedApiKey);
+      }
       const res = await fetch(`/api/core/ai-models?${params.toString()}`);
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.detail ?? `HTTP ${res.status}`);
