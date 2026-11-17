@@ -109,8 +109,9 @@ class AiEndpointOut(Schema):
     name: str
     base_url: str
     model: str
-    api_key: str = ""
-    is_active: bool = False
+    has_api_key: bool = False
+    api_key_masked: str = ""
+    is_selected: bool = False
     updated_at: str
 
 
@@ -119,13 +120,18 @@ class AiEndpointIn(Schema):
     base_url: str = ""
     model: str = ""
     api_key: str = ""
+    select: bool = False
+    duplicate_of: int | None = None
 
 
 class AiEndpointUpdateIn(Schema):
     name: str | None = None
     base_url: str | None = None
     model: str | None = None
-    api_key: str | None = None
+
+
+class AiEndpointKeyIn(Schema):
+    api_key: str = ""
 
 
 class OkOut(Schema):
@@ -401,25 +407,30 @@ def list_ai_models(
 # ------------------------------------ #
 
 
-def _serialize_ai_endpoint(endpoint, active_id: int | None) -> AiEndpointOut:
+def _serialize_ai_endpoint(endpoint, selected_id: int | None) -> AiEndpointOut:
     return AiEndpointOut(
         id=endpoint.id,
         name=endpoint.name,
         base_url=endpoint.base_url,
         model=endpoint.model,
-        api_key=endpoint.api_key or "",
-        is_active=endpoint.id == active_id,
+        has_api_key=bool(endpoint.api_key),
+        api_key_masked=ai_endpoints.mask_secret(endpoint.api_key),
+        is_selected=endpoint.id == selected_id,
         updated_at=endpoint.updated_at.isoformat(),
     )
+
+
+def _selected_id() -> int | None:
+    selected = ai_endpoints.get_selected_endpoint()
+    return selected.id if selected else None
 
 
 @api.get("/ai-endpoints", response=list[AiEndpointOut])
 def list_ai_endpoints(request):
     _require_api_user(request)
-    active = ai_endpoints.get_active_endpoint()
-    active_id = active.id if active else None
+    selected_id = _selected_id()
     return [
-        _serialize_ai_endpoint(endpoint, active_id)
+        _serialize_ai_endpoint(endpoint, selected_id)
         for endpoint in ai_endpoints.list_endpoints()
     ]
 
@@ -433,11 +444,12 @@ def create_ai_endpoint(request, payload: AiEndpointIn):
             base_url=payload.base_url,
             model=payload.model,
             api_key=payload.api_key,
+            select=payload.select,
+            duplicate_of=payload.duplicate_of,
         )
     except ai_endpoints.AiEndpointError as exc:
         raise HttpError(400, str(exc))
-    active = ai_endpoints.get_active_endpoint()
-    return _serialize_ai_endpoint(endpoint, active.id if active else None)
+    return _serialize_ai_endpoint(endpoint, _selected_id())
 
 
 @api.patch("/ai-endpoints/{endpoint_id}", response=AiEndpointOut)
@@ -446,12 +458,7 @@ def update_ai_endpoint(request, endpoint_id: int, payload: AiEndpointUpdateIn):
     endpoint = ai_endpoints.get_endpoint(endpoint_id)
     if endpoint is None:
         raise HttpError(404, "AI endpoint не найден.")
-    if (
-        payload.name is None
-        and payload.base_url is None
-        and payload.model is None
-        and payload.api_key is None
-    ):
+    if payload.name is None and payload.base_url is None and payload.model is None:
         raise HttpError(400, "Нечего обновлять: передайте хотя бы одно поле.")
     try:
         updated = ai_endpoints.update_endpoint(
@@ -459,12 +466,10 @@ def update_ai_endpoint(request, endpoint_id: int, payload: AiEndpointUpdateIn):
             name=payload.name,
             base_url=payload.base_url,
             model=payload.model,
-            api_key=payload.api_key,
         )
     except ai_endpoints.AiEndpointError as exc:
         raise HttpError(400, str(exc))
-    active = ai_endpoints.get_active_endpoint()
-    return _serialize_ai_endpoint(updated, active.id if active else None)
+    return _serialize_ai_endpoint(updated, _selected_id())
 
 
 @api.delete("/ai-endpoints/{endpoint_id}", response=OkOut)
@@ -477,11 +482,24 @@ def delete_ai_endpoint(request, endpoint_id: int):
     return OkOut(ok=True)
 
 
-@api.post("/ai-endpoints/{endpoint_id}/activate", response=AiEndpointOut)
-def activate_ai_endpoint(request, endpoint_id: int):
+@api.post("/ai-endpoints/{endpoint_id}/select", response=AiEndpointOut)
+def select_ai_endpoint(request, endpoint_id: int):
     _require_api_user(request)
     endpoint = ai_endpoints.get_endpoint(endpoint_id)
     if endpoint is None:
         raise HttpError(404, "AI endpoint не найден.")
-    ai_endpoints.set_active_endpoint(endpoint)
+    ai_endpoints.set_selected_endpoint(endpoint)
     return _serialize_ai_endpoint(endpoint, endpoint.id)
+
+
+@api.put("/ai-endpoints/{endpoint_id}/api-key", response=AiEndpointOut)
+def set_ai_endpoint_key(request, endpoint_id: int, payload: AiEndpointKeyIn):
+    _require_api_user(request)
+    endpoint = ai_endpoints.get_endpoint(endpoint_id)
+    if endpoint is None:
+        raise HttpError(404, "AI endpoint не найден.")
+    try:
+        updated = ai_endpoints.set_endpoint_api_key(endpoint, payload.api_key)
+    except ai_endpoints.AiEndpointError as exc:
+        raise HttpError(400, str(exc))
+    return _serialize_ai_endpoint(updated, _selected_id())

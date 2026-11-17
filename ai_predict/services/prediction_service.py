@@ -11,7 +11,7 @@ import time
 from ai_predict.models import MoviePrediction, TasteProfile
 from ai_predict.services.engine import run_taste_engine
 from ai_predict.services.movie_card import build_movie_card
-from core.services.ai_endpoints import get_active_endpoint
+from core.services.ai_endpoints import get_selected_endpoint
 from vault.models import Movie
 
 # ------------------------------------ #
@@ -72,7 +72,7 @@ def last_prediction(movie_id: int, taste_profile_id: int | None = None) -> Movie
 
 def _current_model_name() -> str:
     try:
-        endpoint = get_active_endpoint()
+        endpoint = get_selected_endpoint()
         return (endpoint.model or "").strip() if endpoint else ""
     except Exception:  # noqa: BLE001 — Preferences может быть ещё не создан
         return ""

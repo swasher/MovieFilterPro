@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
-  import { resolveAiEndpoint, type AiEndpoint } from "$lib/aiEndpoints";
+  import { resolveSelectedEndpoint, type AiEndpoint } from "$lib/aiEndpoints";
   import { getPreferencesStore } from "./store.svelte.js";
 
   type Props = {
@@ -23,7 +23,7 @@
   const configured = (ok: boolean, missing = "Missing"): { value: string; tone: StatusTone } =>
     ok ? { value: "Configured", tone: "ok" } : { value: missing, tone: "warn" };
 
-  const activeAiEndpoint = $derived(resolveAiEndpoint(endpoints));
+  const activeAiEndpoint = $derived(resolveSelectedEndpoint(endpoints));
 
   const statusRows = $derived.by<StatusRow[]>(() => {
     const form = store.form;

@@ -7,7 +7,9 @@
   import * as Command from "$lib/components/ui/command";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
+  import { Switch } from "$lib/components/ui/switch";
   import { cn } from "$lib/utils.js";
   import {
     createAiEndpoint,
@@ -40,7 +42,9 @@
   let nameValue = $state("");
   let baseUrlValue = $state("");
   let modelValue = $state("");
+  // Пишется только при создании: ключ никогда не приходит с сервера.
   let apiKeyValue = $state("");
+  let copySourceKey = $state(true);
   let errorMessage = $state("");
   let saving = $state(false);
 
@@ -55,13 +59,26 @@
   const isEdit = $derived(mode === "edit");
 
   // Список моделей относится к конкретной паре Base URL + API key.
-  // Если поля поменяли — список нужно запросить заново.
+  // Если Base URL поменяли — список нужно запросить заново.
+  const aiModelsSourceKey = $derived(mode === "create" ? apiKeyValue.trim() : "");
   const modelsReady = $derived(
     aiModelsSource !== null &&
       aiModelsSource.baseUrl === baseUrlValue.trim() &&
-      aiModelsSource.apiKey === apiKeyValue.trim()
+      aiModelsSource.apiKey === aiModelsSourceKey
   );
-  const modelIsValid = $derived(modelsReady && aiModels.includes(modelValue.trim()));
+
+  // При недоступном сервере моделей (fetch упал) разрешаем сохранить
+  // endpoint с уже существующей конфигурацией (edit/duplicate без изменений).
+  const isUnchangedExisting = $derived(
+    (mode === "edit" || mode === "duplicate") &&
+      endpoint !== null &&
+      baseUrlValue.trim() === (endpoint.base_url ?? "").trim() &&
+      modelValue.trim() === (endpoint.model ?? "").trim()
+  );
+  const modelIsValid = $derived(
+    modelValue.trim() !== "" &&
+      (modelsReady ? aiModels.includes(modelValue.trim()) : isUnchangedExisting)
+  );
 
   const title = $derived(
     mode === "edit"
@@ -81,7 +98,8 @@
         : (endpoint?.name ?? "");
     baseUrlValue = initialBaseUrl;
     modelValue = endpoint?.model ?? "";
-    apiKeyValue = endpoint?.api_key ?? "";
+    apiKeyValue = "";
+    copySourceKey = true;
     errorMessage = "";
     aiModels = [];
     aiModelsError = "";
@@ -100,7 +118,6 @@
 
   const loadAiModels = async (notify = true) => {
     const requestedBaseUrl = baseUrlValue.trim();
-    const requestedApiKey = apiKeyValue.trim();
     if (!requestedBaseUrl) {
       aiModelsError = "Сначала укажите Base URL.";
       return;
@@ -109,26 +126,25 @@
     aiModelsError = "";
     try {
       const params = new URLSearchParams();
-      // Ключ сохранённого endpoint-а на фронт не должен уходить к чужому Base URL:
-      // пока base_url и ключ не менялись — просим модели по endpoint_id, сервер
-      // подставит сохранённый ключ сам. Иначе шлём явную пару base_url + ключ
-      // (пустой ключ остаётся пустым — backend не подмешивает ключ другого endpoint).
+      // Ключ сохранённого endpoint-а не должен уходить к чужому Base URL:
+      // пока Base URL не менялся — просим модели по endpoint_id, сервер
+      // подставит сохранённый ключ сам. Иначе шлём явный base_url и (только
+      // для create) введённый ключ; пустой остаётся пустым — backend не
+      // подмешивает ключ другого endpoint.
       const baseUrlChanged =
         endpoint === null || requestedBaseUrl !== (endpoint.base_url ?? "").trim();
-      const apiKeyChanged =
-        endpoint === null || requestedApiKey !== (endpoint.api_key ?? "").trim();
-      if (endpoint && mode !== "create" && !baseUrlChanged && !apiKeyChanged) {
+      if (endpoint && mode !== "create" && !baseUrlChanged) {
         params.set("endpoint_id", String(endpoint.id));
       } else {
         params.set("base_url", requestedBaseUrl);
-        if (requestedApiKey) params.set("api_key", requestedApiKey);
+        if (mode === "create" && apiKeyValue.trim()) params.set("api_key", apiKeyValue.trim());
       }
       const res = await fetch(`/api/core/ai-models?${params.toString()}`);
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.detail ?? `HTTP ${res.status}`);
       aiModels = payload.models ?? [];
       aiModelsBaseUrl = payload.base_url ?? "";
-      aiModelsSource = { baseUrl: requestedBaseUrl, apiKey: requestedApiKey };
+      aiModelsSource = { baseUrl: requestedBaseUrl, apiKey: aiModelsSourceKey };
       if (!aiModels.length) {
         aiModelsError = "Сервер ответил, но список моделей пуст.";
       } else {
@@ -178,18 +194,26 @@
 
     saving = true;
     errorMessage = "";
-    const payload = {
-      name: trimmedName,
-      base_url: trimmedBaseUrl,
-      model: trimmedModel,
-      api_key: apiKeyValue.trim()
-    };
     try {
       if (isEdit && endpoint) {
-        const saved = await updateAiEndpoint(endpoint.id, payload);
+        const saved = await updateAiEndpoint(endpoint.id, {
+          name: trimmedName,
+          base_url: trimmedBaseUrl,
+          model: trimmedModel
+        });
         onSaved(saved);
       } else {
-        const saved = await createAiEndpoint(payload);
+        // Новый endpoint (включая дубль) сразу становится выбранным в одной
+        // транзакции на сервере. Ключ дубля копируется сервером по duplicate_of
+        // и на фронт не попадает.
+        const saved = await createAiEndpoint({
+          name: trimmedName,
+          base_url: trimmedBaseUrl,
+          model: trimmedModel,
+          api_key: mode === "create" ? apiKeyValue.trim() : "",
+          select: true,
+          duplicate_of: mode === "duplicate" && copySourceKey && endpoint ? endpoint.id : undefined
+        });
         onSaved(saved);
       }
     } catch (error) {
@@ -225,10 +249,41 @@
         </div>
       </div>
 
-      <div class="space-y-2">
-        <div class="text-sm font-medium">API key (optional)</div>
-        <Input bind:value={apiKeyValue} placeholder="обычно пусто для локальных серверов" />
-      </div>
+      {#if mode === "create"}
+        <div class="space-y-2">
+          <div class="text-sm font-medium">API key (optional)</div>
+          <Input bind:value={apiKeyValue} placeholder="обычно пусто для локальных серверов" />
+        </div>
+      {:else if mode === "duplicate"}
+        <div class="border-border/70 flex items-center justify-between rounded-xl border px-4 py-3">
+          <div class="space-y-1">
+            <Label for="copy-source-key" class="text-sm font-medium">Скопировать API-ключ</Label>
+            <div class="text-muted-foreground text-xs">
+              Ключ исходного endpoint копируется на сервере и не покидает backend.
+            </div>
+          </div>
+          <Switch
+            id="copy-source-key"
+            bind:checked={copySourceKey}
+            onCheckedChange={(v) => {
+              copySourceKey = v;
+              return v;
+            }}
+          />
+        </div>
+      {:else}
+        <div class="border-border/70 rounded-xl border px-4 py-3">
+          <div class="text-sm font-medium">API key</div>
+          <div class="text-muted-foreground mt-1 text-xs">
+            {#if endpoint?.has_api_key}
+              Сохранён ({endpoint.api_key_masked}). Заменить можно кнопкой с ключом в разделе AI —
+              ключ никогда не передаётся в браузер.
+            {:else}
+              Не задан. Добавить можно кнопкой с ключом в разделе AI.
+            {/if}
+          </div>
+        </div>
+      {/if}
 
       <div class="space-y-2">
         <div class="text-sm font-medium">Model</div>
@@ -286,6 +341,9 @@
         </div>
         <div class="text-muted-foreground text-xs">
           Модель выбирается из списка, который вернул сервер по Base URL и API-ключу.
+          {#if isUnchangedExisting && !modelsReady}
+            Сервер моделей недоступен — можно сохранить endpoint с текущей моделью.
+          {/if}
         </div>
         {#if aiModelsError}
           <div class="border-destructive/40 bg-destructive/10 text-destructive rounded-xl border px-4 py-3 text-sm">

@@ -39,8 +39,8 @@
       <AlertDialog.Description>
         Удалить endpoint «{endpoint?.name ?? ""}»?
         <span class="text-muted-foreground mt-1 block text-xs">
-          {#if endpoint?.is_active}
-            Он сейчас активен — AI переключится на первый оставшийся endpoint, а если список опустеет, AI
+          {#if endpoint?.is_selected}
+            Он сейчас выбран — AI переключится на первый оставшийся endpoint, а если список опустеет, AI
             будет выключен.
           {:else}
             Остальные endpoints и настройки Preferences не изменятся.

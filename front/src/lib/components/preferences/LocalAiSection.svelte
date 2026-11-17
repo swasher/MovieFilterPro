@@ -1,21 +1,23 @@
 <script lang="ts">
   import CopyIcon from "@lucide/svelte/icons/copy";
+  import KeyRoundIcon from "@lucide/svelte/icons/key-round";
   import MinusIcon from "@lucide/svelte/icons/minus";
   import PencilIcon from "@lucide/svelte/icons/pencil";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import { toast } from "svelte-sonner";
   import {
-    activateAiEndpoint,
     listAiEndpoints,
-    resolveAiEndpoint,
+    resolveSelectedEndpoint,
+    selectAiEndpoint,
     type AiEndpoint
   } from "$lib/aiEndpoints";
   import { Button } from "$lib/components/ui/button";
   import { Label } from "$lib/components/ui/label";
   import * as Select from "$lib/components/ui/select";
   import { Switch } from "$lib/components/ui/switch";
-  import AiEndpointDialog from "./AiEndpointDialog.svelte";
   import AiEndpointDeleteDialog from "./AiEndpointDeleteDialog.svelte";
+  import AiEndpointDialog from "./AiEndpointDialog.svelte";
+  import AiEndpointKeyDialog from "./AiEndpointKeyDialog.svelte";
   import { getPreferencesStore } from "./store.svelte.js";
 
   type Props = {
@@ -32,12 +34,13 @@
   let dialogEndpoint = $state<AiEndpoint | null>(null);
   let suggestedName = $state("");
   let deleteOpen = $state(false);
-  let activatingId = $state<number | null>(null);
+  let keyOpen = $state(false);
+  let selectingId = $state<number | null>(null);
 
   const sortedEndpoints = $derived(
     [...endpoints].sort((left, right) => left.name.localeCompare(right.name, "ru"))
   );
-  const selectedEndpoint = $derived(resolveAiEndpoint(sortedEndpoints));
+  const selectedEndpoint = $derived(resolveSelectedEndpoint(sortedEndpoints));
 
   const refresh = async () => {
     try {
@@ -50,17 +53,20 @@
   const selectEndpoint = async (value: string) => {
     const parsed = Number.parseInt(value, 10);
     if (!Number.isFinite(parsed) || parsed === selectedEndpoint?.id) return;
-    activatingId = parsed;
+    selectingId = parsed;
     try {
-      await activateAiEndpoint(parsed);
-      endpoints = endpoints.map((endpoint) => ({ ...endpoint, is_active: endpoint.id === parsed }));
-      toast.success("Активный AI переключён.");
+      await selectAiEndpoint(parsed);
+      endpoints = endpoints.map((endpoint) => ({
+        ...endpoint,
+        is_selected: endpoint.id === parsed
+      }));
+      toast.success("Выбранный AI переключён.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось переключить AI.");
       // Контролируемый Select мог уйти в новое значение — возвращаем состояние с сервера.
       await refresh();
     } finally {
-      activatingId = null;
+      selectingId = null;
     }
   };
 
@@ -98,18 +104,11 @@
     dialogOpen = true;
   };
 
-  const handleSaved = async (saved: AiEndpoint) => {
+  const handleSaved = async (_saved: AiEndpoint) => {
     const mode = dialogMode;
     dialogOpen = false;
-    if (mode === "create" || mode === "duplicate") {
-      // Новый endpoint (включая дубль) сразу становится активным: пользователь
-      // должен видеть перед собой то, что только что создал.
-      try {
-        await activateAiEndpoint(saved.id);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Не удалось выбрать новый AI.");
-      }
-    }
+    // Create/duplicate проходят с select: true — сервер выбирает endpoint
+    // в той же транзакции, отдельный запрос не нужен.
     await refresh();
     toast.success(
       mode === "edit"
@@ -125,6 +124,12 @@
     await refresh();
     toast.success("AI endpoint удалён.");
   };
+
+  const handleKeySaved = async () => {
+    keyOpen = false;
+    await refresh();
+    toast.success("API-ключ сохранён.");
+  };
 </script>
 
 <div class="space-y-4">
@@ -138,7 +143,7 @@
     <div class="space-y-1">
       <Label for="ai-enabled" class="text-sm font-medium">AI enabled</Label>
       <div class="text-muted-foreground text-xs">
-        Вкл — AI-фичи (скан, TMDB matching, предсказания) используют активный endpoint. Выкл — всё без AI.
+        Вкл — AI-фичи (скан, TMDB matching, предсказания) используют выбранный endpoint. Выкл — всё без AI.
       </div>
     </div>
     <Switch
@@ -159,7 +164,7 @@
         type="single"
         value={selectedEndpoint ? String(selectedEndpoint.id) : ""}
         onValueChange={selectEndpoint}
-        disabled={!sortedEndpoints.length || activatingId !== null}
+        disabled={!sortedEndpoints.length || selectingId !== null}
       >
         <Select.Trigger class="flex-1" aria-label="AI endpoint">
           {#if selectedEndpoint}
@@ -198,6 +203,15 @@
         <PencilIcon class="h-4 w-4" />
       </Button>
       <Button
+        variant="outline"
+        size="icon"
+        onclick={() => (keyOpen = true)}
+        disabled={!selectedEndpoint}
+        title="Заменить API-ключ"
+      >
+        <KeyRoundIcon class="h-4 w-4" />
+      </Button>
+      <Button
         variant="destructive-outline"
         size="icon"
         onclick={() => (deleteOpen = true)}
@@ -230,6 +244,13 @@
     suggestedName={suggestedName}
     onSaved={handleSaved}
     onCancel={() => (dialogOpen = false)}
+  />
+
+  <AiEndpointKeyDialog
+    bind:open={keyOpen}
+    endpoint={selectedEndpoint}
+    onsaved={handleKeySaved}
+    oncancel={() => (keyOpen = false)}
   />
 
   <AiEndpointDeleteDialog

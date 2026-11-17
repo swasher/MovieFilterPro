@@ -3,8 +3,9 @@ export type AiEndpoint = {
   name: string;
   base_url: string;
   model: string;
-  api_key: string;
-  is_active: boolean;
+  has_api_key: boolean;
+  api_key_masked: string;
+  is_selected: boolean;
   updated_at: string;
 };
 
@@ -12,7 +13,18 @@ export type AiEndpointInput = {
   name: string;
   base_url: string;
   model: string;
-  api_key: string;
+  /** Только для создания; ключ никогда не приходит с сервера. */
+  api_key?: string;
+  /** Сразу сделать endpoint выбранным (создание + выбор в одной транзакции). */
+  select?: boolean;
+  /** Скопировать API-ключ исходного endpoint на сервере (ключ не покидает backend). */
+  duplicate_of?: number;
+};
+
+export type AiEndpointUpdateInput = {
+  name?: string;
+  base_url?: string;
+  model?: string;
 };
 
 const BASE_URL = "/api/core/ai-endpoints";
@@ -57,7 +69,7 @@ export function createAiEndpoint(payload: AiEndpointInput): Promise<AiEndpoint> 
 
 export function updateAiEndpoint(
   id: number,
-  payload: Partial<AiEndpointInput>
+  payload: AiEndpointUpdateInput
 ): Promise<AiEndpoint> {
   return apiRequest<AiEndpoint>(`/${id}`, {
     method: "PATCH",
@@ -69,13 +81,20 @@ export function deleteAiEndpoint(id: number): Promise<{ ok: boolean }> {
   return apiRequest<{ ok: boolean }>(`/${id}`, { method: "DELETE" });
 }
 
-export function activateAiEndpoint(id: number): Promise<AiEndpoint> {
-  return apiRequest<AiEndpoint>(`/${id}/activate`, {
+export function selectAiEndpoint(id: number): Promise<AiEndpoint> {
+  return apiRequest<AiEndpoint>(`/${id}/select`, {
     method: "POST",
     body: JSON.stringify({})
   });
 }
 
-export function resolveAiEndpoint(endpoints: AiEndpoint[]): AiEndpoint | null {
-  return endpoints.find((endpoint) => endpoint.is_active) ?? null;
+export function replaceAiEndpointKey(id: number, apiKey: string): Promise<AiEndpoint> {
+  return apiRequest<AiEndpoint>(`/${id}/api-key`, {
+    method: "PUT",
+    body: JSON.stringify({ api_key: apiKey })
+  });
+}
+
+export function resolveSelectedEndpoint(endpoints: AiEndpoint[]): AiEndpoint | null {
+  return endpoints.find((endpoint) => endpoint.is_selected) ?? null;
 }
