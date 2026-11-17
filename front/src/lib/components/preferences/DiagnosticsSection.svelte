@@ -1,15 +1,10 @@
 <script lang="ts">
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
-  import { resolveSelectedEndpoint, type AiEndpoint } from "$lib/aiEndpoints";
+  import { getAiEndpointsStore } from "./aiEndpointsStore.svelte.js";
   import { getPreferencesStore } from "./store.svelte.js";
 
-  type Props = {
-    endpoints?: AiEndpoint[];
-  };
-
-  let { endpoints = [] }: Props = $props();
-
+  const aiStore = getAiEndpointsStore();
   const store = getPreferencesStore();
 
   type StatusTone = "ok" | "warn" | "off";
@@ -23,16 +18,16 @@
   const configured = (ok: boolean, missing = "Missing"): { value: string; tone: StatusTone } =>
     ok ? { value: "Configured", tone: "ok" } : { value: missing, tone: "warn" };
 
-  const activeAiEndpoint = $derived(resolveSelectedEndpoint(endpoints));
+  const selectedAiEndpoint = $derived(aiStore.selected);
 
   const statusRows = $derived.by<StatusRow[]>(() => {
     const form = store.form;
     const ai = !form.ai_enabled
       ? { value: "Disabled", tone: "off" as StatusTone }
-      : !activeAiEndpoint
+      : !selectedAiEndpoint
         ? { value: "No endpoint", tone: "warn" as StatusTone }
-        : activeAiEndpoint.base_url.trim() && activeAiEndpoint.model.trim()
-          ? { value: activeAiEndpoint.name, tone: "ok" as StatusTone }
+        : selectedAiEndpoint.base_url.trim() && selectedAiEndpoint.model.trim()
+          ? { value: selectedAiEndpoint.name, tone: "ok" as StatusTone }
           : { value: "Incomplete", tone: "warn" as StatusTone };
 
     return [

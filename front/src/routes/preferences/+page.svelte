@@ -19,6 +19,10 @@
   import WebSearchSection from "$lib/components/preferences/WebSearchSection.svelte";
   import { PreferencesStore, setPreferencesStore } from "$lib/components/preferences/store.svelte.js";
   import {
+    AiEndpointsStore,
+    setAiEndpointsStore
+  } from "$lib/components/preferences/aiEndpointsStore.svelte.js";
+  import {
     PREFERENCES_SECTIONS,
     dirtySections,
     resolveSectionId,
@@ -33,7 +37,11 @@
   const store = new PreferencesStore(() => data);
   setPreferencesStore(store);
 
-  let aiEndpoints = $state(data.endpoints ?? []);
+  const aiEndpointsStore = new AiEndpointsStore(() => ({
+    endpoints: data.endpoints ?? [],
+    error: data.endpointsError
+  }));
+  setAiEndpointsStore(aiEndpointsStore);
 
   // Раздел живёт в URL (?section=…), чтобы пережить перезагрузку и работать как deep-link.
   const resolveInitialSection = (): PreferencesSectionId =>
@@ -82,6 +90,7 @@
 
   $effect(() => {
     store.applyData({ preferences: data.preferences, apiError: data.apiError });
+    aiEndpointsStore.applyData({ endpoints: data.endpoints ?? [], error: data.endpointsError });
   });
 </script>
 
@@ -146,13 +155,13 @@
               {:else if activeSection === "writeback"}
                 <TmdbWritebackSection />
               {:else if activeSection === "local-ai"}
-                <LocalAiSection bind:endpoints={aiEndpoints} endpointsError={data.endpointsError} />
+                <LocalAiSection />
               {:else if activeSection === "kinorium-sync"}
-                <KinoriumSyncSection endpoints={aiEndpoints} />
+                <KinoriumSyncSection />
               {:else if activeSection === "taste"}
                 <TasteSection tastes={data.tastes} tastesError={data.tastesError} />
               {:else if activeSection === "diagnostics"}
-                <DiagnosticsSection endpoints={aiEndpoints} />
+                <DiagnosticsSection />
               {/if}
             </CardContent>
           </Card>

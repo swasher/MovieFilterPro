@@ -1,14 +1,9 @@
 <script lang="ts">
   import * as Select from "$lib/components/ui/select";
-  import type { AiEndpoint } from "$lib/aiEndpoints";
+  import { getAiEndpointsStore } from "./aiEndpointsStore.svelte.js";
   import { getPreferencesStore } from "./store.svelte.js";
 
-  type Props = {
-    endpoints?: AiEndpoint[];
-  };
-
-  let { endpoints = [] }: Props = $props();
-
+  const aiStore = getAiEndpointsStore();
   const store = getPreferencesStore();
 
   // Значение селекта "по умолчанию": stage-specific endpoint не выбран,
@@ -16,7 +11,7 @@
   const DEFAULT_VALUE = "default";
 
   const sortedEndpoints = $derived(
-    [...endpoints].sort((left, right) => left.name.localeCompare(right.name, "ru"))
+    [...aiStore.endpoints].sort((left, right) => left.name.localeCompare(right.name, "ru"))
   );
   const endpointById = $derived(
     new Map(sortedEndpoints.map((endpoint) => [String(endpoint.id), endpoint]))

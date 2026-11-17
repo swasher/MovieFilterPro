@@ -5,12 +5,7 @@
   import PencilIcon from "@lucide/svelte/icons/pencil";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import { toast } from "svelte-sonner";
-  import {
-    listAiEndpoints,
-    resolveSelectedEndpoint,
-    selectAiEndpoint,
-    type AiEndpoint
-  } from "$lib/aiEndpoints";
+  import { selectAiEndpoint, type AiEndpoint } from "$lib/aiEndpoints";
   import { Button } from "$lib/components/ui/button";
   import { Label } from "$lib/components/ui/label";
   import * as Select from "$lib/components/ui/select";
@@ -18,15 +13,10 @@
   import AiEndpointDeleteDialog from "./AiEndpointDeleteDialog.svelte";
   import AiEndpointDialog from "./AiEndpointDialog.svelte";
   import AiEndpointKeyDialog from "./AiEndpointKeyDialog.svelte";
+  import { getAiEndpointsStore } from "./aiEndpointsStore.svelte.js";
   import { getPreferencesStore } from "./store.svelte.js";
 
-  type Props = {
-    endpoints?: AiEndpoint[];
-    endpointsError?: string;
-  };
-
-  let { endpoints = $bindable([]), endpointsError = "" }: Props = $props();
-
+  const aiStore = getAiEndpointsStore();
   const store = getPreferencesStore();
 
   let dialogOpen = $state(false);
@@ -38,16 +28,14 @@
   let selectingId = $state<number | null>(null);
 
   const sortedEndpoints = $derived(
-    [...endpoints].sort((left, right) => left.name.localeCompare(right.name, "ru"))
+    [...aiStore.endpoints].sort((left, right) => left.name.localeCompare(right.name, "ru"))
   );
-  const selectedEndpoint = $derived(resolveSelectedEndpoint(sortedEndpoints));
+  const selectedEndpoint = $derived(aiStore.selected);
 
-  const refresh = async () => {
-    try {
-      endpoints = await listAiEndpoints();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось загрузить AI endpoints.");
-    }
+  const refreshWithToast = async (): Promise<boolean> => {
+    const ok = await aiStore.refresh();
+    if (!ok) toast.error(aiStore.error);
+    return ok;
   };
 
   const selectEndpoint = async (value: string) => {
@@ -56,7 +44,7 @@
     selectingId = parsed;
     try {
       await selectAiEndpoint(parsed);
-      endpoints = endpoints.map((endpoint) => ({
+      aiStore.endpoints = aiStore.endpoints.map((endpoint) => ({
         ...endpoint,
         is_selected: endpoint.id === parsed
       }));
@@ -64,7 +52,7 @@
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось переключить AI.");
       // Контролируемый Select мог уйти в новое значение — возвращаем состояние с сервера.
-      await refresh();
+      await refreshWithToast();
     } finally {
       selectingId = null;
     }
@@ -99,17 +87,17 @@
     dialogEndpoint = selectedEndpoint;
     suggestedName = uniqueName(
       `${selectedEndpoint.name} copy`,
-      endpoints.map((endpoint) => endpoint.name)
+      aiStore.endpoints.map((endpoint) => endpoint.name)
     );
     dialogOpen = true;
   };
 
-  const handleSaved = async (_saved: AiEndpoint) => {
+  const handleSaved = async () => {
     const mode = dialogMode;
     dialogOpen = false;
     // Create/duplicate проходят с select: true — сервер выбирает endpoint
     // в той же транзакции, отдельный запрос не нужен.
-    await refresh();
+    await refreshWithToast();
     toast.success(
       mode === "edit"
         ? "AI endpoint сохранён."
@@ -121,21 +109,21 @@
 
   const handleDeleted = async () => {
     deleteOpen = false;
-    await refresh();
+    await refreshWithToast();
     toast.success("AI endpoint удалён.");
   };
 
   const handleKeySaved = async () => {
     keyOpen = false;
-    await refresh();
+    await refreshWithToast();
     toast.success("API-ключ сохранён.");
   };
 </script>
 
 <div class="space-y-4">
-  {#if endpointsError}
+  {#if aiStore.error}
     <div class="border-destructive/40 bg-destructive/10 text-destructive rounded-xl border px-4 py-3 text-sm">
-      {endpointsError}
+      {aiStore.error}
     </div>
   {/if}
 
