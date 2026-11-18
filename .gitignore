@@ -26,3 +26,4 @@ dump.json
 nul
 # Локальный прототип bestfilmsof (эталон для сверки, в git не нужен)
 bestfilmsof/example_code/
+temp/
