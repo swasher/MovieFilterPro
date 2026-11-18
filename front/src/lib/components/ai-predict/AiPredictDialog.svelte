@@ -5,14 +5,17 @@
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import {
+    fetchLastKinozalPrediction,
     fetchLastPrediction,
     getPreferredTasteId,
     listTasteProfiles,
     predictionScoreLabel,
     resolveTasteProfile,
+    runKinozalPrediction,
     runPrediction,
     setPreferredTasteId,
     type AiPrediction,
+    type PredictionSource,
     type TasteProfile
   } from "$lib/aiPredict";
 
@@ -20,9 +23,10 @@
     open: boolean;
     movieId: number;
     movieTitle: string;
+    source?: PredictionSource;
   };
 
-  let { open = $bindable(), movieId, movieTitle }: Props = $props();
+  let { open = $bindable(), movieId, movieTitle, source = "vault" }: Props = $props();
 
   let profiles = $state<TasteProfile[]>([]);
   let profilesLoading = $state(false);
@@ -44,7 +48,7 @@
   );
 
   $effect(() => {
-    const key = `${open}:${movieId}`;
+    const key = `${open}:${source}:${movieId}`;
     if (!open) {
       preparedKey = "";
       return;
@@ -84,7 +88,10 @@
     }
     lastLoading = true;
     try {
-      prediction = await fetchLastPrediction(movieId, selectedProfile.id);
+      prediction =
+        source === "kinozal"
+          ? await fetchLastKinozalPrediction(movieId, selectedProfile.id)
+          : await fetchLastPrediction(movieId, selectedProfile.id);
     } catch {
       // отсутствие истории — не ошибка
     } finally {
@@ -106,7 +113,10 @@
     running = true;
     runError = "";
     try {
-      prediction = await runPrediction(movieId, selectedProfile?.id ?? null);
+      prediction =
+        source === "kinozal"
+          ? await runKinozalPrediction(movieId, selectedProfile?.id ?? null)
+          : await runPrediction(movieId, selectedProfile?.id ?? null);
       if (prediction.taste_profile_id !== null) {
         setPreferredTasteId(prediction.taste_profile_id);
       }

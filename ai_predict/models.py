@@ -66,6 +66,16 @@ class MoviePrediction(models.Model):
     movie = models.ForeignKey(
         "vault.Movie",
         verbose_name="Фильм",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="ai_predictions",
+    )
+    rss_movie = models.ForeignKey(
+        "moviefilter.MovieRSS",
+        verbose_name="Раздача Kinozal",
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="ai_predictions",
     )
@@ -104,6 +114,21 @@ class MoviePrediction(models.Model):
         verbose_name = "AI-предсказание"
         verbose_name_plural = "AI-предсказания"
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(movie__isnull=False, rss_movie__isnull=True)
+                    | models.Q(movie__isnull=True, rss_movie__isnull=False)
+                ),
+                name="ai_predict_prediction_single_source",
+            )
+        ]
 
     def __str__(self) -> str:
-        return f"{self.movie} — {self.taste_profile or 'без профиля'} ({self.get_status_display()})"
+        if self.movie_id:
+            subject = self.movie.title
+        elif self.rss_movie_id:
+            subject = self.rss_movie.title
+        else:
+            subject = "без фильма"
+        return f"{subject} — {self.taste_profile or 'без профиля'} ({self.get_status_display()})"

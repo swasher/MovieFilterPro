@@ -10,8 +10,9 @@ import time
 
 from ai_predict.models import MoviePrediction, TasteProfile
 from ai_predict.services.engine import run_taste_engine
-from ai_predict.services.movie_card import build_movie_card
+from ai_predict.services.movie_card import build_movie_card, build_rss_movie_card
 from core.services.ai_endpoints import get_selected_endpoint
+from moviefilter.models import MovieRSS
 from vault.models import Movie
 
 # ------------------------------------ #
@@ -27,12 +28,55 @@ def predict_movie(movie: Movie, taste_profile: TasteProfile | None = None) -> Mo
     этот метод станет постановщиком задачи HUEY, а API начнёт возвращать
     статус `running` вместо готового результата.
     """
+    return _run_prediction(
+        card=build_movie_card(movie),
+        taste_profile=taste_profile,
+        movie=movie,
+    )
+
+
+def predict_rss_movie(
+    rss_movie: MovieRSS, taste_profile: TasteProfile | None = None
+) -> MoviePrediction:
+    """Предсказание для раздачи из ленты Kinozal (ещё не в Vault)."""
+    return _run_prediction(
+        card=build_rss_movie_card(rss_movie),
+        taste_profile=taste_profile,
+        rss_movie=rss_movie,
+    )
+
+
+def last_prediction(movie_id: int, taste_profile_id: int | None = None) -> MoviePrediction | None:
+    """Последний прогон для фильма (и профиля, если указан)."""
+    queryset = MoviePrediction.objects.filter(movie_id=movie_id)
+    if taste_profile_id is not None:
+        queryset = queryset.filter(taste_profile_id=taste_profile_id)
+    return queryset.first()
+
+
+def last_rss_prediction(
+    rss_movie_id: int, taste_profile_id: int | None = None
+) -> MoviePrediction | None:
+    """Последний прогон для раздачи Kinozal (и профиля, если указан)."""
+    queryset = MoviePrediction.objects.filter(rss_movie_id=rss_movie_id)
+    if taste_profile_id is not None:
+        queryset = queryset.filter(taste_profile_id=taste_profile_id)
+    return queryset.first()
+
+
+def _run_prediction(
+    *,
+    card: dict,
+    taste_profile: TasteProfile | None,
+    movie: Movie | None = None,
+    rss_movie: MovieRSS | None = None,
+) -> MoviePrediction:
     started = time.monotonic()
-    card = build_movie_card(movie)
     model_name = _current_model_name()
 
     prediction = MoviePrediction.objects.create(
         movie=movie,
+        rss_movie=rss_movie,
         taste_profile=taste_profile,
         status=MoviePrediction.Status.RUNNING,
         input_snapshot=card,
@@ -55,14 +99,6 @@ def predict_movie(movie: Movie, taste_profile: TasteProfile | None = None) -> Mo
     prediction.duration_ms = int((time.monotonic() - started) * 1000)
     prediction.save()
     return prediction
-
-
-def last_prediction(movie_id: int, taste_profile_id: int | None = None) -> MoviePrediction | None:
-    """Последний прогон для фильма (и профиля, если указан)."""
-    queryset = MoviePrediction.objects.filter(movie_id=movie_id)
-    if taste_profile_id is not None:
-        queryset = queryset.filter(taste_profile_id=taste_profile_id)
-    return queryset.first()
 
 
 # ------------------------------------ #

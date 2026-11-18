@@ -4,6 +4,7 @@ from ninja.errors import HttpError
 from ai_predict.models import MoviePrediction
 from ai_predict.services import prediction_service, taste_profiles
 from ai_predict.services import prompt as prompt_service
+from moviefilter.models import MovieRSS
 from vault.models import Movie
 
 api = NinjaAPI(title="AI Predict API", version="1.0", urls_namespace="ai-predict-api")
@@ -28,7 +29,9 @@ class TasteProfileUpdateIn(Schema):
 
 class PredictionOut(Schema):
     id: int
-    movie_id: int
+    source: str
+    movie_id: int | None = None
+    rss_movie_id: int | None = None
     movie_title: str
     taste_profile_id: int | None = None
     taste_profile_name: str | None = None
@@ -47,6 +50,11 @@ class PredictionOut(Schema):
 
 class PredictIn(Schema):
     movie_id: int
+    taste_profile_id: int | None = None
+
+
+class RssPredictIn(Schema):
+    rss_movie_id: int
     taste_profile_id: int | None = None
 
 
@@ -86,10 +94,13 @@ def _serialize_taste(profile) -> TasteProfileOut:
 
 
 def _serialize_prediction(prediction: MoviePrediction) -> PredictionOut:
+    is_rss = prediction.rss_movie_id is not None
     return PredictionOut(
         id=prediction.id,
+        source="kinozal" if is_rss else "vault",
         movie_id=prediction.movie_id,
-        movie_title=prediction.movie.title,
+        rss_movie_id=prediction.rss_movie_id,
+        movie_title=prediction.rss_movie.title if is_rss else prediction.movie.title,
         taste_profile_id=prediction.taste_profile_id,
         taste_profile_name=prediction.taste_profile.name if prediction.taste_profile else None,
         status=prediction.status,
@@ -194,12 +205,7 @@ def run_prediction(request, payload: PredictIn):
     movie = Movie.objects.filter(pk=payload.movie_id).first()
     if movie is None:
         raise HttpError(404, "Фильм не найден.")
-
-    if payload.taste_profile_id is None:
-        raise HttpError(400, "Выберите профиль вкусов — без него предсказание невозможно.")
-    taste_profile = taste_profiles.get_taste_profile(payload.taste_profile_id)
-    if taste_profile is None:
-        raise HttpError(404, "Профиль вкусов не найден.")
+    taste_profile = _require_taste_profile(payload.taste_profile_id)
 
     prediction = prediction_service.predict_movie(movie, taste_profile)
     return _serialize_prediction(prediction)
@@ -210,3 +216,31 @@ def get_last_prediction(request, movie_id: int, taste_profile_id: int | None = N
     _require_api_user(request)
     prediction = prediction_service.last_prediction(movie_id, taste_profile_id)
     return PredictionEnvelope(prediction=_serialize_prediction(prediction) if prediction else None)
+
+
+@api.post("/kinozal/predict", response=PredictionOut)
+def run_kinozal_prediction(request, payload: RssPredictIn):
+    _require_api_user(request)
+    rss_movie = MovieRSS.objects.filter(pk=payload.rss_movie_id).first()
+    if rss_movie is None:
+        raise HttpError(404, "Раздача Kinozal не найдена.")
+    taste_profile = _require_taste_profile(payload.taste_profile_id)
+
+    prediction = prediction_service.predict_rss_movie(rss_movie, taste_profile)
+    return _serialize_prediction(prediction)
+
+
+@api.get("/kinozal/predictions/last", response=PredictionEnvelope)
+def get_last_kinozal_prediction(request, rss_movie_id: int, taste_profile_id: int | None = None):
+    _require_api_user(request)
+    prediction = prediction_service.last_rss_prediction(rss_movie_id, taste_profile_id)
+    return PredictionEnvelope(prediction=_serialize_prediction(prediction) if prediction else None)
+
+
+def _require_taste_profile(taste_profile_id: int | None):
+    if taste_profile_id is None:
+        raise HttpError(400, "Выберите профиль вкусов — без него предсказание невозможно.")
+    taste_profile = taste_profiles.get_taste_profile(taste_profile_id)
+    if taste_profile is None:
+        raise HttpError(404, "Профиль вкусов не найден.")
+    return taste_profile

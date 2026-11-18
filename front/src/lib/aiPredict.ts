@@ -7,9 +7,13 @@ export type TasteProfile = {
 
 export type PredictionStatus = "running" | "done" | "error";
 
+export type PredictionSource = "vault" | "kinozal";
+
 export type AiPrediction = {
   id: number;
-  movie_id: number;
+  source: PredictionSource;
+  movie_id: number | null;
+  rss_movie_id: number | null;
   movie_title: string;
   taste_profile_id: number | null;
   taste_profile_name: string | null;
@@ -88,6 +92,16 @@ export function runPrediction(movieId: number, tasteProfileId: number | null): P
   });
 }
 
+export function runKinozalPrediction(
+  rssMovieId: number,
+  tasteProfileId: number | null
+): Promise<AiPrediction> {
+  return apiRequest<AiPrediction>("/kinozal/predict", {
+    method: "POST",
+    body: JSON.stringify({ rss_movie_id: rssMovieId, taste_profile_id: tasteProfileId })
+  });
+}
+
 export async function fetchLastPrediction(
   movieId: number,
   tasteProfileId: number | null
@@ -98,6 +112,20 @@ export async function fetchLastPrediction(
   }
   const payload = await apiRequest<{ prediction: AiPrediction | null }>(
     `/predictions/last?${params.toString()}`
+  );
+  return payload.prediction;
+}
+
+export async function fetchLastKinozalPrediction(
+  rssMovieId: number,
+  tasteProfileId: number | null
+): Promise<AiPrediction | null> {
+  const params = new URLSearchParams({ rss_movie_id: String(rssMovieId) });
+  if (tasteProfileId !== null) {
+    params.set("taste_profile_id", String(tasteProfileId));
+  }
+  const payload = await apiRequest<{ prediction: AiPrediction | null }>(
+    `/kinozal/predictions/last?${params.toString()}`
   );
   return payload.prediction;
 }

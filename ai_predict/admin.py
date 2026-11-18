@@ -24,12 +24,13 @@ class PromptTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(MoviePrediction)
 class MoviePredictionAdmin(admin.ModelAdmin):
-    list_display = ("movie", "taste_profile", "status", "score", "verdict", "model_name", "created_at")
+    list_display = ("movie", "rss_movie", "taste_profile", "status", "score", "verdict", "model_name", "created_at")
     list_filter = ("status", "verdict", "taste_profile")
-    search_fields = ("movie__title",)
-    raw_id_fields = ("movie",)
+    search_fields = ("movie__title", "rss_movie__title")
+    raw_id_fields = ("movie", "rss_movie")
     readonly_fields = (
         "movie",
+        "rss_movie",
         "taste_profile",
         "status",
         "score",

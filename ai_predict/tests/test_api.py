@@ -7,6 +7,8 @@ from django.test import TestCase
 
 from ai_predict.models import MoviePrediction, TasteProfile
 from core.models import AiEndpoint, UserPreferences
+from moviefilter.models import MovieRSS
+from movie_filter_pro.settings import HIGH
 from vault.models import Movie
 
 
@@ -351,3 +353,101 @@ class PredictionApiTests(AiPredictApiTestCase):
 
         prediction = MoviePrediction.objects.get()
         self.assertIsNone(prediction.taste_profile_id)
+
+
+class KinozalPredictionApiTests(AiPredictApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        configure_ai()
+        self.profile = self._create_taste().json()
+        self.rss_movie = MovieRSS.objects.create(
+            priority=HIGH,
+            kinozal_id=123456,
+            title="Раздача с трекера",
+            original_title="Tracker Release",
+            year="2019",
+            tracker_date="2019-05-01",
+            imdb_rating=6.7,
+            kinopoisk_rating=7.1,
+            genres="Драма, Триллер",
+            countries="США, Канада",
+            director="Иван Режиссёров",
+            actors="Пётр Актёров, Анна Актрисова",
+            plot="Описание раздачи с трекера.",
+            translate="Дубляж",
+            poster="",
+        )
+
+    def _run_kinozal_prediction(self):
+        return self.client.post(
+            "/api/ai-predict/kinozal/predict",
+            data={"rss_movie_id": self.rss_movie.id, "taste_profile_id": self.profile["id"]},
+            content_type="application/json",
+        )
+
+    def test_predict_builds_card_from_rss_movie(self):
+        with patch("requests.post", return_value=FakeResponse(llm_reply('{"score": 7}'))) as post:
+            response = self._run_kinozal_prediction()
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "done")
+        self.assertEqual(payload["score"], 7)
+        self.assertEqual(payload["source"], "kinozal")
+        self.assertIsNone(payload["movie_id"])
+        self.assertEqual(payload["rss_movie_id"], self.rss_movie.id)
+        self.assertEqual(payload["movie_title"], "Раздача с трекера")
+
+        user_prompt = post.call_args.kwargs["json"]["messages"][1]["content"]
+        self.assertIn("Tracker Release", user_prompt)
+        self.assertIn("Драма", user_prompt)
+        self.assertIn("Пётр Актёров", user_prompt)
+
+        prediction = MoviePrediction.objects.get(pk=payload["id"])
+        self.assertEqual(prediction.input_snapshot["year"], 2019)
+        self.assertEqual(prediction.input_snapshot["ratings"]["kinopoisk"], 7.1)
+        self.assertEqual(prediction.input_snapshot["ratings"]["imdb"], 6.7)
+        self.assertEqual(prediction.input_snapshot["translation"], "Дубляж")
+
+    def test_last_kinozal_prediction_returns_latest(self):
+        with patch("requests.post", return_value=FakeResponse(llm_reply('{"score": 4}'))):
+            self._run_kinozal_prediction()
+
+        response = self.client.get(
+            f"/api/ai-predict/kinozal/predictions/last?rss_movie_id={self.rss_movie.id}"
+            f"&taste_profile_id={self.profile['id']}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["prediction"]
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["rss_movie_id"], self.rss_movie.id)
+        self.assertEqual(payload["score"], 4)
+
+    def test_last_kinozal_prediction_is_null_when_nothing_ran(self):
+        response = self.client.get(
+            f"/api/ai-predict/kinozal/predictions/last?rss_movie_id={self.rss_movie.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["prediction"])
+
+    def test_kinozal_predict_requires_taste_profile(self):
+        response = self.client.post(
+            "/api/ai-predict/kinozal/predict",
+            data={"rss_movie_id": self.rss_movie.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("профиль вкусов", response.json()["detail"].lower())
+
+    def test_kinozal_predict_unknown_movie_returns_404(self):
+        response = self.client.post(
+            "/api/ai-predict/kinozal/predict",
+            data={"rss_movie_id": 999999, "taste_profile_id": self.profile["id"]},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)

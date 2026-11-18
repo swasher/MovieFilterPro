@@ -7,6 +7,7 @@
   import BootstrapBadge4kFill from "$lib/components/BootstrapBadge4kFill.svelte";
   import BootstrapBadgeSdFill from "$lib/components/BootstrapBadgeSdFill.svelte";
   import KinozalPoster from "$lib/components/KinozalPoster.svelte";
+  import AiPredictDialog from "$lib/components/ai-predict/AiPredictDialog.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { Input } from "$lib/components/ui/input";
@@ -55,6 +56,7 @@
     Languages,
     RefreshCw,
     Search,
+    Sparkles,
     Star,
     Trash2,
     X
@@ -80,6 +82,8 @@
   let leavingRows = $state<Record<number, boolean>>({});
   let downloadDialogOpen = $state(false);
   let selectedMovie = $state<KinozalMovie | null>(null);
+  let aiPredictOpen = $state(false);
+  let aiPredictMovie = $state<KinozalMovie | null>(null);
   let downloadOptions = $state<KinozalDownloadOption[]>([]);
   let downloadOptionsLoading = $state(false);
   let downloadOptionsError = $state<KinozalApiErrorDetail | null>(null);
@@ -560,6 +564,11 @@
       setRowLeaving(movie.id, false);
       setActionPending(movie.id, action, false);
     }
+  };
+
+  const openAiPredictDialog = (movie: KinozalMovie) => {
+    aiPredictMovie = movie;
+    aiPredictOpen = true;
   };
 
   const openDownloadDialog = async (movie: KinozalMovie) => {
@@ -1111,6 +1120,17 @@
                 <td class="kz-cell">
                   <div class="kz-actions">
                     <Button
+                      variant="outline"
+                      size="sm"
+                      class="kz-action-button"
+                      title="AI-оценка: насколько раздача подходит профилю вкусов"
+                      onclick={() => openAiPredictDialog(movie)}
+                    >
+                      <Sparkles class="mr-2 size-4" />
+                      AI predict
+                    </Button>
+
+                    <Button
                       href={movie.open_url ?? undefined}
                       target="_blank"
                       rel="noreferrer"
@@ -1366,3 +1386,10 @@
     {/if}
   </Dialog.Content>
 </Dialog.Root>
+
+<AiPredictDialog
+  bind:open={aiPredictOpen}
+  movieId={aiPredictMovie?.id ?? 0}
+  movieTitle={aiPredictMovie?.title ?? ""}
+  source="kinozal"
+/>
