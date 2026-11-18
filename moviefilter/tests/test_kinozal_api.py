@@ -447,6 +447,281 @@ class KinozalApiTests(TestCase):
         self.assertEqual(response.status_code, 401)
 
 
+class KinozalDirectDownloadApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="direct-user", password="secret")
+        self.client.force_login(self.user)
+        self.preferences = UserPreferences.objects.create(
+            user=self.user,
+            kinozal_domain="kinozal.tv",
+            cookie_uid="uid123",
+            cookie_pass="pass123",
+            qbt_url="http://qbittorrent:8080",
+            qbt_api_key="qbt-test-key",
+            qbt_skip_cert_verify=True,
+            torrents_backup_folder=r"C:\temp\backup_torrents",
+        )
+
+    # --- GET /search ---
+
+    @patch("moviefilter.api.search_releases")
+    def test_direct_search_returns_serialized_items(self, search_mock):
+        from moviefilter.classes import KinozalSearch
+
+        item = KinozalSearch()
+        item.id = 777
+        item.header = "Сердце зверя / Heart of the Beast / 2026 / ПМ / 4K / WEB-DL (2160p)"
+        item.size = "14.29 GB"
+        item.seed = "5"
+        item.peer = "2"
+        item.created = "17.11.2026"
+        item.link = "https://kinozal.tv/details.php?id=777"
+        item.is_4k = True
+        item.is_sdr = False
+        item.title = "Сердце зверя"
+        item.original_title = "Heart of the Beast"
+        item.year = "2026"
+        search_mock.return_value = SimpleNamespace(items=[item])
+
+        response = self.client.get(
+            "/api/kinozal/search",
+            {"q": "Heart of the Beast", "year": "2026", "quality": "4k"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["query"], "Heart of the Beast")
+        self.assertEqual(payload["year"], "2026")
+        self.assertEqual(payload["quality"], "4k")
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["title"], "Сердце зверя")
+        self.assertEqual(payload["items"][0]["original_title"], "Heart of the Beast")
+        search_mock.assert_called_once_with("Heart of the Beast", "2026", "4k")
+
+    def test_direct_search_rejects_empty_query(self):
+        response = self.client.get("/api/kinozal/search", {"q": "   "})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_direct_search_rejects_bad_quality(self):
+        response = self.client.get("/api/kinozal/search", {"q": "X", "quality": "8k"})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_direct_search_rejects_bad_year(self):
+        response = self.client.get("/api/kinozal/search", {"q": "X", "year": "20"})
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch("moviefilter.api.search_releases")
+    def test_direct_search_maps_service_error(self, search_mock):
+        from moviefilter.services.kinozal_search_service import KinozalSearchError
+
+        search_mock.side_effect = KinozalSearchError(
+            "kinozal_unreachable",
+            "Не удалось получить результаты поиска с Kinozal.",
+        )
+
+        response = self.client.get("/api/kinozal/search", {"q": "X"})
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"]["code"], "kinozal_unreachable")
+
+    def test_direct_search_requires_authentication(self):
+        self.client.logout()
+
+        response = self.client.get("/api/kinozal/search", {"q": "X"})
+
+        self.assertEqual(response.status_code, 401)
+
+    # --- GET /qbt-status ---
+
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    def test_qbt_status_ok(self, validate_ready_mock):
+        response = self.client.get("/api/kinozal/qbt-status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        validate_ready_mock.assert_called_once()
+
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    def test_qbt_status_returns_structured_error(self, validate_ready_mock):
+        from qbittorrent.services.errors import QbtError
+
+        validate_ready_mock.side_effect = QbtError(
+            "qbt_unreachable",
+            "qBittorrent недоступен",
+            status_code=502,
+        )
+
+        response = self.client.get("/api/kinozal/qbt-status")
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"]["code"], "qbt_unreachable")
+
+    def test_qbt_status_requires_authentication(self):
+        self.client.logout()
+
+        response = self.client.get("/api/kinozal/qbt-status")
+
+        self.assertEqual(response.status_code, 401)
+
+    # --- POST /torrents/{id}/direct-download ---
+
+    @patch("moviefilter.api.KinozalDownloadImportService.enqueue_direct_download_import")
+    @patch("kinozal_scan.parse.get_details")
+    @patch("moviefilter.api.torrent_service.add_torrent_from_kinozal")
+    @patch("moviefilter.api.fetch_torrent_file")
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    def test_direct_download_adds_to_qbt_and_enqueues_import(
+        self,
+        validate_ready_mock,
+        fetch_torrent_file_mock,
+        add_torrent_mock,
+        get_details_mock,
+        enqueue_mock,
+    ):
+        from moviefilter.classes import KinozalMovie
+        from moviefilter.services.torrent_download_service import TorrentFile
+        from qbittorrent.services.torrent_service import TorrentAddResult
+
+        fetch_torrent_file_mock.return_value = TorrentFile(
+            torrent_id=777,
+            filename="[kinozal.tv]id777.torrent",
+            content=b"d4:info0:e",
+        )
+        torrent = SimpleNamespace(
+            id=42,
+            info_hash="a" * 40,
+            torrent_file=f"{'a' * 40}.torrent",
+            movie_id=None,
+        )
+        add_torrent_mock.return_value = TorrentAddResult(
+            torrent=torrent,
+            created=True,
+            archive_saved=True,
+        )
+        get_details_mock.return_value = (
+            KinozalMovie(kinozal_id=777, imdb_id="tt1234567", kinopoisk_id="258687"),
+            0.1,
+        )
+        enqueue_mock.return_value = SimpleNamespace(
+            status="queued",
+            message="Torrent сохранен. Импорт в Vault поставлен в очередь",
+            operation_id=uuid4(),
+        )
+
+        response = self.client.post(
+            "/api/kinozal/torrents/777/direct-download",
+            data=json.dumps(
+                {
+                    "header": "Сердце зверя / Heart of the Beast / 2026 / ПМ / 4K / WEB-DL (2160p)",
+                    "title": "Сердце зверя",
+                    "original_title": "Heart of the Beast",
+                    "year": "2026",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["torrent_id"], 777)
+        self.assertIn("Скачано", payload["message"])
+        self.assertIsNone(payload["movie_id"])
+        self.assertFalse(payload["removed_from_feed"])
+
+        _, add_kwargs = add_torrent_mock.call_args
+        self.assertEqual(add_kwargs["torrent_id"], 777)
+        self.assertEqual(add_kwargs["tag"], "mfp:direct")
+        self.assertEqual(add_kwargs["source_url"], "https://kinozal.tv/details.php?id=777")
+
+        enqueue_mock.assert_called_once()
+        _, enqueue_kwargs = enqueue_mock.call_args
+        self.assertEqual(enqueue_kwargs["torrent_id"], 777)
+        self.assertEqual(enqueue_kwargs["user"], self.user)
+        self.assertEqual(enqueue_kwargs["torrent_file"], f"{'a' * 40}.torrent")
+        self.assertEqual(enqueue_kwargs["qbt_torrent_id"], 42)
+        self.assertEqual(enqueue_kwargs["title"], "Сердце зверя")
+        self.assertEqual(enqueue_kwargs["original_title"], "Heart of the Beast")
+        self.assertEqual(enqueue_kwargs["year"], "2026")
+        self.assertEqual(enqueue_kwargs["imdb_id"], "tt1234567")
+        self.assertEqual(enqueue_kwargs["kinopoisk_id"], 258687)
+
+    @patch("moviefilter.api.KinozalDownloadImportService.enqueue_direct_download_import")
+    @patch("kinozal_scan.parse.get_details")
+    @patch("moviefilter.api.torrent_service.add_torrent_from_kinozal")
+    @patch("moviefilter.api.fetch_torrent_file")
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    def test_direct_download_degrades_when_details_fetch_fails(
+        self,
+        validate_ready_mock,
+        fetch_torrent_file_mock,
+        add_torrent_mock,
+        get_details_mock,
+        enqueue_mock,
+    ):
+        from moviefilter.services.torrent_download_service import TorrentFile
+        from qbittorrent.services.torrent_service import TorrentAddResult
+
+        fetch_torrent_file_mock.return_value = TorrentFile(
+            torrent_id=777,
+            filename="[kinozal.tv]id777.torrent",
+            content=b"d4:info0:e",
+        )
+        torrent = SimpleNamespace(
+            id=42,
+            info_hash="a" * 40,
+            torrent_file=f"{'a' * 40}.torrent",
+            movie_id=None,
+        )
+        add_torrent_mock.return_value = TorrentAddResult(
+            torrent=torrent,
+            created=True,
+            archive_saved=True,
+        )
+        get_details_mock.side_effect = Exception("boom")
+        enqueue_mock.return_value = SimpleNamespace(
+            status="queued",
+            message="Torrent сохранен. Импорт в Vault поставлен в очередь",
+            operation_id=uuid4(),
+        )
+
+        response = self.client.post(
+            "/api/kinozal/torrents/777/direct-download",
+            data=json.dumps({"header": "Сердце зверя / Heart of the Beast / 2026", "title": "Сердце зверя", "year": "2026"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        _, enqueue_kwargs = enqueue_mock.call_args
+        self.assertIsNone(enqueue_kwargs["imdb_id"])
+        self.assertIsNone(enqueue_kwargs["kinopoisk_id"])
+        self.assertEqual(enqueue_kwargs["title"], "Сердце зверя")
+        self.assertEqual(enqueue_kwargs["year"], "2026")
+
+    @patch("moviefilter.api.fetch_torrent_file")
+    @patch("moviefilter.api.torrent_service.validate_ready")
+    def test_direct_download_returns_structured_error_when_qbt_not_ready(
+        self,
+        validate_ready_mock,
+        fetch_torrent_file_mock,
+    ):
+        from qbittorrent.services.errors import QbtError
+
+        validate_ready_mock.side_effect = QbtError("qbt_not_configured", "qBittorrent не настроен")
+
+        response = self.client.post(
+            "/api/kinozal/torrents/777/direct-download",
+            data=json.dumps({"header": "X / Y / 2026"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"]["code"], "qbt_not_configured")
+        fetch_torrent_file_mock.assert_not_called()
+
+
 class FavoriteActorMatcherTests(TestCase):
     def test_normalize_actor_name_cleans_variants(self):
         self.assertEqual(normalize_actor_name("Дайан Лэйн"), "дайан лэйн")

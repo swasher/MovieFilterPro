@@ -94,11 +94,24 @@ export type KinozalDownloadOption = {
   link: string;
   is_4k: boolean;
   is_sdr: boolean;
+  /** Распарсенный заголовок раздачи (для прямого скачивания в Vault). */
+  title?: string | null;
+  original_title?: string | null;
+  year?: string | null;
 };
 
 export type KinozalDownloadOptionsResponse = {
   movie_id: number;
   title: string;
+  items: KinozalDownloadOption[];
+};
+
+export type KinozalDirectQuality = "4k" | "hd";
+
+export type KinozalDirectSearchResponse = {
+  query: string;
+  year: string | null;
+  quality: KinozalDirectQuality;
   items: KinozalDownloadOption[];
 };
 
@@ -124,6 +137,82 @@ export type KinozalApiErrorDetail = {
 
 export type KinozalApiErrorPayload = {
   detail?: string | KinozalApiErrorDetail;
+};
+
+/**
+ * Ошибки, которые можно исправить на странице Preferences
+ * (зеркало Kinozal, cookies, настройки qBittorrent).
+ */
+export const canFixDownloadErrorInPreferences = (error: KinozalApiErrorDetail | null) =>
+  Boolean(
+    error?.code &&
+      [
+        "settings_missing_domain",
+        "settings_missing_auth",
+        "qbt_not_configured",
+        "qbt_auth_failed",
+        "qbt_invalid_url",
+        "qbt_unreachable",
+        "qbt_ssl_error",
+        "qbt_backup_folder_not_configured",
+        "qbt_backup_folder_invalid"
+      ].includes(error.code)
+  );
+
+/**
+ * Приводит неизвестную ошибку клиента к структуре KinozalApiErrorDetail.
+ */
+export const normalizeKinozalClientError = (
+  error: unknown,
+  fallbackMessage: string
+): KinozalApiErrorDetail => {
+  if (error && typeof error === "object" && ("message" in error || "code" in error || "hint" in error)) {
+    const detail = error as KinozalApiErrorDetail;
+    return {
+      code: detail.code,
+      message: detail.message || fallbackMessage,
+      hint: detail.hint
+    };
+  }
+
+  if (error instanceof Error) {
+    return { message: error.message || fallbackMessage };
+  }
+
+  return { message: fallbackMessage };
+};
+
+/**
+ * Разбирает payload ошибки Ninja-API ({ detail: string | object }) в KinozalApiErrorDetail.
+ */
+export const parseKinozalApiError = (
+  payload: unknown,
+  fallbackMessage: string
+): KinozalApiErrorDetail => {
+  const detail = (payload as KinozalApiErrorPayload | undefined)?.detail;
+  if (!detail) {
+    return { message: fallbackMessage };
+  }
+  if (typeof detail === "string") {
+    try {
+      const parsed = JSON.parse(detail) as KinozalApiErrorDetail;
+      if (parsed && typeof parsed === "object") {
+        return {
+          code: parsed.code,
+          message: parsed.message || fallbackMessage,
+          hint: parsed.hint
+        };
+      }
+    } catch {
+      // fall back to plain string message
+    }
+    return { message: detail };
+  }
+  return {
+    code: detail.code,
+    message: detail.message || fallbackMessage,
+    hint: detail.hint
+  };
 };
 
 export const emptyKinozalMoviesPage = (): KinozalMoviesPage => ({

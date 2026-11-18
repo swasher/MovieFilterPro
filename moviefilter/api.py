@@ -1,7 +1,6 @@
 import json
 import mimetypes
 
-from bs4 import BeautifulSoup
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from ninja import NinjaAPI, Schema
@@ -17,7 +16,7 @@ from moviefilter.image_caching import (
     get_placeholder_image_url,
 )
 from moviefilter.image_caching import remove_cached_image
-from moviefilter.kinozal import KinozalClient, LinkConstructor, normalize_kinozal_domain
+from moviefilter.kinozal import KinozalClient, LinkConstructor
 from moviefilter.models import MovieRSS
 from core.models import UserPreferences
 from moviefilter.services.torrent_download_service import (
@@ -25,11 +24,17 @@ from moviefilter.services.torrent_download_service import (
     fetch_torrent_file,
     validate_kinozal_preferences,
 )
+from moviefilter.services.kinozal_search_service import (
+    KinozalSearchError,
+    parse_search_rows,
+    search_releases,
+)
 from qbittorrent.services import torrent_service
 from qbittorrent.services.errors import QbtError
 from vault.models import FavoritePerson, StarPerson
 from vault.services.kinozal_download_import_service import KinozalDownloadImportService
 from moviefilter.services.favorite_actor_matcher import FavoriteActorMatcher
+from web_logger import log, LogType
 
 
 api = NinjaAPI(title="Kinozal API", version="1.0", urls_namespace="kinozal-api")
@@ -135,12 +140,36 @@ class KinozalDownloadOptionOut(Schema):
     link: str
     is_4k: bool
     is_sdr: bool
+    # Распарсенный заголовок релиза (для импорта в Vault при прямом скачивании).
+    title: str | None = None
+    original_title: str | None = None
+    year: str | None = None
 
 
 class KinozalDownloadOptionsOut(Schema):
     movie_id: int
     title: str
     items: list[KinozalDownloadOptionOut]
+
+
+class KinozalDirectSearchOut(Schema):
+    query: str
+    year: str | None = None
+    quality: str
+    items: list[KinozalDownloadOptionOut]
+
+
+class KinozalDirectDownloadIn(Schema):
+    """Данные строки раздачи, выбранной пользователем в произвольном поиске."""
+
+    header: str
+    title: str | None = None
+    original_title: str | None = None
+    year: str | None = None
+
+
+class KinozalQbtStatusOut(Schema):
+    ok: bool
 
 
 class KinozalTorrentDownloadOut(Schema):
@@ -394,6 +423,9 @@ def _serialize_download_option(item: KinozalSearch) -> KinozalDownloadOptionOut:
         link=item.link or "",
         is_4k=bool(item.is_4k),
         is_sdr=bool(item.is_sdr),
+        title=item.title,
+        original_title=item.original_title,
+        year=item.year,
     )
 
 
@@ -438,10 +470,10 @@ def _kinozal_search(movie_id: int) -> list[KinozalSearch]:
         year = None
 
     for quality in [3, 7]:
+        kwargs = {"s": search_string, "v": quality}
         if year:
-            link_builder = LinkConstructor(s=search_string, d=year, v=quality)
-        else:
-            link_builder = LinkConstructor(s=search_string, v=quality)
+            kwargs["d"] = year
+        link_builder = LinkConstructor(**kwargs)
 
         try:
             response = client.get_html_response(link_builder.search_url())
@@ -459,21 +491,7 @@ def _kinozal_search(movie_id: int) -> list[KinozalSearch]:
                 f"Kinozal search failed with status {response.status_code}.",
             )
 
-        soup = BeautifulSoup(response.content, "html.parser")
-        movies_elements = soup.find_all("tr", "bg")
-
-        for element in movies_elements:
-            item = KinozalSearch()
-            item.id = int(element.a["href"].split("=")[1])
-            item.header = element.a.text
-            item.size = element.find_all("td", "s")[1].text
-            item.seed = element.find("td", {"class": "sl_s"}).text
-            item.peer = element.find("td", {"class": "sl_p"}).text
-            item.created = element.find_all("td", "s")[2].text
-            item.link = f"https://{normalize_kinozal_domain(preferences.kinozal_domain)}{element.a['href']}"
-            item.is_4k = quality == 7
-            item.is_sdr = "SDR" in item.header
-            results.append(item)
+        results.extend(parse_search_rows(response, quality, preferences))
 
     return results
 
@@ -735,6 +753,164 @@ def download_torrent(request, torrent_id: int):
         removed_from_feed=removed_from_feed,
         previous_priority_key=previous_priority_key,
         current_priority_key=current_priority_key,
+    )
+
+
+QUALITY_KEYS = {"4k", "hd"}
+
+
+def _normalize_direct_search_year(year: str | None) -> str | None:
+    value = (year or "").strip()
+    if not value:
+        return None
+    if not (value.isdigit() and len(value) == 4):
+        raise HttpError(400, "Year must be a 4-digit number")
+    return value
+
+
+@api.get("/qbt-status", response=KinozalQbtStatusOut)
+def qbt_status(request):
+    """Проверка qBittorrent до поиска раздач.
+
+    Выполняет ту же проверку, что и скачивание (настройки, backup-папка,
+    реальное подключение), чтобы не тратить время на поиск при недоступном qbt.
+    """
+    _require_api_user(request)
+
+    try:
+        torrent_service.validate_ready()
+    except QbtError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    return KinozalQbtStatusOut(ok=True)
+
+
+@api.get("/search", response=KinozalDirectSearchOut)
+def direct_search(request, q: str = "", year: str = "", quality: str = "4k"):
+    """Произвольный поиск раздач на Kinozal (кнопка «Скачать фильм»).
+
+    quality='4k' ищет 4K и автоматически откатывается на HD, если 4K пусто.
+    """
+    _require_api_user(request)
+    _require_kinozal_preferences()
+
+    query = (q or "").strip()
+    if not query:
+        raise HttpError(400, "Search query is required")
+
+    normalized_year = _normalize_direct_search_year(year)
+
+    quality_key = (quality or "4k").strip().lower()
+    if quality_key not in QUALITY_KEYS:
+        raise HttpError(400, "Quality must be '4k' or 'hd'")
+
+    try:
+        result = search_releases(query, normalized_year, quality_key)
+    except KinozalSearchError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    return KinozalDirectSearchOut(
+        query=query,
+        year=normalized_year,
+        quality=quality_key,
+        items=[_serialize_download_option(item) for item in result.items],
+    )
+
+
+@api.post("/torrents/{torrent_id}/direct-download", response=KinozalTorrentDownloadOut)
+def direct_download_torrent(request, torrent_id: int, payload: KinozalDirectDownloadIn):
+    """Скачивание произвольной раздачи: torrent → qBittorrent → импорт в Vault.
+
+    От обычного download-эндпоинта отличается тем, что источник метаданных —
+    не строка MovieRSS, а данные строки поиска (title/year) плюс детальная
+    страница раздачи (imdb/kinopoisk, best-effort).
+    """
+    user = _require_api_user(request)
+    preferences = _require_kinozal_preferences()
+
+    try:
+        torrent_service.validate_ready()
+    except QbtError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    try:
+        torrent_file = fetch_torrent_file(torrent_id, preferences=preferences)
+    except TorrentDownloadError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    try:
+        add_result = torrent_service.add_torrent_from_kinozal(
+            torrent_bytes=torrent_file.content,
+            torrent_id=torrent_id,
+            source_url=_kinozal_source_url(preferences, torrent_id),
+            tag="mfp:direct",
+        )
+    except QbtError as exc:
+        _raise_kinozal_error(exc.status_code, exc.code, exc.message, exc.hint)
+
+    torrent = add_result.torrent
+    message = "Torrent добавлен в qBittorrent"
+    if add_result.warning:
+        message = f"{message}. {add_result.warning}"
+
+    # Метаданные для импорта в Vault: title/year — из выбранной строки поиска,
+    # imdb/kinopoisk — с детальной страницы раздачи (best-effort).
+    title = (payload.title or "").strip()
+    original_title = (payload.original_title or "").strip()
+    year = (payload.year or "").strip()
+    imdb_id = None
+    kinopoisk_id = None
+
+    try:
+        from kinozal_scan.parse import get_details
+        from moviefilter.classes import KinozalMovie
+
+        details_movie, _ = get_details(KinozalMovie(kinozal_id=torrent_id))
+        imdb_id = details_movie.imdb_id or None
+        raw_kinopoisk_id = details_movie.kinopoisk_id
+        if isinstance(raw_kinopoisk_id, str) and raw_kinopoisk_id.isdigit():
+            kinopoisk_id = int(raw_kinopoisk_id)
+        elif isinstance(raw_kinopoisk_id, int):
+            kinopoisk_id = raw_kinopoisk_id
+    except Exception as exc:
+        # Детальная страница не критична: импорт в Vault продолжится
+        # по названию/году через fallback-матчинг TMDB.
+        log(
+            f"direct-download: не удалось получить детали раздачи {torrent_id}: {exc}",
+            logger_name=LogType.ERROR,
+        )
+
+    queue_result = KinozalDownloadImportService.enqueue_direct_download_import(
+        title=title,
+        original_title=original_title,
+        year=year,
+        imdb_id=imdb_id,
+        kinopoisk_id=kinopoisk_id,
+        torrent_id=torrent_id,
+        user=user,
+        torrent_file=torrent.torrent_file,
+        qbt_torrent_id=torrent.id,
+    )
+    operation_id = str(queue_result.operation_id)
+
+    if queue_result.status == "queued":
+        message = "Скачано. Импорт в Vault («Буду смотреть») запущен"
+    else:
+        message = f"Torrent добавлен в qBittorrent. {queue_result.message}"
+
+    if add_result.warning:
+        message = f"{message}. {add_result.warning}"
+
+    return KinozalTorrentDownloadOut(
+        torrent_id=torrent_id,
+        filename=torrent_file.filename,
+        message=message,
+        info_hash=torrent.info_hash,
+        archive_path=torrent.torrent_file or None,
+        operation_id=operation_id,
+        warning=add_result.warning,
+        movie_id=None,
+        removed_from_feed=False,
     )
 
 

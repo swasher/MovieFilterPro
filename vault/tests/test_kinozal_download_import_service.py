@@ -398,6 +398,226 @@ class KinozalDownloadImportServiceTests(TestCase):
         self.assertEqual(event.message, "Фильм есть на IMDb, но отсутствует на TMDB")
 
 
+class KinozalDirectDownloadImportServiceTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="direct-vault-user", password="secret")
+
+    @staticmethod
+    def _direct_metadata(**overrides):
+        payload = {
+            "title": "Сердце зверя",
+            "original_title": "Heart of the Beast",
+            "year": "2026",
+            "imdb_id": "tt1234567",
+            "kinopoisk_id": 258687,
+            "torrent_id": 7001,
+            "torrent_file": "/tmp/direct.torrent",
+        }
+        payload.update(overrides)
+        return payload
+
+    @staticmethod
+    def _candidate(tmdb_id=777, media_type="movie"):
+        return TMDBCandidate(
+            tmdb_id=tmdb_id,
+            media_type=media_type,
+            title="Сердце зверя",
+            original_title="Heart of the Beast",
+            year=2026,
+            score=100,
+            score_reasons=("imdb_id_lookup",),
+            poster_path="/poster.jpg",
+            popularity=99.0,
+            vote_average=8.0,
+        )
+
+    @patch("vault.tasks.process_kinozal_direct_download_import")
+    def test_enqueue_direct_download_import_logs_queue_events(self, queue_task_mock):
+        result = KinozalDownloadImportService.enqueue_direct_download_import(
+            **self._direct_metadata(),
+            user=self.user,
+        )
+
+        self.assertEqual(result.status, "queued")
+        queue_task_mock.assert_called_once()
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="direct_download_requested",
+            ).exists()
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="direct_import_queued",
+            ).exists()
+        )
+
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieImportService.import_movie")
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.find_by_imdb_id")
+    def test_direct_download_imports_movie_sets_status_and_links_qbt(self, find_by_imdb_id_mock, import_movie_mock):
+        candidate = self._candidate()
+        find_by_imdb_id_mock.return_value = TMDBMatchingResult(
+            status="auto_match",
+            selected_candidate=candidate,
+            candidates=(candidate,),
+            message="TMDB match",
+        )
+        imported_movie = Movie.objects.create(
+            title="Сердце зверя",
+            original_title="Heart of the Beast",
+            year=2026,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+            source=Movie.Source.TMDB,
+            tmdb_id=777,
+            tmdb_media_type="movie",
+        )
+        import_movie_mock.return_value = SimpleNamespace(
+            status="created",
+            message="Фильм добавлен в Vault",
+            movie=imported_movie,
+        )
+        qbt_torrent = Torrent.objects.create(
+            info_hash="b" * 40,
+            name="Сердце зверя 4K",
+        )
+
+        result = KinozalDownloadImportService.handle_direct_download_import(
+            **self._direct_metadata(),
+            user=self.user,
+            qbt_torrent_id=qbt_torrent.id,
+        )
+
+        imported_movie.refresh_from_db()
+        qbt_torrent.refresh_from_db()
+        self.assertEqual(result.status, "created")
+        self.assertEqual(imported_movie.imdb_id, "tt1234567")
+        self.assertEqual(imported_movie.kinopoisk_id, 258687)
+        self.assertEqual(qbt_torrent.movie, imported_movie)
+        self.assertEqual(
+            UserMovie.objects.get(user=self.user, movie=imported_movie).watch_status,
+            UserMovie.WatchStatus.PLAN,
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="direct_import_started",
+            ).exists()
+        )
+        self.assertTrue(
+            VaultConnectionEvent.objects.filter(
+                operation_id=result.operation_id,
+                event_type="operation_completed",
+            ).exists()
+        )
+        # Записи MovieRSS нет — события не ссылаются на ленту.
+        started_event = VaultConnectionEvent.objects.get(
+            operation_id=result.operation_id,
+            event_type="direct_import_started",
+        )
+        self.assertIsNone(started_event.movie_rss)
+        self.assertEqual(started_event.rss_kinozal_id, 7001)
+        self.assertEqual(started_event.imdb_id, "tt1234567")
+        self.assertEqual(started_event.kinopoisk_id, 258687)
+
+    def test_direct_download_reuses_existing_movie_and_sets_plan_status(self):
+        existing_movie = Movie.objects.create(
+            title="Сердце зверя",
+            original_title="Heart of the Beast",
+            year=2026,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+            source=Movie.Source.TMDB,
+            tmdb_id=777,
+            tmdb_media_type="movie",
+            imdb_id="tt1234567",
+        )
+
+        result = KinozalDownloadImportService.handle_direct_download_import(
+            **self._direct_metadata(),
+            user=self.user,
+        )
+
+        existing_movie.refresh_from_db()
+        self.assertEqual(result.status, "reused")
+        self.assertEqual(Movie.objects.count(), 1)
+        self.assertEqual(
+            UserMovie.objects.get(user=self.user, movie=existing_movie).watch_status,
+            UserMovie.WatchStatus.PLAN,
+        )
+        # kinopoisk_id добит из метаданных раздачи.
+        self.assertEqual(existing_movie.kinopoisk_id, 258687)
+
+    def test_direct_download_preserves_existing_user_status(self):
+        existing_movie = Movie.objects.create(
+            title="Сердце зверя",
+            original_title="Heart of the Beast",
+            year=2026,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+            source=Movie.Source.TMDB,
+            tmdb_id=777,
+            tmdb_media_type="movie",
+            imdb_id="tt1234567",
+        )
+        UserMovie.objects.create(
+            user=self.user,
+            movie=existing_movie,
+            watch_status=UserMovie.WatchStatus.WATCHED,
+        )
+
+        result = KinozalDownloadImportService.handle_direct_download_import(
+            **self._direct_metadata(),
+            user=self.user,
+        )
+
+        self.assertEqual(result.status, "reused")
+        self.assertEqual(result.message, "Фильм уже есть в Vault, статус не изменён")
+        user_movie = UserMovie.objects.get(user=self.user, movie=existing_movie)
+        self.assertEqual(user_movie.watch_status, UserMovie.WatchStatus.WATCHED)
+
+    @patch("vault.services.kinozal_download_import_service.TMDBMovieMatchingService.match_movie")
+    def test_direct_download_without_ids_uses_title_year_fallback(self, match_movie_mock):
+        """Без imdb/kinopoisk импорт должен использовать fallback-матчинг по названию/году."""
+        candidate = self._candidate()
+        match_movie_mock.return_value = TMDBMatchingResult(
+            status="auto_match",
+            selected_candidate=candidate,
+            candidates=(candidate,),
+            message="TMDB match",
+        )
+        imported_movie = Movie.objects.create(
+            title="Сердце зверя",
+            original_title="Heart of the Beast",
+            year=2026,
+            movie_type=Movie.MovieType.MOVIE,
+            status=Movie.Status.RELEASED,
+            source=Movie.Source.TMDB,
+            tmdb_id=777,
+            tmdb_media_type="movie",
+        )
+        with patch(
+            "vault.services.kinozal_download_import_service.TMDBMovieImportService.import_movie",
+            return_value=SimpleNamespace(
+                status="created",
+                message="Фильм добавлен в Vault",
+                movie=imported_movie,
+            ),
+        ):
+            result = KinozalDownloadImportService.handle_direct_download_import(
+                **self._direct_metadata(imdb_id=None, kinopoisk_id=None),
+                user=self.user,
+            )
+
+        self.assertEqual(result.status, "created")
+        match_movie_mock.assert_called_once()
+        probe_movie = match_movie_mock.call_args[0][0]
+        self.assertEqual(probe_movie.title, "Сердце зверя")
+        self.assertEqual(probe_movie.original_title, "Heart of the Beast")
+        self.assertEqual(probe_movie.year, 2026)
+
+
 class ConnectionEventsApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="api-user", password="secret")

@@ -82,6 +82,58 @@ def process_kinozal_download_import(
 
 
 @HUEY.task()
+def process_kinozal_direct_download_import(
+    operation_id: str,
+    torrent_id: int,
+    user_id: int | None,
+    torrent_file: str,
+    qbt_torrent_id: int | None,
+    title: str,
+    original_title: str,
+    year: str,
+    imdb_id: str | None,
+    kinopoisk_id: int | None,
+):
+    """Фоновая обработка прямого скачивания: импорт в Vault со статусом «Буду смотреть»."""
+    close_old_connections()
+    operation_uuid = UUID(operation_id)
+    user = None
+    if user_id is not None:
+        user = get_user_model().objects.filter(pk=user_id).first()
+
+    try:
+        result = KinozalDownloadImportService.handle_direct_download_import(
+            title=title,
+            original_title=original_title,
+            year=year,
+            imdb_id=imdb_id,
+            kinopoisk_id=kinopoisk_id,
+            torrent_id=torrent_id,
+            user=user,
+            torrent_file=torrent_file,
+            qbt_torrent_id=qbt_torrent_id,
+            operation_id=operation_uuid,
+        )
+        return {
+            "operation_id": str(result.operation_id),
+            "status": result.status,
+            "message": result.message,
+            "movie_id": result.movie.id if result.movie is not None else None,
+        }
+    except Exception as exc:
+        KinozalDownloadImportService._log(
+            operation_id=operation_uuid,
+            level="error",
+            event_type="direct_import_failed",
+            message=f"Фоновая обработка прямого скачивания завершилась ошибкой: {exc}",
+            torrent_id=torrent_id,
+            user=user,
+            payload={"error_type": type(exc).__name__},
+        )
+        raise
+
+
+@HUEY.task()
 def tmdb_writeback_user_movie(user_movie_id: int, changed_fields: list[str] | None = None):
     """Фоновая write-back синхронизация одного UserMovie (статус/избранное/рейтинг).
 

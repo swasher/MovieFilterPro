@@ -146,6 +146,66 @@ def kinozal_scan(start_page: int, scan_to_date: date, user, cancel_event: asynci
 
     return counter
 
+def parse_header(raw_head: str) -> tuple[str, str, str]:
+    """
+    Парсит заголовок строки релиза Kinozal и возвращает (title, original_title, year).
+
+    movie head format:
+
+    'Красная жара / Red Heat / 1988 / ПМ / UHD / BDRip (1080p)' - обычно такая форма
+    'Наследие / 2023 / РУ, СТ / WEB-DL (1080p)'                 - если русский, то нет original_title
+    'Телекинез / 2022-2023 / РУ / WEB-DL (1080p)'               - встречается и такое (тогда берем первые 4 цифры)
+    """
+    header = raw_head.split(' / ')
+
+    if len(header) >= 3 and header[2].strip().isdigit() and len(header[2].strip()) == 4:  # normal format
+        title = header[0].strip()
+        original_title = header[1].strip()
+        year = header[2].strip()
+
+    elif len(header) >= 3 and 'РУ' in header[2].split(', '):  # 	До звезды / 2023 / РУ / WEB-DL (1080p)  - русский формат без original title
+        title = header[0].strip()
+        original_title = ''
+        year = header[1].strip()
+
+    elif len(header) >= 2 and header[1].strip().isdigit() and len(header[1].strip()) == 4:  # Карточный долг / 2023 / ДБ / WEB-DL (1080p) - фильм казахский, РУ нет, но и title нет.
+        title = header[0].strip()
+        original_title = ''
+        year = header[1].strip()
+
+    elif len(header) >= 3 and len(header[2]) > 4 and header[2][:4].isdigit():
+        # год в заголовке как диапазон: "Голый пистолет (Коллекция) / Naked Gun: Collection / 1982-1994 / ПМ, ПД..."
+        # или как перечень:
+        # Клетка для чудаков (Клетка для безумцев) (Трилогия) / La Cage aux folles I, II, III / 1978, 1980, 1985 / ПМ, ПД / BDRip (1080p), HDTVRip (1080p)
+        title = header[0].strip()
+        original_title = header[1].strip()
+        year = header[2].strip()[:4]
+    else:
+        # Если какой-то уебок написал каличный хедер, например, пропустил слеш, или еще что, не обрываем скан, и делаем по следующему алгоритму:
+        # - Если есть хоть один слеш - cчитаем все, что до него - это title
+        # - Если нет ни одного слеша, - берем первые 5 слов как title
+        # - original_title делаем пустым
+        # - год ставим как первые 4 цифры, найденные в строке, или текущий год, если цифры не найдены.
+
+        # remove double spaces
+        head = re.sub(r'\s+', ' ', raw_head)
+        if '/' in raw_head:
+            title = head.split('/')[0]
+        else:
+            b = [element.strip() for element in head.split(' ')]
+            title = ' '.join(b[:5])
+        original_title = ''
+
+        match = re.search(r'\d{4}', head)
+        if match:
+            year = str(match.group())
+            year = year if year != '1080' else str(datetime.now().year)
+        else:
+            year = str(datetime.now().year)
+
+    return title.strip(), original_title.strip(), year.strip()
+
+
 def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list[KinozalMovie], bool]:
     """
     Принимает:
@@ -177,15 +237,6 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
         movies_elements = soup.find_all('tr', 'bg')
 
         for m in movies_elements:
-            """
-            movie head format:
-            
-            'Красная жара / Red Heat / 1988 / ПМ / UHD / BDRip (1080p)' - обычно такая форма
-            'Наследие / 2023 / РУ, СТ / WEB-DL (1080p)'                 - если русский, то нет original_title
-            'Телекинез / 2022-2023 / РУ / WEB-DL (1080p)'               - встречается и такое (тогда берем первые 4 цифры)
-            
-            """
-
             if cancel_event.is_set():
                 log("parse_page: Scan cancelled by user")
                 raise ScanCancelled()
@@ -212,51 +263,7 @@ def parse_page(page_number: int, scan_to_date: date, cancel_event) -> tuple[list
             else:
                 dubbed = False
 
-            header = s.text.split(' / ')
-            if header[2].strip().isdigit() and len(header[2].strip()) == 4:  # normal format
-                title = header[0].strip()
-                original_title = header[1].strip()
-                year = header[2].strip()
-
-            elif 'РУ' in header[2].split(', '):  # 	До звезды / 2023 / РУ / WEB-DL (1080p)  - русский формат без original title
-                title = header[0].strip()
-                original_title = ''
-                year = header[1].strip()
-
-            elif header[1].strip().isdigit() and len(header[1].strip()) == 4:  # Карточный долг / 2023 / ДБ / WEB-DL (1080p) - фильм казахский, РУ нет, но и title нет.
-                title = header[0].strip()
-                original_title = ''
-                year = header[1].strip()
-
-            elif len(header[2]) > 4 and header[2][:4].isdigit():
-                # год в заголовке как диапазон: "Голый пистолет (Коллекция) / Naked Gun: Collection / 1982-1994 / ПМ, ПД..."
-                # или как перечень:
-                # Клетка для чудаков (Клетка для безумцев) (Трилогия) / La Cage aux folles I, II, III / 1978, 1980, 1985 / ПМ, ПД / BDRip (1080p), HDTVRip (1080p)
-                title = header[0].strip()
-                original_title = header[1].strip()
-                year = header[2].strip()[:4]
-            else:
-                # Если какой-то уебок написал каличный хедер, например, пропустил слеш, или еще что, не обрываем скан, и делаем по следующему алгоритму:
-                # - Если есть хоть один слеш - cчитаем все, что до него - это title
-                # - Если нет ни одного слеша, - берем первые 5 слов как title
-                # - original_title делаем пустым
-                # - год ставим как первые 4 цифры, найденные в строке, или текущий год, если цифры не найдены.
-
-                # remove double spaces
-                head = re.sub(r'\s+', ' ', s.text)
-                if '/' in s.text:
-                    title = head.split('/')[0]
-                else:
-                    b = [element.strip() for element in head.split(' ')]
-                    title = ' '.join(b[:5])
-                original_title = ''
-
-                match = re.search(r'\d{4}', head)
-                if match:
-                    year = str(match.group())
-                    year = year if year != '1080' else str(datetime.now().year)
-                else:
-                    year = str(datetime.now().year)
+            title, original_title, year = parse_header(s.text)
 
             # print(f'FOUND [{tracker_date:%d.%m.%y}]: {title} - {year}')
             log(f'FOUND [{tracker_date:%d.%m.%y}]: {title} - {year}')

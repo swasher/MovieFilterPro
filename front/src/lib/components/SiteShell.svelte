@@ -6,7 +6,9 @@
   import type { HeaderLink } from "$lib/template-data";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
-  import { Moon, Sun, User, KeyRound, Settings, ShieldCheck, Cable, LogOut, ChevronDown, RefreshCw, List, ScrollText } from "@lucide/svelte";
+  import KinozalDirectDownloadDialog from "$lib/components/KinozalDirectDownloadDialog.svelte";
+  import { parseKinozalApiError } from "$lib/kinozal";
+  import { Moon, Sun, User, KeyRound, Settings, ShieldCheck, Cable, LogOut, ChevronDown, RefreshCw, List, ScrollText, Download, CircleDashed } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   type Props = {
@@ -28,6 +30,35 @@
 
   let darkMode = $state(false);
   let isLoggingOut = $state(false);
+  let directDownloadOpen = $state(false);
+  let checkingQbt = $state(false);
+
+  /**
+   * Перед открытием поиска проверяем qBittorrent: если он недоступен,
+   * нет смысла искать раздачу и ждать обхода Cloudflare.
+   */
+  const openDirectDownload = async () => {
+    if (checkingQbt) return;
+    checkingQbt = true;
+
+    try {
+      const response = await fetch("/api/kinozal/qbt-status");
+      const payload = (await response.json()) as { detail?: unknown };
+
+      if (!response.ok) {
+        const detail = parseKinozalApiError(payload, `HTTP ${response.status}`);
+        const message = detail.hint ? `${detail.message ?? "qBittorrent недоступен"} ${detail.hint}` : detail.message;
+        toast.error(message ?? "qBittorrent недоступен");
+        return;
+      }
+
+      directDownloadOpen = true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось проверить qBittorrent");
+    } finally {
+      checkingQbt = false;
+    }
+  };
 
   const isActive = (href: string): boolean => {
     const currentPath = page.url.pathname;
@@ -98,6 +129,23 @@
       </div>
 
       <div class="flex flex-wrap items-center justify-end gap-2">
+        {#if auth.is_authenticated && auth.user}
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={() => void openDirectDownload()}
+            disabled={checkingQbt}
+            title="Найти произвольный фильм на Kinozal и скачать"
+          >
+            {#if checkingQbt}
+              <CircleDashed class="size-4 animate-spin" />
+            {:else}
+              <Download class="size-4" />
+            {/if}
+            Скачать фильм
+          </Button>
+        {/if}
+
         <small class="text-muted-foreground text-xs">v. {siteVersion}</small>
 
         <Button variant="outline" size="icon" onclick={toggleTheme} aria-label="Toggle theme">
@@ -205,4 +253,8 @@
   <main class="flex min-h-0 flex-1 flex-col">
     {@render children?.()}
   </main>
+
+  {#if auth.is_authenticated && auth.user}
+    <KinozalDirectDownloadDialog bind:open={directDownloadOpen} />
+  {/if}
 </div>

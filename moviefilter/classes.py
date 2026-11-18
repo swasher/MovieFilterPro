@@ -37,3 +37,6 @@ class KinozalSearch:
     link: str = None
     is_4k: bool = None
     is_sdr: bool = None
+    title: str = None
+    original_title: str = None
+    year: str = None

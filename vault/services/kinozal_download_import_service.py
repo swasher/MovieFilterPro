@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from django.db import transaction
 
+from moviefilter.classes import KinozalMovie
 from moviefilter.models import MovieRSS
 from vault.models import Movie, UserMovie, VaultConnectionEvent
 from vault.services.movie_status_service import MovieStatusService
@@ -212,10 +213,38 @@ class KinozalDownloadImportService:
                 payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
             )
 
-        movie = cls._find_existing_movie(movie_rss, operation_id=operation_id, torrent_id=torrent_id, user=user)
+        return cls._apply_download_pipeline(
+            source=movie_rss,
+            torrent_id=torrent_id,
+            user=user,
+            torrent_file=torrent_file,
+            qbt_torrent_id=qbt_torrent_id,
+            operation_id=operation_id,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def _apply_download_pipeline(
+        cls,
+        *,
+        source: MovieRSS | KinozalMovie,
+        torrent_id: int,
+        user,
+        torrent_file: str,
+        qbt_torrent_id: int | None = None,
+        operation_id: UUID,
+    ) -> KinozalDownloadImportResult:
+        """
+        Общий пайплайн импорта скачанной раздачи в Vault: поиск существующего
+        фильма → TMDB match → import/sync → статус «Буду смотреть» → привязка qbt.
+
+        `source` — носитель метаданных: строка MovieRSS (скачивание из ленты)
+        или KinozalMovie (прямое скачивание произвольного фильма, без записи в RSS).
+        """
+        movie = cls._find_existing_movie(source, operation_id=operation_id, torrent_id=torrent_id, user=user)
         candidate = None
         if (movie is None or not movie.tmdb_id) and not cls._has_user_vault_data(user, movie):
-            match_result = cls._resolve_tmdb_match(movie_rss, operation_id=operation_id, torrent_id=torrent_id, user=user)
+            match_result = cls._resolve_tmdb_match(source, operation_id=operation_id, torrent_id=torrent_id, user=user)
             if match_result is not None and match_result.selected_candidate is not None:
                 candidate = match_result.selected_candidate
             elif movie is None:
@@ -226,7 +255,7 @@ class KinozalDownloadImportService:
                     level=VaultConnectionEvent.Level.WARNING if status == "ambiguous" else VaultConnectionEvent.Level.ERROR,
                     event_type="tmdb_resolution_stopped",
                     message=message,
-                    movie_rss=movie_rss,
+                    movie_rss=source,
                     torrent_id=torrent_id,
                     user=user,
                 )
@@ -244,7 +273,7 @@ class KinozalDownloadImportService:
                 level=VaultConnectionEvent.Level.SUCCESS if import_result.status == "created" else VaultConnectionEvent.Level.INFO,
                 event_type="vault_movie_imported",
                 message=import_result.message,
-                movie_rss=movie_rss,
+                movie_rss=source,
                 vault_movie=movie,
                 torrent_id=torrent_id,
                 user=user,
@@ -268,7 +297,7 @@ class KinozalDownloadImportService:
                     level=VaultConnectionEvent.Level.ERROR,
                     event_type="tmdb_sync_failed",
                     message=sync_result.message,
-                    movie_rss=movie_rss,
+                    movie_rss=source,
                     vault_movie=movie,
                     torrent_id=torrent_id,
                     user=user,
@@ -286,7 +315,7 @@ class KinozalDownloadImportService:
                 level=VaultConnectionEvent.Level.SUCCESS,
                 event_type="tmdb_sync_completed",
                 message=sync_result.message,
-                movie_rss=movie_rss,
+                movie_rss=source,
                 vault_movie=movie,
                 torrent_id=torrent_id,
                 user=user,
@@ -300,7 +329,7 @@ class KinozalDownloadImportService:
                 level=VaultConnectionEvent.Level.ERROR,
                 event_type="vault_movie_missing",
                 message="После обработки TMDB фильм в Vault не определен",
-                movie_rss=movie_rss,
+                movie_rss=source,
                 torrent_id=torrent_id,
                 user=user,
             )
@@ -314,21 +343,21 @@ class KinozalDownloadImportService:
         if status_preserved:
             cls._log_preserved_user_state(
                 operation_id=operation_id,
-                movie_rss=movie_rss,
+                movie_rss=source,
                 vault_movie=movie,
                 user=user,
                 status_key="will_watch",
                 torrent_id=torrent_id,
             )
         else:
-            cls._persist_external_ids(movie, movie_rss)
+            cls._persist_external_ids(movie, source)
             MovieStatusService.set_status(user, movie, "will_watch")
             cls._log(
                 operation_id=operation_id,
                 level=VaultConnectionEvent.Level.SUCCESS,
                 event_type="will_watch_applied",
                 message="Статус 'Буду смотреть' выставлен",
-                movie_rss=movie_rss,
+                movie_rss=source,
                 vault_movie=movie,
                 torrent_id=torrent_id,
                 user=user,
@@ -349,7 +378,7 @@ class KinozalDownloadImportService:
                         if linked
                         else "Раздачу qBittorrent не удалось привязать к фильму"
                     ),
-                    movie_rss=movie_rss,
+                    movie_rss=source,
                     vault_movie=movie,
                     torrent_id=torrent_id,
                     user=user,
@@ -362,7 +391,7 @@ class KinozalDownloadImportService:
                     level=VaultConnectionEvent.Level.ERROR,
                     event_type="qbt_torrent_link_failed",
                     message=f"Ошибка привязки раздачи qBittorrent: {exc}",
-                    movie_rss=movie_rss,
+                    movie_rss=source,
                     vault_movie=movie,
                     torrent_id=torrent_id,
                     user=user,
@@ -381,7 +410,7 @@ class KinozalDownloadImportService:
             level=VaultConnectionEvent.Level.SUCCESS,
             event_type="operation_completed",
             message=final_message,
-            movie_rss=movie_rss,
+            movie_rss=source,
             vault_movie=movie,
             torrent_id=torrent_id,
             user=user,
@@ -392,6 +421,136 @@ class KinozalDownloadImportService:
             status=final_status,
             message=final_message,
             movie=movie,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def handle_direct_download_import(
+        cls,
+        *,
+        title: str,
+        original_title: str,
+        year: str,
+        imdb_id: str | None,
+        kinopoisk_id: int | None,
+        torrent_id: int,
+        user,
+        torrent_file: str,
+        qbt_torrent_id: int | None = None,
+        operation_id: UUID | None = None,
+    ) -> KinozalDownloadImportResult:
+        """Фоновая обработка прямого скачивания произвольного фильма."""
+        operation_id = operation_id or uuid4()
+        source = cls._build_direct_metadata_source(
+            title=title,
+            original_title=original_title,
+            year=year,
+            imdb_id=imdb_id,
+            kinopoisk_id=kinopoisk_id,
+            torrent_id=torrent_id,
+        )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="direct_import_started",
+            message="Фоновый прямой импорт в Vault запущен",
+            movie_rss=source,
+            torrent_id=torrent_id,
+            user=user,
+            payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
+        )
+
+        return cls._apply_download_pipeline(
+            source=source,
+            torrent_id=torrent_id,
+            user=user,
+            torrent_file=torrent_file,
+            qbt_torrent_id=qbt_torrent_id,
+            operation_id=operation_id,
+        )
+
+    @classmethod
+    def enqueue_direct_download_import(
+        cls,
+        *,
+        title: str,
+        original_title: str,
+        year: str,
+        imdb_id: str | None,
+        kinopoisk_id: int | None,
+        torrent_id: int,
+        user,
+        torrent_file: str,
+        qbt_torrent_id: int | None = None,
+    ) -> KinozalDownloadEnqueueResult:
+        """Прямое скачивание: постановка импорта в Vault в фоновую очередь."""
+        operation_id = uuid4()
+        source = cls._build_direct_metadata_source(
+            title=title,
+            original_title=original_title,
+            year=year,
+            imdb_id=imdb_id,
+            kinopoisk_id=kinopoisk_id,
+            torrent_id=torrent_id,
+        )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="direct_download_requested",
+            message=f"Прямое скачивание запрошено: '{title or '—'}'",
+            movie_rss=source,
+            torrent_id=torrent_id,
+            user=user,
+            payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
+        )
+        try:
+            from vault.tasks import process_kinozal_direct_download_import
+
+            process_kinozal_direct_download_import(
+                str(operation_id),
+                torrent_id,
+                user.id if getattr(user, "is_authenticated", False) else None,
+                torrent_file,
+                qbt_torrent_id,
+                title,
+                original_title,
+                year,
+                imdb_id,
+                kinopoisk_id,
+            )
+        except Exception as exc:
+            cls._log(
+                operation_id=operation_id,
+                level=VaultConnectionEvent.Level.ERROR,
+                event_type="direct_import_queue_failed",
+                message=f"Не удалось поставить прямой импорт в очередь: {exc}",
+                movie_rss=source,
+                torrent_id=torrent_id,
+                user=user,
+                payload={"error_type": type(exc).__name__},
+            )
+            return KinozalDownloadEnqueueResult(
+                operation_id=operation_id,
+                status="error",
+                message="Torrent добавлен в qBittorrent, но импорт в Vault не удалось поставить в очередь",
+            )
+
+        cls._log(
+            operation_id=operation_id,
+            level=VaultConnectionEvent.Level.INFO,
+            event_type="direct_import_queued",
+            message="Прямой импорт в Vault поставлен в очередь",
+            movie_rss=source,
+            torrent_id=torrent_id,
+            user=user,
+            payload={"torrent_file": torrent_file, "qbt_torrent_id": qbt_torrent_id},
+        )
+        return KinozalDownloadEnqueueResult(
+            operation_id=operation_id,
+            status="queued",
+            message="Torrent сохранен. Импорт в Vault поставлен в очередь",
         )
 
     @classmethod
@@ -751,6 +910,31 @@ class KinozalDownloadImportService:
     # ------------------------------------ #
 
     @staticmethod
+    def _build_direct_metadata_source(
+        *,
+        title: str,
+        original_title: str,
+        year: str,
+        imdb_id: str | None,
+        kinopoisk_id: int | None,
+        torrent_id: int,
+    ) -> KinozalMovie:
+        """Duck-typed носитель метаданных прямого скачивания (без записи MovieRSS).
+
+        KinozalMovie имеет те же поля (title/original_title/year/imdb_id/
+        kinopoisk_id/kinozal_id), что использует пайплайн импорта, поэтому
+        может подставляться вместо MovieRSS.
+        """
+        return KinozalMovie(
+            kinozal_id=torrent_id,
+            title=(title or "").strip(),
+            original_title=(original_title or "").strip(),
+            year=(year or "").strip(),
+            imdb_id=(imdb_id or "").strip() or None,
+            kinopoisk_id=kinopoisk_id,
+        )
+
+    @staticmethod
     def _has_user_vault_data(user, movie: Movie) -> bool:
         """Есть ли у пользователя собственные данные по фильму (статус/избранное/оценка/заметка).
 
@@ -776,7 +960,7 @@ class KinozalDownloadImportService:
         cls,
         *,
         operation_id: UUID,
-        movie_rss: MovieRSS,
+        movie_rss: MovieRSS | KinozalMovie,
         vault_movie: Movie,
         user,
         action: VaultImportAction | None = None,
@@ -806,7 +990,7 @@ class KinozalDownloadImportService:
     @classmethod
     def _find_existing_movie(
         cls,
-        movie_rss: MovieRSS,
+        movie_rss: MovieRSS | KinozalMovie,
         *,
         operation_id: UUID,
         torrent_id: int,
@@ -849,7 +1033,7 @@ class KinozalDownloadImportService:
     @classmethod
     def _resolve_tmdb_match(
         cls,
-        movie_rss: MovieRSS,
+        movie_rss: MovieRSS | KinozalMovie,
         *,
         operation_id: UUID,
         torrent_id: int,
@@ -966,7 +1150,7 @@ class KinozalDownloadImportService:
         )
 
     @classmethod
-    def _persist_external_ids(cls, movie: Movie, movie_rss: MovieRSS) -> None:
+    def _persist_external_ids(cls, movie: Movie, movie_rss: MovieRSS | KinozalMovie) -> None:
         update_fields: list[str] = []
         if movie_rss.imdb_id and movie.imdb_id != movie_rss.imdb_id:
             movie.imdb_id = movie_rss.imdb_id
@@ -995,11 +1179,14 @@ class KinozalDownloadImportService:
         message: str,
         torrent_id: int,
         user,
-        movie_rss: MovieRSS | None = None,
+        movie_rss: MovieRSS | KinozalMovie | None = None,
         vault_movie: Movie | None = None,
         tmdb_id: int | None = None,
         payload: dict | None = None,
     ) -> None:
+        # movie_rss может быть duck-typed носителем метаданных (KinozalMovie) при
+        # прямом скачивании: в FK сохраняем только реальные строки MovieRSS.
+        movie_rss_obj = movie_rss if isinstance(movie_rss, MovieRSS) else None
         VaultConnectionEvent.objects.create(
             operation_id=operation_id,
             source=VaultConnectionEvent.Source.KINOZAL_DOWNLOAD,
@@ -1008,7 +1195,7 @@ class KinozalDownloadImportService:
             message=message,
             payload=payload,
             user=user if getattr(user, "is_authenticated", False) else None,
-            movie_rss=movie_rss,
+            movie_rss=movie_rss_obj,
             vault_movie=vault_movie,
             rss_kinozal_id=movie_rss.kinozal_id if movie_rss is not None else None,
             torrent_kinozal_id=torrent_id,

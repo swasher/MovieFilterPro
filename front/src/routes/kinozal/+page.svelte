@@ -15,6 +15,7 @@
   import * as ToggleGroup from "$lib/components/ui/toggle-group";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import {
+    canFixDownloadErrorInPreferences,
     DEFAULT_PRIORITY_FILTER,
     DEFAULT_REVERSE,
     DEFAULT_SORT_KEY,
@@ -34,7 +35,9 @@
     type KinozalSortKey,
     type KinozalSummary,
     type KinozalTorrentDownloadResponse,
-    type KinozalMoviesPage
+    type KinozalMoviesPage,
+    normalizeKinozalClientError,
+    parseKinozalApiError
   } from "$lib/kinozal";
   import { toast } from "svelte-sonner";
   import {
@@ -584,7 +587,7 @@
       const successPayload = payload as KinozalDownloadOptionsResponse;
       downloadOptions = successPayload.items;
     } catch (error) {
-      downloadOptionsError = normalizeClientError(error, "Не удалось загрузить варианты скачивания.");
+      downloadOptionsError = normalizeKinozalClientError(error, "Не удалось загрузить варианты скачивания.");
       toast.error(downloadOptionsError.message ?? "Не удалось загрузить варианты скачивания.");
     } finally {
       loadingDownloadMovieId = null;
@@ -648,76 +651,13 @@
       toast.success(successPayload.message);
       scheduleDownloadDialogClose();
     } catch (error) {
-      const normalizedError = normalizeClientError(error, "Скачать torrent-файл не удалось.");
+      const normalizedError = normalizeKinozalClientError(error, "Скачать torrent-файл не удалось.");
       downloadOptionsError = normalizedError;
       toast.error(normalizedError.message ?? "Скачать torrent-файл не удалось.");
     } finally {
       downloadingTorrentId = null;
     }
   };
-
-  const parseKinozalApiError = (
-    payload: KinozalApiErrorPayload | KinozalDownloadOptionsResponse | KinozalTorrentDownloadResponse,
-    fallbackMessage: string
-  ): KinozalApiErrorDetail => {
-    const detail = "detail" in payload ? payload.detail : undefined;
-    if (!detail) {
-      return { message: fallbackMessage };
-    }
-    if (typeof detail === "string") {
-      try {
-        const parsed = JSON.parse(detail) as KinozalApiErrorDetail;
-        if (parsed && typeof parsed === "object") {
-          return {
-            code: parsed.code,
-            message: parsed.message || fallbackMessage,
-            hint: parsed.hint
-          };
-        }
-      } catch {
-        // fall back to plain string message
-      }
-      return { message: detail };
-    }
-    return {
-      code: detail.code,
-      message: detail.message || fallbackMessage,
-      hint: detail.hint
-    };
-  };
-
-  const normalizeClientError = (error: unknown, fallbackMessage: string): KinozalApiErrorDetail => {
-    if (error && typeof error === "object" && ("message" in error || "code" in error || "hint" in error)) {
-      const detail = error as KinozalApiErrorDetail;
-      return {
-        code: detail.code,
-        message: detail.message || fallbackMessage,
-        hint: detail.hint
-      };
-    }
-
-    if (error instanceof Error) {
-      return { message: error.message || fallbackMessage };
-    }
-
-    return { message: fallbackMessage };
-  };
-
-  const canFixDownloadErrorInPreferences = (error: KinozalApiErrorDetail | null) =>
-    Boolean(
-      error?.code &&
-        [
-          "settings_missing_domain",
-          "settings_missing_auth",
-          "qbt_not_configured",
-          "qbt_auth_failed",
-          "qbt_invalid_url",
-          "qbt_unreachable",
-          "qbt_ssl_error",
-          "qbt_backup_folder_not_configured",
-          "qbt_backup_folder_invalid"
-        ].includes(error.code)
-    );
 
   const retryDownloadOptions = async () => {
     if (!selectedMovie) {
