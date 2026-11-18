@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\mfp]
+@="URL:MFP Play"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\mfp\shell\open\command]
+@="powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\Users\\swasher\\.tools\\mfp-play.ps1\" \"%1\""

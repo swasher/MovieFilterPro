@@ -19,6 +19,17 @@ class Country(models.Model):
         return self.name
 
 
+# Значение по умолчанию для UserPreferences.player_path_map.
+# Плеер запускается на Windows-клиенте, поэтому путь, который знает Plex
+# (изнутри контейнера он видит шары как /share/<шара>), нужно перевести в UNC.
+# Формат строки: `<префикс пути Plex> => <префикс UNC>`.
+PLAYER_PATH_MAP_DEFAULT = r"""/share/Movies => \\qnap\Movies
+/share/Erotic => \\qnap\Erotic
+/share/CACHEDEV3_DATA/Review => \\qnap\Review
+/share/CACHEDEV3_DATA/TVShow => \\qnap\TVShow
+/share/TVShow => \\qnap\TVShow"""
+
+
 class AiEndpoint(models.Model):
     """
     Шаблон подключения к AI: OpenAI-совместимый `/chat/completions`.
@@ -254,6 +265,24 @@ class UserPreferences(models.Model):
             'Вкл — постеры и фото Vault отдаются через /api/vault/images/... '
             'с дисковым кешем. Выкл — картинки грузятся напрямую с CDN TMDB '
             'и кешируются браузером.'
+        ),
+    )
+
+    player_enabled = models.BooleanField(
+        'Кнопка «Смотреть» (внешний плеер)',
+        default=True,
+        help_text=(
+            'Вкл — на странице фильма показывается кнопка запуска VLC через протокол '
+            'mfp://, а endpoint /api/vault/playback-target/ отдаёт путь к файлу на шаре.'
+        ),
+    )
+    player_path_map = models.TextField(
+        'Маппинг путей Plex → UNC',
+        blank=True,
+        default=PLAYER_PATH_MAP_DEFAULT,
+        help_text=(
+            'По одному правилу на строку: «префикс пути Plex => префикс UNC». '
+            'Выигрывает самое длинное совпадение; строки, начинающиеся с #, — комментарии.'
         ),
     )
 

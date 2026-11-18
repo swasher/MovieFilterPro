@@ -846,11 +846,19 @@
     }
   };
 
+  const playInVlc = () => {
+    const url = movie.playback?.url;
+    if (!url) return;
+    // mfp:// — зарегистрированный обработчик протокола на компьютере пользователя
+    // (см. player/README.md). Браузер спросит разрешение один раз, дальше молча
+    // передаёт ссылку PowerShell-скрипту, который запускает VLC.
+    window.location.href = url;
+  };
+
   const openTorrentDeleteDialog = (torrent: MovieTorrent) => {
     torrentPendingDelete = torrent;
     torrentDeleteDialogOpen = true;
   };
-
   const confirmDeleteTorrent = async () => {
     if (!torrentPendingDelete) return;
 
@@ -1575,6 +1583,23 @@
               </div>
               {#if movie.plex.section}
                 <span class="truncate text-[11px] text-muted-foreground">Секция: {movie.plex.section}</span>
+              {/if}
+              {#if movie.playback?.available && movie.playback.url}
+                <Button
+                  size="sm"
+                  class="w-full justify-center"
+                  onclick={playInVlc}
+                  title="VLC откроет файл напрямую с сетевой шары"
+                >
+                  <Play class="size-4 fill-current" />
+                  Смотреть в VLC
+                </Button>
+                <span class="text-[11px] text-muted-foreground">
+                  VLC запустится на вашем компьютере. Если ничего не произошло — не установлен
+                  обработчик протокола mfp:// (player/README.md).
+                </span>
+              {:else if movie.playback?.reason}
+                <span class="text-[11px] text-muted-foreground">{movie.playback.reason}</span>
               {/if}
             {:else}
               <div class="vd-list-chip text-muted-foreground">Нет в Plex</div>

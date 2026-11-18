@@ -10,6 +10,7 @@
   import LocalAiSection from "$lib/components/preferences/LocalAiSection.svelte";
   import OmdbSection from "$lib/components/preferences/OmdbSection.svelte";
   import PlexSection from "$lib/components/preferences/PlexSection.svelte";
+  import PlayerSection from "$lib/components/preferences/PlayerSection.svelte";
   import PreferencesNav from "$lib/components/preferences/PreferencesNav.svelte";
   import QbittorrentSection from "$lib/components/preferences/QbittorrentSection.svelte";
   import RulesSection from "$lib/components/preferences/RulesSection.svelte";
@@ -71,6 +72,7 @@
     if (!(form.tmdb_v4_read_access_token.trim() || form.tmdb_api_key.trim())) {
       result.push("tmdb");
     }
+    if (form.player_enabled && !form.player_path_map.trim()) result.push("player");
     return result;
   });
 
@@ -146,6 +148,8 @@
                 <PlexSection />
               {:else if activeSection === "images"}
                 <ImagesSection />
+              {:else if activeSection === "player"}
+                <PlayerSection />
               {:else if activeSection === "tmdb"}
                 <TmdbSection />
               {:else if activeSection === "omdb"}

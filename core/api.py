@@ -63,6 +63,8 @@ class PreferencesOut(Schema):
     kinorium_fast_ai_endpoint_id: int | None = None
     kinorium_deep_ai_endpoint_id: int | None = None
     vault_image_cache_enabled: bool = True
+    player_enabled: bool = True
+    player_path_map: str = ""
 
 
 class PreferencesUpdateIn(Schema):
@@ -97,6 +99,8 @@ class PreferencesUpdateIn(Schema):
     kinorium_fast_ai_endpoint_id: int | None = None
     kinorium_deep_ai_endpoint_id: int | None = None
     vault_image_cache_enabled: bool = True
+    player_enabled: bool = True
+    player_path_map: str = ""
 
 
 class AiModelsOut(Schema):
@@ -289,6 +293,9 @@ def _serialize_preferences(preferences: UserPreferences) -> PreferencesOut:
         kinorium_fast_ai_endpoint_id=preferences.kinorium_fast_ai_endpoint_id,
         kinorium_deep_ai_endpoint_id=preferences.kinorium_deep_ai_endpoint_id,
         vault_image_cache_enabled=preferences.vault_image_cache_enabled,
+        player_enabled=preferences.player_enabled,
+        # Пустое значение отдаём пустым: UI показывает подсказку с примером правил.
+        player_path_map=preferences.player_path_map or "",
     )
 
 
@@ -340,6 +347,12 @@ def _apply_preferences_update(preferences: UserPreferences, payload: Preferences
         payload.kinorium_deep_ai_endpoint_id, "AI для глубоких решений"
     )
     preferences.vault_image_cache_enabled = payload.vault_image_cache_enabled
+    preferences.player_enabled = payload.player_enabled
+    # Многострочный текст из textarea: нормализуем переводы строк, чтобы правила
+    # одинаково разбирались на любой ОС.
+    preferences.player_path_map = (
+        (payload.player_path_map or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    )
     preferences.save()
 
     # Переключатель изображений кешируется в ImageService на несколько секунд,

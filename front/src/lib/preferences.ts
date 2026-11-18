@@ -37,6 +37,8 @@ export type PreferencesData = {
   kinorium_fast_ai_endpoint_id: number | null;
   kinorium_deep_ai_endpoint_id: number | null;
   vault_image_cache_enabled: boolean;
+  player_enabled: boolean;
+  player_path_map: string;
 };
 
 export type PreferencesUpdatePayload = {
@@ -70,6 +72,8 @@ export type PreferencesUpdatePayload = {
   kinorium_fast_ai_endpoint_id: number | null;
   kinorium_deep_ai_endpoint_id: number | null;
   vault_image_cache_enabled: boolean;
+  player_enabled: boolean;
+  player_path_map: string;
 };
 
 export type PreferencesApiErrorPayload = {
@@ -133,5 +137,7 @@ export const emptyPreferences = (): PreferencesData => ({
   ai_enabled: false,
   kinorium_fast_ai_endpoint_id: null,
   kinorium_deep_ai_endpoint_id: null,
-  vault_image_cache_enabled: true
+  vault_image_cache_enabled: true,
+  player_enabled: true,
+  player_path_map: ""
 });

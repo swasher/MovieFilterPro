@@ -174,6 +174,12 @@ type ApiMovieDetail = {
     reason: string | null;
   } | null;
   in_plex: boolean;
+  playback: {
+    available: boolean;
+    url: string | null;
+    reason: string | null;
+    file_name: string | null;
+  } | null;
   plex: {
     rating_key: string;
     section: string;

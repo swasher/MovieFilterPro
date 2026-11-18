@@ -55,6 +55,7 @@ from vault.services.image_service import (
     ImageService,
 )
 from vault.services.movie_search_service import MovieSearchService
+from vault.services.movie_playback_service import MoviePlaybackService
 from vault.services.movie_status_service import MovieStatusService
 from vault.services.season_status_service import UNSET, SeasonStatusService
 from vault.services.tmdb_movie_import_service import TMDBMovieImportService
@@ -122,6 +123,25 @@ class PlexMovieBriefOut(Schema):
     last_seen_at: str | None = None
 
 
+class PlaybackOut(Schema):
+    """Готовность фильма к запуску во внешнем плеере (VLC через mfp://)."""
+
+    available: bool = False
+    url: str | None = None
+    reason: str | None = None
+    file_name: str | None = None
+
+
+class PlaybackTargetOut(Schema):
+    """Ответ обработчику протокола mfp:// — только путь, без байтов фильма."""
+
+    unc_path: str
+    file_name: str
+    source_path: str
+    movie_slug: str
+    movie_title: str
+
+
 class MovieDetailOut(Schema):
     id: int
     title: str
@@ -176,6 +196,7 @@ class MovieDetailOut(Schema):
     writeback: WritebackPerMovieOut | None = None
     in_plex: bool = False
     plex: PlexMovieBriefOut | None = None
+    playback: PlaybackOut | None = None
 
 
 class CollectionPartOut(Schema):
@@ -1265,6 +1286,22 @@ def movie_detail(request, slug: str):
             last_seen_at=_datetime_to_iso(plex_link.last_seen_at),
         )
 
+    playback_resolution = MoviePlaybackService.resolve(movie)
+    playback_out = PlaybackOut(
+        available=playback_resolution.available,
+        url=(
+            MoviePlaybackService.build_launch_url(movie.slug)
+            if playback_resolution.target is not None
+            else None
+        ),
+        reason=playback_resolution.reason,
+        file_name=(
+            playback_resolution.target.file_name
+            if playback_resolution.target is not None
+            else None
+        ),
+    )
+
     actor_rows = list(movie.get_actors().select_related("person"))
     if _is_series_movie(movie):
         actor_rows = _hoist_marked_actors(actor_rows, favorite_person_ids, star_person_ids)
@@ -1411,6 +1448,36 @@ def movie_detail(request, slug: str):
         writeback=_build_writeback_out(movie),
         in_plex=plex_out is not None,
         plex=plex_out,
+        playback=playback_out,
+    )
+
+
+@api.get("/playback-target/{slug}", response=PlaybackTargetOut)
+def playback_target(request, slug: str, t: str = ""):
+    """Цель запуска для обработчика протокола mfp:// (см. player/mfp-play.ps1).
+
+    Авторизация — подписанный токен ``t`` из ссылки: запрос делает PowerShell
+    на клиентской машине, сессионной куки у него нет. Байты фильма здесь не
+    отдаются — только UNC-путь, который откроет VLC.
+    """
+
+    try:
+        movie, resolution = MoviePlaybackService.resolve_launch(slug, t)
+    except PermissionError:
+        raise HttpError(403, "Invalid or expired launch token")
+    except LookupError:
+        raise HttpError(404, "Movie not found")
+
+    target = resolution.target
+    if target is None:
+        raise HttpError(409, resolution.reason or "Playback is not available")
+
+    return PlaybackTargetOut(
+        unc_path=target.unc_path,
+        file_name=target.file_name,
+        source_path=target.source_path,
+        movie_slug=movie.slug,
+        movie_title=movie.title,
     )
 
 

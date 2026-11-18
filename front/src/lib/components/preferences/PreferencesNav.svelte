@@ -5,6 +5,7 @@
   import CpuIcon from "@lucide/svelte/icons/cpu";
   import DatabaseIcon from "@lucide/svelte/icons/database";
   import DownloadIcon from "@lucide/svelte/icons/download";
+  import FilmIcon from "@lucide/svelte/icons/film";
   import FunnelIcon from "@lucide/svelte/icons/funnel";
   import ImageIcon from "@lucide/svelte/icons/image";
   import LockIcon from "@lucide/svelte/icons/lock";
@@ -33,6 +34,7 @@
     qbittorrent: DownloadIcon,
     plex: MonitorPlayIcon,
     images: ImageIcon,
+    player: FilmIcon,
     tmdb: DatabaseIcon,
     omdb: StarIcon,
     websearch: SearchIcon,

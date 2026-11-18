@@ -35,6 +35,8 @@ export type PreferencesFormState = {
   kinorium_fast_ai_endpoint_id: string;
   kinorium_deep_ai_endpoint_id: string;
   vault_image_cache_enabled: boolean;
+  player_enabled: boolean;
+  player_path_map: string;
 };
 
 export type PreferencesSectionId =
@@ -43,6 +45,7 @@ export type PreferencesSectionId =
   | "qbittorrent"
   | "plex"
   | "images"
+  | "player"
   | "tmdb"
   | "omdb"
   | "websearch"
@@ -92,6 +95,13 @@ export const PREFERENCES_SECTIONS: PreferencesSection[] = [
     title: "Изображения",
     group: "Медиа",
     description: "Кеширование постеров, бэкдропов и фото персон Vault."
+  },
+  {
+    id: "player",
+    title: "Плеер",
+    group: "Медиа",
+    description:
+      "Кнопка «Смотреть»: запуск VLC на компьютере через протокол mfp:// и правила перевода путей Plex в UNC."
   },
   {
     id: "tmdb",
@@ -186,6 +196,8 @@ export const FIELD_SECTIONS: Record<keyof PreferencesUpdatePayload, PreferencesS
   plex_address: "plex",
   plex_token: "plex",
   vault_image_cache_enabled: "images",
+  player_enabled: "player",
+  player_path_map: "player",
   tmdb_api_key: "tmdb",
   tmdb_v4_read_access_token: "tmdb",
   omdb_api_key: "omdb",
@@ -246,7 +258,9 @@ export const createFormState = (preferences: PreferencesData): PreferencesFormSt
     ai_enabled: preferences.ai_enabled ?? false,
     kinorium_fast_ai_endpoint_id: asText(preferences.kinorium_fast_ai_endpoint_id),
     kinorium_deep_ai_endpoint_id: asText(preferences.kinorium_deep_ai_endpoint_id),
-    vault_image_cache_enabled: preferences.vault_image_cache_enabled ?? true
+    vault_image_cache_enabled: preferences.vault_image_cache_enabled ?? true,
+    player_enabled: preferences.player_enabled ?? true,
+    player_path_map: preferences.player_path_map ?? ""
   };
 };
 
@@ -285,7 +299,9 @@ export const buildPayload = (formState: PreferencesFormState): PreferencesUpdate
   ai_enabled: formState.ai_enabled,
   kinorium_fast_ai_endpoint_id: asOptionalInt(formState.kinorium_fast_ai_endpoint_id),
   kinorium_deep_ai_endpoint_id: asOptionalInt(formState.kinorium_deep_ai_endpoint_id),
-  vault_image_cache_enabled: formState.vault_image_cache_enabled
+  vault_image_cache_enabled: formState.vault_image_cache_enabled,
+  player_enabled: formState.player_enabled,
+  player_path_map: formState.player_path_map
 });
 
 export const payloadSnapshot = (formState: PreferencesFormState) => JSON.stringify(buildPayload(formState));
