@@ -41,3 +41,9 @@
 -   Обработчики парсят JSON, отображают `log` и обрабатывают `scan_complete`; завершение скана обновляет состояние Svelte UI.
 
 Старый клиент в `kinozal_scan/templates/scan_page.html` удален вместе с Django UI.
+
+## Где WebSocket не используется
+
+Live-обновления внешних состояний (прогресс qBittorrent, статус Plex, очередь
+TMDB) намеренно работают через polling. Обоснование и границы применения —
+[`REALTIME-UPDATES.md`](REALTIME-UPDATES.md).

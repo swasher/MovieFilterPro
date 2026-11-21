@@ -147,6 +147,39 @@
 - UI Vault (Svelte): `front/src/routes/**`.
 - API Vault: `vault/api.py`.
 
+## Документация проекта
+
+Актуальные документы (`docs/`):
+
+- `docs/REALTIME-UPDATES.md` — почему live-обновления внешних состояний (qBittorrent, Plex, очередь TMDB) работают на polling, а не WebSocket.
+- `docs/WRITEBACK_IMPLEMENTATION.md` — как устроен write-back Vault → TMDB (живой документ).
+- `docs/VAULT-IMAGE-CACHING.md` — кеш постеров/бэкдропов/фото TMDB в Vault (живой документ).
+- `docs/IMAGE-CACHING.md` — кеш постеров Kinozal (живой документ).
+- `docs/LOGGING.md` — как писать логи (`web_logger.log`, файлы и WebSocket).
+- `docs/WEBSOCKET-LOGGING.md` — архитектура WebSocket-логов и уведомлений.
+- `docs/TZ_ERROR_HANDLING.md` — правила retry и остановки очередей синхронизации TMDB.
+- `docs/VAULT_TMDB_SYNC_IMPLEMENTATION.md` — история реализации sync (частично устарел; актуальный API — `vault/api.py`).
+- `docs/VAULT_TMDB_SYNC_PLAN.md` — исторический план sync (Django UI удалён).
+
+Исторические и выполненные (читать для контекста, не как руководство):
+
+- `docs/KINOZAL_SVELTE_MIGRATION_PLAN.md` — миграция Kinozal в Svelte (завершена).
+- `docs/DJANGO_LEGACY_REMOVAL_PLAN.md` — удаление старого Django UI (выполнено).
+- `docs/HTMX_LEGACY_ENDPOINTS.md` — реестр удалённых HTMX endpoints.
+- `docs/archive/` — старые планы write-back и двусторонней синхронизации.
+
+Другие полезные файлы:
+
+- `README.md` — пользовательское описание проекта и индекс документации.
+- `front/docs/ui-principles.md` — визуальные правила Svelte UI (badge/chip/facts row).
+- `player/README.md` — запуск фильма в VLC через `mfp://`.
+- `PLANS-qbittorrent-integrations.md` — рабочий план и статус интеграции qBittorrent.
+- `PLANS_BESTFILMOF_INTEGRATION.md` — интеграция bestfilmsof.com.
+- `PLANS_CACHE_EVICT.md` — политика вытеснения кеша изображений.
+- `PLANS_AI_PREDICT_TMDB_REFRESH.md`, `PLAN_AI.md` — AI Predict и ранние AI-этапы (частично отложены/устарели).
+
+Правило: при изменении подсистемы обновляй соответствующий живой документ; исторические планы не переписывай.
+
 ## Write-back (Vault → TMDB)
 
 Если задача затрагивает **обратную синхронизацию Vault в TMDB** (watchlist,
@@ -160,6 +193,7 @@ favorites, rating, списки, TMDB Lists, очередь writeback, асин�
 - Файлы логов: `logs/debug.log`, `logs/error.log`, `logs/scan.log`.
 - Websocket-канал логов: `web_logger/*`, endpoint `ws/log/`.
 - Доки: `docs/LOGGING.md`, `docs/WEBSOCKET-LOGGING.md`.
+- Live-обновления внешних состояний (qBittorrent progress, Plex, очередь TMDB) — polling, не WebSocket. Решение: `docs/REALTIME-UPDATES.md`.
 
 ## Frontend: текущее состояние
 - Основной паттерн интеграции: `front` (SvelteKit) -> SvelteKit proxy routes -> `django-ninja` endpoints (в `vault/api.py`).
